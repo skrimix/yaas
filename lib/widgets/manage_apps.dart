@@ -13,16 +13,24 @@ class ManageApps extends StatefulWidget {
 
 class _ManageAppsState extends State<ManageApps> {
   int _selectedIndex = 0;
+  bool _sortAscending = true;
   final List<String> _sections = [
     'VR Apps',
     'Other Apps',
     'System & Hidden Apps'
   ];
 
+  List<InstalledPackage> _sortApps(List<InstalledPackage> apps) {
+    return apps.sortBy((a, b) {
+      int result = a.label.compareTo(b.label);
+      return _sortAscending ? result : -result;
+    });
+  }
+
   List<InstalledPackage> _getFilteredApps(List<InstalledPackage>? packages) {
     if (packages == null) return [];
 
-    return packages.where((app) {
+    var filtered = packages.where((app) {
       switch (_selectedIndex) {
         case 0: // VR Apps
           return app.vr && !app.system && app.launchable;
@@ -34,6 +42,8 @@ class _ManageAppsState extends State<ManageApps> {
           return false;
       }
     }).toList();
+
+    return _sortApps(filtered);
   }
 
   String _formatSize(int bytes) {
@@ -241,6 +251,22 @@ class _ManageAppsState extends State<ManageApps> {
                     ),
                   ),
                 ),
+              ],
+              IconButton(
+                icon: Icon(
+                  _sortAscending 
+                    ? Icons.sort_by_alpha 
+                    : Icons.sort_by_alpha_outlined,
+                ),
+                tooltip: _sortAscending ? 'Sort A-Z' : 'Sort Z-A',
+                onPressed: () {
+                  setState(() {
+                    _sortAscending = !_sortAscending;
+                  });
+                },
+              ),
+            ],
+          ),
 
                 // Animated content area
                 Expanded(

@@ -36,16 +36,20 @@ class _ManageAppsState extends State<ManageApps> {
     }).toList();
   }
 
-  String _formatSize(AppSize size) {
-    final totalBytes =
-        size.app.toInt() + size.data.toInt() + size.cache.toInt();
-    return FileSize.fromBytes(totalBytes).toString(
+  String _formatSize(int bytes) {
+    return FileSize.fromBytes(bytes).toString(
       unit: Unit.auto(
-        size: totalBytes,
+        size: bytes,
         baseType: BaseType.metric,
       ),
       decimals: 2,
     );
+  }
+
+  String _formatAppSize(AppSize size) {
+    final totalBytes =
+        size.app.toInt() + size.data.toInt() + size.cache.toInt();
+    return _formatSize(totalBytes);
   }
 
   void _showAppDetailsDialog(BuildContext context, InstalledPackage app) {
@@ -60,35 +64,38 @@ class _ManageAppsState extends State<ManageApps> {
             Text('Package Name: ${app.packageName}'),
             Text('Version: ${app.versionName} (${app.versionCode})'),
             const SizedBox(height: 16),
-            const Text('Storage Usage:', style: TextStyle(fontWeight: FontWeight.bold)),
+            const Text('Storage Usage:',
+                style: TextStyle(fontWeight: FontWeight.bold)),
             const SizedBox(height: 4),
             Row(
               mainAxisAlignment: MainAxisAlignment.spaceBetween,
               children: [
                 const Text('App:'),
-                Text(FileSize.fromBytes(app.size.app.toInt()).toString(decimals: 2)),
+                Text(_formatSize(app.size.app.toInt())),
               ],
             ),
             Row(
               mainAxisAlignment: MainAxisAlignment.spaceBetween,
               children: [
                 const Text('Data:'),
-                Text(FileSize.fromBytes(app.size.data.toInt()).toString(decimals: 2)),
+                Text(_formatSize(app.size.data.toInt())),
               ],
             ),
             Row(
               mainAxisAlignment: MainAxisAlignment.spaceBetween,
               children: [
                 const Text('Cache:'),
-                Text(FileSize.fromBytes(app.size.cache.toInt()).toString(decimals: 2)),
+                Text(_formatSize(app.size.cache.toInt())),
               ],
             ),
             const Divider(height: 24),
             Row(
               mainAxisAlignment: MainAxisAlignment.spaceBetween,
               children: [
-                const Text('Total:', style: TextStyle(fontWeight: FontWeight.bold)),
-                Text(_formatSize(app.size), style: const TextStyle(fontWeight: FontWeight.bold)),
+                const Text('Total:',
+                    style: TextStyle(fontWeight: FontWeight.bold)),
+                Text(_formatAppSize(app.size),
+                    style: const TextStyle(fontWeight: FontWeight.bold)),
               ],
             ),
           ],
@@ -121,7 +128,6 @@ class _ManageAppsState extends State<ManageApps> {
         return Card(
           margin: const EdgeInsets.symmetric(horizontal: 16, vertical: 2),
           child: ListTile(
-            onTap: () => _showAppDetailsDialog(context, app),
             title: Text(app.label),
             subtitle: Column(
               crossAxisAlignment: CrossAxisAlignment.start,
@@ -137,7 +143,7 @@ class _ManageAppsState extends State<ManageApps> {
                       ),
                 ),
                 Text(
-                  _formatSize(app.size),
+                  _formatAppSize(app.size),
                   style: Theme.of(context).textTheme.bodySmall?.copyWith(
                         color: Theme.of(context)
                             .textTheme

@@ -1,4 +1,5 @@
 import 'package:flutter/material.dart';
+import 'package:flutter/services.dart';
 import 'package:provider/provider.dart';
 import 'package:proper_filesize/proper_filesize.dart';
 import '../providers/device_state.dart';
@@ -13,7 +14,8 @@ class ManageApps extends StatefulWidget {
 
 class _ManageAppsState extends State<ManageApps> {
   int _selectedIndex = 0;
-  bool _sortAscending = true;
+  final bool _sortAscending =
+      true; // TODO: Add a toggle to sort ascending/descending?
   final List<String> _sections = [
     'VR Apps',
     'Other Apps',
@@ -21,10 +23,15 @@ class _ManageAppsState extends State<ManageApps> {
   ];
 
   List<InstalledPackage> _sortApps(List<InstalledPackage> apps) {
-    return apps.sortBy((a, b) {
-      int result = a.label.compareTo(b.label);
+    apps.sort((a, b) {
+      final appNameA =
+          (a.label.isNotEmpty ? a.label : a.packageName).toLowerCase();
+      final appNameB =
+          (b.label.isNotEmpty ? b.label : b.packageName).toLowerCase();
+      int result = appNameA.compareTo(appNameB);
       return _sortAscending ? result : -result;
     });
+    return apps;
   }
 
   List<InstalledPackage> _getFilteredApps(List<InstalledPackage>? packages) {
@@ -62,55 +69,101 @@ class _ManageAppsState extends State<ManageApps> {
     return _formatSize(totalBytes);
   }
 
+  void _copyToClipboard(String text, bool showText) {
+    Clipboard.setData(ClipboardData(text: text));
+    ScaffoldMessenger.of(context).showSnackBar(
+      SnackBar(
+          duration: const Duration(seconds: 1),
+          content: Text(
+              showText ? 'Copied to clipboard: $text' : 'Copied to clipboard')),
+    );
+  }
+
+  Widget _buildCopyableText(String text, bool showTooltip) {
+    return showTooltip
+        ? Tooltip(
+            message: 'Click to copy',
+            waitDuration: const Duration(milliseconds: 300),
+            child: MouseRegion(
+                cursor: SystemMouseCursors.click,
+                child: GestureDetector(
+                  onTap: () => {
+                    _copyToClipboard(text, true),
+                  },
+                  child: Text(text),
+                )),
+          )
+        : MouseRegion(
+            cursor: SystemMouseCursors.click,
+            child: GestureDetector(
+              onTap: () => _copyToClipboard(text, true),
+              child: Text(text),
+            ),
+          );
+  }
+
+  String _formatAppDetails(InstalledPackage app) {
+    return 'App Name: ${app.label}\n'
+        'Package Name: ${app.packageName}\n'
+        'Version: ${app.versionName}\n'
+        'Version Code: ${app.versionCode}\n'
+        'Is VR: ${app.vr ? 'Yes' : 'No'}\n'
+        'Is Launchable: ${app.launchable ? 'Yes' : 'No'}\n'
+        'Is System: ${app.system ? 'Yes' : 'No'}\n'
+        'Storage Usage:\n'
+        'App: ${_formatSize(app.size.app.toInt())}\n'
+        'Data: ${_formatSize(app.size.data.toInt())}\n'
+        'Cache: ${_formatSize(app.size.cache.toInt())}\n'
+        'Total: ${_formatAppSize(app.size)}';
+  }
+
+  Widget _buildDetailsRow(String label, String value, bool copyable) {
+    return Row(
+      mainAxisAlignment: MainAxisAlignment.spaceBetween,
+      spacing: 12,
+      children: [
+        Text(label),
+        copyable ? _buildCopyableText(value, true) : Text(value),
+      ],
+    );
+  }
+
   void _showAppDetailsDialog(BuildContext context, InstalledPackage app) {
     showDialog(
       context: context,
       builder: (context) => AlertDialog(
-        title: Text(app.label),
+        title: _buildCopyableText(app.label, true),
         content: Column(
           mainAxisSize: MainAxisSize.min,
           crossAxisAlignment: CrossAxisAlignment.start,
           children: [
-            Text('Package Name: ${app.packageName}'),
-            Text('Version: ${app.versionName} (${app.versionCode})'),
+            _buildDetailsRow('Package Name:', app.packageName, true),
+            _buildDetailsRow('Version:', app.versionName, true),
+            _buildDetailsRow('Version Code:', app.versionCode.toString(), true),
+            _buildDetailsRow('Is VR:', app.vr ? 'Yes' : 'No', false),
+            _buildDetailsRow(
+                'Is Launchable:', app.launchable ? 'Yes' : 'No', false),
+            _buildDetailsRow('Is System:', app.system ? 'Yes' : 'No', false),
             const SizedBox(height: 16),
             const Text('Storage Usage:',
                 style: TextStyle(fontWeight: FontWeight.bold)),
             const SizedBox(height: 4),
-            Row(
-              mainAxisAlignment: MainAxisAlignment.spaceBetween,
-              children: [
-                const Text('App:'),
-                Text(_formatSize(app.size.app.toInt())),
-              ],
-            ),
-            Row(
-              mainAxisAlignment: MainAxisAlignment.spaceBetween,
-              children: [
-                const Text('Data:'),
-                Text(_formatSize(app.size.data.toInt())),
-              ],
-            ),
-            Row(
-              mainAxisAlignment: MainAxisAlignment.spaceBetween,
-              children: [
-                const Text('Cache:'),
-                Text(_formatSize(app.size.cache.toInt())),
-              ],
-            ),
-            const Divider(height: 24),
-            Row(
-              mainAxisAlignment: MainAxisAlignment.spaceBetween,
-              children: [
-                const Text('Total:',
-                    style: TextStyle(fontWeight: FontWeight.bold)),
-                Text(_formatAppSize(app.size),
-                    style: const TextStyle(fontWeight: FontWeight.bold)),
-              ],
-            ),
+            _buildDetailsRow('App:', _formatSize(app.size.app.toInt()), false),
+            _buildDetailsRow(
+                'Data:', _formatSize(app.size.data.toInt()), false),
+            _buildDetailsRow(
+                'Cache:', _formatSize(app.size.cache.toInt()), false),
+            const Divider(height: 4),
+            _buildDetailsRow('Total:', _formatAppSize(app.size), false),
           ],
         ),
         actions: [
+          TextButton(
+            onPressed: () => {
+              _copyToClipboard(_formatAppDetails(app), false),
+            },
+            child: const Text('Copy'),
+          ),
           TextButton(
             onPressed: () => Navigator.of(context).pop(),
             child: const Text('Close'),
@@ -135,10 +188,11 @@ class _ManageAppsState extends State<ManageApps> {
       itemCount: apps.length,
       itemBuilder: (context, index) {
         final app = apps[index];
+        final appName = app.label.isNotEmpty ? app.label : app.packageName;
         return Card(
           margin: const EdgeInsets.symmetric(horizontal: 16, vertical: 2),
           child: ListTile(
-            title: Text(app.label),
+            title: Text(appName),
             subtitle: Column(
               crossAxisAlignment: CrossAxisAlignment.start,
               children: [
@@ -251,24 +305,6 @@ class _ManageAppsState extends State<ManageApps> {
                     ),
                   ),
                 ),
-              ],
-              IconButton(
-                icon: Icon(
-                  _sortAscending 
-                    ? Icons.sort_by_alpha 
-                    : Icons.sort_by_alpha_outlined,
-                ),
-                tooltip: _sortAscending ? 'Sort A-Z' : 'Sort Z-A',
-                onPressed: () {
-                  setState(() {
-                    _sortAscending = !_sortAscending;
-                  });
-                },
-              ),
-            ],
-          ),
-
-                // Animated content area
                 Expanded(
                   child: AnimatedSwitcher(
                     duration: const Duration(milliseconds: 200),

@@ -50,3 +50,4 @@ target/
 
 # Generated messages
 */**/messages/
+.aider*

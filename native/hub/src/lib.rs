@@ -7,7 +7,6 @@ use adb::AdbHandler;
 use mimalloc::MiMalloc;
 
 mod messages;
-mod sample_functions;
 
 #[global_allocator]
 static GLOBAL: MiMalloc = MiMalloc;

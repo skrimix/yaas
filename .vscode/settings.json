@@ -1,5 +1,0 @@
-{
-    "rust-analyzer.files.excludeDirs": [
-        "native/hub/src/messages"
-    ],
-}

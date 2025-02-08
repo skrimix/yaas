@@ -17,7 +17,7 @@ use crate::{
 };
 
 static LIST_APPS_DEX_BYTES: LazyLock<Vec<u8>> =
-    LazyLock::new(|| include_bytes!("../resources/list_apps.dex").to_vec());
+    LazyLock::new(|| include_bytes!("../assets/list_apps.dex").to_vec());
 
 #[derive(Debug, Clone)]
 pub struct AdbDevice {

@@ -77,12 +77,16 @@ class Home extends StatelessWidget {
                               'assets/png/headset/${deviceState.productName.isEmpty ? "unknown" : deviceState.productName}.png',
                               width: 192,
                               height: 164,
+                              cacheWidth: 192,
+                              cacheHeight: 192,
                               fit: BoxFit.fitWidth,
                               errorBuilder: (context, error, stackTrace) {
                                 return Image.asset(
                                   'assets/png/headset/unknown.png',
                                   width: 192,
                                   height: 164,
+                                  cacheWidth: 192,
+                                  cacheHeight: 192,
                                   fit: BoxFit.fitWidth,
                                 );
                               },

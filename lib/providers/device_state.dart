@@ -18,9 +18,9 @@ class DeviceState extends ChangeNotifier {
 
   bool get isConnected => _device != null;
 
-  String get deviceName => _device?.name ?? 'No device connected';
-  String get deviceSerial => _device?.serial ?? '';
-  String get productName => _device?.product ?? '';
+  String get deviceName => _device?.name ?? 'N/A';
+  String get deviceSerial => _device?.serial ?? 'N/A';
+  String get productName => _device?.product ?? 'N/A';
   int get batteryLevel => _device?.batteryLevel.toInt() ?? 0;
 
   ControllerInfo? get leftController => _device?.controllers.left;

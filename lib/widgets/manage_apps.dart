@@ -58,18 +58,39 @@ class _ManageAppsState extends State<ManageApps> {
           crossAxisAlignment: CrossAxisAlignment.start,
           children: [
             Text('Package Name: ${app.packageName}'),
-            Text('Version: ${app.versionName}'),
-            Text('Version Code: ${app.versionCode}'),
-            const SizedBox(height: 8),
-            const Text('Storage Details:',
-                style: TextStyle(fontWeight: FontWeight.bold)),
-            Text(
-                'App: ${FileSize.fromBytes(app.size.app.toInt()).toString(decimals: 2)}'),
-            Text(
-                'Data: ${FileSize.fromBytes(app.size.data.toInt()).toString(decimals: 2)}'),
-            Text(
-                'Cache: ${FileSize.fromBytes(app.size.cache.toInt()).toString(decimals: 2)}'),
-            Text('Total: ${_formatSize(app.size)}'),
+            Text('Version: ${app.versionName} (${app.versionCode})'),
+            const SizedBox(height: 16),
+            const Text('Storage Usage:', style: TextStyle(fontWeight: FontWeight.bold)),
+            const SizedBox(height: 4),
+            Row(
+              mainAxisAlignment: MainAxisAlignment.spaceBetween,
+              children: [
+                const Text('App:'),
+                Text(FileSize.fromBytes(app.size.app.toInt()).toString(decimals: 2)),
+              ],
+            ),
+            Row(
+              mainAxisAlignment: MainAxisAlignment.spaceBetween,
+              children: [
+                const Text('Data:'),
+                Text(FileSize.fromBytes(app.size.data.toInt()).toString(decimals: 2)),
+              ],
+            ),
+            Row(
+              mainAxisAlignment: MainAxisAlignment.spaceBetween,
+              children: [
+                const Text('Cache:'),
+                Text(FileSize.fromBytes(app.size.cache.toInt()).toString(decimals: 2)),
+              ],
+            ),
+            const Divider(height: 24),
+            Row(
+              mainAxisAlignment: MainAxisAlignment.spaceBetween,
+              children: [
+                const Text('Total:', style: TextStyle(fontWeight: FontWeight.bold)),
+                Text(_formatSize(app.size), style: const TextStyle(fontWeight: FontWeight.bold)),
+              ],
+            ),
           ],
         ),
         actions: [
@@ -102,46 +123,66 @@ class _ManageAppsState extends State<ManageApps> {
           child: ListTile(
             onTap: () => _showAppDetailsDialog(context, app),
             title: Text(app.label),
-            subtitle: Text(
-              '${app.packageName} • ${app.versionName} (${app.versionCode}) • ${_formatSize(app.size)}',
-              style: Theme.of(context).textTheme.bodyMedium?.copyWith(
-                    color: Theme.of(context)
-                        .textTheme
-                        .bodyMedium
-                        ?.color
-                        ?.withValues(alpha: 0.6),
-                  ),
+            subtitle: Column(
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                Text(
+                  '${app.packageName} • ${app.versionName} (${app.versionCode})',
+                  style: Theme.of(context).textTheme.bodyMedium?.copyWith(
+                        color: Theme.of(context)
+                            .textTheme
+                            .bodyMedium
+                            ?.color
+                            ?.withValues(alpha: 0.6),
+                      ),
+                ),
+                Text(
+                  _formatSize(app.size),
+                  style: Theme.of(context).textTheme.bodySmall?.copyWith(
+                        color: Theme.of(context)
+                            .textTheme
+                            .bodySmall
+                            ?.color
+                            ?.withValues(alpha: 0.6),
+                      ),
+                ),
+              ],
             ),
             contentPadding:
                 const EdgeInsets.symmetric(horizontal: 16.0, vertical: 4.0),
-            trailing: _selectedIndex == 2
-                ? null
-                : Row(
-                    mainAxisSize: MainAxisSize.min,
-                    children: [
-                      IconButton(
-                        icon: const Icon(Icons.play_arrow),
-                        tooltip: 'Launch',
-                        onPressed: () {
-                          // TODO: Implement launch functionality
-                        },
-                      ),
-                      IconButton(
-                        icon: const Icon(Icons.close),
-                        tooltip: 'Force Stop',
-                        onPressed: () {
-                          // TODO: Implement force stop functionality
-                        },
-                      ),
-                      IconButton(
-                        icon: const Icon(Icons.delete_outline),
-                        tooltip: 'Uninstall',
-                        onPressed: () {
-                          // TODO: Implement uninstall functionality
-                        },
-                      ),
-                    ],
+            trailing: Row(
+              mainAxisSize: MainAxisSize.min,
+              children: [
+                IconButton(
+                  icon: const Icon(Icons.info_outline),
+                  tooltip: 'App Details',
+                  onPressed: () => _showAppDetailsDialog(context, app),
+                ),
+                if (_selectedIndex != 2) ...[
+                  IconButton(
+                    icon: const Icon(Icons.play_arrow),
+                    tooltip: 'Launch',
+                    onPressed: () {
+                      // TODO: Implement launch functionality
+                    },
                   ),
+                  IconButton(
+                    icon: const Icon(Icons.close),
+                    tooltip: 'Force Stop',
+                    onPressed: () {
+                      // TODO: Implement force stop functionality
+                    },
+                  ),
+                  IconButton(
+                    icon: const Icon(Icons.delete_outline),
+                    tooltip: 'Uninstall',
+                    onPressed: () {
+                      // TODO: Implement uninstall functionality
+                    },
+                  ),
+                ],
+              ],
+            ),
           ),
         );
       },

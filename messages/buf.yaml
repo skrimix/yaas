@@ -1,0 +1,9 @@
+version: v2
+
+lint:
+  use:
+    - STANDARD
+  
+  except:
+    - PACKAGE_VERSION_SUFFIX
+    - ENUM_ZERO_VALUE_SUFFIX

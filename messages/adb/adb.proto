@@ -1,0 +1,67 @@
+syntax = "proto3";
+package adb;
+
+enum DeviceType {
+  DEVICE_TYPE_UNKNOWN = 0;
+  DEVICE_TYPE_QUEST = 1;
+  DEVICE_TYPE_QUEST2 = 2;
+  DEVICE_TYPE_QUEST3 = 3;
+  DEVICE_TYPE_QUEST3S = 4;
+  DEVICE_TYPE_QUEST_PRO = 5;
+}
+
+enum ControllerStatus {
+  CONTROLLER_STATUS_UNKNOWN = 0;
+  CONTROLLER_STATUS_ACTIVE = 1;
+  CONTROLLER_STATUS_DISABLED = 2;
+  CONTROLLER_STATUS_SEARCHING = 3;
+}
+
+message ControllerInfo {
+  optional uint32 battery_level = 1;
+  ControllerStatus status = 2;
+}
+
+message ControllersInfo {
+  ControllerInfo left = 1;
+  ControllerInfo right = 2;
+}
+
+message SpaceInfo {
+  uint64 total = 1;
+  uint64 available = 2;
+}
+
+message AppSize {
+  uint64 app = 1;
+  uint64 data = 2;
+  uint64 cache = 3;
+}
+
+message InstalledPackage {
+  uint64 uid = 1;
+  bool system = 2;
+  string package_name = 3;
+  uint64 version_code = 4;
+  string version_name = 5;
+  string label = 6;
+  bool launchable = 7;
+  bool vr = 8;
+  AppSize size = 9;
+}
+
+message AdbDevice {
+  string name = 1;
+  string product = 2;
+  DeviceType device_type = 3;
+  string serial = 4;
+  uint32 battery_level = 5;
+  ControllersInfo controllers = 6;
+  SpaceInfo space_info = 7;
+  repeated InstalledPackage installed_packages = 8;
+}
+
+// [RUST-SIGNAL]
+message DeviceChangedEvent {
+  optional AdbDevice device = 1;
+}

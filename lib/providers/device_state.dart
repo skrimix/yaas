@@ -23,8 +23,8 @@ class DeviceState extends ChangeNotifier {
   String get productName => _device?.product ?? '';
   int get batteryLevel => _device?.batteryLevel.toInt() ?? 0;
 
-  ControllerInfo? get leftController => _device?.controllers?.left;
-  ControllerInfo? get rightController => _device?.controllers?.right;
+  ControllerInfo? get leftController => _device?.controllers.left;
+  ControllerInfo? get rightController => _device?.controllers.right;
 
   SpaceInfo? get spaceInfo => _device?.spaceInfo;
 
@@ -43,6 +43,6 @@ class DeviceState extends ChangeNotifier {
   }
 
   int controllerBatteryLevel(ControllerInfo? controller) {
-    return controller?.batteryLevel?.toInt() ?? 0;
+    return controller?.batteryLevel.toInt() ?? 0;
   }
 }

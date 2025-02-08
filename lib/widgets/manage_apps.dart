@@ -12,15 +12,16 @@ class ManageApps extends StatefulWidget {
   State<ManageApps> createState() => _ManageAppsState();
 }
 
+enum AppCategory {
+  vr,
+  other,
+  system,
+}
+
 class _ManageAppsState extends State<ManageApps> {
-  int _selectedIndex = 0;
+  AppCategory _selectedCategory = AppCategory.vr;
   final bool _sortAscending =
       true; // TODO: Add a toggle to sort ascending/descending?
-  final List<String> _sections = [
-    'VR Apps',
-    'Other Apps',
-    'System & Hidden Apps'
-  ];
 
   List<InstalledPackage> _sortApps(List<InstalledPackage> apps) {
     apps.sort((a, b) {
@@ -34,19 +35,20 @@ class _ManageAppsState extends State<ManageApps> {
     return apps;
   }
 
-  List<InstalledPackage> _getFilteredApps(List<InstalledPackage>? packages) {
+  List<InstalledPackage> _getFilteredApps(
+    List<InstalledPackage>? packages,
+    AppCategory category,
+  ) {
     if (packages == null) return [];
 
     var filtered = packages.where((app) {
-      switch (_selectedIndex) {
-        case 0: // VR Apps
+      switch (category) {
+        case AppCategory.vr: // VR Apps
           return app.vr && !app.system && app.launchable;
-        case 1: // Other Apps
+        case AppCategory.other: // Other Apps
           return !app.vr && !app.system && app.launchable;
-        case 2: // System & Hidden Apps
+        case AppCategory.system: // System & Hidden Apps
           return app.system || !app.launchable;
-        default:
-          return false;
       }
     }).toList();
 
@@ -228,7 +230,7 @@ class _ManageAppsState extends State<ManageApps> {
                   tooltip: 'App Details',
                   onPressed: () => _showAppDetailsDialog(context, app),
                 ),
-                if (_selectedIndex != 2) ...[
+                if (_selectedCategory != AppCategory.system) ...[
                   IconButton(
                     icon: const Icon(Icons.play_arrow),
                     tooltip: 'Launch',
@@ -272,7 +274,23 @@ class _ManageAppsState extends State<ManageApps> {
           );
         }
 
-        final apps = _getFilteredApps(deviceState.device?.installedPackages);
+        final vrApps = _getFilteredApps(
+          deviceState.device?.installedPackages,
+          AppCategory.vr,
+        );
+        final otherApps = _getFilteredApps(
+          deviceState.device?.installedPackages,
+          AppCategory.other,
+        );
+        final systemApps = _getFilteredApps(
+          deviceState.device?.installedPackages,
+          AppCategory.system,
+        );
+        final currentApps = _selectedCategory == AppCategory.vr
+            ? vrApps
+            : _selectedCategory == AppCategory.other
+                ? otherApps
+                : systemApps;
 
         return Scaffold(
           body: SafeArea(
@@ -281,20 +299,26 @@ class _ManageAppsState extends State<ManageApps> {
                 Padding(
                   padding:
                       const EdgeInsets.symmetric(horizontal: 16, vertical: 8),
-                  child: SegmentedButton<int>(
-                    segments: _sections
-                        .asMap()
-                        .entries
-                        .map((e) => ButtonSegment(
-                              value: e.key,
-                              label: Text(
-                                  '${e.value} (${_getFilteredApps(deviceState.device?.installedPackages).length})'),
-                            ))
-                        .toList(),
-                    selected: {_selectedIndex},
-                    onSelectionChanged: (Set<int> newSelection) {
+                  child: SegmentedButton<AppCategory>(
+                    segments: [
+                      ButtonSegment(
+                        value: AppCategory.vr,
+                        label: Text('VR Apps (${vrApps.length})'),
+                      ),
+                      ButtonSegment(
+                        value: AppCategory.other,
+                        label: Text('Other Apps (${otherApps.length})'),
+                      ),
+                      ButtonSegment(
+                        value: AppCategory.system,
+                        label:
+                            Text('System & Hidden Apps (${systemApps.length})'),
+                      ),
+                    ],
+                    selected: {_selectedCategory},
+                    onSelectionChanged: (Set<AppCategory> newSelection) {
                       setState(() {
-                        _selectedIndex = newSelection.first;
+                        _selectedCategory = newSelection.first;
                       });
                     },
                     style: ButtonStyle(
@@ -315,8 +339,8 @@ class _ManageAppsState extends State<ManageApps> {
                       );
                     },
                     child: Container(
-                      key: ValueKey<int>(_selectedIndex),
-                      child: _buildAppList(apps),
+                      key: ValueKey<AppCategory>(_selectedCategory),
+                      child: _buildAppList(currentApps),
                     ),
                   ),
                 ),

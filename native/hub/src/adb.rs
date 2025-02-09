@@ -4,7 +4,7 @@ use anyhow::{Context, Result, bail, ensure};
 use arc_swap::ArcSwapOption;
 use derive_more::Debug;
 use device::AdbDevice;
-use forensic_adb::{AndroidStorageInput, DeviceState};
+use forensic_adb::{AndroidStorageInput, DeviceBrief, DeviceState};
 use tokio::time;
 use tokio_stream::StreamExt;
 use tracing::{debug, error, instrument, warn};
@@ -36,72 +36,78 @@ impl AdbHandler {
 
     #[instrument(level = "debug")]
     fn start_device_monitor(adb_handler: Arc<AdbHandler>) {
-        let (sender, mut receiver) = tokio::sync::mpsc::unbounded_channel();
+        let (sender, receiver) = tokio::sync::mpsc::unbounded_channel();
 
-        // Spawn the device tracking task
-        tokio::spawn({
-            let sender = sender.clone();
-            let adb_host = adb_handler.adb_host.clone();
-            async move {
-                ensure_server_running(&adb_host).await.expect("adb server failed to start");
-                loop {
-                    let mut got_update = false;
-                    debug!("starting track_devices loop");
-                    let stream = adb_host.track_devices();
-                    tokio::pin!(stream);
-                    while let Some(device_result) = stream.next().await {
-                        match device_result {
-                            Ok(device) => {
-                                got_update = true;
-                                sender.send(device).expect("failed to send track_devices update");
-                            }
-                            Err(e) => {
-                                if got_update {
-                                    warn!(
-                                        error = &e as &dyn Error,
-                                        "track_devices stream returned error"
-                                    );
-                                    break;
-                                } else {
-                                    error!(
-                                        error = &e as &dyn Error,
-                                        "failed to start track_devices stream"
-                                    );
-                                    return;
-                                }
-                            }
+        // Spawn device state handler
+        tokio::spawn(Self::handle_device_updates(adb_handler.clone(), receiver));
+
+        // Spawn device tracking task
+        tokio::spawn(Self::run_device_tracker(adb_handler.adb_host.clone(), sender.clone()));
+    }
+
+    #[instrument(level = "debug", err)]
+    async fn run_device_tracker(
+        adb_host: forensic_adb::Host,
+        sender: tokio::sync::mpsc::UnboundedSender<DeviceBrief>,
+    ) -> Result<()> {
+        ensure_server_running(&adb_host).await?;
+
+        loop {
+            debug!("starting track_devices loop");
+            let stream = adb_host.track_devices();
+            tokio::pin!(stream);
+            let mut got_update = false;
+
+            while let Some(device_result) = stream.next().await {
+                match device_result {
+                    Ok(device) => {
+                        got_update = true;
+                        sender.send(device).context("failed to send track_devices update")?;
+                    }
+                    Err(e) => {
+                        if got_update {
+                            warn!(error = &e as &dyn Error, "track_devices stream returned error");
+                            break;
+                        } else {
+                            return Err(e).context("failed to start track_devices stream");
                         }
                     }
-                    time::sleep(Duration::from_secs(1)).await;
                 }
             }
-        });
 
-        // Handle device updates
-        tokio::spawn({
-            let adb_handler = adb_handler.clone();
-            async move {
-                while let Some(device_update) = receiver.recv().await {
-                    debug!(update = ?device_update, "received device update");
-                    // TODO: match other states
-                    if let Some(device) = adb_handler.try_current_device() {
-                        if device_update.state == DeviceState::Offline
-                            && device_update.serial == device.serial
-                        {
-                            debug!("device is offline, disconnecting");
-                            if let Err(e) = adb_handler.disconnect_device().await {
-                                error!(error = e.as_ref() as &dyn Error, "auto-disconnect failed");
-                            }
-                        }
-                    } else if device_update.state == DeviceState::Device {
-                        debug!("auto-connecting to device");
-                        if let Err(e) = adb_handler.connect_device().await {
-                            error!(error = e.as_ref() as &dyn Error, "auto-connect failed");
-                        }
-                    };
+            time::sleep(Duration::from_secs(1)).await;
+        }
+    }
+
+    #[instrument(level = "debug", err)]
+    async fn handle_device_updates(
+        adb_handler: Arc<AdbHandler>,
+        mut receiver: tokio::sync::mpsc::UnboundedReceiver<DeviceBrief>,
+    ) -> Result<()> {
+        while let Some(device_update) = receiver.recv().await {
+            debug!(update = ?device_update, "received device update");
+
+            match (adb_handler.try_current_device(), &device_update.state) {
+                // Current device went offline
+                (Some(device), DeviceState::Offline) if device.serial == device_update.serial => {
+                    debug!("device is offline, disconnecting");
+                    if let Err(e) = adb_handler.disconnect_device().await {
+                        error!(error = e.as_ref() as &dyn Error, "auto-disconnect failed");
+                    }
                 }
+                // New device available
+                (None, DeviceState::Device) => {
+                    debug!("auto-connecting to device");
+                    if let Err(e) = adb_handler.connect_device().await {
+                        error!(error = e.as_ref() as &dyn Error, "auto-connect failed");
+                    }
+                }
+                // TODO: handle other state combinations
+                _ => {}
             }
-        });
+        }
+
+        bail!("device update channel closed unexpectedly");
     }
 
     #[instrument(level = "debug")]

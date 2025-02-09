@@ -20,8 +20,30 @@ enum AppCategory {
 
 class _ManageAppsState extends State<ManageApps> {
   AppCategory _selectedCategory = AppCategory.vr;
-  final bool _sortAscending =
-      true; // TODO: Add a toggle to sort ascending/descending?
+  static const _animationDuration = Duration(milliseconds: 200);
+  static const _cardPadding =
+      EdgeInsets.symmetric(horizontal: 16.0, vertical: 4.0);
+  static const _listPadding = EdgeInsets.only(bottom: 24);
+  static const _segmentPadding =
+      EdgeInsets.symmetric(horizontal: 16, vertical: 8);
+  static const _buttonPadding =
+      EdgeInsets.symmetric(horizontal: 12, vertical: 8);
+
+  final bool _sortAscending = true;
+
+  // Cache filtered apps to avoid recalculating on every build
+  List<InstalledPackage>? _cachedVrApps;
+  List<InstalledPackage>? _cachedOtherApps;
+  List<InstalledPackage>? _cachedSystemApps;
+  List<InstalledPackage>? _installedPackages;
+
+  void _updateCachedLists(List<InstalledPackage>? packages) {
+    if (_installedPackages == packages) return;
+    _installedPackages = packages;
+    _cachedVrApps = _getFilteredApps(packages, AppCategory.vr);
+    _cachedOtherApps = _getFilteredApps(packages, AppCategory.other);
+    _cachedSystemApps = _getFilteredApps(packages, AppCategory.system);
+  }
 
   List<InstalledPackage> _sortApps(List<InstalledPackage> apps) {
     apps.sort((a, b) {
@@ -186,11 +208,14 @@ class _ManageAppsState extends State<ManageApps> {
     }
 
     return ListView.builder(
-      padding: const EdgeInsets.only(bottom: 24),
+      padding: _listPadding,
       itemCount: apps.length,
       itemBuilder: (context, index) {
         final app = apps[index];
         final appName = app.label.isNotEmpty ? app.label : app.packageName;
+        final theme = Theme.of(context);
+        final textTheme = theme.textTheme;
+
         return Card(
           margin: const EdgeInsets.symmetric(horizontal: 16, vertical: 2),
           child: ListTile(
@@ -200,28 +225,19 @@ class _ManageAppsState extends State<ManageApps> {
               children: [
                 Text(
                   '${app.packageName} • ${app.versionName} (${app.versionCode})',
-                  style: Theme.of(context).textTheme.bodyMedium?.copyWith(
-                        color: Theme.of(context)
-                            .textTheme
-                            .bodyMedium
-                            ?.color
-                            ?.withValues(alpha: 0.6),
-                      ),
+                  style: textTheme.bodyMedium?.copyWith(
+                    color: textTheme.bodyMedium?.color?.withValues(alpha: 0.6),
+                  ),
                 ),
                 Text(
                   _formatAppSize(app.size),
-                  style: Theme.of(context).textTheme.bodySmall?.copyWith(
-                        color: Theme.of(context)
-                            .textTheme
-                            .bodySmall
-                            ?.color
-                            ?.withValues(alpha: 0.6),
-                      ),
+                  style: textTheme.bodySmall?.copyWith(
+                    color: textTheme.bodySmall?.color?.withValues(alpha: 0.6),
+                  ),
                 ),
               ],
             ),
-            contentPadding:
-                const EdgeInsets.symmetric(horizontal: 16.0, vertical: 4.0),
+            contentPadding: _cardPadding,
             trailing: Row(
               mainAxisSize: MainAxisSize.min,
               children: [
@@ -274,45 +290,36 @@ class _ManageAppsState extends State<ManageApps> {
           );
         }
 
-        final vrApps = _getFilteredApps(
-          deviceState.device?.installedPackages,
-          AppCategory.vr,
-        );
-        final otherApps = _getFilteredApps(
-          deviceState.device?.installedPackages,
-          AppCategory.other,
-        );
-        final systemApps = _getFilteredApps(
-          deviceState.device?.installedPackages,
-          AppCategory.system,
-        );
-        final currentApps = _selectedCategory == AppCategory.vr
-            ? vrApps
-            : _selectedCategory == AppCategory.other
-                ? otherApps
-                : systemApps;
+        _updateCachedLists(deviceState.device?.installedPackages);
+
+        final currentApps = switch (_selectedCategory) {
+              AppCategory.vr => _cachedVrApps,
+              AppCategory.other => _cachedOtherApps,
+              AppCategory.system => _cachedSystemApps,
+            } ??
+            [];
 
         return Scaffold(
           body: SafeArea(
             child: Column(
               children: [
                 Padding(
-                  padding:
-                      const EdgeInsets.symmetric(horizontal: 16, vertical: 8),
+                  padding: _segmentPadding,
                   child: SegmentedButton<AppCategory>(
                     segments: [
                       ButtonSegment(
                         value: AppCategory.vr,
-                        label: Text('VR Apps (${vrApps.length})'),
+                        label: Text('VR Apps (${_cachedVrApps?.length ?? 0})'),
                       ),
                       ButtonSegment(
                         value: AppCategory.other,
-                        label: Text('Other Apps (${otherApps.length})'),
+                        label: Text(
+                            'Other Apps (${_cachedOtherApps?.length ?? 0})'),
                       ),
                       ButtonSegment(
                         value: AppCategory.system,
-                        label:
-                            Text('System & Hidden Apps (${systemApps.length})'),
+                        label: Text(
+                            'System & Hidden Apps (${_cachedSystemApps?.length ?? 0})'),
                       ),
                     ],
                     selected: {_selectedCategory},
@@ -324,14 +331,14 @@ class _ManageAppsState extends State<ManageApps> {
                     style: ButtonStyle(
                       visualDensity: VisualDensity.compact,
                       padding: WidgetStateProperty.all<EdgeInsets>(
-                        const EdgeInsets.symmetric(horizontal: 12, vertical: 8),
+                        _buttonPadding,
                       ),
                     ),
                   ),
                 ),
                 Expanded(
                   child: AnimatedSwitcher(
-                    duration: const Duration(milliseconds: 200),
+                    duration: _animationDuration,
                     transitionBuilder: (child, animation) {
                       return FadeTransition(
                         opacity: animation,

@@ -13,18 +13,28 @@ use crate::messages::{self as proto, AdbCommand, DeviceChangedEvent};
 
 pub mod device;
 
+/// Events that can occur in the ADB system
 #[derive(Debug)]
 pub enum AdbEvent {
+    /// Event indicating a device connection state has changed
     DeviceChanged(Option<Arc<AdbDevice>>),
 }
 
+/// Handles ADB device connections and commands
 #[derive(Debug)]
 pub struct AdbHandler {
+    /// The ADB host instance for device communication
     adb_host: forensic_adb::Host,
+    /// Currently connected device (if any)
     device: ArcSwapOption<AdbDevice>,
 }
 
 impl AdbHandler {
+    /// Creates a new AdbHandler instance and starts device monitoring.
+    /// This is the main entry point for ADB functionality.
+    ///
+    /// # Returns
+    /// Arc-wrapped AdbHandler that manages ADB device connections
     #[instrument]
     pub fn create() -> Arc<Self> {
         // TODO: check host and launch if not running
@@ -34,6 +44,11 @@ impl AdbHandler {
         handle
     }
 
+    /// Starts monitoring for device connection changes.
+    /// Sets up the device tracking and update handling infrastructure.
+    ///
+    /// # Arguments
+    /// * `adb_handler` - Reference to the AdbHandler instance to manage device updates
     #[instrument(level = "debug")]
     fn start_device_monitor(adb_handler: Arc<AdbHandler>) {
         let (sender, receiver) = tokio::sync::mpsc::unbounded_channel();
@@ -42,9 +57,14 @@ impl AdbHandler {
         tokio::spawn(Self::handle_device_updates(adb_handler.clone(), receiver));
 
         // Spawn device tracking task
-        tokio::spawn(Self::run_device_tracker(adb_handler.adb_host.clone(), sender.clone()));
+        tokio::spawn(Self::run_device_tracker(adb_handler.adb_host.clone(), sender));
     }
 
+    /// Runs the device tracking loop that monitors for device connections and disconnections
+    ///
+    /// # Arguments
+    /// * `adb_host` - The ADB host instance to track devices from
+    /// * `sender` - Channel sender to communicate device updates
     #[instrument(level = "debug", err)]
     async fn run_device_tracker(
         adb_host: forensic_adb::Host,
@@ -53,7 +73,7 @@ impl AdbHandler {
         ensure_server_running(&adb_host).await?;
 
         loop {
-            debug!("starting track_devices loop");
+            debug!("Starting track_devices loop");
             let stream = adb_host.track_devices();
             tokio::pin!(stream);
             let mut got_update = false;
@@ -62,44 +82,50 @@ impl AdbHandler {
                 match device_result {
                     Ok(device) => {
                         got_update = true;
-                        sender.send(device).context("failed to send track_devices update")?;
+                        sender.send(device).context("Failed to send track_devices update")?;
                     }
                     Err(e) => {
                         if got_update {
-                            warn!(error = &e as &dyn Error, "track_devices stream returned error");
+                            warn!(error = &e as &dyn Error, "Track_devices stream returned error");
                             break;
                         } else {
-                            return Err(e).context("failed to start track_devices stream");
+                            return Err(e).context("Failed to start track_devices stream");
                         }
                     }
                 }
             }
 
+            // Wait before retrying the tracking loop
             time::sleep(Duration::from_secs(1)).await;
         }
     }
 
+    /// Handles device state updates received from the device tracker
+    ///
+    /// # Arguments
+    /// * `adb_handler` - Reference to the AdbHandler instance
+    /// * `receiver` - Channel receiver for device updates
     #[instrument(level = "debug", err)]
     async fn handle_device_updates(
         adb_handler: Arc<AdbHandler>,
         mut receiver: tokio::sync::mpsc::UnboundedReceiver<DeviceBrief>,
     ) -> Result<()> {
         while let Some(device_update) = receiver.recv().await {
-            debug!(update = ?device_update, "received device update");
+            debug!(update = ?device_update, "Received device update");
 
             match (adb_handler.try_current_device(), &device_update.state) {
                 // Current device went offline
                 (Some(device), DeviceState::Offline) if device.serial == device_update.serial => {
-                    debug!("device is offline, disconnecting");
+                    debug!("Device is offline, disconnecting");
                     if let Err(e) = adb_handler.disconnect_device().await {
-                        error!(error = e.as_ref() as &dyn Error, "auto-disconnect failed");
+                        error!(error = e.as_ref() as &dyn Error, "Auto-disconnect failed");
                     }
                 }
                 // New device available
                 (None, DeviceState::Device) => {
-                    debug!("auto-connecting to device");
+                    debug!("Auto-connecting to device");
                     if let Err(e) = adb_handler.connect_device().await {
-                        error!(error = e.as_ref() as &dyn Error, "auto-connect failed");
+                        error!(error = e.as_ref() as &dyn Error, "Auto-connect failed");
                     }
                 }
                 // TODO: handle other state combinations
@@ -107,9 +133,10 @@ impl AdbHandler {
             }
         }
 
-        bail!("device update channel closed unexpectedly");
+        bail!("Device update channel closed unexpectedly");
     }
 
+    /// Listens for and processes ADB commands received from Dart
     #[instrument(level = "debug")]
     async fn receive_commands(&self) {
         let receiver = proto::AdbRequest::get_dart_signal_receiver();
@@ -118,16 +145,24 @@ impl AdbHandler {
                 Ok(command) => {
                     if let Err(e) = self.execute_command(command, request.message.parameters).await
                     {
-                        error!(error = %e, "adb command execution failed");
+                        error!(error = %e, "ADB command execution failed");
                     }
                 }
                 Err(unknown_value) => {
-                    error!(command = ?unknown_value, "received invalid command from Dart");
+                    error!(command = ?unknown_value, "Received invalid command from Dart");
                 }
             }
         }
     }
 
+    /// Executes a received ADB command with the given parameters
+    ///
+    /// # Arguments
+    /// * `command` - The ADB command to execute
+    /// * `parameters` - Optional parameters for the command
+    ///
+    /// # Returns
+    /// Result indicating success or failure of the command execution
     #[instrument(level = "debug")]
     async fn execute_command(
         &self,
@@ -140,37 +175,46 @@ impl AdbHandler {
             (
                 AdbCommand::LaunchApp,
                 Some(proto::adb_request::Parameters::PackageName(package_name)),
-            ) => device.launch(&package_name).await.context("failed to launch app"),
+            ) => device.launch(&package_name).await.context("Failed to launch app"),
+
             (
                 AdbCommand::ForceStopApp,
                 Some(proto::adb_request::Parameters::PackageName(package_name)),
-            ) => device.force_stop(&package_name).await.context("failed to force stop app"),
+            ) => device.force_stop(&package_name).await.context("Failed to force stop app"),
+
             (AdbCommand::InstallApk, Some(proto::adb_request::Parameters::ApkPath(apk_path))) => {
-                device.install_apk(Path::new(&apk_path)).await.context("failed to install apk")
+                device.install_apk(Path::new(&apk_path)).await.context("Failed to install APK")
             }
+
             (
                 AdbCommand::UninstallPackage,
                 Some(proto::adb_request::Parameters::PackageName(package_name)),
             ) => {
-                device.uninstall_package(&package_name).await.context("failed to uninstall package")
+                device.uninstall_package(&package_name).await.context("Failed to uninstall package")
             }
+
             (cmd, params) => {
-                bail!("invalid parameters {:?} for command {:?}", params, cmd)
+                bail!("Invalid parameters {:?} for command {:?}", params, cmd)
             }
         }
     }
 
+    /// Updates the current device state and notifies Dart of the change
+    ///
+    /// # Arguments
+    /// * `device` - Optional new device state
+    /// * `update_current` - Whether to update the current device if it exists
     #[instrument(level = "debug")]
     fn set_device(&self, device: Option<AdbDevice>, update_current: bool) {
         if update_current {
             if let Some(current_device) = self.try_current_device() {
                 if let Some(ref new_device) = device {
                     if current_device.serial != new_device.serial {
-                        debug!("ignoring device update for different device");
+                        debug!("Ignoring device update for different device");
                         return;
                     }
                 } else {
-                    warn!("attempted to update device when current device is None");
+                    warn!("Attempted to update device when current device is None");
                     return;
                 }
             }
@@ -181,16 +225,28 @@ impl AdbHandler {
         DeviceChangedEvent { device: proto_device }.send_signal_to_dart();
     }
 
+    /// Attempts to get the currently connected device
+    ///
+    /// # Returns
+    /// Option containing the current device if one is connected
     #[instrument(level = "trace")]
     fn try_current_device(&self) -> Option<Arc<AdbDevice>> {
         self.device.load().as_ref().map(Arc::clone)
     }
 
+    /// Gets the currently connected device or returns an error if none is connected
+    ///
+    /// # Returns
+    /// Result containing the current device or an error if no device is connected
     #[instrument(level = "trace")]
     fn current_device(&self) -> Result<Arc<AdbDevice>> {
-        self.try_current_device().context("no device connected")
+        self.try_current_device().context("No device connected")
     }
 
+    /// Connects to an ADB device
+    ///
+    /// # Returns
+    /// Result containing the connected AdbDevice instance or an error if connection fails
     #[instrument(err, ret)]
     async fn connect_device(&self) -> Result<AdbDevice> {
         // TODO: wait for device to be ready (boot_completed)
@@ -199,26 +255,37 @@ impl AdbHandler {
                 .clone()
                 .device_or_default(Option::<&String>::None, AndroidStorageInput::default())
                 .await
-                .context("failed to connect to device")?,
+                .context("Failed to connect to device")?,
         )
         .await?;
+
         self.set_device(Some(device.clone()), false);
         Ok(device)
     }
 
+    /// Disconnects the current ADB device
+    ///
+    /// # Returns
+    /// Result indicating success or failure of the disconnection
     #[instrument(err)]
     async fn disconnect_device(&self) -> Result<()> {
-        ensure!(self.device.load().is_some(), "already disconnected");
+        ensure!(self.device.load().is_some(), "Already disconnected");
         self.set_device(None, false);
-        // TODO: on_device_disconnected
         Ok(())
     }
 }
 
+/// Ensures the ADB server is running, starting it if necessary
+///
+/// # Arguments
+/// * `host` - The ADB host instance to check
+///
+/// # Returns
+/// Result indicating success or failure of ensuring server is running
 #[instrument(err, level = "debug")]
 async fn ensure_server_running(host: &forensic_adb::Host) -> Result<()> {
     if host.check_host_running().await.is_err() {
-        debug!("starting adb server");
+        debug!("Starting ADB server");
         host.start_server(None).await?;
     }
     Ok(())

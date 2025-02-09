@@ -9,7 +9,7 @@ use tokio::time;
 use tokio_stream::StreamExt;
 use tracing::{debug, error, instrument, warn};
 
-use crate::messages::{self as proto, AdbCommand, DeviceChangedEvent};
+use crate::messages::{self as proto, AdbCommand, AdbResponse, DeviceChangedEvent};
 
 pub mod device;
 
@@ -41,6 +41,15 @@ impl AdbHandler {
         let handle =
             Arc::new(Self { adb_host: forensic_adb::Host::default(), device: None.into() });
         Self::start_device_monitor(handle.clone());
+
+        // Start command receiver
+        tokio::spawn({
+            let handle = handle.clone();
+            async move {
+                handle.receive_commands().await;
+            }
+        });
+
         handle
     }
 
@@ -169,34 +178,106 @@ impl AdbHandler {
         command: AdbCommand,
         parameters: Option<proto::adb_request::Parameters>,
     ) -> Result<()> {
+        fn send_response(command: AdbCommand, success: bool, message: String) {
+            AdbResponse { command: command as i32, success, message }.send_signal_to_dart();
+        }
+
         let device = self.current_device()?;
 
-        match (command, parameters) {
+        let result = match (command, parameters) {
             (
                 AdbCommand::LaunchApp,
                 Some(proto::adb_request::Parameters::PackageName(package_name)),
-            ) => device.launch(&package_name).await.context("Failed to launch app"),
+            ) => {
+                let result = device.launch(&package_name).await;
+                match result {
+                    Ok(_) => {
+                        send_response(
+                            AdbCommand::LaunchApp,
+                            true,
+                            format!("Launched {}", package_name),
+                        );
+                        Ok(())
+                    }
+                    Err(e) => {
+                        let error_msg = format!("Failed to launch app: {}", e);
+                        send_response(AdbCommand::LaunchApp, false, error_msg.clone());
+                        Err(anyhow::anyhow!(error_msg))
+                    }
+                }
+            }
 
             (
                 AdbCommand::ForceStopApp,
                 Some(proto::adb_request::Parameters::PackageName(package_name)),
-            ) => device.force_stop(&package_name).await.context("Failed to force stop app"),
+            ) => {
+                let result = device.force_stop(&package_name).await;
+                match result {
+                    Ok(_) => {
+                        send_response(
+                            AdbCommand::ForceStopApp,
+                            true,
+                            format!("Stopped {}", package_name),
+                        );
+                        Ok(())
+                    }
+                    Err(e) => {
+                        let error_msg = format!("Failed to force stop app: {}", e);
+                        send_response(AdbCommand::ForceStopApp, false, error_msg.clone());
+                        Err(anyhow::anyhow!(error_msg))
+                    }
+                }
+            }
 
             (AdbCommand::InstallApk, Some(proto::adb_request::Parameters::ApkPath(apk_path))) => {
-                device.install_apk(Path::new(&apk_path)).await.context("Failed to install APK")
+                let result = device.install_apk(Path::new(&apk_path)).await;
+                match result {
+                    Ok(_) => {
+                        send_response(
+                            AdbCommand::InstallApk,
+                            true,
+                            format!("Installed {}", apk_path),
+                        );
+                        Ok(())
+                    }
+                    Err(e) => {
+                        let error_msg = format!("Failed to install APK: {}", e);
+                        send_response(AdbCommand::InstallApk, false, error_msg.clone());
+                        Err(anyhow::anyhow!(error_msg))
+                    }
+                }
             }
 
             (
                 AdbCommand::UninstallPackage,
                 Some(proto::adb_request::Parameters::PackageName(package_name)),
             ) => {
-                device.uninstall_package(&package_name).await.context("Failed to uninstall package")
+                let result = device.uninstall_package(&package_name).await;
+                match result {
+                    Ok(_) => {
+                        send_response(
+                            AdbCommand::UninstallPackage,
+                            true,
+                            format!("Uninstalled {}", package_name),
+                        );
+                        Ok(())
+                    }
+                    Err(e) => {
+                        let error_msg = format!("Failed to uninstall package: {}", e);
+                        send_response(AdbCommand::UninstallPackage, false, error_msg.clone());
+                        Err(anyhow::anyhow!(error_msg))
+                    }
+                }
             }
 
             (cmd, params) => {
-                bail!("Invalid parameters {:?} for command {:?}", params, cmd)
+                let error_msg = format!("Invalid parameters {:?} for command {:?}", params, cmd);
+                send_response(cmd, false, error_msg.clone());
+                bail!(error_msg)
             }
-        }
+        };
+
+        result.context("Command execution failed")
     }
 
     /// Updates the current device state and notifies Dart of the change

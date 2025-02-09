@@ -2,6 +2,8 @@ use anyhow::{Context, Result};
 use serde::Deserialize;
 
 use crate::messages as proto;
+
+/// Represents the size information of an installed application
 #[derive(Debug, Clone, Default, Deserialize)]
 pub struct AppSize {
     app: u64,
@@ -9,6 +11,7 @@ pub struct AppSize {
     cache: u64,
 }
 
+/// Represents an installed package on the device with its metadata
 #[derive(Debug, Clone, Default, Deserialize)]
 pub struct InstalledPackage {
     uid: u64,
@@ -24,11 +27,13 @@ pub struct InstalledPackage {
 }
 
 impl InstalledPackage {
+    /// Updates the size information for the package
     pub fn update_sizes(&mut self, app_size: u64, data_size: u64, cache_size: u64) {
         self.size = AppSize { app: app_size, data: data_size, cache: cache_size };
     }
 
     // TODO: use the proto struct directly
+    /// Converts the package information into a protobuf message
     pub fn into_proto(self) -> proto::InstalledPackage {
         proto::InstalledPackage {
             uid: self.uid,
@@ -48,48 +53,66 @@ impl InstalledPackage {
     }
 }
 
+/// Parses the output of list_apps.dex command
 fn parse_list_apps_dex(dex_output: &str) -> Result<Vec<InstalledPackage>, serde_json::Error> {
     serde_json::from_str(dex_output)
 }
 
+/// Populates size information for packages from dumpsys output
 fn populate_sizes(packages: &mut [InstalledPackage], dumpsys_output: &str) -> Result<()> {
     let mut package_names: Vec<String> = Vec::new();
     let mut app_sizes: Vec<u64> = Vec::new();
     let mut data_sizes: Vec<u64> = Vec::new();
     let mut cache_sizes: Vec<u64> = Vec::new();
 
+    // Parse each line of the dumpsys output
     for line in dumpsys_output.lines() {
-        if line.starts_with("Package Names:") {
-            package_names = serde_json::from_str(
-                line.split_once(':').context("unexpected package names format")?.1.trim(),
-            )
-            .context("unexpected package names format")?;
-        } else if line.starts_with("App Sizes:") {
-            app_sizes = serde_json::from_str(
-                line.split_once(':').context("unexpected app sizes format")?.1.trim(),
-            )
-            .context("unexpected app sizes format")?;
-        } else if line.starts_with("App Data Sizes:") {
-            data_sizes = serde_json::from_str(
-                line.split_once(':').context("unexpected data sizes format")?.1.trim(),
-            )
-            .context("unexpected data sizes format")?;
-        } else if line.starts_with("Cache Sizes:") {
-            cache_sizes = serde_json::from_str(
-                line.split_once(':').context("unexpected cache sizes format")?.1.trim(),
-            )
-            .context("unexpected cache sizes format")?;
+        if let Some((key, value)) = line.split_once(':') {
+            let value = value.trim();
+            match key {
+                "Package Names" => {
+                    package_names =
+                        serde_json::from_str(value).context("failed to parse package names")?;
+                }
+                "App Sizes" => {
+                    app_sizes = serde_json::from_str(value).context("failed to parse app sizes")?;
+                }
+                "App Data Sizes" => {
+                    data_sizes =
+                        serde_json::from_str(value).context("failed to parse data sizes")?;
+                }
+                "Cache Sizes" => {
+                    cache_sizes =
+                        serde_json::from_str(value).context("failed to parse cache sizes")?;
+                }
+                _ => continue,
+            }
         }
     }
 
-    if package_names.is_empty()
-        || app_sizes.is_empty()
-        || data_sizes.is_empty()
-        || cache_sizes.is_empty()
-    {
-        return Err(anyhow::anyhow!("missing required size information in dumpsys output"));
+    // Validate that we have all required information
+    if package_names.is_empty() {
+        return Err(anyhow::anyhow!("package names not found in dumpsys output"));
+    }
+    if app_sizes.is_empty() {
+        return Err(anyhow::anyhow!("app sizes not found in dumpsys output"));
+    }
+    if data_sizes.is_empty() {
+        return Err(anyhow::anyhow!("data sizes not found in dumpsys output"));
+    }
+    if cache_sizes.is_empty() {
+        return Err(anyhow::anyhow!("cache sizes not found in dumpsys output"));
     }
 
+    // Validate array lengths match
+    if app_sizes.len() != package_names.len()
+        || data_sizes.len() != package_names.len()
+        || cache_sizes.len() != package_names.len()
+    {
+        return Err(anyhow::anyhow!("size arrays have mismatched lengths"));
+    }
+
+    // Update package sizes
     for (i, package_name) in package_names.iter().enumerate() {
         if let Some(package) = packages.iter_mut().find(|p| &p.package_name == package_name) {
             package.update_sizes(app_sizes[i], data_sizes[i], cache_sizes[i]);
@@ -99,6 +122,7 @@ fn populate_sizes(packages: &mut [InstalledPackage], dumpsys_output: &str) -> Re
     Ok(())
 }
 
+/// Creates a list of installed packages from device output
 pub fn packages_from_device_output(
     dex_output: &str,
     dumpsys_output: &str,

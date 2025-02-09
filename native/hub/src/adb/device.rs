@@ -233,7 +233,7 @@ impl AdbDevice {
     #[instrument(err, level = "debug")]
     async fn get_space_info(&self) -> Result<SpaceInfo> {
         let output = self.shell(SPACE_INFO_COMMAND).await.context("Failed to get space info")?;
-        SpaceInfo::from_adb_output(&output)
+        SpaceInfo::from_stat_output(&output)
     }
 
     /// Launches an application on the device

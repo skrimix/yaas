@@ -4,6 +4,11 @@ use tracing::{info, instrument, trace, warn};
 pub static CONTROLLER_INFO_COMMAND: &str = "dumpsys OVRRemoteService | grep Battery";
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Hash)]
+/// Represents the current status of a Quest controller.
+/// - `Active`: Controller is connected and functioning normally
+/// - `Disabled`: Controller is intentionally disabled
+/// - `Searching`: Controller is attempting to establish connection
+/// - `Unknown`: Status could not be determined
 pub enum ControllerStatus {
     Active,
     Disabled,
@@ -52,16 +57,18 @@ pub fn parse_dumpsys(lines: &str) -> ControllersInfo {
     );
 
     for caps in re.captures_iter(lines) {
-        if let (Some(controller_type), controller_battery, Some(controller_status)) = (
+        if let (Some(controller_type), Some(battery_str), Some(controller_status)) = (
             caps.name("type").map(|m| m.as_str()),
-            caps.name("battery").and_then(|m| m.as_str().parse::<u8>().ok()),
+            caps.name("battery").map(|m| m.as_str()),
             caps.name("status").map(|m| m.as_str()),
         ) {
+            let controller_battery = battery_str.parse::<u8>().ok();
+
             if controller_battery.is_none() {
                 info!(
-                    "invalid battery level for controller type '{}': {}",
-                    controller_type,
-                    caps.name("battery").map(|m| m.as_str()).unwrap_or("None")
+                    "Invalid battery level for {} controller: {}",
+                    controller_type.to_lowercase(),
+                    battery_str
                 );
             }
             match controller_type {

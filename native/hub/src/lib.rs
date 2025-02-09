@@ -18,8 +18,7 @@ pub mod models;
 #[tokio::main(flavor = "multi_thread")]
 async fn main() {
     // tokio::spawn(sample_functions::communicate());
-    let adb_handler = AdbHandler::new();
-    AdbHandler::start_device_monitor(Arc::new(adb_handler)).await;
+    let _adb_handler = AdbHandler::create();
 
     // Keep the main function running until Dart shutdown.
     rinf::dart_shutdown().await;

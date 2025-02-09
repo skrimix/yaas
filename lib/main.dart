@@ -49,7 +49,7 @@ class _RqlAppState extends State<RqlApp> {
   @override
   Widget build(BuildContext context) {
     return MaterialApp(
-      title: 'RQL Test',
+      title: 'RQL',
       theme: ThemeData(
         colorScheme: ColorScheme.fromSeed(
             seedColor: Colors.deepPurple, brightness: Brightness.dark),

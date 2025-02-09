@@ -24,20 +24,17 @@ pub struct AdbHandler {
     device: ArcSwapOption<AdbDevice>,
 }
 
-impl Default for AdbHandler {
-    fn default() -> Self {
-        Self::new()
-    }
-}
-
 impl AdbHandler {
-    pub fn new() -> Self {
+    pub fn create() -> Arc<Self> {
         // TODO: check host and launch if not running
-        Self { adb_host: forensic_adb::Host::default(), device: None.into() }
+        let handle =
+            Arc::new(Self { adb_host: forensic_adb::Host::default(), device: None.into() });
+        Self::start_device_monitor(handle.clone());
+        handle
     }
 
     #[instrument(level = "debug")]
-    pub async fn start_device_monitor(adb_handler: Arc<AdbHandler>) {
+    fn start_device_monitor(adb_handler: Arc<AdbHandler>) {
         let (sender, mut receiver) = tokio::sync::mpsc::unbounded_channel();
 
         // Spawn the device tracking task

@@ -1,10 +1,11 @@
-use std::{fmt::Display, sync::LazyLock};
+use std::{fmt::Display, path::Path, sync::LazyLock};
 
-use anyhow::{Context, Result, anyhow, ensure};
+use anyhow::{Context, Result, anyhow, bail, ensure};
 use bon::bon;
 use derive_more::Debug;
-use forensic_adb::{Device, UnixPath};
-use tracing::{Span, error, instrument, trace};
+use forensic_adb::{Device, DeviceError, UnixPath};
+use tokio::{fs::File, io::BufReader};
+use tracing::{Span, error, info, instrument, trace, warn};
 
 use crate::{
     messages as proto,
@@ -43,7 +44,7 @@ impl Display for AdbDevice {
 #[bon]
 impl AdbDevice {
     #[instrument(level = "trace")]
-    pub(super) async fn new(inner: Device) -> Result<Self> {
+    pub async fn new(inner: Device) -> Result<Self> {
         let serial = inner.serial.clone();
         let product = inner.info.get("product").expect("no product name found").to_string();
         let device_type = DeviceType::from_product_name(&product);
@@ -67,14 +68,14 @@ impl AdbDevice {
     }
 
     #[instrument(level = "debug")]
-    pub(super) async fn refresh_all(&mut self) -> Result<()> {
+    pub async fn refresh_all(&mut self) -> Result<()> {
         self.refresh().battery(true).space(true).packages(true).call().await
     }
 
     // TODO: periodic auto-refresh
     // #[instrument(err, level = "debug")] // BUG: segfault
     #[builder]
-    pub(super) async fn refresh(
+    pub async fn refresh(
         &mut self,
         packages: Option<bool>,
         battery: Option<bool>,
@@ -176,8 +177,86 @@ impl AdbDevice {
         SpaceInfo::from_adb_output(&output)
     }
 
+    #[instrument(err)]
+    pub async fn launch(&self, package: &str) -> Result<()> {
+        // TODO: try to use exit code to run both variants and determine result?
+        let output = self
+            .shell(format!("monkey -p {} -c com.oculus.intent.category.VR 1", package).as_str())
+            .await
+            .context("failed to execute monkey command")?;
+        if !output.contains("monkey aborted") {
+            return Ok(());
+        }
+
+        info!("monkey command failed with VR category, retrying with default");
+        let output = self
+            .shell(format!("monkey -p {} 1", package).as_str())
+            .await
+            .context("failed to execute monkey command")?;
+        if output.contains("monkey aborted") {
+            warn!(output = output, package = package, "monkey command returned error");
+            // TODO: return output
+            return Err(anyhow!("both monkey commands returned error"));
+        }
+        Ok(())
+    }
+
+    #[instrument(err)]
+    pub async fn force_stop(&self, package: &str) -> Result<(), DeviceError> {
+        self.inner.force_stop(package).await
+    }
+
+    #[instrument(err, level = "debug", fields(path = ?path.display(), remote_path = ?remote_path.display()))]
+    async fn push(&self, path: &Path, remote_path: &UnixPath) -> Result<()> {
+        if !path.is_file() {
+            return Err(anyhow!("path does not exist or is not a file"));
+        }
+        let mut file = BufReader::new(File::open(path).await?);
+        self.inner.push(&mut file, remote_path, 0o777).await.context("failed to push file")
+    }
+
+    #[instrument(err, level = "debug", fields(source = ?source.display(), dest_dir = ?dest_dir.display()))]
+    pub async fn push_dir(&self, source: &Path, dest_dir: &UnixPath) -> Result<()> {
+        if !source.is_dir() {
+            return Err(anyhow!("source path does not exist or is not a directory"));
+        }
+        self.inner.push_dir(source, dest_dir, 0o777).await.context("failed to push directory")
+    }
+
+    #[instrument(err, level = "debug", skip(bytes, remote_path), fields(remote_path = ?remote_path.display()))]
     async fn push_bytes(&self, mut bytes: &[u8], remote_path: &UnixPath) -> Result<()> {
         self.inner.push(&mut bytes, remote_path, 0o777).await.context("failed to push bytes")
+    }
+
+    #[instrument(err, fields(apk_path = ?apk_path.display()))]
+    pub async fn install_apk(&self, apk_path: &Path) -> Result<(), DeviceError> {
+        // TODO: backup->reinstall->restore for incompatible updates
+        self.inner.install_package(apk_path, true, true).await
+    }
+
+    #[instrument(err)]
+    pub async fn uninstall_package(&self, package_name: &str) -> Result<()> {
+        if let Err(e) = self.inner.uninstall_package(package_name).await {
+            if e.to_string().contains("DELETE_FAILED_INTERNAL_ERROR") {
+                let escaped = package_name.replace(".", "\\.");
+                let output = self
+                    .shell(&format!("pm list packages | grep -w ^package:{}", escaped))
+                    .await
+                    .unwrap_or_default();
+                if output.trim().is_empty() {
+                    bail!("package not installed");
+                }
+            } else if e.to_string().contains("DELETE_FAILED_DEVICE_POLICY_MANAGER") {
+                info!(
+                    "package {} is protected by device policy, trying to force uninstall",
+                    package_name
+                );
+                self.shell(&format!("pm disable-user {}", package_name)).await?;
+                self.inner.uninstall_package(package_name).await?;
+            }
+            return Err(e.into());
+        }
+        Ok(())
     }
 
     pub fn into_proto(self) -> proto::AdbDevice {

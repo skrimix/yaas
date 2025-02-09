@@ -1,5 +1,5 @@
 syntax = "proto3";
-package command;
+package adb;
 
 // ADB Command Types
 enum AdbCommand {
@@ -18,22 +18,8 @@ message AdbRequest {
   }
 }
 
-message AdbLaunchAppResponse {
-  string package_name = 1;
-  optional string error = 2;
-}
-
-message AdbForceStopAppResponse {
-  string package_name = 1;
-  optional string error = 2;
-}
-
-message AdbInstallApkResponse {
-  string apk_path = 1;
-  optional string error = 2;
-}
-
-message AdbUninstallPackageResponse {
-  string package_name = 1;
-  optional string error = 2;
+message AdbResponse {
+  AdbCommand command = 1;
+  bool success = 2;
+  string message = 3;
 }

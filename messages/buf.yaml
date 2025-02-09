@@ -6,5 +6,4 @@ lint:
   
   except:
     - PACKAGE_VERSION_SUFFIX
-    - ENUM_ZERO_VALUE_SUFFIX
     - PACKAGE_DIRECTORY_MATCH

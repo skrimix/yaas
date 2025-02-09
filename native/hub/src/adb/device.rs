@@ -284,7 +284,7 @@ impl AdbDevice {
     /// # Arguments
     /// * `path` - Local path of the file to push
     /// * `remote_path` - Destination path on the device
-    #[instrument(err, level = "debug", fields(path = ?path.display(), remote_path = ?remote_path.display()))]
+    //#[instrument(err, level = "debug", fields(path = ?path.display(), remote_path = ?remote_path.display()))]
     async fn push(&self, path: &Path, remote_path: &UnixPath) -> Result<()> {
         ensure!(path.is_file(), "Path does not exist or is not a file: {}", path.display());
         let mut file = BufReader::new(File::open(path).await?);
@@ -296,7 +296,7 @@ impl AdbDevice {
     /// # Arguments
     /// * `source` - Local directory path to push
     /// * `dest_dir` - Destination directory path on device
-    #[instrument(err, level = "debug", fields(source = ?source.display(), dest_dir = ?dest_dir.display()))]
+    //#[instrument(err, level = "debug", fields(source = ?source.display(), dest_dir = ?dest_dir.display()))]
     pub async fn push_dir(&self, source: &Path, dest_dir: &UnixPath) -> Result<()> {
         ensure!(
             source.is_dir(),
@@ -311,7 +311,7 @@ impl AdbDevice {
     /// # Arguments
     /// * `bytes` - The bytes to push
     /// * `remote_path` - Destination path on the device
-    #[instrument(err, level = "debug", skip(bytes, remote_path), fields(remote_path = ?remote_path.display()))]
+    // #[instrument(err, level = "debug", skip(bytes, remote_path))] // BUG: segfaults
     async fn push_bytes(&self, mut bytes: &[u8], remote_path: &UnixPath) -> Result<()> {
         self.inner.push(&mut bytes, remote_path, 0o777).await.context("Failed to push bytes")
     }
@@ -320,7 +320,7 @@ impl AdbDevice {
     ///
     /// # Arguments
     /// * `apk_path` - Path to the APK file to install
-    #[instrument(err, fields(apk_path = ?apk_path.display()))]
+    //#[instrument(err, fields(apk_path = ?apk_path.display()))]
     pub async fn install_apk(&self, apk_path: &Path) -> Result<(), DeviceError> {
         // TODO: Implement backup->reinstall->restore for incompatible updates
         self.inner.install_package(apk_path, true, true).await

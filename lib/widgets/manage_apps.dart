@@ -250,22 +250,33 @@ class _ManageAppsState extends State<ManageApps> {
                   IconButton(
                     icon: const Icon(Icons.play_arrow),
                     tooltip: 'Launch',
-                    onPressed: () {
+                    onPressed: () async {
                       // TODO: Implement launch functionality
+                      AdbRequest(
+                              command: AdbCommand.ADB_COMMAND_LAUNCH_APP,
+                              packageName: app.packageName)
+                          .sendSignalToRust();
                     },
                   ),
                   IconButton(
                     icon: const Icon(Icons.close),
                     tooltip: 'Force Stop',
-                    onPressed: () {
+                    onPressed: () async {
                       // TODO: Implement force stop functionality
+                      AdbRequest(
+                              command: AdbCommand.ADB_COMMAND_FORCE_STOP_APP,
+                              packageName: app.packageName)
+                          .sendSignalToRust();
                     },
                   ),
                   IconButton(
                     icon: const Icon(Icons.delete_outline),
                     tooltip: 'Uninstall',
-                    onPressed: () {
+                    onPressed: () async {
                       // TODO: Implement uninstall functionality
+                      // AdbRequest(
+                      //     command: AdbCommand.ADB_COMMAND_UNINSTALL_PACKAGE,
+                      //     packageName: app.packageName).sendSignalToRust();
                     },
                   ),
                 ],

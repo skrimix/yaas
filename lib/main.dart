@@ -3,14 +3,60 @@ import 'dart:ui';
 import 'package:flutter/material.dart';
 import 'package:provider/provider.dart';
 import 'package:rinf/rinf.dart';
+import 'package:toastification/toastification.dart';
 import './messages/all.dart';
 import 'widgets/home.dart';
 import 'widgets/status_bar.dart';
 import 'widgets/manage_apps.dart';
 import 'providers/device_state.dart';
 
+final colorScheme = ColorScheme.fromSeed(
+  seedColor: Colors.deepPurple,
+  brightness: Brightness.dark,
+);
+
 void main() async {
   await initializeRust(assignRustSignal);
+
+  AdbResponse.rustSignalStream.listen((response) {
+    final type = response.message.success
+        ? ToastificationType.success
+        : ToastificationType.error;
+
+    String title;
+    switch (response.message.command) {
+      case AdbCommand.ADB_COMMAND_LAUNCH_APP:
+        title = response.message.success ? 'App Launched' : 'Launch Failed';
+        break;
+      case AdbCommand.ADB_COMMAND_FORCE_STOP_APP:
+        title = response.message.success ? 'App Stopped' : 'Stop Failed';
+        break;
+      case AdbCommand.ADB_COMMAND_INSTALL_APK:
+        title = response.message.success
+            ? 'Installation Complete'
+            : 'Installation Failed';
+        break;
+      case AdbCommand.ADB_COMMAND_UNINSTALL_PACKAGE:
+        title = response.message.success
+            ? 'Uninstallation Complete'
+            : 'Uninstallation Failed';
+        break;
+      default:
+        title = response.message.success ? 'Success' : 'Error';
+    }
+
+    toastification.show(
+      type: type,
+      style: ToastificationStyle.flat,
+      title: Text(title),
+      description: Text(response.message.message),
+      autoCloseDuration: const Duration(seconds: 3),
+      backgroundColor: colorScheme.surfaceContainer,
+      borderSide: BorderSide.none,
+      alignment: Alignment.bottomRight,
+    );
+  });
+
   runApp(
     ChangeNotifierProvider(
       create: (_) => DeviceState(),
@@ -48,14 +94,15 @@ class _RqlAppState extends State<RqlApp> {
 
   @override
   Widget build(BuildContext context) {
-    return MaterialApp(
-      title: 'RQL',
-      theme: ThemeData(
-        colorScheme: ColorScheme.fromSeed(
-            seedColor: Colors.deepPurple, brightness: Brightness.dark),
-        useMaterial3: true,
+    return ToastificationWrapper(
+      child: MaterialApp(
+        title: 'RQL',
+        theme: ThemeData(
+          colorScheme: colorScheme,
+          useMaterial3: true,
+        ),
+        home: const SinglePage(),
       ),
-      home: const SinglePage(),
     );
   }
 }

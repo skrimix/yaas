@@ -1,6 +1,6 @@
-use std::{error::Error, sync::Arc, time::Duration};
+use std::{error::Error, path::Path, sync::Arc, time::Duration};
 
-use anyhow::{Context, Result, ensure};
+use anyhow::{Context, Result, bail, ensure};
 use arc_swap::ArcSwapOption;
 use derive_more::Debug;
 use device::AdbDevice;
@@ -9,7 +9,7 @@ use tokio::time;
 use tokio_stream::StreamExt;
 use tracing::{debug, error, instrument, warn};
 
-use crate::messages::DeviceChangedEvent;
+use crate::messages::{self as proto, AdbCommand, DeviceChangedEvent};
 
 pub mod device;
 
@@ -25,6 +25,7 @@ pub struct AdbHandler {
 }
 
 impl AdbHandler {
+    #[instrument]
     pub fn create() -> Arc<Self> {
         // TODO: check host and launch if not running
         let handle =
@@ -101,6 +102,56 @@ impl AdbHandler {
                 }
             }
         });
+    }
+
+    #[instrument(level = "debug")]
+    async fn receive_commands(&self) {
+        let receiver = proto::AdbRequest::get_dart_signal_receiver();
+        while let Some(request) = receiver.recv().await {
+            match AdbCommand::try_from(request.message.command) {
+                Ok(command) => {
+                    if let Err(e) = self.execute_command(command, request.message.parameters).await
+                    {
+                        error!(error = %e, "adb command execution failed");
+                    }
+                }
+                Err(unknown_value) => {
+                    error!(command = ?unknown_value, "received invalid command from Dart");
+                }
+            }
+        }
+    }
+
+    #[instrument(level = "debug")]
+    async fn execute_command(
+        &self,
+        command: AdbCommand,
+        parameters: Option<proto::adb_request::Parameters>,
+    ) -> Result<()> {
+        let device = self.current_device()?;
+
+        match (command, parameters) {
+            (
+                AdbCommand::LaunchApp,
+                Some(proto::adb_request::Parameters::PackageName(package_name)),
+            ) => device.launch(&package_name).await.context("failed to launch app"),
+            (
+                AdbCommand::ForceStopApp,
+                Some(proto::adb_request::Parameters::PackageName(package_name)),
+            ) => device.force_stop(&package_name).await.context("failed to force stop app"),
+            (AdbCommand::InstallApk, Some(proto::adb_request::Parameters::ApkPath(apk_path))) => {
+                device.install_apk(Path::new(&apk_path)).await.context("failed to install apk")
+            }
+            (
+                AdbCommand::UninstallPackage,
+                Some(proto::adb_request::Parameters::PackageName(package_name)),
+            ) => {
+                device.uninstall_package(&package_name).await.context("failed to uninstall package")
+            }
+            (cmd, params) => {
+                bail!("invalid parameters {:?} for command {:?}", params, cmd)
+            }
+        }
     }
 
     #[instrument(level = "debug")]

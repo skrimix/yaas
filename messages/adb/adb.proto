@@ -10,6 +10,7 @@ enum AdbCommand {
 }
 
 // ADB Command Request
+// [DART-SIGNAL]
 message AdbRequest {
   AdbCommand command = 1;
   oneof parameters {
@@ -18,6 +19,8 @@ message AdbRequest {
   }
 }
 
+// ADB Command Response
+// [RUST-SIGNAL]
 message AdbResponse {
   AdbCommand command = 1;
   bool success = 2;

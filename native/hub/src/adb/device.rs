@@ -71,6 +71,7 @@ impl AdbDevice {
         self.refresh().battery(true).space(true).packages(true).call().await
     }
 
+    // TODO: periodic auto-refresh
     // #[instrument(err, level = "debug")] // BUG: segfault
     #[builder]
     pub(super) async fn refresh(
@@ -104,6 +105,7 @@ impl AdbDevice {
             .inspect(|v| trace!(output = ?v, "shell command executed"))
     }
 
+    // TODO: refresh after package operations
     // #[instrument(err, fields(result, count), level = "debug")] // BUG: segfault
     async fn refresh_package_list(&mut self) -> Result<()> {
         // pushing every time, but it's only 4.8kB, should be fine?

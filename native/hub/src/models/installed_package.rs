@@ -28,6 +28,7 @@ impl InstalledPackage {
         self.size = AppSize { app: app_size, data: data_size, cache: cache_size };
     }
 
+    // TODO: use the proto struct directly
     pub fn into_proto(self) -> proto::InstalledPackage {
         proto::InstalledPackage {
             uid: self.uid,

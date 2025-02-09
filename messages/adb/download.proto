@@ -1,0 +1,23 @@
+syntax = "proto3";
+package download;
+
+// Represents an application from the cloud repository
+message CloudApp {
+  string app_name = 1;
+  string full_name = 2;
+  string package_name = 3;
+  uint32 version_code = 4;
+  string last_updated = 5;
+  uint32 size_bytes = 6;
+}
+
+// Request to get available cloud apps
+message GetCloudAppsRequest {
+  bool refresh = 1;
+}
+
+// Response containing available cloud apps
+message GetCloudAppsResponse {
+  repeated CloudApp apps = 1;
+  optional string error = 2;
+}

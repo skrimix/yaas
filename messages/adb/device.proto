@@ -1,5 +1,5 @@
 syntax = "proto3";
-package adb;
+package device;
 
 enum DeviceType {
   DEVICE_TYPE_UNKNOWN = 0;
@@ -10,6 +10,7 @@ enum DeviceType {
   DEVICE_TYPE_QUEST_PRO = 5;
 }
 
+// Quest Controller Status
 enum ControllerStatus {
   CONTROLLER_STATUS_UNKNOWN = 0;
   CONTROLLER_STATUS_ACTIVE = 1;
@@ -17,6 +18,7 @@ enum ControllerStatus {
   CONTROLLER_STATUS_SEARCHING = 3;
 }
 
+// Quest Controller Info
 message ControllerInfo {
   optional uint32 battery_level = 1;
   ControllerStatus status = 2;
@@ -27,11 +29,13 @@ message ControllersInfo {
   ControllerInfo right = 2;
 }
 
+// Device Storage Info
 message SpaceInfo {
   uint64 total = 1;
   uint64 available = 2;
 }
 
+// Installed App Size
 message AppSize {
   uint64 app = 1;
   uint64 data = 2;

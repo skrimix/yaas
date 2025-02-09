@@ -1,0 +1,39 @@
+syntax = "proto3";
+package command;
+
+// ADB Command Types
+enum AdbCommand {
+  ADB_COMMAND_LAUNCH_APP = 0;
+  ADB_COMMAND_FORCE_STOP_APP = 1;
+  ADB_COMMAND_INSTALL_APK = 2;
+  ADB_COMMAND_UNINSTALL_PACKAGE = 3;
+}
+
+// ADB Command Request
+message AdbRequest {
+  AdbCommand command = 1;
+  oneof parameters {
+    string package_name = 2; // Used for launch/stop/uninstall
+    string apk_path = 3; // Used for APK installation
+  }
+}
+
+message AdbLaunchAppResponse {
+  string package_name = 1;
+  optional string error = 2;
+}
+
+message AdbForceStopAppResponse {
+  string package_name = 1;
+  optional string error = 2;
+}
+
+message AdbInstallApkResponse {
+  string apk_path = 1;
+  optional string error = 2;
+}
+
+message AdbUninstallPackageResponse {
+  string package_name = 1;
+  optional string error = 2;
+}

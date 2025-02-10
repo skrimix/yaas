@@ -3,7 +3,7 @@ use std::{fmt::Display, path::Path, sync::LazyLock};
 use anyhow::{Context, Result, anyhow, bail, ensure};
 use bon::bon;
 use derive_more::Debug;
-use forensic_adb::{Device, DeviceError, UnixPath};
+use forensic_adb::{Device, UnixPath};
 use tokio::{fs::File, io::BufReader};
 use tracing::{Span, error, info, instrument, trace, warn};
 
@@ -48,7 +48,7 @@ pub struct AdbDevice {
 
 impl Display for AdbDevice {
     fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
-        write!(f, "{} ({})", self.name, self.inner.serial)
+        write!(f, "{} ({})", self.name, self.serial)
     }
 }
 
@@ -316,9 +316,11 @@ impl AdbDevice {
     /// # Arguments
     /// * `apk_path` - Path to the APK file to install
     //#[instrument(err, fields(apk_path = ?apk_path.display()))]
-    pub async fn install_apk(&self, apk_path: &Path) -> Result<()> {
+    pub async fn install_apk(&mut self, apk_path: &Path) -> Result<()> {
         // TODO: Implement backup->reinstall->restore for incompatible updates
-        self.inner.install_package(apk_path, true, true).await.context("Failed to install APK")
+        let install_result = self.inner.install_package(apk_path, true, true).await;
+        let _ = self.on_package_list_change().await;
+        install_result.context("Failed to install APK")
     }
 
     /// Uninstalls a package from the device
@@ -326,8 +328,8 @@ impl AdbDevice {
     /// # Arguments
     /// * `package_name` - The package name to uninstall
     #[instrument(err)]
-    pub async fn uninstall_package(&self, package_name: &str) -> Result<()> {
-        match self.inner.uninstall_package(package_name).await {
+    pub async fn uninstall_package(&mut self, package_name: &str) -> Result<()> {
+        let uninstall_result = match self.inner.uninstall_package(package_name).await {
             Ok(_) => Ok(()),
             Err(e) => {
                 if e.to_string().contains("DELETE_FAILED_INTERNAL_ERROR") {
@@ -339,9 +341,10 @@ impl AdbDevice {
                         .unwrap_or_default();
 
                     if output.trim().is_empty() {
-                        bail!("Package not installed: {}", package_name);
+                        Err(anyhow!("Package not installed: {}", package_name))
+                    } else {
+                        Err(e.into())
                     }
-                    Err(e.into())
                 } else if e.to_string().contains("DELETE_FAILED_DEVICE_POLICY_MANAGER") {
                     // Try force uninstall for protected packages
                     info!(
@@ -349,13 +352,14 @@ impl AdbDevice {
                         package_name
                     );
                     self.shell(&format!("pm disable-user {}", package_name)).await?;
-                    self.inner.uninstall_package(package_name).await?;
-                    Ok(())
+                    self.inner.uninstall_package(package_name).await.map_err(Into::into)
                 } else {
                     Err(e.into())
                 }
             }
-        }
+        };
+        let _ = self.on_package_list_change().await;
+        uninstall_result
     }
 
     /// Converts the AdbDevice instance into its protobuf representation
@@ -414,7 +418,7 @@ impl AdbDevice {
     /// # Arguments
     /// * `game_dir` - Path to directory containing the game files
     #[instrument(err)]
-    pub async fn sideload_game(&self, game_dir: &Path) -> Result<()> {
+    pub async fn sideload_game(&mut self, game_dir: &Path) -> Result<()> {
         ensure!(game_dir.is_dir(), "Game path must be a directory");
 
         // Read directory entries
@@ -470,5 +474,9 @@ impl AdbDevice {
         }
 
         Ok(())
+    }
+
+    async fn on_package_list_change(&mut self) -> Result<()> {
+        self.refresh().packages(true).space(true).call().await
     }
 }

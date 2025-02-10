@@ -8,7 +8,7 @@ use forensic_adb::{AndroidStorageInput, DeviceBrief, DeviceState};
 use lazy_regex::{Lazy, Regex, lazy_regex};
 use tokio::time;
 use tokio_stream::StreamExt;
-use tracing::{debug, error, instrument, warn};
+use tracing::{Instrument, debug, debug_span, error, instrument, trace, warn};
 
 use crate::messages::{self as proto, AdbCommand, AdbResponse, DeviceChangedEvent};
 
@@ -50,6 +50,14 @@ impl AdbHandler {
             let handle = handle.clone();
             async move {
                 handle.receive_commands().await;
+            }
+        });
+
+        // Start periodic device info refresh
+        tokio::spawn({
+            let handle = handle.clone();
+            async move {
+                handle.run_periodic_refresh().await;
             }
         });
 
@@ -185,7 +193,7 @@ impl AdbHandler {
             AdbResponse { command: command as i32, success, message }.send_signal_to_dart();
         }
 
-        let device = self.current_device()?;
+        let mut device = (*self.current_device()?).clone();
 
         let result = match (command, parameters) {
             (
@@ -236,6 +244,7 @@ impl AdbHandler {
                 let result = device.install_apk(Path::new(&apk_path)).await;
                 match result {
                     Ok(_) => {
+                        self.set_device(Some(device), true);
                         send_response(
                             AdbCommand::InstallApk,
                             true,
@@ -258,6 +267,7 @@ impl AdbHandler {
                 let result = device.uninstall_package(&package_name).await;
                 match result {
                     Ok(_) => {
+                        self.set_device(Some(device), true);
                         send_response(
                             AdbCommand::UninstallPackage,
                             true,
@@ -280,6 +290,7 @@ impl AdbHandler {
                 let result = device.sideload_game(Path::new(&game_path)).await;
                 match result {
                     Ok(_) => {
+                        self.set_device(Some(device), true);
                         send_response(
                             AdbCommand::SideloadGame,
                             true,
@@ -379,6 +390,32 @@ impl AdbHandler {
         ensure!(self.device.load().is_some(), "Already disconnected");
         self.set_device(None, false);
         Ok(())
+    }
+
+    /// Runs a periodic refresh of device information
+    #[instrument]
+    async fn run_periodic_refresh(&self) {
+        let refresh_interval = Duration::from_secs(180); // 3 minutes
+        let mut interval = time::interval(refresh_interval);
+
+        loop {
+            interval.tick().await;
+            trace!("Device refresh tick");
+            if let Some(device) = self.try_current_device() {
+                let mut device = (*device).clone();
+                async {
+                    match device.refresh_all().await {
+                        Ok(_) => self.set_device(Some(device), true),
+                        Err(e) => error!(
+                            error = e.as_ref() as &dyn Error,
+                            "Periodic device refresh failed"
+                        ),
+                    }
+                }
+                .instrument(debug_span!("auto_refresh_run"))
+                .await;
+            }
+        }
     }
 }
 

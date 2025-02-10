@@ -197,6 +197,33 @@ class _ManageAppsState extends State<ManageApps> {
     );
   }
 
+  void _showUninstallDialog(BuildContext context, InstalledPackage app) async {
+    showDialog(
+      context: context,
+      builder: (context) => AlertDialog(
+        title: const Text('Uninstall App'),
+        content: Text(
+            'Are you sure you want to uninstall "${app.label}"?\n\nThis will permanently delete the app and all its data.'),
+        actions: [
+          TextButton(
+            onPressed: () => Navigator.of(context).pop(),
+            child: const Text('Cancel'),
+          ),
+          TextButton(
+            onPressed: () {
+              Navigator.of(context).pop();
+              AdbRequest(
+                      command: AdbCommand.ADB_COMMAND_UNINSTALL_PACKAGE,
+                      packageName: app.packageName)
+                  .sendSignalToRust();
+            },
+            child: const Text('Uninstall'),
+          ),
+        ],
+      ),
+    );
+  }
+
   Widget _buildAppList(List<InstalledPackage> apps) {
     if (apps.isEmpty) {
       return const Center(
@@ -251,7 +278,6 @@ class _ManageAppsState extends State<ManageApps> {
                     icon: const Icon(Icons.play_arrow),
                     tooltip: 'Launch',
                     onPressed: () async {
-                      // TODO: Implement launch functionality
                       AdbRequest(
                               command: AdbCommand.ADB_COMMAND_LAUNCH_APP,
                               packageName: app.packageName)
@@ -262,7 +288,6 @@ class _ManageAppsState extends State<ManageApps> {
                     icon: const Icon(Icons.close),
                     tooltip: 'Force Stop',
                     onPressed: () async {
-                      // TODO: Implement force stop functionality
                       AdbRequest(
                               command: AdbCommand.ADB_COMMAND_FORCE_STOP_APP,
                               packageName: app.packageName)
@@ -272,12 +297,7 @@ class _ManageAppsState extends State<ManageApps> {
                   IconButton(
                     icon: const Icon(Icons.delete_outline),
                     tooltip: 'Uninstall',
-                    onPressed: () async {
-                      // TODO: Implement uninstall functionality
-                      // AdbRequest(
-                      //     command: AdbCommand.ADB_COMMAND_UNINSTALL_PACKAGE,
-                      //     packageName: app.packageName).sendSignalToRust();
-                    },
+                    onPressed: () => _showUninstallDialog(context, app),
                   ),
                 ],
               ],

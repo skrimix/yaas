@@ -18,6 +18,13 @@ enum AppCategory {
   system,
 }
 
+// Some of these aren't technically system apps, but they belong to the OS
+const hiddenPrefixes = [
+  'com.oculus.',
+  'com.meta.',
+  'com.facebook.',
+];
+
 class _ManageAppsState extends State<ManageApps> {
   AppCategory _selectedCategory = AppCategory.vr;
   static const _animationDuration = Duration(milliseconds: 200);
@@ -64,13 +71,15 @@ class _ManageAppsState extends State<ManageApps> {
     if (packages == null) return [];
 
     var filtered = packages.where((app) {
+      final isForceHidden =
+          hiddenPrefixes.any((prefix) => app.packageName.startsWith(prefix));
       switch (category) {
         case AppCategory.vr: // VR Apps
-          return app.vr && !app.system && app.launchable;
+          return !isForceHidden && app.vr && !app.system && app.launchable;
         case AppCategory.other: // Other Apps
-          return !app.vr && !app.system && app.launchable;
+          return !isForceHidden && !app.vr && !app.system && app.launchable;
         case AppCategory.system: // System & Hidden Apps
-          return app.system || !app.launchable;
+          return isForceHidden || app.system || !app.launchable;
       }
     }).toList();
 

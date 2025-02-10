@@ -8,6 +8,7 @@ use tokio::{fs::File, io::BufReader};
 use tracing::{Span, error, info, instrument, trace, warn};
 
 use crate::{
+    adb::PACKAGE_NAME_REGEX,
     messages as proto,
     models::{
         DeviceType, InstalledPackage, SPACE_INFO_COMMAND, SpaceInfo, packages_from_device_output,
@@ -57,9 +58,6 @@ impl AdbDevice {
     ///
     /// # Arguments
     /// * `inner` - The underlying forensic_adb Device instance
-    ///
-    /// # Returns
-    /// Result containing the initialized AdbDevice or an error if initialization fails
     #[instrument(level = "trace")]
     pub async fn new(inner: Device) -> Result<Self> {
         let serial = inner.serial.clone();
@@ -240,9 +238,6 @@ impl AdbDevice {
     ///
     /// # Arguments
     /// * `package` - The package name to launch
-    ///
-    /// # Returns
-    /// Result indicating success or failure of the launch operation
     #[instrument(err)]
     pub async fn launch(&self, package: &str) -> Result<()> {
         // First try launching with VR category
@@ -412,5 +407,68 @@ impl AdbDevice {
                 .map(InstalledPackage::into_proto)
                 .collect(),
         }
+    }
+
+    /// Sideloads a game by installing its APK and pushing OBB data if present
+    ///
+    /// # Arguments
+    /// * `game_dir` - Path to directory containing the game files
+    #[instrument(err)]
+    pub async fn sideload_game(&self, game_dir: &Path) -> Result<()> {
+        ensure!(game_dir.is_dir(), "Game path must be a directory");
+
+        // Read directory entries
+        let mut entries = Vec::new();
+        let mut dir = tokio::fs::read_dir(game_dir).await?;
+        while let Some(entry) = dir.next_entry().await? {
+            entries.push(entry);
+        }
+
+        // Find APK file
+        let mut apk_path = None;
+        for entry in &entries {
+            if entry.file_type().await.context("Failed to get directory entry file type")?.is_file()
+                && entry.path().extension().and_then(|e| e.to_str()) == Some("apk")
+            {
+                if apk_path.is_some() {
+                    bail!("Multiple APK files found in game directory");
+                }
+                apk_path = Some(entry.path().to_path_buf());
+            }
+        }
+
+        let apk_path = apk_path.context("No APK file found in game directory")?;
+
+        // Look for OBB directory
+        let mut obb_dir = None;
+        for entry in &entries {
+            if entry.file_type().await.context("Failed to get directory entry file type")?.is_dir()
+            {
+                let path = entry.path();
+                if let Some(dir_name) = path.file_name().and_then(|n| n.to_str()) {
+                    if PACKAGE_NAME_REGEX.is_match(dir_name) {
+                        if obb_dir.is_some() {
+                            bail!("Multiple possible OBB directories found");
+                        }
+                        obb_dir = Some(path);
+                    }
+                }
+            }
+        }
+
+        // Install APK
+        self.install_apk(&apk_path).await?;
+
+        // Push OBB directory
+        if let Some(obb_dir) = obb_dir {
+            let package_name = obb_dir
+                .file_name()
+                .and_then(|n| n.to_str())
+                .context("Failed to get package name from OBB path")?;
+            let remote_obb_path = UnixPath::new("/data/media/0/Android/obb").join(package_name);
+            self.push_dir(&obb_dir, &remote_obb_path).await?;
+        }
+
+        Ok(())
     }
 }

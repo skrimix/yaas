@@ -5,6 +5,7 @@ use arc_swap::ArcSwapOption;
 use derive_more::Debug;
 use device::AdbDevice;
 use forensic_adb::{AndroidStorageInput, DeviceBrief, DeviceState};
+use lazy_regex::{Lazy, Regex, lazy_regex};
 use tokio::time;
 use tokio_stream::StreamExt;
 use tracing::{debug, error, instrument, warn};
@@ -12,6 +13,8 @@ use tracing::{debug, error, instrument, warn};
 use crate::messages::{self as proto, AdbCommand, AdbResponse, DeviceChangedEvent};
 
 pub mod device;
+
+pub static PACKAGE_NAME_REGEX: Lazy<Regex> = lazy_regex!(r"^(?:[A-Za-z]{1}[\w]*\.)+[A-Za-z][\w]*$");
 
 /// Events that can occur in the ADB system
 #[derive(Debug)]
@@ -270,8 +273,30 @@ impl AdbHandler {
                 }
             }
 
+            (
+                AdbCommand::SideloadGame,
+                Some(proto::adb_request::Parameters::GamePath(game_path)),
+            ) => {
+                let result = device.sideload_game(Path::new(&game_path)).await;
+                match result {
+                    Ok(_) => {
+                        send_response(
+                            AdbCommand::SideloadGame,
+                            true,
+                            format!("Sideloaded {}", game_path),
+                        );
+                        Ok(())
+                    }
+                    Err(e) => {
+                        let error_msg = format!("Failed to sideload game: {}", e);
+                        send_response(AdbCommand::SideloadGame, false, error_msg.clone());
+                        Err(anyhow::anyhow!(error_msg))
+                    }
+                }
+            }
             (cmd, params) => {
-                let error_msg = format!("Invalid parameters {:?} for command {:?}", params, cmd);
+                error!(command = ?cmd, parameters = ?params, "Invalid parameters for command");
+                let error_msg = format!("Invalid parameters for command {:?}", cmd);
                 send_response(cmd, false, error_msg.clone());
                 bail!(error_msg)
             }

@@ -8,6 +8,7 @@ enum AdbCommand {
   ADB_COMMAND_FORCE_STOP_APP = 2;
   ADB_COMMAND_INSTALL_APK = 3;
   ADB_COMMAND_UNINSTALL_PACKAGE = 4;
+  ADB_COMMAND_SIDELOAD_GAME = 5;
 }
 
 // ADB Command Request
@@ -17,6 +18,7 @@ message AdbRequest {
   oneof parameters {
     string package_name = 2; // Used for launch/stop/uninstall
     string apk_path = 3; // Used for APK installation
+    string game_path = 4; // Used for sideloading game
   }
 }
 

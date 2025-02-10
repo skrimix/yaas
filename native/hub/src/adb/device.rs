@@ -270,8 +270,8 @@ impl AdbDevice {
     /// # Arguments
     /// * `package` - The package name to force stop
     #[instrument(err)]
-    pub async fn force_stop(&self, package: &str) -> Result<(), DeviceError> {
-        self.inner.force_stop(package).await
+    pub async fn force_stop(&self, package: &str) -> Result<()> {
+        self.inner.force_stop(package).await.context("Failed to force stop package")
     }
 
     /// Pushes a file to the device
@@ -316,9 +316,9 @@ impl AdbDevice {
     /// # Arguments
     /// * `apk_path` - Path to the APK file to install
     //#[instrument(err, fields(apk_path = ?apk_path.display()))]
-    pub async fn install_apk(&self, apk_path: &Path) -> Result<(), DeviceError> {
+    pub async fn install_apk(&self, apk_path: &Path) -> Result<()> {
         // TODO: Implement backup->reinstall->restore for incompatible updates
-        self.inner.install_package(apk_path, true, true).await
+        self.inner.install_package(apk_path, true, true).await.context("Failed to install APK")
     }
 
     /// Uninstalls a package from the device

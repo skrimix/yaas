@@ -157,7 +157,7 @@ impl AdbHandler {
                 Ok(command) => {
                     if let Err(e) = self.execute_command(command, request.message.parameters).await
                     {
-                        error!(error = %e, "ADB command execution failed");
+                        error!(error = e.as_ref() as &dyn Error, "ADB command execution failed");
                     }
                 }
                 Err(unknown_value) => {
@@ -203,9 +203,9 @@ impl AdbHandler {
                         Ok(())
                     }
                     Err(e) => {
-                        let error_msg = format!("Failed to launch app: {}", e);
+                        let error_msg = format!("Failed to launch {}: {}", package_name, e);
                         send_response(AdbCommand::LaunchApp, false, error_msg.clone());
-                        Err(anyhow::anyhow!(error_msg))
+                        Err(e.context(format!("Failed to launch {}", package_name)))
                     }
                 }
             }
@@ -225,9 +225,9 @@ impl AdbHandler {
                         Ok(())
                     }
                     Err(e) => {
-                        let error_msg = format!("Failed to force stop app: {}", e);
+                        let error_msg = format!("Failed to force stop {}: {}", package_name, e);
                         send_response(AdbCommand::ForceStopApp, false, error_msg.clone());
-                        Err(anyhow::anyhow!(error_msg))
+                        Err(e.context(format!("Failed to force stop {}", package_name)))
                     }
                 }
             }
@@ -244,9 +244,9 @@ impl AdbHandler {
                         Ok(())
                     }
                     Err(e) => {
-                        let error_msg = format!("Failed to install APK: {}", e);
+                        let error_msg = format!("Failed to install {}: {}", apk_path, e);
                         send_response(AdbCommand::InstallApk, false, error_msg.clone());
-                        Err(anyhow::anyhow!(error_msg))
+                        Err(e.context(format!("Failed to install {}", apk_path)))
                     }
                 }
             }
@@ -266,9 +266,9 @@ impl AdbHandler {
                         Ok(())
                     }
                     Err(e) => {
-                        let error_msg = format!("Failed to uninstall package: {}", e);
+                        let error_msg = format!("Failed to uninstall {}: {}", package_name, e);
                         send_response(AdbCommand::UninstallPackage, false, error_msg.clone());
-                        Err(anyhow::anyhow!(error_msg))
+                        Err(e.context(format!("Failed to uninstall {}", package_name)))
                     }
                 }
             }
@@ -288,12 +288,13 @@ impl AdbHandler {
                         Ok(())
                     }
                     Err(e) => {
-                        let error_msg = format!("Failed to sideload game: {}", e);
+                        let error_msg = format!("Failed to sideload {}: {}", game_path, e);
                         send_response(AdbCommand::SideloadGame, false, error_msg.clone());
-                        Err(anyhow::anyhow!(error_msg))
+                        Err(e.context(format!("Failed to sideload {}", game_path)))
                     }
                 }
             }
+
             (cmd, params) => {
                 error!(command = ?cmd, parameters = ?params, "Invalid parameters for command");
                 let error_msg = format!("Invalid parameters for command {:?}", cmd);

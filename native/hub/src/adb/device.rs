@@ -182,6 +182,7 @@ impl AdbDevice {
             return Err(anyhow!("app_process command failed with exit code {}", exit_code));
         }
 
+        // TODO: See if getting this through the list_apps.dex tool is better
         let dumpsys_output = self.shell("dumpsys diskstats").await?;
 
         let packages = packages_from_device_output(list_output, &dumpsys_output)

@@ -12,7 +12,7 @@ use crate::{
     models::{
         DeviceType, InstalledPackage, SPACE_INFO_COMMAND, SpaceInfo, packages_from_device_output,
         vendor::quest::controller::{
-            CONTROLLER_INFO_COMMAND, ControllerStatus, ControllersInfo, parse_dumpsys,
+            CONTROLLER_INFO_COMMAND, ControllerStatus, HeadsetControllersInfo, parse_dumpsys,
         },
     },
 };
@@ -37,7 +37,7 @@ pub struct AdbDevice {
     /// Device battery level (0-100)
     pub battery_level: u8,
     /// Information about connected controllers
-    pub controllers: ControllersInfo,
+    pub controllers: HeadsetControllersInfo,
     /// Device storage space information
     pub space_info: SpaceInfo,
     /// List of installed packages on the device
@@ -77,7 +77,7 @@ impl AdbDevice {
             device_type,
             serial,
             battery_level: 0,
-            controllers: ControllersInfo::default(),
+            controllers: HeadsetControllersInfo::default(),
             space_info: SpaceInfo::default(),
             installed_packages: Vec::new(),
         };

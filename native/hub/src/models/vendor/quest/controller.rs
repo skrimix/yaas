@@ -38,15 +38,15 @@ pub struct ControllerInfo {
 
 #[derive(Debug, Default, Clone, Copy, PartialEq, Eq, Hash)]
 /// Holds info about both controllers connected to the headset.
-pub struct ControllersInfo {
+pub struct HeadsetControllersInfo {
     pub left: Option<ControllerInfo>,
     pub right: Option<ControllerInfo>,
 }
 
 #[instrument(level = "debug")]
 /// Parses the output of `QUEST_CONTROLLER_INFO_COMMAND` command.
-pub fn parse_dumpsys(lines: &str) -> ControllersInfo {
-    let mut result = ControllersInfo::default();
+pub fn parse_dumpsys(lines: &str) -> HeadsetControllersInfo {
+    let mut result = HeadsetControllersInfo::default();
 
     let re = regex!(
         r#"^\s*Paired.+Type:\s*(?<type>\w{4,5}).+Battery:\s*(?<battery>\-*\d{1,3})%.+ Status: (?<status>\w+).+$"#m

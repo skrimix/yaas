@@ -51,13 +51,3 @@ tracing-subscriber = { version = "0.3.19", features = [
 ] }
 ubyte = { version = "0.10.4", features = ["serde"] }
 chrono = "0.4.39"
-
-[profile.release]
-# TODO: enable optimizations
-#lto = true 
-debug = true
-strip = "debuginfo"
-split-debuginfo = "packed"
-
-[profile.dev]
-split-debuginfo = "packed"

@@ -6,3 +6,13 @@
 [workspace]
 members = ["./native/*"]
 resolver = "2"
+
+[profile.release]
+# TODO: enable optimizations
+#lto = true 
+debug = true
+strip = "debuginfo"
+split-debuginfo = "packed"
+
+[profile.dev]
+split-debuginfo = "packed"

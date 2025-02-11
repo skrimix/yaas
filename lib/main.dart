@@ -8,6 +8,7 @@ import './messages/all.dart';
 import 'widgets/home.dart';
 import 'widgets/status_bar.dart';
 import 'widgets/manage_apps.dart';
+import 'widgets/error_screen.dart';
 import 'providers/device_state.dart';
 
 final colorScheme = ColorScheme.fromSeed(
@@ -15,8 +16,28 @@ final colorScheme = ColorScheme.fromSeed(
   brightness: Brightness.dark,
 );
 
+class AppState extends ChangeNotifier {
+  String? _panicMessage;
+  String? get panicMessage => _panicMessage;
+
+  void setPanicMessage(String message) {
+    _panicMessage = message;
+    notifyListeners();
+  }
+}
+
 void main() async {
   await initializeRust(assignRustSignal);
+
+  runApp(
+    MultiProvider(
+      providers: [
+        ChangeNotifierProvider(create: (_) => DeviceState()),
+        ChangeNotifierProvider(create: (_) => AppState()),
+      ],
+      child: const RqlApp(),
+    ),
+  );
 
   AdbResponse.rustSignalStream.listen((response) {
     final type = response.message.success
@@ -57,15 +78,17 @@ void main() async {
     );
   });
 
-  runApp(
-    ChangeNotifierProvider(
-      create: (_) => DeviceState(),
-      child: const RqlApp(),
-    ),
-  );
+  RustPanic.rustSignalStream.listen((panic) {
+    final appState = RqlApp.navigatorKey.currentContext?.read<AppState>();
+    if (appState != null) {
+      appState.setPanicMessage(panic.message.message);
+    }
+  });
 }
 
 class RqlApp extends StatefulWidget {
+  static final navigatorKey = GlobalKey<NavigatorState>();
+
   const RqlApp({super.key});
 
   @override
@@ -80,7 +103,7 @@ class _RqlAppState extends State<RqlApp> {
     super.initState();
     _listener = AppLifecycleListener(
       onExitRequested: () async {
-        finalizeRust(); // Shut down the `tokio` Rust runtime.
+        finalizeRust();
         return AppExitResponse.exit;
       },
     );
@@ -96,12 +119,20 @@ class _RqlAppState extends State<RqlApp> {
   Widget build(BuildContext context) {
     return ToastificationWrapper(
       child: MaterialApp(
+        navigatorKey: RqlApp.navigatorKey,
         title: 'RQL',
         theme: ThemeData(
           colorScheme: colorScheme,
           useMaterial3: true,
         ),
-        home: const SinglePage(),
+        home: Consumer<AppState>(
+          builder: (context, appState, child) {
+            if (appState.panicMessage != null) {
+              return ErrorScreen(message: appState.panicMessage!);
+            }
+            return const SinglePage();
+          },
+        ),
       ),
     );
   }

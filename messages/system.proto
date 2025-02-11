@@ -1,0 +1,7 @@
+syntax = "proto3";
+package system;
+
+// [RUST-SIGNAL]
+message RustPanic {
+  string message = 1;
+}

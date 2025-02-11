@@ -275,17 +275,17 @@ impl AdbDevice {
         self.inner.force_stop(package).await.context("Failed to force stop package")
     }
 
-    /// Pushes a file to the device
-    ///
-    /// # Arguments
-    /// * `path` - Local path of the file to push
-    /// * `remote_path` - Destination path on the device
+    // Pushes a file to the device
+    //
+    // # Arguments
+    // * `path` - Local path of the file to push
+    // * `remote_path` - Destination path on the device
     //#[instrument(err, level = "debug", fields(path = ?path.display(), remote_path = ?remote_path.display()))]
-    async fn push(&self, path: &Path, remote_path: &UnixPath) -> Result<()> {
-        ensure!(path.is_file(), "Path does not exist or is not a file: {}", path.display());
-        let mut file = BufReader::new(File::open(path).await?);
-        self.inner.push(&mut file, remote_path, 0o777).await.context("Failed to push file")
-    }
+    // async fn push(&self, path: &Path, remote_path: &UnixPath) -> Result<()> {
+    //     ensure!(path.is_file(), "Path does not exist or is not a file: {}", path.display());
+    //     let mut file = BufReader::new(File::open(path).await?);
+    //     self.inner.push(&mut file, remote_path, 0o777).await.context("Failed to push file")
+    // }
 
     /// Pushes a directory to the device
     ///

@@ -20,7 +20,6 @@ async fn main() {
     std::panic::set_hook(Box::new(move |panic_info| {
         let backtrace = std::backtrace::Backtrace::force_capture();
         let message = format!("{panic_info}\n{backtrace}");
-        rinf::debug_print!("RUST PANIC: {message}");
         RustPanic { message }.send_signal_to_dart();
         original_hook(panic_info);
     }));

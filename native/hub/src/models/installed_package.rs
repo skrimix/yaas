@@ -1,4 +1,4 @@
-use anyhow::{Context, Result};
+use anyhow::{Context, Result, bail};
 use serde::Deserialize;
 
 use crate::messages as proto;
@@ -28,7 +28,7 @@ pub struct InstalledPackage {
 
 impl InstalledPackage {
     /// Updates the size information for the package
-    pub fn update_sizes(&mut self, app_size: u64, data_size: u64, cache_size: u64) {
+    fn update_sizes(&mut self, app_size: u64, data_size: u64, cache_size: u64) {
         self.size = AppSize { app: app_size, data: data_size, cache: cache_size };
     }
 
@@ -92,16 +92,16 @@ fn populate_sizes(packages: &mut [InstalledPackage], dumpsys_output: &str) -> Re
 
     // Validate that we have all required information
     if package_names.is_empty() {
-        return Err(anyhow::anyhow!("package names not found in dumpsys output"));
+        bail!("package names not found in dumpsys output");
     }
     if app_sizes.is_empty() {
-        return Err(anyhow::anyhow!("app sizes not found in dumpsys output"));
+        bail!("app sizes not found in dumpsys output");
     }
     if data_sizes.is_empty() {
-        return Err(anyhow::anyhow!("data sizes not found in dumpsys output"));
+        bail!("data sizes not found in dumpsys output");
     }
     if cache_sizes.is_empty() {
-        return Err(anyhow::anyhow!("cache sizes not found in dumpsys output"));
+        bail!("cache sizes not found in dumpsys output");
     }
 
     // Validate array lengths match
@@ -109,7 +109,7 @@ fn populate_sizes(packages: &mut [InstalledPackage], dumpsys_output: &str) -> Re
         || data_sizes.len() != package_names.len()
         || cache_sizes.len() != package_names.len()
     {
-        return Err(anyhow::anyhow!("size arrays have mismatched lengths"));
+        bail!("size arrays have mismatched lengths");
     }
 
     // Update package sizes

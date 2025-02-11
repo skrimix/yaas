@@ -19,6 +19,7 @@ impl Default for ControllerStatus {
 }
 
 impl From<&str> for ControllerStatus {
+    #[instrument(level = "trace")]
     fn from(value: &str) -> Self {
         match value {
             "Active" => Self::Active,

@@ -1,7 +1,7 @@
 import 'dart:io' show exit;
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
-import 'package:rinf/rinf.dart';
+// import 'package:rinf/rinf.dart';
 import 'package:toastification/toastification.dart';
 
 class ErrorScreen extends StatelessWidget {

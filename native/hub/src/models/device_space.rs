@@ -19,22 +19,13 @@ impl SpaceInfo {
     /// Creates a new SpaceInfo instance from `SPACE_INFO_COMMAND`
     pub fn from_stat_output(output: &str) -> Result<Self> {
         // block_size:total_blocks:available_blocks
-        let mut parts = output.trim().split(':');
-        let block_size: u64 = parts
-            .next()
-            .context("failed to get block size")?
-            .parse()
-            .context("failed to parse block size")?;
-        let total_blocks: u64 = parts
-            .next()
-            .context("failed to get total blocks")?
-            .parse()
-            .context("failed to parse total blocks")?;
-        let available_blocks: u64 = parts
-            .next()
-            .context("failed to get available blocks")?
-            .parse()
-            .context("failed to parse available blocks")?;
+        let parts = output.trim().split(':').collect::<Vec<&str>>();
+
+        ensure!(parts.len() == 3, "invalid stat output: {}", output);
+
+        let block_size: u64 = parts[0].parse().context("failed to parse block size")?;
+        let total_blocks: u64 = parts[1].parse().context("failed to parse total blocks")?;
+        let available_blocks: u64 = parts[2].parse().context("failed to parse available blocks")?;
 
         // A small sanity check
         ensure!(available_blocks <= total_blocks, "available blocks cannot exceed total blocks");

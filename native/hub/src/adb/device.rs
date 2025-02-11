@@ -4,7 +4,6 @@ use anyhow::{Context, Result, anyhow, bail, ensure};
 use bon::bon;
 use derive_more::Debug;
 use forensic_adb::{Device, UnixPath};
-use tokio::{fs::File, io::BufReader};
 use tracing::{Span, error, info, instrument, trace, warn};
 
 use crate::{

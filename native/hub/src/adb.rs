@@ -368,14 +368,27 @@ impl AdbHandler {
     #[instrument(err, ret)]
     async fn connect_device(&self) -> Result<AdbDevice> {
         // TODO: wait for device to be ready (boot_completed)
-        let device = AdbDevice::new(
-            self.adb_host
-                .clone()
-                .device_or_default(Option::<&String>::None, AndroidStorageInput::default())
-                .await
-                .context("Failed to connect to device")?,
+        let adb_host = self.adb_host.clone();
+        let devices = adb_host
+            .devices::<Vec<_>>()
+            .await?
+            .into_iter()
+            .filter(|d| d.state == DeviceState::Device)
+            .collect::<Vec<_>>();
+
+        // TODO: handle multiple devices
+        let first_device = devices.first().ok_or_else(|| anyhow::anyhow!("No device found"))?;
+
+        let inner_device = forensic_adb::Device::new(
+            adb_host,
+            first_device.serial.clone(),
+            first_device.info.clone(),
+            AndroidStorageInput::default(),
         )
-        .await?;
+        .await
+        .context("Failed to connect to device")?;
+
+        let device = AdbDevice::new(inner_device).await?;
 
         self.set_device(Some(device.clone()), false);
         Ok(device)

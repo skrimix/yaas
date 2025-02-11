@@ -58,7 +58,7 @@ class ErrorScreen extends StatelessWidget {
                     children: [
                       FilledButton.icon(
                         onPressed: () {
-                          finalizeRust();
+                          // finalizeRust();
                           exit(1);
                         },
                         icon: const Icon(Icons.close),

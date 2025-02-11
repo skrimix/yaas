@@ -82,6 +82,7 @@ void main() async {
     final appState = RqlApp.navigatorKey.currentContext?.read<AppState>();
     if (appState != null) {
       appState.setPanicMessage(panic.message.message);
+      finalizeRust();
     }
   });
 }

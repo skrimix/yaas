@@ -5,10 +5,6 @@ pub static CONTROLLER_INFO_COMMAND: &str = "dumpsys OVRRemoteService | grep Batt
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Hash)]
 /// Represents the current status of a Quest controller.
-/// - `Active`: Controller is connected and functioning normally
-/// - `Disabled`: Controller is intentionally disabled
-/// - `Searching`: Controller is attempting to establish connection
-/// - `Unknown`: Status could not be determined
 pub enum ControllerStatus {
     Active,
     Disabled,

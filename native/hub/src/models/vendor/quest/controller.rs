@@ -1,6 +1,8 @@
 use lazy_regex::regex;
 use tracing::{info, instrument, trace, warn};
 
+use crate::messages as proto;
+
 pub static CONTROLLER_INFO_COMMAND: &str = "dumpsys OVRRemoteService | grep Battery";
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Hash)]
@@ -37,6 +39,19 @@ pub struct ControllerInfo {
     pub status: ControllerStatus,
 }
 
+impl ControllerInfo {
+    pub fn into_proto(self) -> proto::ControllerInfo {
+        proto::ControllerInfo {
+            battery_level: self.battery_level.map(|l| l as u32),
+            status: match self.status {
+                ControllerStatus::Active => proto::ControllerStatus::Active,
+                ControllerStatus::Disabled => proto::ControllerStatus::Disabled,
+                ControllerStatus::Searching => proto::ControllerStatus::Searching,
+                ControllerStatus::Unknown => proto::ControllerStatus::Unknown,
+            } as i32,
+        }
+    }
+}
 #[derive(Debug, Default, Clone, Copy, PartialEq, Eq, Hash)]
 /// Holds info about both controllers connected to the headset.
 pub struct HeadsetControllersInfo {

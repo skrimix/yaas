@@ -1,5 +1,7 @@
 use std::fmt::Display;
 
+use crate::messages as proto;
+
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Hash)]
 pub enum DeviceType {
     Quest,
@@ -12,14 +14,18 @@ pub enum DeviceType {
 
 impl Display for DeviceType {
     fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
-        write!(f, "{}", match self {
-            Self::Quest => "Meta Quest",
-            Self::Quest2 => "Meta Quest 2",
-            Self::Quest3S => "Meta Quest 3S",
-            Self::QuestPro => "Meta Quest Pro",
-            Self::Quest3 => "Meta Quest 3",
-            Self::Unknown => "Unknown",
-        })
+        write!(
+            f,
+            "{}",
+            match self {
+                Self::Quest => "Meta Quest",
+                Self::Quest2 => "Meta Quest 2",
+                Self::Quest3S => "Meta Quest 3S",
+                Self::QuestPro => "Meta Quest Pro",
+                Self::Quest3 => "Meta Quest 3",
+                Self::Unknown => "Unknown",
+            }
+        )
     }
 }
 
@@ -33,6 +39,17 @@ impl DeviceType {
             "seacliff" => DeviceType::QuestPro,
             // TODO: add user setting for allowing unknown devices
             _ => DeviceType::Unknown,
+        }
+    }
+
+    pub fn into_proto(self) -> proto::DeviceType {
+        match self {
+            Self::Quest => proto::DeviceType::Quest,
+            Self::Quest2 => proto::DeviceType::Quest2,
+            Self::Quest3 => proto::DeviceType::Quest3,
+            Self::Quest3S => proto::DeviceType::Quest3s,
+            Self::QuestPro => proto::DeviceType::QuestPro,
+            Self::Unknown => proto::DeviceType::Unknown,
         }
     }
 }

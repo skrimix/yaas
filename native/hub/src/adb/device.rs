@@ -364,42 +364,15 @@ impl AdbDevice {
 
     /// Converts the AdbDevice instance into its protobuf representation
     pub fn into_proto(self) -> proto::AdbDevice {
-        /// Helper function to convert controller info to protobuf
-        fn controller_to_proto(
-            controller: crate::models::vendor::quest::controller::ControllerInfo,
-        ) -> proto::ControllerInfo {
-            proto::ControllerInfo {
-                battery_level: controller.battery_level.map(|l| l as u32),
-                status: match controller.status {
-                    ControllerStatus::Active => proto::ControllerStatus::Active,
-                    ControllerStatus::Disabled => proto::ControllerStatus::Disabled,
-                    ControllerStatus::Searching => proto::ControllerStatus::Searching,
-                    ControllerStatus::Unknown => proto::ControllerStatus::Unknown,
-                } as i32,
-            }
-        }
-
-        /// Helper function to convert device type to protobuf
-        fn device_type_to_proto(device_type: DeviceType) -> proto::DeviceType {
-            match device_type {
-                DeviceType::Quest => proto::DeviceType::Quest,
-                DeviceType::Quest2 => proto::DeviceType::Quest2,
-                DeviceType::Quest3 => proto::DeviceType::Quest3,
-                DeviceType::Quest3S => proto::DeviceType::Quest3s,
-                DeviceType::QuestPro => proto::DeviceType::QuestPro,
-                DeviceType::Unknown => proto::DeviceType::Unknown,
-            }
-        }
-
         proto::AdbDevice {
             name: self.name,
             product: self.product,
-            device_type: device_type_to_proto(self.device_type) as i32,
+            device_type: self.device_type.into_proto() as i32,
             serial: self.serial,
             battery_level: self.battery_level as u32,
             controllers: Some(proto::ControllersInfo {
-                left: self.controllers.left.map(controller_to_proto),
-                right: self.controllers.right.map(controller_to_proto),
+                left: self.controllers.left.map(|c| c.into_proto()),
+                right: self.controllers.right.map(|c| c.into_proto()),
             }),
             space_info: Some(proto::SpaceInfo {
                 total: self.space_info.total.into(),

@@ -16,13 +16,6 @@ pub mod device;
 
 pub static PACKAGE_NAME_REGEX: Lazy<Regex> = lazy_regex!(r"^(?:[A-Za-z]{1}[\w]*\.)+[A-Za-z][\w]*$");
 
-/// Events that can occur in the ADB system
-#[derive(Debug)]
-pub enum AdbEvent {
-    /// Event indicating a device connection state has changed
-    DeviceChanged(Option<Arc<AdbDevice>>),
-}
-
 /// Handles ADB device connections and commands
 #[derive(Debug)]
 pub struct AdbHandler {
@@ -90,9 +83,8 @@ impl AdbHandler {
         adb_host: forensic_adb::Host,
         sender: tokio::sync::mpsc::UnboundedSender<DeviceBrief>,
     ) -> Result<()> {
-        ensure_server_running(&adb_host).await?;
-
         loop {
+            ensure_server_running(&adb_host).await?;
             debug!("Starting track_devices loop");
             let stream = adb_host.track_devices();
             tokio::pin!(stream);
@@ -443,6 +435,7 @@ impl AdbHandler {
 async fn ensure_server_running(host: &forensic_adb::Host) -> Result<()> {
     if host.check_host_running().await.is_err() {
         debug!("Starting ADB server");
+        // TODO: include adb binary
         host.start_server(None).await?;
     }
     Ok(())

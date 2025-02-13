@@ -40,6 +40,7 @@ dependencies:
   filesize: ^2.0.1
   proper_filesize: ^1.0.2
   toastification: ^2.3.0
+  file_picker: ^8.3.5
 
 dev_dependencies:
   flutter_test:

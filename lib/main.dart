@@ -8,6 +8,7 @@ import './messages/all.dart';
 import 'widgets/home.dart';
 import 'widgets/status_bar.dart';
 import 'widgets/manage_apps.dart';
+import 'widgets/local_sideload.dart';
 import 'widgets/error_screen.dart';
 import 'providers/device_state.dart';
 
@@ -82,6 +83,7 @@ void main() async {
     final appState = RqlApp.navigatorKey.currentContext?.read<AppState>();
     if (appState != null) {
       appState.setPanicMessage(panic.message.message);
+      // Rust side is borked, shut it down
       finalizeRust();
     }
   });
@@ -166,7 +168,7 @@ class _SinglePageState extends State<SinglePage> {
     Destination(
         icon: Icons.arrow_circle_down,
         label: 'Sideload',
-        content: Text('Local Sideload')),
+        content: const LocalSideload()),
     Destination(
         icon: Icons.settings, label: 'Settings', content: Text('Settings')),
     Destination(icon: Icons.info, label: 'About', content: Text('About')),

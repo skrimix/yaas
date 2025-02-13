@@ -311,25 +311,60 @@ impl AdbHandler {
     /// # Arguments
     /// * `device` - Optional new device state
     /// * `update_current` - Whether to update the current device if it exists
-//  #[instrument(level = "debug")]
+    //  #[instrument(level = "debug")]
     fn set_device(&self, device: Option<AdbDevice>, update_current: bool) {
         if update_current {
-            if let Some(current_device) = self.try_current_device() {
-                if let Some(ref new_device) = device {
+            if device.is_none() {
+                // TODO: should this be an error?
+                warn!("Attempted to pass None as a device update");
+                return;
+            }
+            // Jumping through hoops to (mostly) avoid race conditions
+            loop {
+                let current = self.device.load();
+
+                if let (Some(current_device), Some(new_device)) = (current.as_ref(), &device) {
                     if current_device.serial != new_device.serial {
                         debug!("Ignoring device update for different device");
                         return;
                     }
-                } else {
-                    warn!("Attempted to update device when current device is None");
-                    return;
                 }
-            }
-        }
 
-        let proto_device = device.clone().map(|d| d.into_proto());
-        self.device.swap(device.map(Arc::new));
-        DeviceChangedEvent { device: proto_device }.send_signal_to_dart();
+                // This returns whatever was in the slot before the swap attempt
+                // If the value differs from our `current` variable, the swap failed
+                let maybe_current =
+                    self.device.compare_and_swap(&current, device.clone().map(Arc::new));
+
+                // Verify that the update was successful
+                match (current.as_ref(), maybe_current.as_ref()) {
+                    // Case 1: We had a device, and we successfully replaced it
+                    (Some(c), Some(u)) if Arc::ptr_eq(u, c) => {
+                        let proto_device = device.clone().map(|d| d.into_proto());
+                        DeviceChangedEvent { device: proto_device }.send_signal_to_dart();
+                        return;
+                    }
+                    // Case 2: We had no device, and we successfully added one
+                    (None, None) => {
+                        let proto_device = device.clone().map(|d| d.into_proto());
+                        DeviceChangedEvent { device: proto_device }.send_signal_to_dart();
+                        return;
+                    }
+                    // Case 3: We had a device, but it was disconnected
+                    (Some(_), None) => {
+                        return;
+                    }
+                    _ => {}
+                }
+
+                // If verification failed, another thread modified the device
+                // Loop and try again
+            }
+        } else {
+            // For update_current=false, we just do a direct store
+            let proto_device = device.clone().map(|d| d.into_proto());
+            self.device.store(device.map(Arc::new));
+            DeviceChangedEvent { device: proto_device }.send_signal_to_dart();
+        }
     }
 
     /// Attempts to get the currently connected device
@@ -366,7 +401,7 @@ impl AdbHandler {
             .collect::<Vec<_>>();
 
         // TODO: handle multiple devices
-        let first_device = devices.first().ok_or_else(|| anyhow::anyhow!("No device found"))?;
+        let first_device = devices.first().context("No device found")?;
 
         let inner_device = forensic_adb::Device::new(
             adb_host,
@@ -389,7 +424,10 @@ impl AdbHandler {
     /// Result indicating success or failure of the disconnection
     //  #[instrument(err)]
     async fn disconnect_device(&self) -> Result<()> {
-        ensure!(self.device.load().is_some(), "Already disconnected");
+        ensure!(
+            self.device.load().is_some(),
+            "Cannot disconnect from a device when none is connected"
+        );
         self.set_device(None, false);
         Ok(())
     }

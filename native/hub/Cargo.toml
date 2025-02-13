@@ -45,6 +45,7 @@ tracing = { version = "0.1.41", features = [
     "max_level_trace",
     "release_max_level_debug",
 ] }
+tracing-appender = "0.2"
 tracing-subscriber = { version = "0.3.19", features = [
     "time",
     "env-filter",

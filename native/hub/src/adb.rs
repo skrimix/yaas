@@ -275,25 +275,22 @@ impl AdbHandler {
                 }
             }
 
-            (
-                AdbCommand::SideloadGame,
-                Some(proto::adb_request::Parameters::GamePath(game_path)),
-            ) => {
-                let result = device.sideload_game(Path::new(&game_path)).await;
+            (AdbCommand::SideloadApp, Some(proto::adb_request::Parameters::AppPath(app_path))) => {
+                let result = device.sideload_app(Path::new(&app_path)).await;
                 match result {
                     Ok(_) => {
                         self.set_device(Some(device), true);
                         send_response(
-                            AdbCommand::SideloadGame,
+                            AdbCommand::SideloadApp,
                             true,
-                            format!("Sideloaded {}", game_path),
+                            format!("Sideloaded {}", app_path),
                         );
                         Ok(())
                     }
                     Err(e) => {
-                        let error_msg = format!("Failed to sideload {}: {}", game_path, e);
-                        send_response(AdbCommand::SideloadGame, false, error_msg.clone());
-                        Err(e.context(format!("Failed to sideload {}", game_path)))
+                        let error_msg = format!("Failed to sideload {}: {}", app_path, e);
+                        send_response(AdbCommand::SideloadApp, false, error_msg.clone());
+                        Err(e.context(format!("Failed to sideload {}", app_path)))
                     }
                 }
             }

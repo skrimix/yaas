@@ -3,10 +3,10 @@ use std::{fmt::Display, path::Path, sync::LazyLock};
 use anyhow::{Context, Result, anyhow, bail, ensure};
 use bon::bon;
 use derive_more::Debug;
-use forensic_adb::{Device, UnixFileStatus, UnixPath};
+use forensic_adb::{Device, UnixFileStatus, UnixPath, UnixPathBuf};
 use lazy_regex::{Lazy, Regex, lazy_regex};
 use tokio::{fs::File, io::BufReader};
-use tracing::{Span, debug, error, info, instrument, trace, warn};
+use tracing::{Span, debug, error, info, trace, warn};
 
 use crate::{
     adb::PACKAGE_NAME_REGEX,
@@ -62,7 +62,7 @@ impl AdbDevice {
     ///
     /// # Arguments
     /// * `inner` - The underlying forensic_adb Device instance
-    #[instrument(level = "trace")]
+    //  #[instrument(level = "trace")]
     pub async fn new(inner: Device) -> Result<Self> {
         let serial = inner.serial.clone();
         let product = inner
@@ -91,7 +91,7 @@ impl AdbDevice {
     }
 
     /// Refreshes all device information (packages, battery, space)
-    #[instrument(level = "debug")]
+    //  #[instrument(level = "debug")]
     pub async fn refresh_all(&mut self) -> Result<()> {
         self.refresh().battery(true).space(true).packages(true).call().await
     }
@@ -151,7 +151,7 @@ impl AdbDevice {
     ///
     /// # Returns
     /// Result containing the command output as a string
-    #[instrument(err, level = "debug")]
+    //  #[instrument(err, level = "debug")]
     // TODO: Add `check_exit_code` parameter
     async fn shell(&self, command: &str) -> Result<String> {
         self.inner
@@ -162,7 +162,7 @@ impl AdbDevice {
     }
 
     /// Refreshes the list of installed packages on the device
-    #[instrument(err, level = "debug")]
+    //  #[instrument(err, level = "debug")]
     async fn refresh_package_list(&mut self) -> Result<()> {
         // Push the list_apps.dex tool to device
         self.push_bytes(&LIST_APPS_DEX_BYTES, UnixPath::new("/data/local/tmp/list_apps.dex"))
@@ -201,7 +201,7 @@ impl AdbDevice {
     }
 
     /// Refreshes battery information for the device and controllers
-    #[instrument(err, level = "debug")]
+    //  #[instrument(err, level = "debug")]
     async fn refresh_battery_info(&mut self) -> Result<()> {
         // Get device battery level
         let device_level: u8 = self
@@ -226,7 +226,7 @@ impl AdbDevice {
     }
 
     /// Refreshes storage space information
-    #[instrument(err, level = "debug")]
+    //  #[instrument(err, level = "debug")]
     async fn refresh_space_info(&mut self) -> Result<()> {
         let space_info = self.get_space_info().await?;
         self.space_info = space_info;
@@ -234,7 +234,7 @@ impl AdbDevice {
     }
 
     /// Gets storage space information from the device
-    #[instrument(err, level = "debug")]
+    //  #[instrument(err, level = "debug")]
     async fn get_space_info(&self) -> Result<SpaceInfo> {
         let output = self.shell(SPACE_INFO_COMMAND).await.context("Failed to get space info")?;
         SpaceInfo::from_stat_output(&output)
@@ -244,7 +244,7 @@ impl AdbDevice {
     ///
     /// # Arguments
     /// * `package` - The package name to launch
-    #[instrument(err)]
+    //  #[instrument(err)]
     pub async fn launch(&self, package: &str) -> Result<()> {
         // First try launching with VR category
         let output = self
@@ -275,21 +275,121 @@ impl AdbDevice {
     ///
     /// # Arguments
     /// * `package` - The package name to force stop
-    #[instrument(err)]
+    //  #[instrument(err)]
     pub async fn force_stop(&self, package: &str) -> Result<()> {
         self.inner.force_stop(package).await.context("Failed to force stop package")
+    }
+
+    /// Resolves the destination path for a push operation
+    async fn resolve_push_dest_path(&self, source: &Path, dest: &UnixPath) -> Result<UnixPathBuf> {
+        let source_name = source
+            .file_name()
+            .context("Source path has no file name")?
+            .to_str()
+            .context("Source file name is not valid UTF-8")?;
+
+        // Check if destination exists
+        let dest_stat = self.inner.stat(dest).await;
+
+        if let Ok(stat) = dest_stat {
+            if stat.file_mode == UnixFileStatus::Directory {
+                // If destination is a directory, append source file name
+                Ok(UnixPathBuf::from(dest).join(source_name))
+            } else if source.is_dir() {
+                // Can't push directory to existing file
+                bail!(
+                    "Cannot push directory '{}' to existing file '{}'",
+                    source.display(),
+                    dest.display()
+                )
+            } else {
+                // Use destination path as is
+                Ok(UnixPathBuf::from(dest))
+            }
+        } else {
+            // Check if parent exists
+            if let Some(parent) = dest.parent() {
+                let parent_stat = self.inner.stat(parent).await;
+                if parent_stat.is_ok() {
+                    Ok(UnixPathBuf::from(dest))
+                } else {
+                    bail!("Parent directory '{}' does not exist", parent.display())
+                }
+            } else {
+                bail!("Invalid destination path: no parent directory")
+            }
+        }
+    }
+
+    /// Resolves the destination path for a pull operation
+    async fn resolve_pull_dest_path(
+        &self,
+        source: &UnixPath,
+        dest: &Path,
+    ) -> Result<std::path::PathBuf> {
+        let source_name = source
+            .file_name()
+            .context("Source path has no file name")?
+            .to_str()
+            .context("Source file name is not valid UTF-8")?;
+
+        // Check if destination exists
+        if dest.exists() {
+            if dest.is_dir() {
+                // If destination is a directory, append source file name
+                Ok(dest.join(source_name))
+            } else {
+                // Can't pull to existing file if source is directory
+                let source_is_dir = match self.inner.stat(source).await {
+                    Ok(stat) => stat.file_mode == UnixFileStatus::Directory,
+                    Err(_) => false,
+                };
+                if source_is_dir {
+                    bail!(
+                        "Cannot pull directory '{}' to existing file '{}'",
+                        source.display(),
+                        dest.display()
+                    )
+                } else {
+                    // Use destination path as is for file
+                    Ok(dest.to_path_buf())
+                }
+            }
+        } else {
+            // Check if parent exists
+            if let Some(parent) = dest.parent() {
+                if parent.exists() {
+                    // Parent exists, use destination path as is
+                    Ok(dest.to_path_buf())
+                } else {
+                    bail!("Parent directory '{}' does not exist", parent.display())
+                }
+            } else {
+                bail!("Invalid destination path: no parent directory")
+            }
+        }
     }
 
     /// Pushes a file to the device
     ///
     /// # Arguments
-    /// * `path` - Local path of the file to push
-    /// * `remote_path` - Destination path on the device
-    // #[instrument(err, level = "debug", fields(path = ?path.display(), remote_path = ?remote_path.display()))]
-    async fn push(&self, path: &Path, remote_path: &UnixPath) -> Result<()> {
-        ensure!(path.is_file(), "Path does not exist or is not a file: {}", path.display());
-        let mut file = BufReader::new(File::open(path).await?);
-        self.inner.push(&mut file, remote_path, 0o777).await.context("Failed to push file")
+    /// * `source_file` - Local path of the file to push
+    /// * `dest_file` - Destination path on the device
+    async fn push(&self, source_file: &Path, dest_file: &UnixPath) -> Result<()> {
+        ensure!(
+            source_file.is_file(),
+            "Path does not exist or is not a file: {}",
+            source_file.display()
+        );
+
+        let dest_path = self.resolve_push_dest_path(source_file, dest_file).await?;
+        debug!(
+            source_file = source_file.display().to_string(),
+            dest_path = dest_path.display().to_string(),
+            "Pushing file"
+        );
+        let mut file = BufReader::new(File::open(source_file).await?);
+        self.inner.push(&mut file, &dest_path, 0o777).await.context("Failed to push file")
     }
 
     /// Pushes a directory to the device
@@ -297,14 +397,20 @@ impl AdbDevice {
     /// # Arguments
     /// * `source` - Local directory path to push
     /// * `dest_dir` - Destination directory path on device
-    //#[instrument(err, level = "debug", fields(source = ?source.display(), dest_dir = ?dest_dir.display()))]
-    pub async fn push_dir(&self, source: &Path, dest_dir: &UnixPath) -> Result<()> {
+    pub async fn push_dir(&self, source: &Path, dest: &UnixPath) -> Result<()> {
         ensure!(
             source.is_dir(),
             "Source path does not exist or is not a directory: {}",
             source.display()
         );
-        self.inner.push_dir(source, dest_dir, 0o777).await.context("Failed to push directory")
+
+        let dest_path = self.resolve_push_dest_path(source, dest).await?;
+        debug!(
+            source = source.display().to_string(),
+            dest_path = dest_path.display().to_string(),
+            "Pushing directory"
+        );
+        self.inner.push_dir(source, &dest_path, 0o777).await.context("Failed to push directory")
     }
 
     /// Pushes raw bytes to a file on the device
@@ -314,43 +420,62 @@ impl AdbDevice {
     /// * `remote_path` - Destination path on the device
     // #[instrument(err, level = "debug", skip(bytes, remote_path))] // BUG: segfaults
     async fn push_bytes(&self, mut bytes: &[u8], remote_path: &UnixPath) -> Result<()> {
+        debug!(
+            bytes_len = bytes.len(),
+            remote_path = remote_path.display().to_string(),
+            "Pushing bytes"
+        );
         self.inner.push(&mut bytes, remote_path, 0o777).await.context("Failed to push bytes")
     }
 
     /// Pulls a file from the device
     ///
     /// # Arguments
-    /// * `remote_file_path` - Remote path to the file on the device
-    /// * `local_file_path` - Destination local file path
-    // #[instrument(err, level = "debug", fields(remote_path = ?remote_path.display(), local_path = ?local_path.display()))]
-    async fn pull(&self, remote_file_path: &UnixPath, local_file_path: &Path) -> Result<()> {
-        if local_file_path.exists() {
-            if local_file_path.is_file() {
-                debug!(file = remote_file_path.display().to_string(), "Overwriting existing file");
-            } else {
-                bail!("Destination path is not a file: {}", local_file_path.display());
-            }
-        }
-        let mut file = File::create(local_file_path).await?;
-        self.inner.pull(remote_file_path, &mut file).await?;
+    /// * `source_file` - Remote path to the file on the device
+    /// * `dest_file` - Destination local file path
+    async fn pull(&self, source_file: &UnixPath, dest_file: &Path) -> Result<()> {
+        // Verify source exists and is a file
+        let source_stat =
+            self.inner.stat(source_file).await.context("Failed to stat source file")?;
+        ensure!(
+            source_stat.file_mode == UnixFileStatus::RegularFile,
+            "Source path is not a regular file: {}",
+            source_file.display().to_string()
+        );
+
+        let dest_path = self.resolve_pull_dest_path(source_file, dest_file).await?;
+        debug!(
+            source_file = source_file.display().to_string(),
+            dest_path = dest_path.display().to_string(),
+            "Pulling file"
+        );
+        let mut file = File::create(&dest_path).await?;
+        self.inner.pull(source_file, &mut file).await?;
         Ok(())
     }
 
     /// Pulls a directory from the device
     ///
     /// # Arguments
-    /// * `remote_dir_path` - Remote path to the directory on the device
-    /// * `local_dir_path` - Destination local directory path
-    async fn pull_dir(&self, remote_dir_path: &UnixPath, local_dir_path: &Path) -> Result<()> {
+    /// * `source` - Remote path to the directory on the device
+    /// * `dest` - Destination local directory path
+    async fn pull_dir(&self, source: &UnixPath, dest: &Path) -> Result<()> {
+        // Verify source exists and is a directory
+        let source_stat =
+            self.inner.stat(source).await.context("Failed to stat source directory")?;
         ensure!(
-            local_dir_path.is_dir(),
-            "Destination path does not exist or is not a directory: {}",
-            local_dir_path.display()
+            source_stat.file_mode == UnixFileStatus::Directory,
+            "Source path is not a directory: {}",
+            source.display().to_string()
         );
-        self.inner
-            .pull_dir(remote_dir_path, local_dir_path)
-            .await
-            .context("Failed to pull directory")
+
+        let dest_path = self.resolve_pull_dest_path(source, dest).await?;
+        debug!(
+            source = source.display().to_string(),
+            dest_path = dest_path.display().to_string(),
+            "Pulling directory"
+        );
+        self.inner.pull_dir(source, &dest_path).await.context("Failed to pull directory")
     }
 
     /// Pulls an item from the device. A stat command is used to determine if the remote path is a file or directory
@@ -375,6 +500,23 @@ impl AdbDevice {
         Ok(())
     }
 
+    /// Pushes an item to the device
+    ///
+    /// # Arguments
+    /// * `source` - Local path to the file/directory to push
+    /// * `dest` - Destination path on the device
+    async fn push_any(&self, source: &Path, dest: &UnixPath) -> Result<()> {
+        ensure!(source.exists(), "Source path does not exist: {}", source.display());
+        if source.is_dir() {
+            self.push_dir(source, dest).await?;
+        } else if source.is_file() {
+            self.push(source, dest).await?;
+        } else {
+            bail!("Unsupported source file type: {}", source.display());
+        }
+        Ok(())
+    }
+
     /// Installs an APK on the device
     ///
     /// # Arguments
@@ -391,7 +533,7 @@ impl AdbDevice {
     ///
     /// # Arguments
     /// * `package_name` - The package name to uninstall
-    #[instrument(err)]
+    //  #[instrument(err)]
     pub async fn uninstall_package(&mut self, package_name: &str) -> Result<()> {
         let uninstall_result = match self.inner.uninstall_package(package_name).await {
             Ok(_) => Ok(()),
@@ -454,7 +596,7 @@ impl AdbDevice {
     ///
     /// # Arguments
     /// * `script_path` - Path to the install script file
-    #[instrument(err, level = "debug")]
+    //  #[instrument(err, level = "debug")]
     async fn execute_install_script(&mut self, script_path: &Path) -> Result<()> {
         let script_content = tokio::fs::read_to_string(script_path)
             .await
@@ -570,39 +712,14 @@ impl AdbDevice {
                     let source = script_dir.join(adb_args[0]);
                     let dest = UnixPath::new(adb_args[1]);
 
-                    ensure!(
-                        source.exists(),
-                        "Line {}: adb push: source path '{}' does not exist",
-                        line_index + 1,
-                        adb_args[0]
-                    );
-
-                    if source.is_dir() {
-                        self.push_dir(&source, dest).await.with_context(|| {
-                            format!(
-                                "Line {}: adb push: failed to push directory '{}' to '{}'",
-                                line_index + 1,
-                                adb_args[0],
-                                adb_args[1]
-                            )
-                        })?;
-                    } else if source.is_file() {
-                        self.push(&source, dest).await.with_context(|| {
-                            format!(
-                                "Line {}: adb push: failed to push file '{}' to '{}'",
-                                line_index + 1,
-                                adb_args[0],
-                                adb_args[1]
-                            )
-                        })?;
-                    } else {
-                        bail!(
-                            "Line {}: adb push: source path '{}' exists but is not a file or \
-                             directory",
+                    self.push_any(&source, dest).await.with_context(|| {
+                        format!(
+                            "Line {}: adb push: failed to push file/directory '{}' to '{}'",
                             line_index + 1,
-                            adb_args[0]
-                        );
-                    }
+                            source.display(),
+                            dest.display()
+                        )
+                    })?;
                 }
                 "pull" => {
                     ensure!(
@@ -633,7 +750,7 @@ impl AdbDevice {
     ///
     /// # Arguments
     /// * `app_dir` - Path to directory containing the app files
-    #[instrument(err)]
+    //  #[instrument(err)]
     pub async fn sideload_app(&mut self, app_dir: &Path) -> Result<()> {
         ensure!(app_dir.is_dir(), "App path must be a directory");
 

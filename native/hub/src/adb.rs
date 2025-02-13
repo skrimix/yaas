@@ -62,7 +62,7 @@ impl AdbHandler {
     ///
     /// # Arguments
     /// * `adb_handler` - Reference to the AdbHandler instance to manage device updates
-    #[instrument(level = "debug")]
+    //  #[instrument(level = "debug")]
     fn start_device_monitor(adb_handler: Arc<AdbHandler>) {
         let (sender, receiver) = tokio::sync::mpsc::unbounded_channel();
 
@@ -78,7 +78,7 @@ impl AdbHandler {
     /// # Arguments
     /// * `adb_host` - The ADB host instance to track devices from
     /// * `sender` - Channel sender to communicate device updates
-    #[instrument(level = "debug", err)]
+    //  #[instrument(level = "debug", err)]
     async fn run_device_tracker(
         adb_host: forensic_adb::Host,
         sender: tokio::sync::mpsc::UnboundedSender<DeviceBrief>,
@@ -117,7 +117,7 @@ impl AdbHandler {
     /// # Arguments
     /// * `adb_handler` - Reference to the AdbHandler instance
     /// * `receiver` - Channel receiver for device updates
-    #[instrument(level = "debug", err)]
+    //  #[instrument(level = "debug", err)]
     async fn handle_device_updates(
         adb_handler: Arc<AdbHandler>,
         mut receiver: tokio::sync::mpsc::UnboundedReceiver<DeviceBrief>,
@@ -149,7 +149,7 @@ impl AdbHandler {
     }
 
     /// Listens for and processes ADB commands received from Dart
-    #[instrument(level = "debug")]
+    //  #[instrument(level = "debug")]
     async fn receive_commands(&self) {
         let receiver = proto::AdbRequest::get_dart_signal_receiver();
         while let Some(request) = receiver.recv().await {
@@ -175,7 +175,7 @@ impl AdbHandler {
     ///
     /// # Returns
     /// Result indicating success or failure of the command execution
-    #[instrument(level = "debug")]
+    //  #[instrument(level = "debug")]
     async fn execute_command(
         &self,
         command: AdbCommand,
@@ -311,7 +311,7 @@ impl AdbHandler {
     /// # Arguments
     /// * `device` - Optional new device state
     /// * `update_current` - Whether to update the current device if it exists
-    #[instrument(level = "debug")]
+//  #[instrument(level = "debug")]
     fn set_device(&self, device: Option<AdbDevice>, update_current: bool) {
         if update_current {
             if let Some(current_device) = self.try_current_device() {
@@ -336,7 +336,7 @@ impl AdbHandler {
     ///
     /// # Returns
     /// Option containing the current device if one is connected
-    #[instrument(level = "trace")]
+    //  #[instrument(level = "trace")]
     fn try_current_device(&self) -> Option<Arc<AdbDevice>> {
         self.device.load().as_ref().map(Arc::clone)
     }
@@ -345,7 +345,7 @@ impl AdbHandler {
     ///
     /// # Returns
     /// Result containing the current device or an error if no device is connected
-    #[instrument(level = "trace")]
+    //  #[instrument(level = "trace")]
     fn current_device(&self) -> Result<Arc<AdbDevice>> {
         self.try_current_device().context("No device connected")
     }
@@ -354,7 +354,7 @@ impl AdbHandler {
     ///
     /// # Returns
     /// Result containing the connected AdbDevice instance or an error if connection fails
-    #[instrument(err, ret)]
+    //  #[instrument(err, ret)]
     async fn connect_device(&self) -> Result<AdbDevice> {
         // TODO: wait for device to be ready (boot_completed)
         let adb_host = self.adb_host.clone();
@@ -387,7 +387,7 @@ impl AdbHandler {
     ///
     /// # Returns
     /// Result indicating success or failure of the disconnection
-    #[instrument(err)]
+    //  #[instrument(err)]
     async fn disconnect_device(&self) -> Result<()> {
         ensure!(self.device.load().is_some(), "Already disconnected");
         self.set_device(None, false);
@@ -395,7 +395,7 @@ impl AdbHandler {
     }
 
     /// Runs a periodic refresh of device information
-    #[instrument]
+    //  #[instrument]
     async fn run_periodic_refresh(&self) {
         let refresh_interval = Duration::from_secs(180); // 3 minutes
         let mut interval = time::interval(refresh_interval);

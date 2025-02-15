@@ -8,15 +8,17 @@ message CloudApp {
   string package_name = 3;
   uint32 version_code = 4;
   string last_updated = 5;
-  uint32 size_bytes = 6;
+  uint32 size = 6;
 }
 
 // Request to get available cloud apps
+// [DART-SIGNAL]
 message GetCloudAppsRequest {
   bool refresh = 1;
 }
 
 // Response containing available cloud apps
+// [RUST-SIGNAL]
 message GetCloudAppsResponse {
   repeated CloudApp apps = 1;
   optional string error = 2;

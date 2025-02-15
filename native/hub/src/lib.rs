@@ -3,6 +3,7 @@
 
 use adb::AdbHandler;
 use anyhow::{Context, Result};
+use downloader::Downloader;
 use messages::RustPanic;
 use mimalloc::MiMalloc;
 use tracing::Level;
@@ -20,9 +21,13 @@ static GLOBAL: MiMalloc = MiMalloc;
 rinf::write_interface!();
 
 pub mod adb;
+pub mod downloader;
 pub mod models;
+pub mod utils;
+
 #[tokio::main(flavor = "multi_thread")]
 async fn main() {
+    std::env::set_var("RUST_BACKTRACE", "1");
     let original_hook = std::panic::take_hook();
     std::panic::set_hook(Box::new(move |panic_info| {
         let backtrace = std::backtrace::Backtrace::force_capture();
@@ -42,6 +47,7 @@ async fn main() {
     }
 
     let _adb_handler = AdbHandler::create();
+    let _downloader = Downloader::create();
 
     // Keep the main function running until Dart shutdown.
     rinf::dart_shutdown().await;

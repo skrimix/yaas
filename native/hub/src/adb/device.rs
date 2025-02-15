@@ -603,6 +603,26 @@ impl AdbDevice {
             .context("Failed to read install script")?;
         let script_dir = script_path.parent().context("Failed to get script directory")?;
 
+        // TODO: should this be moved elsewhere?
+        // Unpack all 7z archives if present
+        let mut dir = tokio::fs::read_dir(script_dir).await?;
+        while let Some(entry) = dir.next_entry().await? {
+            if entry.file_type().await.context("Failed to get directory entry file type")?.is_file()
+                && entry.path().extension().and_then(|e| e.to_str()) == Some("7z")
+            {
+                tokio::task::spawn_blocking({
+                    let path = entry.path();
+                    debug!(path = path.display().to_string(), "Decompressing 7z archive");
+                    let script_dir = script_dir.to_path_buf();
+                    move || {
+                        sevenz_rust::decompress_file(&path, script_dir)
+                            .context("Error decompressing 7z archive")
+                    }
+                })
+                .await??;
+            }
+        }
+
         for (line_index, line) in script_content.lines().enumerate() {
             let line = line.trim();
 

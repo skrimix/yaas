@@ -69,7 +69,7 @@ impl NifStorage {
         let creds = tokio::fs::read_to_string("/home/skrimix/work/webdav-creds.txt")
             .await
             .context("failed to read webdav credentials")?;
-        let creds = creds.split(":").collect::<Vec<&str>>();
+        let creds = creds.trim().split(":").collect::<Vec<&str>>();
         let builder = Webdav::default()
             .endpoint("https://drive.5698452.xyz:33456")
             .root("Quest Games/")
@@ -112,7 +112,14 @@ impl NifStorage {
             .context("failed to create reader")?
             .into_bytes_stream(..)
             .await
-            .context("failed to create byte stream")?;
+            .context("failed to create byte stream");
+        let stream = match stream {
+            Ok(stream) => stream,
+            Err(e) => {
+                rinf::debug_print!("error: {:?}", e);
+                return Err(e);
+            }
+        };
 
         let target_path = destination.join(file_name);
         trace!(path = ?target_path, "creating local file");
@@ -162,10 +169,10 @@ impl NifStorage {
     #[instrument(err, ret, level = "debug")]
     pub async fn download_file(
         &self,
-        remote_path: String,
+        remote_path: &str,
         destination: PathBuf,
         concurrency: usize,
-        bytes_transferred: Arc<AtomicU64>,
+        bytes_transferred: Arc<AtomicU64>, // TODO: make optional?
     ) -> Result<String> {
         // FIXME: disallow concurrent for same remote path
         let (target_path, mut writer, mut stream) =
@@ -378,7 +385,7 @@ impl NifStorage {
                 std::fs::create_dir_all(&download_destination)
                     .context("failed to create parent directory for local file")?;
 
-                self.download_file(path, download_destination, 4, bytes_transferred.clone())
+                self.download_file(&path, download_destination, 4, bytes_transferred.clone())
                     .await?; // TODO: configure?
                 files_downloaded.fetch_add(1, Ordering::Relaxed);
 
@@ -419,8 +426,16 @@ impl NifStorage {
             .context("failed to list directory")
     }
 
-    pub async fn get_app_list() -> Result<Vec<CloudApp>> {
-        let path = PathBuf::from("/home/skrimix/Desktop/Loader/metadata/FFA.txt");
+    pub async fn get_app_list(&self) -> Result<Vec<CloudApp>> {
+        // TODO: change hardcoded paths
+        self.download_file(
+            "FFA.txt",
+            PathBuf::from("/home/skrimix/work/test"),
+            4,
+            Arc::new(AtomicU64::new(0)),
+        )
+        .await?;
+        let path = PathBuf::from("/home/skrimix/work/test/FFA.txt");
         let file = File::open(path).await?;
         let mut reader =
             csv_async::AsyncReaderBuilder::new().delimiter(b';').create_deserializer(file);

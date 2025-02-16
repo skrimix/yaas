@@ -9,11 +9,15 @@ mod nif;
 
 pub struct Downloader {
     cloud_apps: Mutex<Vec<CloudApp>>,
+    storage: NifStorage,
 }
 
 impl Downloader {
-    pub fn create() -> Arc<Self> {
-        let handle = Arc::new(Self { cloud_apps: Mutex::new(Vec::new()) });
+    pub async fn create() -> Arc<Self> {
+        let handle = Arc::new(Self {
+            cloud_apps: Mutex::new(Vec::new()),
+            storage: NifStorage::create().await.unwrap(), // TODO: handle error
+        });
         tokio::spawn({
             let handle = handle.clone();
             async move {
@@ -36,14 +40,17 @@ impl Downloader {
         while let Some(request) = receiver.recv().await {
             let mut cache = self.cloud_apps.lock().await;
             if cache.is_empty() || request.message.refresh {
-                let result = NifStorage::get_app_list().await;
+                let result = self.storage.get_app_list().await;
                 match result {
                     Ok(apps) => {
                         *cache = apps;
                         send_response(cache.clone(), None);
                     }
                     Err(e) => {
-                        send_response(Vec::new(), Some(format!("Failed to load app list: {}", e)));
+                        send_response(
+                            Vec::new(),
+                            Some(format!("Failed to load app list: {:#}", e)),
+                        );
                     }
                 }
             } else {

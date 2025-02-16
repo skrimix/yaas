@@ -47,7 +47,7 @@ async fn main() {
     }
 
     let _adb_handler = AdbHandler::create();
-    let _downloader = Downloader::create();
+    let _downloader = Downloader::create().await;
 
     // Keep the main function running until Dart shutdown.
     rinf::dart_shutdown().await;

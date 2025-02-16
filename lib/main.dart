@@ -11,6 +11,8 @@ import 'widgets/manage_apps.dart';
 import 'widgets/local_sideload.dart';
 import 'widgets/error_screen.dart';
 import 'providers/device_state.dart';
+import 'providers/cloud_apps_state.dart';
+import 'widgets/download_apps.dart';
 
 final colorScheme = ColorScheme.fromSeed(
   seedColor: Colors.deepPurple,
@@ -35,6 +37,7 @@ void main() async {
       providers: [
         ChangeNotifierProvider(create: (_) => DeviceState()),
         ChangeNotifierProvider(create: (_) => AppState()),
+        ChangeNotifierProvider(create: (_) => CloudAppsState()..load()),
       ],
       child: const RqlApp(),
     ),
@@ -164,7 +167,7 @@ class _SinglePageState extends State<SinglePage> {
     Destination(icon: Icons.home, label: 'Home', content: const Home()),
     Destination(icon: Icons.apps, label: 'Manage', content: const ManageApps()),
     Destination(
-        icon: Icons.get_app, label: 'Download', content: Text('Download Apps')),
+        icon: Icons.get_app, label: 'Download', content: const DownloadApps()),
     Destination(
         icon: Icons.arrow_circle_down,
         label: 'Sideload',

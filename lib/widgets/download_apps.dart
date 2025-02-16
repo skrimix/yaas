@@ -1,0 +1,297 @@
+import 'package:flutter/material.dart';
+import 'package:provider/provider.dart';
+import 'package:proper_filesize/proper_filesize.dart';
+import 'package:intl/intl.dart';
+import '../providers/cloud_apps_state.dart';
+import '../messages/all.dart';
+
+enum SortOption {
+  name,
+  date,
+  size,
+}
+
+class DownloadApps extends StatefulWidget {
+  const DownloadApps({super.key});
+
+  @override
+  State<DownloadApps> createState() => _DownloadAppsState();
+}
+
+class _DownloadAppsState extends State<DownloadApps> {
+  static const _cardPadding =
+      EdgeInsets.symmetric(horizontal: 16.0, vertical: 4.0);
+  static const _listPadding = EdgeInsets.only(bottom: 24);
+
+  SortOption _sortOption = SortOption.name;
+  bool _sortAscending = true;
+
+  String _formatSize(int bytes) {
+    return FileSize.fromBytes(bytes).toString(
+      unit: Unit.auto(
+        size: bytes,
+        baseType: BaseType.metric,
+      ),
+      decimals: 2,
+    );
+  }
+
+  String _formatDate(String utcDate) {
+    try {
+      final date = DateFormat('yyyy-MM-dd HH:mm').parseUtc(utcDate);
+      return DateFormat.yMd().add_jm().format(date.toLocal());
+    } catch (e) {
+      return utcDate;
+    }
+  }
+
+  List<CloudApp> _sortApps(List<CloudApp> apps) {
+    final sortedApps = List<CloudApp>.from(apps);
+    sortedApps.sort((a, b) {
+      int comparison;
+      switch (_sortOption) {
+        case SortOption.name:
+          comparison =
+              a.fullName.toLowerCase().compareTo(b.fullName.toLowerCase());
+          break;
+        case SortOption.date:
+          comparison = a.lastUpdated.compareTo(b.lastUpdated);
+          break;
+        case SortOption.size:
+          comparison = a.size.compareTo(b.size);
+          break;
+      }
+      return _sortAscending ? comparison : -comparison;
+    });
+    return sortedApps;
+  }
+
+  Widget _buildSortButton() {
+    return PopupMenuButton<(SortOption, bool)>(
+      tooltip: 'Sort',
+      icon: const Icon(Icons.sort),
+      initialValue: (_sortOption, _sortAscending),
+      itemBuilder: (context) => [
+        const PopupMenuItem(
+          enabled: false,
+          child: Text('Sort by'),
+        ),
+        PopupMenuItem(
+          value: (SortOption.name, true),
+          child: Row(
+            children: [
+              Icon(_sortOption == SortOption.name && _sortAscending
+                  ? Icons.radio_button_checked
+                  : Icons.radio_button_unchecked),
+              const SizedBox(width: 8),
+              const Text('Name (A to Z)'),
+            ],
+          ),
+        ),
+        PopupMenuItem(
+          value: (SortOption.name, false),
+          child: Row(
+            children: [
+              Icon(_sortOption == SortOption.name && !_sortAscending
+                  ? Icons.radio_button_checked
+                  : Icons.radio_button_unchecked),
+              const SizedBox(width: 8),
+              const Text('Name (Z to A)'),
+            ],
+          ),
+        ),
+        PopupMenuItem(
+          value: (SortOption.date, true),
+          child: Row(
+            children: [
+              Icon(_sortOption == SortOption.date && _sortAscending
+                  ? Icons.radio_button_checked
+                  : Icons.radio_button_unchecked),
+              const SizedBox(width: 8),
+              const Text('Date (Oldest first)'),
+            ],
+          ),
+        ),
+        PopupMenuItem(
+          value: (SortOption.date, false),
+          child: Row(
+            children: [
+              Icon(_sortOption == SortOption.date && !_sortAscending
+                  ? Icons.radio_button_checked
+                  : Icons.radio_button_unchecked),
+              const SizedBox(width: 8),
+              const Text('Date (Newest first)'),
+            ],
+          ),
+        ),
+        PopupMenuItem(
+          value: (SortOption.size, true),
+          child: Row(
+            children: [
+              Icon(_sortOption == SortOption.size && _sortAscending
+                  ? Icons.radio_button_checked
+                  : Icons.radio_button_unchecked),
+              const SizedBox(width: 8),
+              const Text('Size (Smallest first)'),
+            ],
+          ),
+        ),
+        PopupMenuItem(
+          value: (SortOption.size, false),
+          child: Row(
+            children: [
+              Icon(_sortOption == SortOption.size && !_sortAscending
+                  ? Icons.radio_button_checked
+                  : Icons.radio_button_unchecked),
+              const SizedBox(width: 8),
+              const Text('Size (Largest first)'),
+            ],
+          ),
+        ),
+      ],
+      onSelected: (value) {
+        setState(() {
+          _sortOption = value.$1;
+          _sortAscending = value.$2;
+        });
+      },
+    );
+  }
+
+  @override
+  void initState() {
+    super.initState();
+  }
+
+  Widget _buildAppList(List<CloudApp> apps) {
+    if (apps.isEmpty) {
+      return const Center(
+        child: Padding(
+          padding: EdgeInsets.all(16.0),
+          child: Text('No apps available'),
+        ),
+      );
+    }
+
+    final sortedApps = _sortApps(apps);
+
+    return ListView.builder(
+      padding: _listPadding,
+      itemCount: sortedApps.length,
+      itemBuilder: (context, index) {
+        final app = sortedApps[index];
+        final theme = Theme.of(context);
+        final textTheme = theme.textTheme;
+
+        return Card(
+          margin: const EdgeInsets.symmetric(horizontal: 16, vertical: 2),
+          child: ListTile(
+            title: Text(app.fullName),
+            subtitle: Column(
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                Text(
+                  app.packageName,
+                  style: textTheme.bodyMedium?.copyWith(
+                    color: textTheme.bodyMedium?.color?.withValues(alpha: 0.6),
+                  ),
+                ),
+                Text(
+                  'Size: ${_formatSize(app.size.toInt())} • Last Updated: ${_formatDate(app.lastUpdated)}',
+                  style: textTheme.bodySmall?.copyWith(
+                    color: textTheme.bodySmall?.color?.withValues(alpha: 0.6),
+                  ),
+                ),
+              ],
+            ),
+            contentPadding: _cardPadding,
+            trailing: Row(
+              mainAxisSize: MainAxisSize.min,
+              children: [
+                IconButton(
+                  icon: const Icon(Icons.install_mobile),
+                  tooltip: 'Install on device',
+                  onPressed: () {
+                    // TODO: Implement install functionality
+                  },
+                ),
+                IconButton(
+                  icon: const Icon(Icons.download),
+                  tooltip: 'Download to computer',
+                  onPressed: () {
+                    // TODO: Implement download functionality
+                  },
+                ),
+              ],
+            ),
+          ),
+        );
+      },
+    );
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    return Consumer<CloudAppsState>(
+      builder: (context, cloudAppsState, _) {
+        if (cloudAppsState.isLoading) {
+          return const Center(
+            child: CircularProgressIndicator(),
+          );
+        }
+
+        if (cloudAppsState.error != null) {
+          return Center(
+            child: Column(
+              mainAxisSize: MainAxisSize.min,
+              children: [
+                Text(
+                  'Error loading apps',
+                  style: Theme.of(context).textTheme.titleLarge,
+                ),
+                const SizedBox(height: 8),
+                Text(cloudAppsState.error!),
+                const SizedBox(height: 16),
+                FilledButton.icon(
+                  onPressed: () => cloudAppsState.refresh(),
+                  icon: const Icon(Icons.refresh),
+                  label: const Text('Retry'),
+                ),
+              ],
+            ),
+          );
+        }
+
+        return Scaffold(
+          body: SafeArea(
+            child: Column(
+              children: [
+                Padding(
+                  padding: const EdgeInsets.all(16.0),
+                  child: Row(
+                    children: [
+                      Text(
+                        'Available Apps',
+                        style: Theme.of(context).textTheme.titleLarge,
+                      ),
+                      const Spacer(),
+                      _buildSortButton(),
+                      IconButton(
+                        icon: const Icon(Icons.refresh),
+                        tooltip: 'Refresh',
+                        onPressed: () => cloudAppsState.refresh(),
+                      ),
+                    ],
+                  ),
+                ),
+                Expanded(
+                  child: _buildAppList(cloudAppsState.apps),
+                ),
+              ],
+            ),
+          ),
+        );
+      },
+    );
+  }
+}

@@ -16,10 +16,13 @@ use opendal::{
     raw::build_rel_path,
     services::Webdav,
 };
-use tokio::io::{AsyncWriteExt, BufWriter};
-use tracing::{debug, instrument, trace, warn};
+use tokio::{
+    fs::File,
+    io::{AsyncWriteExt, BufWriter},
+};
+use tracing::{debug, info, instrument, trace, warn};
 
-use crate::utils::AverageSpeed;
+use crate::{models::CloudApp, utils::AverageSpeed};
 
 /// Storage implementation for transfers with NIF cloud storage.
 #[derive(Debug, Clone)]
@@ -414,6 +417,17 @@ impl NifStorage {
             .recursive(true)
             .await
             .context("failed to list directory")
+    }
+
+    pub async fn get_app_list() -> Result<Vec<CloudApp>> {
+        let path = PathBuf::from("/home/skrimix/Desktop/Loader/metadata/FFA.txt");
+        let file = File::open(path).await?;
+        let mut reader =
+            csv_async::AsyncReaderBuilder::new().delimiter(b';').create_deserializer(file);
+        let records = reader.deserialize();
+        let cloud_apps: Vec<CloudApp> = records.map_ok(|r| r).try_collect().await?;
+        info!("Loaded {} cloud apps", cloud_apps.len());
+        Ok(cloud_apps)
     }
 }
 

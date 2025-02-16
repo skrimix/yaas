@@ -17,9 +17,9 @@ message GetCloudAppsRequest {
   bool refresh = 1;
 }
 
-// Response containing available cloud apps
+// Event indicating cloud apps list have changed
 // [RUST-SIGNAL]
-message GetCloudAppsResponse {
+message CloudAppsChangedEvent {
   repeated CloudApp apps = 1;
   optional string error = 2;
 }

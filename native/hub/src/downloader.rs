@@ -1,13 +1,11 @@
-use std::{path::PathBuf, sync::Arc};
+use std::sync::Arc;
 
-use anyhow::Result;
-use futures::TryStreamExt;
-use tokio::{fs::File, sync::Mutex};
-use tracing::info;
+use nif::NifStorage;
+use tokio::sync::Mutex;
 
 use crate::{messages as proto, models::CloudApp};
 
-mod webdav;
+mod nif;
 
 pub struct Downloader {
     cloud_apps: Mutex<Vec<CloudApp>>,
@@ -27,7 +25,7 @@ impl Downloader {
 
     pub async fn receive_commands(&self) {
         fn send_response(apps: Vec<CloudApp>, error: Option<String>) {
-            proto::GetCloudAppsResponse {
+            proto::CloudAppsChangedEvent {
                 apps: apps.iter().map(|app| app.into_proto()).collect(),
                 error,
             }
@@ -38,7 +36,7 @@ impl Downloader {
         while let Some(request) = receiver.recv().await {
             let mut cache = self.cloud_apps.lock().await;
             if cache.is_empty() || request.message.refresh {
-                let result = load_app_list().await;
+                let result = NifStorage::get_app_list().await;
                 match result {
                     Ok(apps) => {
                         *cache = apps;
@@ -53,14 +51,4 @@ impl Downloader {
             }
         }
     }
-}
-
-pub async fn load_app_list() -> Result<Vec<CloudApp>> {
-    let path = PathBuf::from("/home/skrimix/Desktop/Loader/metadata/FFA.txt");
-    let file = File::open(path).await?;
-    let mut reader = csv_async::AsyncReaderBuilder::new().delimiter(b';').create_deserializer(file);
-    let records = reader.deserialize();
-    let cloud_apps: Vec<CloudApp> = records.map_ok(|r| r).try_collect().await?;
-    info!("Loaded {} cloud apps", cloud_apps.len());
-    Ok(cloud_apps)
 }

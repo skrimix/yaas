@@ -40,6 +40,15 @@ class _DownloadAppsState extends State<DownloadApps> {
   bool _sortAscending = true;
   List<_CachedAppData>? _sortedApps;
   String? _lastSortKey;
+  bool _isSearching = false;
+  String _searchQuery = '';
+  final _searchController = TextEditingController();
+
+  @override
+  void dispose() {
+    _searchController.dispose();
+    super.dispose();
+  }
 
   String _formatSize(int bytes) {
     return FileSize.fromBytes(bytes).toString(
@@ -95,6 +104,28 @@ class _DownloadAppsState extends State<DownloadApps> {
     _lastSortKey = newSortKey;
     _sortedApps = cachedApps;
     return cachedApps;
+  }
+
+  List<_CachedAppData> _filterAndSortApps(List<CloudApp> apps) {
+    final sortedApps = _sortApps(apps);
+
+    if (_searchQuery.isEmpty) {
+      return sortedApps;
+    }
+
+    final searchTerms = _searchQuery.toLowerCase().split(' ');
+    return sortedApps.where((app) {
+      // Match if all search terms are present in the full name
+      final fullNameLower = app.app.fullName.toLowerCase();
+      if (searchTerms.every((term) => fullNameLower.contains(term))) {
+        return true;
+      }
+
+      // Match if package name contains the search query
+      return app.app.packageName
+          .toLowerCase()
+          .contains(_searchQuery.toLowerCase());
+    }).toList();
   }
 
   Widget _buildSortButton() {
@@ -189,13 +220,67 @@ class _DownloadAppsState extends State<DownloadApps> {
     );
   }
 
+  Widget _buildSearchButton() {
+    if (_isSearching) {
+      return SizedBox(
+        width: 200,
+        child: TextField(
+          controller: _searchController,
+          decoration: InputDecoration(
+            hintText: 'Search apps...',
+            isDense: true,
+            contentPadding:
+                const EdgeInsets.symmetric(horizontal: 8, vertical: 8),
+            border: const OutlineInputBorder(),
+            suffixIcon: IconButton(
+              icon: const Icon(Icons.close),
+              onPressed: () {
+                setState(() {
+                  _isSearching = false;
+                  _searchQuery = '';
+                  _searchController.clear();
+                });
+              },
+              tooltip: 'Clear search',
+            ),
+          ),
+          onChanged: (value) {
+            setState(() {
+              _searchQuery = value;
+            });
+          },
+        ),
+      );
+    }
+
+    return IconButton(
+      icon: const Icon(Icons.search),
+      tooltip: 'Search',
+      onPressed: () {
+        setState(() {
+          _isSearching = true;
+        });
+      },
+    );
+  }
+
   @override
   void initState() {
     super.initState();
   }
 
   Widget _buildAppList(List<CloudApp> apps) {
-    if (apps.isEmpty) {
+    final filteredAndSortedApps = _filterAndSortApps(apps);
+
+    if (filteredAndSortedApps.isEmpty) {
+      if (_searchQuery.isNotEmpty) {
+        return const Center(
+          child: Padding(
+            padding: EdgeInsets.all(16.0),
+            child: Text('No apps match your search'),
+          ),
+        );
+      }
       return const Center(
         child: Padding(
           padding: EdgeInsets.all(16.0),
@@ -204,16 +289,14 @@ class _DownloadAppsState extends State<DownloadApps> {
       );
     }
 
-    final sortedApps = _sortApps(apps);
-
     return ListView.builder(
       padding: _listPadding,
-      itemCount: sortedApps.length,
+      itemCount: filteredAndSortedApps.length,
       itemExtent: _itemExtent,
       addAutomaticKeepAlives: false,
       addRepaintBoundaries: true,
       itemBuilder: (context, index) {
-        final cachedApp = sortedApps[index];
+        final cachedApp = filteredAndSortedApps[index];
         return _AppListItem(cachedApp: cachedApp);
       },
     );
@@ -264,6 +347,7 @@ class _DownloadAppsState extends State<DownloadApps> {
                         style: Theme.of(context).textTheme.titleLarge,
                       ),
                       const Spacer(),
+                      _buildSearchButton(),
                       _buildSortButton(),
                       IconButton(
                         icon: const Icon(Icons.refresh),

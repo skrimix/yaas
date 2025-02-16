@@ -11,6 +11,18 @@ enum SortOption {
   size,
 }
 
+class _CachedAppData {
+  final CloudApp app;
+  final String formattedSize;
+  final String formattedDate;
+
+  const _CachedAppData({
+    required this.app,
+    required this.formattedSize,
+    required this.formattedDate,
+  });
+}
+
 class DownloadApps extends StatefulWidget {
   const DownloadApps({super.key});
 
@@ -22,9 +34,12 @@ class _DownloadAppsState extends State<DownloadApps> {
   static const _cardPadding =
       EdgeInsets.symmetric(horizontal: 16.0, vertical: 4.0);
   static const _listPadding = EdgeInsets.only(bottom: 24);
+  static const _itemExtent = 88.0;
 
   SortOption _sortOption = SortOption.name;
   bool _sortAscending = true;
+  List<_CachedAppData>? _sortedApps;
+  String? _lastSortKey;
 
   String _formatSize(int bytes) {
     return FileSize.fromBytes(bytes).toString(
@@ -45,25 +60,41 @@ class _DownloadAppsState extends State<DownloadApps> {
     }
   }
 
-  List<CloudApp> _sortApps(List<CloudApp> apps) {
-    final sortedApps = List<CloudApp>.from(apps);
-    sortedApps.sort((a, b) {
+  List<_CachedAppData> _sortApps(List<CloudApp> apps) {
+    final newSortKey = '${_sortOption}_${_sortAscending}_${apps.length}';
+    if (_sortedApps != null && newSortKey == _lastSortKey) {
+      return _sortedApps!;
+    }
+
+    final cachedApps = apps
+        .map((app) => _CachedAppData(
+              app: app,
+              formattedSize: _formatSize(app.size.toInt()),
+              formattedDate: _formatDate(app.lastUpdated),
+            ))
+        .toList();
+
+    cachedApps.sort((a, b) {
       int comparison;
       switch (_sortOption) {
         case SortOption.name:
-          comparison =
-              a.fullName.toLowerCase().compareTo(b.fullName.toLowerCase());
+          comparison = a.app.fullName
+              .toLowerCase()
+              .compareTo(b.app.fullName.toLowerCase());
           break;
         case SortOption.date:
-          comparison = a.lastUpdated.compareTo(b.lastUpdated);
+          comparison = a.app.lastUpdated.compareTo(b.app.lastUpdated);
           break;
         case SortOption.size:
-          comparison = a.size.compareTo(b.size);
+          comparison = a.app.size.compareTo(b.app.size);
           break;
       }
       return _sortAscending ? comparison : -comparison;
     });
-    return sortedApps;
+
+    _lastSortKey = newSortKey;
+    _sortedApps = cachedApps;
+    return cachedApps;
   }
 
   Widget _buildSortButton() {
@@ -178,54 +209,12 @@ class _DownloadAppsState extends State<DownloadApps> {
     return ListView.builder(
       padding: _listPadding,
       itemCount: sortedApps.length,
+      itemExtent: _itemExtent,
+      addAutomaticKeepAlives: false,
+      addRepaintBoundaries: true,
       itemBuilder: (context, index) {
-        final app = sortedApps[index];
-        final theme = Theme.of(context);
-        final textTheme = theme.textTheme;
-
-        return Card(
-          margin: const EdgeInsets.symmetric(horizontal: 16, vertical: 2),
-          child: ListTile(
-            title: Text(app.fullName),
-            subtitle: Column(
-              crossAxisAlignment: CrossAxisAlignment.start,
-              children: [
-                Text(
-                  app.packageName,
-                  style: textTheme.bodyMedium?.copyWith(
-                    color: textTheme.bodyMedium?.color?.withValues(alpha: 0.6),
-                  ),
-                ),
-                Text(
-                  'Size: ${_formatSize(app.size.toInt())} • Last Updated: ${_formatDate(app.lastUpdated)}',
-                  style: textTheme.bodySmall?.copyWith(
-                    color: textTheme.bodySmall?.color?.withValues(alpha: 0.6),
-                  ),
-                ),
-              ],
-            ),
-            contentPadding: _cardPadding,
-            trailing: Row(
-              mainAxisSize: MainAxisSize.min,
-              children: [
-                IconButton(
-                  icon: const Icon(Icons.install_mobile),
-                  tooltip: 'Install on device',
-                  onPressed: () {
-                    // TODO: Implement install functionality
-                  },
-                ),
-                IconButton(
-                  icon: const Icon(Icons.download),
-                  tooltip: 'Download to computer',
-                  onPressed: () {
-                    // TODO: Implement download functionality
-                  },
-                ),
-              ],
-            ),
-          ),
-        );
+        final cachedApp = sortedApps[index];
+        return _AppListItem(cachedApp: cachedApp);
       },
     );
   }
@@ -292,6 +281,69 @@ class _DownloadAppsState extends State<DownloadApps> {
           ),
         );
       },
+    );
+  }
+}
+
+class _AppListItem extends StatelessWidget {
+  const _AppListItem({
+    required this.cachedApp,
+  });
+
+  final _CachedAppData cachedApp;
+
+  @override
+  Widget build(BuildContext context) {
+    final theme = Theme.of(context);
+    final textTheme = theme.textTheme;
+
+    return Card(
+      margin: const EdgeInsets.symmetric(horizontal: 16, vertical: 2),
+      child: SizedBox(
+        height: _DownloadAppsState._itemExtent,
+        child: ListTile(
+          title: Text(cachedApp.app.fullName),
+          subtitle: Column(
+            mainAxisSize: MainAxisSize.min,
+            crossAxisAlignment: CrossAxisAlignment.start,
+            children: [
+              Text(
+                cachedApp.app.packageName,
+                style: textTheme.bodyMedium?.copyWith(
+                  color: textTheme.bodyMedium?.color?.withValues(alpha: 0.6),
+                ),
+              ),
+              Text(
+                'Size: ${cachedApp.formattedSize} • Last Updated: ${cachedApp.formattedDate}',
+                style: textTheme.bodySmall?.copyWith(
+                  color: textTheme.bodySmall?.color?.withValues(alpha: 0.6),
+                ),
+              ),
+            ],
+          ),
+          contentPadding: _DownloadAppsState._cardPadding,
+          trailing: Row(
+            mainAxisSize: MainAxisSize.min,
+            children: [
+              IconButton(
+                icon: const Icon(Icons.install_mobile),
+                tooltip: 'Install on device',
+                onPressed: () {
+                  // TODO: Implement install functionality
+                },
+              ),
+              const SizedBox(width: 8),
+              IconButton(
+                icon: const Icon(Icons.download),
+                tooltip: 'Download to computer',
+                onPressed: () {
+                  // TODO: Implement download functionality
+                },
+              ),
+            ],
+          ),
+        ),
+      ),
     );
   }
 }

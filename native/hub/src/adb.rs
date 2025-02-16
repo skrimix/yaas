@@ -203,7 +203,7 @@ impl AdbHandler {
                         Ok(())
                     }
                     Err(e) => {
-                        let error_msg = format!("Failed to launch {}: {}", package_name, e);
+                        let error_msg = format!("Failed to launch {}: {:#}", package_name, e);
                         send_response(AdbCommand::LaunchApp, false, error_msg.clone());
                         Err(e.context(format!("Failed to launch {}", package_name)))
                     }
@@ -225,7 +225,7 @@ impl AdbHandler {
                         Ok(())
                     }
                     Err(e) => {
-                        let error_msg = format!("Failed to force stop {}: {}", package_name, e);
+                        let error_msg = format!("Failed to force stop {}: {:#}", package_name, e);
                         send_response(AdbCommand::ForceStopApp, false, error_msg.clone());
                         Err(e.context(format!("Failed to force stop {}", package_name)))
                     }
@@ -245,7 +245,7 @@ impl AdbHandler {
                         Ok(())
                     }
                     Err(e) => {
-                        let error_msg = format!("Failed to install {}: {}", apk_path, e);
+                        let error_msg = format!("Failed to install {}: {:#}", apk_path, e);
                         send_response(AdbCommand::InstallApk, false, error_msg.clone());
                         Err(e.context(format!("Failed to install {}", apk_path)))
                     }
@@ -268,7 +268,7 @@ impl AdbHandler {
                         Ok(())
                     }
                     Err(e) => {
-                        let error_msg = format!("Failed to uninstall {}: {}", package_name, e);
+                        let error_msg = format!("Failed to uninstall {}: {:#}", package_name, e);
                         send_response(AdbCommand::UninstallPackage, false, error_msg.clone());
                         Err(e.context(format!("Failed to uninstall {}", package_name)))
                     }
@@ -288,7 +288,7 @@ impl AdbHandler {
                         Ok(())
                     }
                     Err(e) => {
-                        let error_msg = format!("Failed to sideload {}: {}", app_path, e);
+                        let error_msg = format!("Failed to sideload {}: {:#}", app_path, e);
                         send_response(AdbCommand::SideloadApp, false, error_msg.clone());
                         Err(e.context(format!("Failed to sideload {}", app_path)))
                     }

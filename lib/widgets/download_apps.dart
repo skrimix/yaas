@@ -43,10 +43,12 @@ class _DownloadAppsState extends State<DownloadApps> {
   bool _isSearching = false;
   String _searchQuery = '';
   final _searchController = TextEditingController();
+  final _scrollController = ScrollController();
 
   @override
   void dispose() {
     _searchController.dispose();
+    _scrollController.dispose();
     super.dispose();
   }
 
@@ -106,6 +108,12 @@ class _DownloadAppsState extends State<DownloadApps> {
     return cachedApps;
   }
 
+  void _resetScroll() {
+    if (_scrollController.hasClients) {
+      _scrollController.jumpTo(0);
+    }
+  }
+
   List<_CachedAppData> _filterAndSortApps(List<CloudApp> apps) {
     final sortedApps = _sortApps(apps);
 
@@ -114,7 +122,7 @@ class _DownloadAppsState extends State<DownloadApps> {
     }
 
     final searchTerms = _searchQuery.toLowerCase().split(' ');
-    return sortedApps.where((app) {
+    final filtered = sortedApps.where((app) {
       // Match if all search terms are present in the full name
       final fullNameLower = app.app.fullName.toLowerCase();
       if (searchTerms.every((term) => fullNameLower.contains(term))) {
@@ -126,6 +134,12 @@ class _DownloadAppsState extends State<DownloadApps> {
           .toLowerCase()
           .contains(_searchQuery.toLowerCase());
     }).toList();
+
+    // Reset scroll position when filter results change
+    if (filtered.length != sortedApps.length) {
+      _resetScroll();
+    }
+    return filtered;
   }
 
   Widget _buildSortButton() {
@@ -215,6 +229,7 @@ class _DownloadAppsState extends State<DownloadApps> {
         setState(() {
           _sortOption = value.$1;
           _sortAscending = value.$2;
+          _resetScroll();
         });
       },
     );
@@ -239,6 +254,7 @@ class _DownloadAppsState extends State<DownloadApps> {
                   _isSearching = false;
                   _searchQuery = '';
                   _searchController.clear();
+                  _resetScroll();
                 });
               },
               tooltip: 'Clear search',
@@ -290,6 +306,7 @@ class _DownloadAppsState extends State<DownloadApps> {
     }
 
     return ListView.builder(
+      controller: _scrollController,
       padding: _listPadding,
       itemCount: filteredAndSortedApps.length,
       itemExtent: _itemExtent,

@@ -3,7 +3,7 @@ import 'dart:ui';
 import 'package:flutter/material.dart';
 import 'package:provider/provider.dart';
 import 'package:rinf/rinf.dart';
-import 'package:toastification/toastification.dart';
+import 'package:toastification/toastification.dart'; // TODO: find an alternative
 import './messages/all.dart';
 import 'widgets/home.dart';
 import 'widgets/status_bar.dart';

@@ -68,13 +68,6 @@ class ErrorScreen extends StatelessWidget {
                       OutlinedButton.icon(
                         onPressed: () {
                           Clipboard.setData(ClipboardData(text: message));
-                          // ScaffoldMessenger.of(context).showSnackBar(
-                          //   const SnackBar(
-                          //     content:
-                          //         Text('Error message copied to clipboard'),
-                          //     behavior: SnackBarBehavior.floating,
-                          //   ),
-                          // );
                           toastification.show(
                             type: ToastificationType.success,
                             title:

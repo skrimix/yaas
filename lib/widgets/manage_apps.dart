@@ -2,6 +2,7 @@ import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 import 'package:provider/provider.dart';
 import 'package:proper_filesize/proper_filesize.dart';
+import 'package:toastification/toastification.dart';
 import '../providers/device_state.dart';
 import '../messages/all.dart';
 
@@ -104,11 +105,15 @@ class _ManageAppsState extends State<ManageApps> {
 
   void _copyToClipboard(String text, bool showText) {
     Clipboard.setData(ClipboardData(text: text));
-    ScaffoldMessenger.of(context).showSnackBar(
-      SnackBar(
-          duration: const Duration(seconds: 1),
-          content: Text(
-              showText ? 'Copied to clipboard: $text' : 'Copied to clipboard')),
+    toastification.show(
+      type: ToastificationType.success,
+      style: ToastificationStyle.flat,
+      title: Text('Copied to clipboard'),
+      description: showText ? Text(text) : null,
+      autoCloseDuration: const Duration(seconds: 2),
+      backgroundColor: Theme.of(context).colorScheme.surfaceContainer,
+      borderSide: BorderSide.none,
+      alignment: Alignment.bottomRight,
     );
   }
 

@@ -1,7 +1,9 @@
 import 'package:flutter/material.dart';
+import 'package:flutter/services.dart';
 import 'package:provider/provider.dart';
 import 'package:proper_filesize/proper_filesize.dart';
 import 'package:intl/intl.dart';
+import 'package:toastification/toastification.dart';
 import '../providers/cloud_apps_state.dart';
 import '../messages/all.dart';
 
@@ -394,6 +396,20 @@ class _AppListItem extends StatelessWidget {
 
   final _CachedAppData cachedApp;
 
+  void _copyToClipboard(BuildContext context, String text) {
+    Clipboard.setData(ClipboardData(text: text));
+    toastification.show(
+      type: ToastificationType.success,
+      style: ToastificationStyle.flat,
+      title: Text('Copied to clipboard'),
+      description: Text(text),
+      autoCloseDuration: const Duration(seconds: 2),
+      backgroundColor: Theme.of(context).colorScheme.surfaceContainer,
+      borderSide: BorderSide.none,
+      alignment: Alignment.bottomRight,
+    );
+  }
+
   @override
   Widget build(BuildContext context) {
     final theme = Theme.of(context);
@@ -403,47 +419,75 @@ class _AppListItem extends StatelessWidget {
       margin: const EdgeInsets.symmetric(horizontal: 16, vertical: 2),
       child: SizedBox(
         height: _DownloadAppsState._itemExtent,
-        child: ListTile(
-          title: Text(cachedApp.app.fullName),
-          subtitle: Column(
-            mainAxisSize: MainAxisSize.min,
-            crossAxisAlignment: CrossAxisAlignment.start,
-            children: [
-              Text(
-                cachedApp.app.packageName,
-                style: textTheme.bodyMedium?.copyWith(
-                  color: textTheme.bodyMedium?.color?.withValues(alpha: 0.6),
+        child: MenuAnchor(
+          menuChildren: [
+            MenuItemButton(
+              child: const Text('Copy full name'),
+              onPressed: () {
+                _copyToClipboard(context, cachedApp.app.fullName);
+              },
+            ),
+            MenuItemButton(
+              child: const Text('Copy package name'),
+              onPressed: () {
+                _copyToClipboard(context, cachedApp.app.packageName);
+              },
+            ),
+          ],
+          builder: (context, controller, child) {
+            return GestureDetector(
+              onSecondaryTapUp: (details) {
+                controller.open(position: details.localPosition);
+              },
+              onLongPress: () {
+                controller.open();
+              },
+              child: ListTile(
+                title: Text(cachedApp.app.fullName),
+                subtitle: Column(
+                  mainAxisSize: MainAxisSize.min,
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  children: [
+                    Text(
+                      cachedApp.app.packageName,
+                      style: textTheme.bodyMedium?.copyWith(
+                        color:
+                            textTheme.bodyMedium?.color?.withValues(alpha: 0.6),
+                      ),
+                    ),
+                    Text(
+                      'Size: ${cachedApp.formattedSize} • Last Updated: ${cachedApp.formattedDate}',
+                      style: textTheme.bodySmall?.copyWith(
+                        color:
+                            textTheme.bodySmall?.color?.withValues(alpha: 0.6),
+                      ),
+                    ),
+                  ],
+                ),
+                contentPadding: _DownloadAppsState._cardPadding,
+                trailing: Row(
+                  mainAxisSize: MainAxisSize.min,
+                  children: [
+                    IconButton(
+                      icon: const Icon(Icons.install_mobile),
+                      tooltip: 'Install on device',
+                      onPressed: () {
+                        // TODO: Implement install functionality
+                      },
+                    ),
+                    const SizedBox(width: 8),
+                    IconButton(
+                      icon: const Icon(Icons.download),
+                      tooltip: 'Download to computer',
+                      onPressed: () {
+                        // TODO: Implement download functionality
+                      },
+                    ),
+                  ],
                 ),
               ),
-              Text(
-                'Size: ${cachedApp.formattedSize} • Last Updated: ${cachedApp.formattedDate}',
-                style: textTheme.bodySmall?.copyWith(
-                  color: textTheme.bodySmall?.color?.withValues(alpha: 0.6),
-                ),
-              ),
-            ],
-          ),
-          contentPadding: _DownloadAppsState._cardPadding,
-          trailing: Row(
-            mainAxisSize: MainAxisSize.min,
-            children: [
-              IconButton(
-                icon: const Icon(Icons.install_mobile),
-                tooltip: 'Install on device',
-                onPressed: () {
-                  // TODO: Implement install functionality
-                },
-              ),
-              const SizedBox(width: 8),
-              IconButton(
-                icon: const Icon(Icons.download),
-                tooltip: 'Download to computer',
-                onPressed: () {
-                  // TODO: Implement download functionality
-                },
-              ),
-            ],
-          ),
+            );
+          },
         ),
       ),
     );

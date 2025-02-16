@@ -15,7 +15,7 @@ class ErrorScreen extends StatelessWidget {
       backgroundColor: Theme.of(context).colorScheme.surfaceContainer,
       body: SafeArea(
         child: Padding(
-          padding: const EdgeInsets.symmetric(vertical: 32),
+          padding: const EdgeInsets.symmetric(vertical: 24),
           child: Center(
             child: ConstrainedBox(
               constraints: const BoxConstraints(maxWidth: 600),
@@ -27,12 +27,12 @@ class ErrorScreen extends StatelessWidget {
                     size: 64,
                     color: Theme.of(context).colorScheme.error,
                   ),
-                  const SizedBox(height: 24),
+                  const SizedBox(height: 12),
                   Text(
                     'Fatal Error',
                     style: Theme.of(context).textTheme.headlineMedium,
                   ),
-                  const SizedBox(height: 16),
+                  const SizedBox(height: 12),
                   Flexible(
                     child: Container(
                       margin: const EdgeInsets.symmetric(horizontal: 32),

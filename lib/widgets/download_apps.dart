@@ -238,9 +238,10 @@ class _DownloadAppsState extends State<DownloadApps> {
   Widget _buildSearchButton() {
     if (_isSearching) {
       return SizedBox(
-        width: 200,
+        width: 350,
         child: TextField(
           controller: _searchController,
+          autofocus: true,
           decoration: InputDecoration(
             hintText: 'Search apps...',
             isDense: true,

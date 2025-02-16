@@ -428,14 +428,14 @@ impl NifStorage {
 
     pub async fn get_app_list(&self) -> Result<Vec<CloudApp>> {
         // TODO: change hardcoded paths
-        self.download_file(
-            "FFA.txt",
-            PathBuf::from("/home/skrimix/work/test"),
-            4,
-            Arc::new(AtomicU64::new(0)),
-        )
-        .await?;
-        let path = PathBuf::from("/home/skrimix/work/test/FFA.txt");
+        let path = self
+            .download_file(
+                "FFA.txt",
+                PathBuf::from("/home/skrimix/work/test"),
+                4,
+                Arc::new(AtomicU64::new(0)),
+            )
+            .await?;
         let file = File::open(path).await?;
         let mut reader =
             csv_async::AsyncReaderBuilder::new().delimiter(b';').create_deserializer(file);

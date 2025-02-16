@@ -37,7 +37,7 @@ void main() async {
       providers: [
         ChangeNotifierProvider(create: (_) => DeviceState()),
         ChangeNotifierProvider(create: (_) => AppState()),
-        ChangeNotifierProvider(create: (_) => CloudAppsState()..load()),
+        ChangeNotifierProvider(create: (_) => CloudAppsState()),
       ],
       child: const RqlApp(),
     ),
@@ -113,6 +113,10 @@ class _RqlAppState extends State<RqlApp> {
         return AppExitResponse.exit;
       },
     );
+
+    WidgetsBinding.instance.addPostFrameCallback((_) {
+      context.read<CloudAppsState>().load();
+    });
   }
 
   @override

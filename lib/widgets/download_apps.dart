@@ -1,29 +1,16 @@
 import 'package:flutter/material.dart';
-import 'package:flutter/services.dart';
 import 'package:provider/provider.dart';
 import 'package:proper_filesize/proper_filesize.dart';
 import 'package:intl/intl.dart';
-import 'package:toastification/toastification.dart';
 import '../providers/cloud_apps_state.dart';
 import '../messages/all.dart';
 import '../providers/device_state.dart';
+import 'cloud_app_list.dart';
 
 enum SortOption {
   name,
   date,
   size,
-}
-
-class _CachedAppData {
-  final CloudApp app;
-  final String formattedSize;
-  final String formattedDate;
-
-  const _CachedAppData({
-    required this.app,
-    required this.formattedSize,
-    required this.formattedDate,
-  });
 }
 
 class DownloadApps extends StatefulWidget {
@@ -34,13 +21,9 @@ class DownloadApps extends StatefulWidget {
 }
 
 class _DownloadAppsState extends State<DownloadApps> {
-  static const _cardPadding =
-      EdgeInsets.symmetric(horizontal: 16.0, vertical: 4.0);
-  static const _listPadding = EdgeInsets.only(bottom: 24);
-
   SortOption _sortOption = SortOption.name;
   bool _sortAscending = true;
-  List<_CachedAppData>? _sortedApps;
+  List<CachedAppData>? _sortedApps;
   String? _lastSortKey;
   bool _isSearching = false;
   String _searchQuery = '';
@@ -77,14 +60,14 @@ class _DownloadAppsState extends State<DownloadApps> {
     }
   }
 
-  List<_CachedAppData> _sortApps(List<CloudApp> apps) {
+  List<CachedAppData> _sortApps(List<CloudApp> apps) {
     final newSortKey = '${_sortOption}_${_sortAscending}_${apps.length}';
     if (_sortedApps != null && newSortKey == _lastSortKey) {
       return _sortedApps!;
     }
 
     final cachedApps = apps
-        .map((app) => _CachedAppData(
+        .map((app) => CachedAppData(
               app: app,
               formattedSize: _formatSize(app.size.toInt()),
               formattedDate: _formatDate(app.lastUpdated),
@@ -128,7 +111,7 @@ class _DownloadAppsState extends State<DownloadApps> {
     });
   }
 
-  List<_CachedAppData> _filterAndSortApps(List<CloudApp> apps) {
+  List<CachedAppData> _filterAndSortApps(List<CloudApp> apps) {
     final sortedApps = _sortApps(apps);
 
     var filtered = sortedApps;
@@ -341,53 +324,6 @@ class _DownloadAppsState extends State<DownloadApps> {
     super.initState();
   }
 
-  Widget _buildAppList(List<CloudApp> apps) {
-    final filteredAndSortedApps = _filterAndSortApps(apps);
-
-    if (filteredAndSortedApps.isEmpty) {
-      if (_searchQuery.isNotEmpty) {
-        return const Center(
-          child: Padding(
-            padding: EdgeInsets.all(16.0),
-            child: Text('No apps match your search'),
-          ),
-        );
-      }
-      return const Center(
-        child: Padding(
-          padding: EdgeInsets.all(16.0),
-          child: Text('No apps available'),
-        ),
-      );
-    }
-
-    return ListView.builder(
-      controller: _scrollController,
-      padding: _listPadding,
-      itemCount: filteredAndSortedApps.length,
-      prototypeItem: _AppListItem(
-        cachedApp: filteredAndSortedApps.first,
-        isSelected: _selectedFullNames
-            .contains(filteredAndSortedApps.first.app.fullName),
-        onSelectionChanged: (selected) =>
-            _toggleSelection(filteredAndSortedApps.first.app.fullName),
-        showCheckbox: _showCheckboxes,
-      ),
-      addAutomaticKeepAlives: false,
-      addRepaintBoundaries: true,
-      itemBuilder: (context, index) {
-        final cachedApp = filteredAndSortedApps[index];
-        return _AppListItem(
-          cachedApp: cachedApp,
-          isSelected: _selectedFullNames.contains(cachedApp.app.fullName),
-          onSelectionChanged: (selected) =>
-              _toggleSelection(cachedApp.app.fullName),
-          showCheckbox: _showCheckboxes,
-        );
-      },
-    );
-  }
-
   Widget _buildFilterButton() {
     final hasSelections = _selectedFullNames.isNotEmpty;
 
@@ -405,7 +341,7 @@ class _DownloadAppsState extends State<DownloadApps> {
     );
   }
 
-  Widget _buildSelectionSummary(List<_CachedAppData> apps) {
+  Widget _buildSelectionSummary(List<CachedAppData> apps) {
     if (_selectedFullNames.isEmpty) return const SizedBox.shrink();
 
     final selectedApps = apps
@@ -507,6 +443,7 @@ class _DownloadAppsState extends State<DownloadApps> {
                         style: Theme.of(context).textTheme.titleLarge,
                       ),
                       const Spacer(),
+                      if (!_showOnlySelected) _buildSearchButton(),
                       if (_showCheckboxes) _buildFilterButton(),
                       IconButton(
                         icon: Icon(_showCheckboxes
@@ -515,7 +452,6 @@ class _DownloadAppsState extends State<DownloadApps> {
                         tooltip: 'Multi-select',
                         onPressed: _toggleCheckboxVisibility,
                       ),
-                      if (!_showOnlySelected) _buildSearchButton(),
                       _buildSortButton(),
                       IconButton(
                         icon: const Icon(Icons.refresh),
@@ -549,7 +485,13 @@ class _DownloadAppsState extends State<DownloadApps> {
                     ),
                   ),
                 Expanded(
-                  child: _buildAppList(cloudAppsState.apps),
+                  child: CloudAppList(
+                    apps: filteredAndSortedApps,
+                    showCheckboxes: _showCheckboxes,
+                    selectedFullNames: _selectedFullNames,
+                    scrollController: _scrollController,
+                    onSelectionChanged: _toggleSelection,
+                  ),
                 ),
                 _buildSelectionSummary(filteredAndSortedApps),
               ],
@@ -557,141 +499,6 @@ class _DownloadAppsState extends State<DownloadApps> {
           ),
         );
       },
-    );
-  }
-}
-
-class _AppListItem extends StatelessWidget {
-  const _AppListItem({
-    required this.cachedApp,
-    required this.isSelected,
-    required this.onSelectionChanged,
-    required this.showCheckbox,
-  });
-
-  final _CachedAppData cachedApp;
-  final bool isSelected;
-  final ValueChanged<bool> onSelectionChanged;
-  final bool showCheckbox;
-
-  void _copyToClipboard(BuildContext context, String text) {
-    Clipboard.setData(ClipboardData(text: text));
-    toastification.show(
-      type: ToastificationType.success,
-      style: ToastificationStyle.flat,
-      title: Text('Copied to clipboard'),
-      description: Text(text),
-      autoCloseDuration: const Duration(seconds: 2),
-      backgroundColor: Theme.of(context).colorScheme.surfaceContainer,
-      borderSide: BorderSide.none,
-      alignment: Alignment.bottomRight,
-    );
-  }
-
-  @override
-  Widget build(BuildContext context) {
-    final theme = Theme.of(context);
-    final textTheme = theme.textTheme;
-
-    return Card(
-      margin: const EdgeInsets.symmetric(horizontal: 16, vertical: 2),
-      child: SizedBox(
-        child: MenuAnchor(
-          menuChildren: [
-            MenuItemButton(
-              child: const Text('Copy full name'),
-              onPressed: () {
-                _copyToClipboard(context, cachedApp.app.fullName);
-              },
-            ),
-            MenuItemButton(
-              child: const Text('Copy package name'),
-              onPressed: () {
-                _copyToClipboard(context, cachedApp.app.packageName);
-              },
-            ),
-          ],
-          builder: (context, controller, child) {
-            return GestureDetector(
-              onSecondaryTapUp: (details) {
-                controller.open(position: details.localPosition);
-              },
-              onLongPress: () {
-                controller.open();
-              },
-              onTapUp: (_) {
-                if (showCheckbox) {
-                  onSelectionChanged(!isSelected);
-                }
-                controller.close();
-              },
-              child: ListTile(
-                leading: showCheckbox
-                    ? Checkbox(
-                        value: isSelected,
-                        onChanged: (value) =>
-                            onSelectionChanged(value ?? false),
-                      )
-                    : null,
-                title: Text(
-                  cachedApp.app.fullName,
-                  softWrap: false,
-                  overflow: TextOverflow.ellipsis,
-                ),
-                subtitle: Column(
-                  mainAxisSize: MainAxisSize.min,
-                  crossAxisAlignment: CrossAxisAlignment.start,
-                  children: [
-                    Text(
-                      cachedApp.app.packageName,
-                      style: textTheme.bodyMedium?.copyWith(
-                        color:
-                            textTheme.bodyMedium?.color?.withValues(alpha: 0.6),
-                      ),
-                    ),
-                    Text(
-                      'Size: ${cachedApp.formattedSize} • Last Updated: ${cachedApp.formattedDate}',
-                      style: textTheme.bodySmall?.copyWith(
-                        color:
-                            textTheme.bodySmall?.color?.withValues(alpha: 0.6),
-                      ),
-                    ),
-                  ],
-                ),
-                contentPadding: _DownloadAppsState._cardPadding,
-                trailing: Row(
-                  mainAxisSize: MainAxisSize.min,
-                  children: [
-                    IconButton(
-                      icon: const Icon(Icons.download),
-                      tooltip: 'Download to computer',
-                      onPressed: () {
-                        // TODO: Implement download functionality
-                      },
-                    ),
-                    const SizedBox(width: 8),
-                    Consumer<DeviceState>(
-                      builder: (context, deviceState, _) {
-                        return IconButton(
-                          icon: const Icon(Icons.install_mobile),
-                          tooltip: deviceState.isConnected
-                              ? 'Install on device'
-                              : 'Install on device (not connected)',
-                          onPressed: deviceState.isConnected
-                              ? () {
-                                  // TODO: Implement install functionality
-                                }
-                              : null,
-                        );
-                      },
-                    ),
-                  ],
-                ),
-              ),
-            );
-          },
-        ),
-      ),
     );
   }
 }

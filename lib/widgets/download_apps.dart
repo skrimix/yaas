@@ -658,6 +658,14 @@ class _AppListItem extends StatelessWidget {
                 trailing: Row(
                   mainAxisSize: MainAxisSize.min,
                   children: [
+                    IconButton(
+                      icon: const Icon(Icons.download),
+                      tooltip: 'Download to computer',
+                      onPressed: () {
+                        // TODO: Implement download functionality
+                      },
+                    ),
+                    const SizedBox(width: 8),
                     Consumer<DeviceState>(
                       builder: (context, deviceState, _) {
                         return IconButton(
@@ -671,14 +679,6 @@ class _AppListItem extends StatelessWidget {
                                 }
                               : null,
                         );
-                      },
-                    ),
-                    const SizedBox(width: 8),
-                    IconButton(
-                      icon: const Icon(Icons.download),
-                      tooltip: 'Download to computer',
-                      onPressed: () {
-                        // TODO: Implement download functionality
                       },
                     ),
                   ],

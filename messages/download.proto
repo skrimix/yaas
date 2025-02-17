@@ -13,7 +13,7 @@ message CloudApp {
 
 // Request to get available cloud apps
 // [DART-SIGNAL]
-message GetCloudAppsRequest {
+message LoadCloudAppsRequest {
   bool refresh = 1;
 }
 

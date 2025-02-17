@@ -36,7 +36,7 @@ impl Downloader {
             .send_signal_to_dart();
         }
 
-        let receiver = proto::GetCloudAppsRequest::get_dart_signal_receiver();
+        let receiver = proto::LoadCloudAppsRequest::get_dart_signal_receiver();
         while let Some(request) = receiver.recv().await {
             let mut cache = self.cloud_apps.lock().await;
             if cache.is_empty() || request.message.refresh {

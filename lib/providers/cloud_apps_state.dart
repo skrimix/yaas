@@ -22,14 +22,14 @@ class CloudAppsState extends ChangeNotifier {
   void refresh() {
     _isLoading = true;
     notifyListeners();
-    GetCloudAppsRequest(refresh: true).sendSignalToRust();
+    LoadCloudAppsRequest(refresh: true).sendSignalToRust();
   }
 
   void load() {
     if (_apps.isEmpty && !_isLoading) {
       _isLoading = true;
       notifyListeners();
-      GetCloudAppsRequest(refresh: false).sendSignalToRust();
+      LoadCloudAppsRequest(refresh: false).sendSignalToRust();
     }
   }
 }

@@ -88,8 +88,7 @@ void main() async {
     final appState = RqlApp.navigatorKey.currentContext?.read<AppState>();
     if (appState != null) {
       appState.setPanicMessage(panic.message.message);
-      // Rust side is borked, shut it down
-      finalizeRust();
+      finalizeRust(); // Rust side is in an undefined state, shut it down
     }
   });
 }

@@ -43,7 +43,7 @@ void main() async {
       child: const RqlApp(),
     ),
   );
-  await DesktopWindow.setMinWindowSize(const Size(600, 500));
+  await DesktopWindow.setMinWindowSize(const Size(800, 600));
 
   AdbResponse.rustSignalStream.listen((response) {
     final type = response.message.success

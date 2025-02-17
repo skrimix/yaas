@@ -772,6 +772,9 @@ impl AdbDevice {
     /// * `app_dir` - Path to directory containing the app files
     //  #[instrument(err)]
     pub async fn sideload_app(&mut self, app_dir: &Path) -> Result<()> {
+        // TODO: support direct streaming of app files
+        // TODO: add optional checksum verification
+        // TODO: check free space before proceeding
         ensure!(app_dir.is_dir(), "App path must be a directory");
 
         let mut entries = Vec::new();

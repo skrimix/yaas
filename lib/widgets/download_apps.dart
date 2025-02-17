@@ -441,7 +441,11 @@ class _AppListItem extends StatelessWidget {
                 controller.open();
               },
               child: ListTile(
-                title: Text(cachedApp.app.fullName),
+                title: Text(
+                  cachedApp.app.fullName,
+                  softWrap: false,
+                  overflow: TextOverflow.ellipsis,
+                ),
                 subtitle: Column(
                   mainAxisSize: MainAxisSize.min,
                   crossAxisAlignment: CrossAxisAlignment.start,

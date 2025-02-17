@@ -46,6 +46,9 @@ class _DownloadAppsState extends State<DownloadApps> {
   String _searchQuery = '';
   final _searchController = TextEditingController();
   final _scrollController = ScrollController();
+  final Set<String> _selectedFullNames = {};
+  bool _showCheckboxes = false;
+  bool _showOnlySelected = false;
 
   @override
   void dispose() {
@@ -119,29 +122,75 @@ class _DownloadAppsState extends State<DownloadApps> {
   List<_CachedAppData> _filterAndSortApps(List<CloudApp> apps) {
     final sortedApps = _sortApps(apps);
 
-    if (_searchQuery.isEmpty) {
-      return sortedApps;
+    var filtered = sortedApps;
+
+    if (_showOnlySelected) {
+      filtered = filtered
+          .where((app) => _selectedFullNames.contains(app.app.fullName))
+          .toList();
+    } else if (_searchQuery.isNotEmpty) {
+      final searchTerms = _searchQuery.toLowerCase().split(' ');
+      filtered = sortedApps.where((app) {
+        // Match if all search terms are present in the full name
+        final fullNameLower = app.app.fullName.toLowerCase();
+        if (searchTerms.every((term) => fullNameLower.contains(term))) {
+          return true;
+        }
+
+        // Match if package name contains the search query
+        return app.app.packageName
+            .toLowerCase()
+            .contains(_searchQuery.toLowerCase());
+      }).toList();
     }
-
-    final searchTerms = _searchQuery.toLowerCase().split(' ');
-    final filtered = sortedApps.where((app) {
-      // Match if all search terms are present in the full name
-      final fullNameLower = app.app.fullName.toLowerCase();
-      if (searchTerms.every((term) => fullNameLower.contains(term))) {
-        return true;
-      }
-
-      // Match if package name contains the search query
-      return app.app.packageName
-          .toLowerCase()
-          .contains(_searchQuery.toLowerCase());
-    }).toList();
 
     // Reset scroll position when filter results change
     if (filtered.length != sortedApps.length) {
       _resetScroll();
     }
     return filtered;
+  }
+
+  void _toggleShowOnlySelected() {
+    setState(() {
+      _showOnlySelected = !_showOnlySelected;
+      if (_showOnlySelected) {
+        _searchQuery = '';
+        _isSearching = false;
+        _searchController.clear();
+      }
+    });
+  }
+
+  void _toggleSelection(String fullName) {
+    setState(() {
+      if (_selectedFullNames.contains(fullName)) {
+        _selectedFullNames.remove(fullName);
+        if (_selectedFullNames.isEmpty) {
+          // _showCheckboxes = false;
+          _showOnlySelected = false;
+        }
+      } else {
+        _selectedFullNames.add(fullName);
+      }
+    });
+  }
+
+  void _toggleCheckboxVisibility() {
+    setState(() {
+      _showCheckboxes = !_showCheckboxes;
+      if (!_showCheckboxes) {
+        _clearSelection();
+      }
+    });
+  }
+
+  void _clearSelection() {
+    setState(() {
+      _selectedFullNames.clear();
+      _showCheckboxes = false;
+      _showOnlySelected = false;
+    });
   }
 
   Widget _buildSortButton() {
@@ -312,13 +361,98 @@ class _DownloadAppsState extends State<DownloadApps> {
       controller: _scrollController,
       padding: _listPadding,
       itemCount: filteredAndSortedApps.length,
-      prototypeItem: _AppListItem(cachedApp: filteredAndSortedApps.first),
+      prototypeItem: _AppListItem(
+        cachedApp: filteredAndSortedApps.first,
+        isSelected: _selectedFullNames
+            .contains(filteredAndSortedApps.first.app.fullName),
+        onSelectionChanged: (selected) =>
+            _toggleSelection(filteredAndSortedApps.first.app.fullName),
+        showCheckbox: _showCheckboxes,
+      ),
       addAutomaticKeepAlives: false,
       addRepaintBoundaries: true,
       itemBuilder: (context, index) {
         final cachedApp = filteredAndSortedApps[index];
-        return _AppListItem(cachedApp: cachedApp);
+        return _AppListItem(
+          cachedApp: cachedApp,
+          isSelected: _selectedFullNames.contains(cachedApp.app.fullName),
+          onSelectionChanged: (selected) =>
+              _toggleSelection(cachedApp.app.fullName),
+          showCheckbox: _showCheckboxes,
+        );
       },
+    );
+  }
+
+  Widget _buildFilterButton() {
+    final hasSelections = _selectedFullNames.isNotEmpty;
+
+    return IconButton(
+      icon: Icon(
+        _showOnlySelected ? Icons.filter_list_off : Icons.filter_list,
+        color: _showOnlySelected ? Theme.of(context).colorScheme.primary : null,
+      ),
+      tooltip: _showOnlySelected
+          ? 'Show all items'
+          : hasSelections
+              ? 'Show only selected items'
+              : 'Filter (no items selected)',
+      onPressed: hasSelections ? _toggleShowOnlySelected : null,
+    );
+  }
+
+  Widget _buildSelectionSummary(List<_CachedAppData> apps) {
+    if (_selectedFullNames.isEmpty) return const SizedBox.shrink();
+
+    final selectedApps = apps
+        .where((app) => _selectedFullNames.contains(app.app.fullName))
+        .toList();
+    final totalSize =
+        selectedApps.fold<int>(0, (sum, app) => sum + app.app.size.toInt());
+    final formattedTotalSize = _formatSize(totalSize);
+
+    return Container(
+      padding: const EdgeInsets.all(16.0),
+      decoration: BoxDecoration(
+        color: Theme.of(context).colorScheme.surfaceContainer,
+        borderRadius: const BorderRadius.vertical(top: Radius.circular(12)),
+      ),
+      child: Row(
+        children: [
+          Text(
+            '${selectedApps.length} selected • $formattedTotalSize total',
+            style: Theme.of(context).textTheme.titleMedium,
+          ),
+          const Spacer(),
+          FilledButton.icon(
+            onPressed: () {
+              // TODO: Implement batch download
+            },
+            icon: const Icon(Icons.download),
+            label: const Text('Download Selected'),
+          ),
+          const SizedBox(width: 8),
+          Consumer<DeviceState>(
+            builder: (context, deviceState, _) {
+              return FilledButton.icon(
+                onPressed: deviceState.isConnected
+                    ? () {
+                        // TODO: Implement batch install
+                      }
+                    : null,
+                icon: const Icon(Icons.install_mobile),
+                label: const Text('Install Selected'),
+              );
+            },
+          ),
+          const SizedBox(width: 8),
+          IconButton(
+            onPressed: _clearSelection,
+            icon: const Icon(Icons.close),
+            tooltip: 'Clear selection',
+          ),
+        ],
+      ),
     );
   }
 
@@ -354,6 +488,8 @@ class _DownloadAppsState extends State<DownloadApps> {
           );
         }
 
+        final filteredAndSortedApps = _filterAndSortApps(cloudAppsState.apps);
+
         return Scaffold(
           body: SafeArea(
             child: Column(
@@ -367,7 +503,15 @@ class _DownloadAppsState extends State<DownloadApps> {
                         style: Theme.of(context).textTheme.titleLarge,
                       ),
                       const Spacer(),
-                      _buildSearchButton(),
+                      if (_showCheckboxes) _buildFilterButton(),
+                      IconButton(
+                        icon: Icon(_showCheckboxes
+                            ? Icons.check_box
+                            : Icons.check_box_outline_blank),
+                        tooltip: 'Multi-select',
+                        onPressed: _toggleCheckboxVisibility,
+                      ),
+                      if (!_showOnlySelected) _buildSearchButton(),
                       _buildSortButton(),
                       IconButton(
                         icon: const Icon(Icons.refresh),
@@ -377,9 +521,33 @@ class _DownloadAppsState extends State<DownloadApps> {
                     ],
                   ),
                 ),
+                if (_showOnlySelected && _selectedFullNames.isNotEmpty)
+                  Padding(
+                    padding: const EdgeInsets.fromLTRB(16, 0, 16, 8),
+                    child: Row(
+                      children: [
+                        Icon(
+                          Icons.filter_list,
+                          size: 16,
+                          color: Theme.of(context).colorScheme.primary,
+                        ),
+                        const SizedBox(width: 8),
+                        Text(
+                          'Showing selected items only',
+                          style: Theme.of(context)
+                              .textTheme
+                              .bodyMedium
+                              ?.copyWith(
+                                color: Theme.of(context).colorScheme.primary,
+                              ),
+                        ),
+                      ],
+                    ),
+                  ),
                 Expanded(
                   child: _buildAppList(cloudAppsState.apps),
                 ),
+                _buildSelectionSummary(filteredAndSortedApps),
               ],
             ),
           ),
@@ -392,9 +560,15 @@ class _DownloadAppsState extends State<DownloadApps> {
 class _AppListItem extends StatelessWidget {
   const _AppListItem({
     required this.cachedApp,
+    required this.isSelected,
+    required this.onSelectionChanged,
+    required this.showCheckbox,
   });
 
   final _CachedAppData cachedApp;
+  final bool isSelected;
+  final ValueChanged<bool> onSelectionChanged;
+  final bool showCheckbox;
 
   void _copyToClipboard(BuildContext context, String text) {
     Clipboard.setData(ClipboardData(text: text));
@@ -442,9 +616,19 @@ class _AppListItem extends StatelessWidget {
                 controller.open();
               },
               onTapUp: (_) {
+                if (showCheckbox) {
+                  onSelectionChanged(!isSelected);
+                }
                 controller.close();
               },
               child: ListTile(
+                leading: showCheckbox
+                    ? Checkbox(
+                        value: isSelected,
+                        onChanged: (value) =>
+                            onSelectionChanged(value ?? false),
+                      )
+                    : null,
                 title: Text(
                   cachedApp.app.fullName,
                   softWrap: false,

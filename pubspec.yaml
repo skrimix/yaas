@@ -42,6 +42,7 @@ dependencies:
   toastification: ^2.3.0
   file_picker: ^8.3.5
   intl: ^0.20.2
+  desktop_window: ^0.4.2
 
 dev_dependencies:
   flutter_test:

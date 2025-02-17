@@ -1,5 +1,6 @@
 import 'dart:ui';
 
+import 'package:desktop_window/desktop_window.dart';
 import 'package:flutter/material.dart';
 import 'package:provider/provider.dart';
 import 'package:rinf/rinf.dart';
@@ -42,6 +43,7 @@ void main() async {
       child: const RqlApp(),
     ),
   );
+  await DesktopWindow.setMinWindowSize(const Size(600, 500));
 
   AdbResponse.rustSignalStream.listen((response) {
     final type = response.message.success

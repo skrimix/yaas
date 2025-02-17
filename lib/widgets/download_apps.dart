@@ -36,7 +36,6 @@ class _DownloadAppsState extends State<DownloadApps> {
   static const _cardPadding =
       EdgeInsets.symmetric(horizontal: 16.0, vertical: 4.0);
   static const _listPadding = EdgeInsets.only(bottom: 24);
-  static const _itemExtent = 88.0;
 
   SortOption _sortOption = SortOption.name;
   bool _sortAscending = true;
@@ -312,7 +311,7 @@ class _DownloadAppsState extends State<DownloadApps> {
       controller: _scrollController,
       padding: _listPadding,
       itemCount: filteredAndSortedApps.length,
-      itemExtent: _itemExtent,
+      prototypeItem: _AppListItem(cachedApp: filteredAndSortedApps.first),
       addAutomaticKeepAlives: false,
       addRepaintBoundaries: true,
       itemBuilder: (context, index) {
@@ -418,7 +417,6 @@ class _AppListItem extends StatelessWidget {
     return Card(
       margin: const EdgeInsets.symmetric(horizontal: 16, vertical: 2),
       child: SizedBox(
-        height: _DownloadAppsState._itemExtent,
         child: MenuAnchor(
           menuChildren: [
             MenuItemButton(

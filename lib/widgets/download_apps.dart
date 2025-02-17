@@ -6,6 +6,7 @@ import 'package:intl/intl.dart';
 import 'package:toastification/toastification.dart';
 import '../providers/cloud_apps_state.dart';
 import '../messages/all.dart';
+import '../providers/device_state.dart';
 
 enum SortOption {
   name,
@@ -473,11 +474,19 @@ class _AppListItem extends StatelessWidget {
                 trailing: Row(
                   mainAxisSize: MainAxisSize.min,
                   children: [
-                    IconButton(
-                      icon: const Icon(Icons.install_mobile),
-                      tooltip: 'Install on device',
-                      onPressed: () {
-                        // TODO: Implement install functionality
+                    Consumer<DeviceState>(
+                      builder: (context, deviceState, _) {
+                        return IconButton(
+                          icon: const Icon(Icons.install_mobile),
+                          tooltip: deviceState.isConnected
+                              ? 'Install on device'
+                              : 'Install on device (not connected)',
+                          onPressed: deviceState.isConnected
+                              ? () {
+                                  // TODO: Implement install functionality
+                                }
+                              : null,
+                        );
                       },
                     ),
                     const SizedBox(width: 8),

@@ -49,6 +49,7 @@ class _DownloadAppsState extends State<DownloadApps> {
   final Set<String> _selectedFullNames = {};
   bool _showCheckboxes = false;
   bool _showOnlySelected = false;
+  String? _lastSearchQuery;
 
   @override
   void dispose() {
@@ -119,6 +120,14 @@ class _DownloadAppsState extends State<DownloadApps> {
     }
   }
 
+  void _resetSearch() {
+    setState(() {
+      _searchQuery = '';
+      _isSearching = false;
+      _searchController.clear();
+    });
+  }
+
   List<_CachedAppData> _filterAndSortApps(List<CloudApp> apps) {
     final sortedApps = _sortApps(apps);
 
@@ -144,10 +153,12 @@ class _DownloadAppsState extends State<DownloadApps> {
       }).toList();
     }
 
-    // Reset scroll position when filter results change
-    if (filtered.length != sortedApps.length) {
+    // Reset scroll position when search query changes
+    if (_lastSearchQuery != _searchQuery) {
       _resetScroll();
+      _lastSearchQuery = _searchQuery;
     }
+
     return filtered;
   }
 
@@ -155,9 +166,7 @@ class _DownloadAppsState extends State<DownloadApps> {
     setState(() {
       _showOnlySelected = !_showOnlySelected;
       if (_showOnlySelected) {
-        _searchQuery = '';
-        _isSearching = false;
-        _searchController.clear();
+        _resetSearch();
       }
     });
   }
@@ -302,12 +311,7 @@ class _DownloadAppsState extends State<DownloadApps> {
             suffixIcon: IconButton(
               icon: const Icon(Icons.close),
               onPressed: () {
-                setState(() {
-                  _isSearching = false;
-                  _searchQuery = '';
-                  _searchController.clear();
-                  _resetScroll();
-                });
+                _resetSearch();
               },
               tooltip: 'Clear search',
             ),

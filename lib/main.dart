@@ -68,6 +68,10 @@ void main() async {
             ? 'Uninstallation Complete'
             : 'Uninstallation Failed';
         break;
+      case AdbCommand.ADB_COMMAND_SIDELOAD_APP:
+        title =
+            response.message.success ? 'App Installed' : 'Installation Failed';
+        break;
       default:
         title = response.message.success ? 'Success' : 'Error';
     }

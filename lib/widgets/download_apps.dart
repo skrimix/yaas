@@ -440,6 +440,9 @@ class _AppListItem extends StatelessWidget {
               onLongPress: () {
                 controller.open();
               },
+              onTapUp: (_) {
+                controller.close();
+              },
               child: ListTile(
                 title: Text(
                   cachedApp.app.fullName,

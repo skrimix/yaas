@@ -48,6 +48,7 @@ class CloudAppList extends StatelessWidget {
       );
     }
 
+    // FIXME: lots of scrolling -> increasing memory usage until navigated away and back
     return ListView.builder(
       controller: scrollController,
       padding: listPadding,

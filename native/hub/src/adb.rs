@@ -32,7 +32,7 @@ impl AdbHandler {
     /// # Returns
     /// Arc-wrapped AdbHandler that manages ADB device connections
     #[instrument]
-    pub fn create() -> Arc<Self> {
+    pub fn new() -> Arc<Self> {
         // TODO: check host and launch if not running
         let handle =
             Arc::new(Self { adb_host: forensic_adb::Host::default(), device: None.into() });

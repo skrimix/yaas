@@ -13,7 +13,7 @@ pub struct Downloader {
 }
 
 impl Downloader {
-    pub async fn create() -> Arc<Self> {
+    pub async fn new() -> Arc<Self> {
         let handle = Arc::new(Self {
             cloud_apps: Mutex::new(Vec::new()),
             storage: NifStorage::create().await.unwrap(), // TODO: handle error

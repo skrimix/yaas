@@ -46,8 +46,8 @@ async fn main() {
         rinf::debug_print!("Failed to setup logging: {e}");
     }
 
-    let _adb_handler = AdbHandler::create();
-    let _downloader = Downloader::create().await;
+    let adb_handler = AdbHandler::new();
+    let downloader = Downloader::new().await;
 
     // Keep the main function running until Dart shutdown.
     rinf::dart_shutdown().await;

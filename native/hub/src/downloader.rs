@@ -1,11 +1,13 @@
-use std::sync::Arc;
+use std::{path::PathBuf, sync::Arc};
 
+use anyhow::Result;
 use nif::NifStorage;
 use tokio::sync::Mutex;
 
 use crate::{messages as proto, models::CloudApp};
 
 mod nif;
+pub use nif::DirDownloadProgress;
 
 pub struct Downloader {
     cloud_apps: Mutex<Vec<CloudApp>>,
@@ -57,5 +59,12 @@ impl Downloader {
                 send_response(cache.clone(), None);
             }
         }
+    }
+
+    pub async fn download_app(&self, app_full_name: String) -> Result<String> {
+        let dst_dir = "/home/skrimix/work/test";
+        let (tx, _) = tokio::sync::mpsc::unbounded_channel(); // unused for now
+        self.storage.download_dir(app_full_name, PathBuf::from(dst_dir), 4, tx).await?;
+        Ok(dst_dir.to_string())
     }
 }

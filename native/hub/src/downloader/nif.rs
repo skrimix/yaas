@@ -176,7 +176,7 @@ impl NifStorage {
     ) -> Result<String> {
         // FIXME: disallow concurrent for same remote path
         let (target_path, mut writer, mut stream) =
-            self.prepare_file_download(&remote_path, &destination, concurrency).await?;
+            self.prepare_file_download(remote_path, &destination, concurrency).await?;
 
         while let Some(chunk) = stream.next().await {
             let chunk = chunk.context("error reading chunk")?;

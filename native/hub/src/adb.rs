@@ -453,6 +453,48 @@ impl AdbHandler {
             }
         }
     }
+
+    /// Installs an APK on the currently connected device
+    ///
+    /// # Arguments
+    /// * `apk_path` - Path to the APK file to install
+    pub async fn install_apk(&self, apk_path: &std::path::Path) -> Result<()> {
+        let device = self.current_device()?.clone();
+        let mut device = (*device).clone();
+        let result = device.install_apk(apk_path).await;
+        if result.is_ok() {
+            self.set_device(Some(device), true);
+        }
+        result
+    }
+
+    /// Uninstalls a package from the currently connected device
+    ///
+    /// # Arguments
+    /// * `package_name` - The package name to uninstall
+    pub async fn uninstall_package(&self, package_name: &str) -> Result<()> {
+        let device = self.current_device()?.clone();
+        let mut device = (*device).clone();
+        let result = device.uninstall_package(package_name).await;
+        if result.is_ok() {
+            self.set_device(Some(device), true);
+        }
+        result
+    }
+
+    /// Sideloads an app by installing its APK and pushing OBB data if present
+    ///
+    /// # Arguments
+    /// * `app_path` - Path to directory containing the app files
+    pub async fn sideload_app(&self, app_path: &std::path::Path) -> Result<()> {
+        let device = self.current_device()?.clone();
+        let mut device = (*device).clone();
+        let result = device.sideload_app(app_path).await;
+        if result.is_ok() {
+            self.set_device(Some(device), true);
+        }
+        result
+    }
 }
 
 /// Ensures the ADB server is running, starting it if necessary

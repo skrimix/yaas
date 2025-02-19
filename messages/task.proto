@@ -1,0 +1,60 @@
+syntax = "proto3";
+package task;
+
+// [DART-SIGNAL]
+message TaskRequest {
+  TaskType type = 1;
+  TaskParams params = 2;
+}
+
+// [DART-SIGNAL]
+message TaskCancelRequest {
+  uint64 id = 1;
+}
+
+// [RUST-SIGNAL]
+message TaskProgress {
+  uint64 id = 1;
+  TaskType type = 2;
+  TaskStatus status = 3;
+  float step_progress = 4;
+  float total_progress = 5;
+  string message = 6;
+}
+
+message TaskParams {
+  optional string cloud_app_full_name = 1;
+  optional string apk_path = 2;
+  optional string local_app_path = 3;
+  optional string package_name = 4;
+}
+
+enum TaskType {
+  // Unspecified task type
+  TASK_TYPE_UNSPECIFIED = 0;
+  // Download app from cloud
+  TASK_TYPE_DOWNLOAD = 1;
+  // Download and install app from cloud
+  TASK_TYPE_DOWNLOAD_INSTALL = 2;
+  // Install local APK
+  TASK_TYPE_INSTALL_APK = 3;
+  // Install already downloaded app
+  TASK_TYPE_INSTALL_LOCAL_APP = 4;
+  // Uninstall app
+  TASK_TYPE_UNINSTALL = 5;
+}
+
+enum TaskStatus {
+  // Unspecified task status
+  TASK_STATUS_UNSPECIFIED = 0;
+  // Task is waiting for execution. This status may be used more than once
+  TASK_STATUS_WAITING = 1;
+  // Task is running
+  TASK_STATUS_RUNNING = 2;
+  // Task is completed
+  TASK_STATUS_COMPLETED = 3;
+  // Task failed
+  TASK_STATUS_FAILED = 4;
+  // Task was cancelled
+  TASK_STATUS_CANCELLED = 5;
+}

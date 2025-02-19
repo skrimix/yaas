@@ -6,6 +6,7 @@ use anyhow::{Context, Result};
 use downloader::Downloader;
 use messages::RustPanic;
 use mimalloc::MiMalloc;
+use task::TaskManager;
 use tracing::Level;
 use tracing_appender::{
     non_blocking::WorkerGuard,
@@ -23,6 +24,7 @@ rinf::write_interface!();
 pub mod adb;
 pub mod downloader;
 pub mod models;
+pub mod task;
 pub mod utils;
 
 #[tokio::main(flavor = "multi_thread")]
@@ -48,6 +50,7 @@ async fn main() {
 
     let adb_handler = AdbHandler::new();
     let downloader = Downloader::new().await;
+    let _task_manager = TaskManager::new(adb_handler.clone(), downloader.clone());
 
     // Keep the main function running until Dart shutdown.
     rinf::dart_shutdown().await;

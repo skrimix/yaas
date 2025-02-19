@@ -36,11 +36,25 @@ impl AdbHandler {
         // TODO: check host and launch if not running
         let handle =
             Arc::new(Self { adb_host: forensic_adb::Host::default(), device: None.into() });
-        Self::start_device_monitor(handle.clone());
+        Self::start_tasks(handle.clone());
+        handle
+    }
+
+    /// Starts all background tasks needed for ADB functionality.
+    /// This includes device monitoring, command handling, and periodic refreshes.
+    ///
+    /// # Arguments
+    /// * `adb_handler` - Reference to the AdbHandler instance
+    //  #[instrument(level = "debug")]
+    fn start_tasks(adb_handler: Arc<AdbHandler>) {
+        // Start device monitoring
+        let (sender, receiver) = tokio::sync::mpsc::unbounded_channel();
+        tokio::spawn(Self::handle_device_updates(adb_handler.clone(), receiver));
+        tokio::spawn(Self::run_device_tracker(adb_handler.adb_host.clone(), sender));
 
         // Start command receiver
         tokio::spawn({
-            let handle = handle.clone();
+            let handle = adb_handler.clone();
             async move {
                 handle.receive_commands().await;
             }
@@ -48,29 +62,11 @@ impl AdbHandler {
 
         // Start periodic device info refresh
         tokio::spawn({
-            let handle = handle.clone();
+            let handle = adb_handler.clone();
             async move {
                 handle.run_periodic_refresh().await;
             }
         });
-
-        handle
-    }
-
-    /// Starts monitoring for device connection changes.
-    /// Sets up the device tracking and update handling infrastructure.
-    ///
-    /// # Arguments
-    /// * `adb_handler` - Reference to the AdbHandler instance to manage device updates
-    //  #[instrument(level = "debug")]
-    fn start_device_monitor(adb_handler: Arc<AdbHandler>) {
-        let (sender, receiver) = tokio::sync::mpsc::unbounded_channel();
-
-        // Spawn device state handler
-        tokio::spawn(Self::handle_device_updates(adb_handler.clone(), receiver));
-
-        // Spawn device tracking task
-        tokio::spawn(Self::run_device_tracker(adb_handler.adb_host.clone(), sender));
     }
 
     /// Runs the device tracking loop that monitors for device connections and disconnections

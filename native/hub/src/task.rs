@@ -137,7 +137,7 @@ impl TaskManager {
             id,
             TaskType::DownloadInstall,
             TaskStatus::Waiting,
-            0.5,
+            0.0,
             0.5,
             "Waiting to start installation...".into(),
         );

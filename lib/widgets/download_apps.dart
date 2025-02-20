@@ -185,6 +185,20 @@ class _DownloadAppsState extends State<DownloadApps> {
     });
   }
 
+  void _install(String appFullName) {
+    TaskRequest(
+      type: TaskType.TASK_TYPE_DOWNLOAD_INSTALL,
+      params: TaskParams(cloudAppFullName: appFullName),
+    ).sendSignalToRust();
+  }
+
+  void _download(String appFullName) {
+    TaskRequest(
+      type: TaskType.TASK_TYPE_DOWNLOAD,
+      params: TaskParams(cloudAppFullName: appFullName),
+    ).sendSignalToRust();
+  }
+
   Widget _buildSortButton() {
     return PopupMenuButton<(SortOption, bool)>(
       tooltip: 'Sort',
@@ -360,7 +374,7 @@ class _DownloadAppsState extends State<DownloadApps> {
       child: Row(
         children: [
           Text(
-            '${selectedApps.length} selected • $formattedTotalSize total',
+            '${selectedApps.length} selected • $formattedTotalSize total', // TODO:  warn if total size is too large
             style: Theme.of(context).textTheme.titleMedium,
           ),
           const Spacer(),
@@ -491,6 +505,8 @@ class _DownloadAppsState extends State<DownloadApps> {
                     selectedFullNames: _selectedFullNames,
                     scrollController: _scrollController,
                     onSelectionChanged: _toggleSelection,
+                    onDownload: _download,
+                    onInstall: _install,
                   ),
                 ),
                 _buildSelectionSummary(filteredAndSortedApps),

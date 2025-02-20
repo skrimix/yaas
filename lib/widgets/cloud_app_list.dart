@@ -27,6 +27,8 @@ class CloudAppList extends StatelessWidget {
   final Set<String> selectedFullNames;
   final ValueChanged<String>? onSelectionChanged;
   final ScrollController scrollController;
+  final Function(String) onDownload;
+  final Function(String) onInstall;
 
   const CloudAppList({
     super.key,
@@ -35,6 +37,8 @@ class CloudAppList extends StatelessWidget {
     required this.selectedFullNames,
     required this.scrollController,
     this.onSelectionChanged,
+    required this.onDownload,
+    required this.onInstall,
   });
 
   @override
@@ -59,6 +63,8 @@ class CloudAppList extends StatelessWidget {
         onSelectionChanged: (selected) =>
             onSelectionChanged?.call(apps.first.app.fullName),
         showCheckbox: showCheckboxes,
+        onDownload: onDownload,
+        onInstall: onInstall,
       ),
       addAutomaticKeepAlives: false,
       addRepaintBoundaries: true,
@@ -70,6 +76,8 @@ class CloudAppList extends StatelessWidget {
           onSelectionChanged: (selected) =>
               onSelectionChanged?.call(cachedApp.app.fullName),
           showCheckbox: showCheckboxes,
+          onDownload: onDownload,
+          onInstall: onInstall,
         );
       },
     );
@@ -83,12 +91,16 @@ class CloudAppListItem extends StatelessWidget {
     required this.isSelected,
     required this.onSelectionChanged,
     required this.showCheckbox,
+    required this.onDownload,
+    required this.onInstall,
   });
 
   final CachedAppData cachedApp;
   final bool isSelected;
   final ValueChanged<bool> onSelectionChanged;
   final bool showCheckbox;
+  final Function(String) onDownload;
+  final Function(String) onInstall;
 
   void _copyToClipboard(BuildContext context, String text) {
     Clipboard.setData(ClipboardData(text: text));
@@ -182,7 +194,7 @@ class CloudAppListItem extends StatelessWidget {
                       icon: const Icon(Icons.download),
                       tooltip: 'Download to computer',
                       onPressed: () {
-                        // TODO: Implement download functionality
+                        onDownload(cachedApp.app.fullName);
                       },
                     ),
                     const SizedBox(width: 8),
@@ -195,7 +207,7 @@ class CloudAppListItem extends StatelessWidget {
                               : 'Install on device (not connected)',
                           onPressed: deviceState.isConnected
                               ? () {
-                                  // TODO: Implement install functionality
+                                  onInstall(cachedApp.app.fullName);
                                 }
                               : null,
                         );

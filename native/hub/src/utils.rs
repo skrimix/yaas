@@ -6,7 +6,7 @@ use tracing::{debug, error, instrument};
 mod speed;
 pub use speed::*;
 
-#[instrument(ret, level = "trace")]
+// #[instrument(ret, level = "trace")]
 pub fn get_sys_proxy() -> Option<String> {
     let proxy = Sysproxy::get_system_proxy();
     match proxy {

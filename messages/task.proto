@@ -9,12 +9,12 @@ message TaskRequest {
 
 // [DART-SIGNAL]
 message TaskCancelRequest {
-  uint64 id = 1;
+  uint64 task_id = 1;
 }
 
 // [RUST-SIGNAL]
 message TaskProgress {
-  uint64 id = 1;
+  uint64 task_id = 1;
   TaskType type = 2;
   TaskStatus status = 3;
   float step_progress = 4;

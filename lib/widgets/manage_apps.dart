@@ -238,10 +238,10 @@ class _ManageAppsState extends State<ManageApps> {
           TextButton(
             onPressed: () {
               Navigator.of(context).pop();
-              AdbRequest(
-                      command: AdbCommand.ADB_COMMAND_UNINSTALL_PACKAGE,
-                      packageName: app.packageName)
-                  .sendSignalToRust();
+              // AdbRequest(
+              //         command: AdbCommand.ADB_COMMAND_UNINSTALL_PACKAGE,
+              //         packageName: app.packageName)
+              //     .sendSignalToRust();
             },
             child: const Text('Uninstall'),
           ),

@@ -59,7 +59,7 @@ pub struct HeadsetControllersInfo {
     pub right: Option<ControllerInfo>,
 }
 
-#[instrument(level = "debug")]
+// #[instrument(level = "debug")]
 /// Parses the output of `QUEST_CONTROLLER_INFO_COMMAND` command.
 pub fn parse_dumpsys(lines: &str) -> HeadsetControllersInfo {
     let mut result = HeadsetControllersInfo::default();

@@ -103,15 +103,15 @@ class _LocalSideloadState extends State<LocalSideload> {
       }
     }
 
-    final command = _isDirectory
-        ? AdbCommand.ADB_COMMAND_SIDELOAD_APP
-        : AdbCommand.ADB_COMMAND_INSTALL_APK;
+    (_isDirectory
+            ? TaskRequest(
+                type: TaskType.TASK_TYPE_INSTALL_LOCAL_APP,
+                params: TaskParams(localAppPath: path))
+            : TaskRequest(
+                type: TaskType.TASK_TYPE_INSTALL_APK,
+                params: TaskParams(apkPath: path)))
+        .sendSignalToRust();
 
-    final parameters = _isDirectory
-        ? AdbRequest(command: command, appPath: path)
-        : AdbRequest(command: command, apkPath: path);
-
-    parameters.sendSignalToRust();
     _pathController.clear();
     toastification.show(
       type: ToastificationType.success,
@@ -214,6 +214,7 @@ class _LocalSideloadState extends State<LocalSideload> {
                           ),
                         ],
                         const SizedBox(height: 16),
+                        // TODO: trigger on keyboard enter
                         FilledButton.icon(
                           onPressed:
                               _pathController.text.isEmpty ? null : _install,

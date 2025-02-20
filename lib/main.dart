@@ -58,20 +58,6 @@ void main() async {
       case AdbCommand.ADB_COMMAND_FORCE_STOP_APP:
         title = response.message.success ? 'App Stopped' : 'Stop Failed';
         break;
-      case AdbCommand.ADB_COMMAND_INSTALL_APK:
-        title = response.message.success
-            ? 'Installation Complete'
-            : 'Installation Failed';
-        break;
-      case AdbCommand.ADB_COMMAND_UNINSTALL_PACKAGE:
-        title = response.message.success
-            ? 'Uninstallation Complete'
-            : 'Uninstallation Failed';
-        break;
-      case AdbCommand.ADB_COMMAND_SIDELOAD_APP:
-        title =
-            response.message.success ? 'App Installed' : 'Installation Failed';
-        break;
       default:
         title = response.message.success ? 'Success' : 'Error';
     }
@@ -94,6 +80,10 @@ void main() async {
       appState.setPanicMessage(panic.message.message);
       finalizeRust(); // Rust side is in an undefined state, shut it down
     }
+  });
+
+  TaskProgress.rustSignalStream.listen((progress) {
+    print(progress.message.toDebugString());
   });
 }
 

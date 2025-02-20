@@ -303,7 +303,7 @@ impl TaskManager {
 
     fn send_progress(
         &self,
-        id: u64,
+        task_id: u64,
         task_type: TaskType,
         status: TaskStatus,
         step_progress: f32,
@@ -311,7 +311,7 @@ impl TaskManager {
         message: String,
     ) {
         TaskProgress {
-            id,
+            task_id,
             r#type: task_type as i32,
             status: status as i32,
             step_progress,

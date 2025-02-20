@@ -14,5 +14,5 @@ debug = true
 strip = "debuginfo"
 split-debuginfo = "packed"
 
-[profile.dev]
-split-debuginfo = "packed"
+# [profile.dev]
+# split-debuginfo = "packed"

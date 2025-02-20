@@ -63,7 +63,7 @@ pub struct DirDownloadProgress {
 }
 
 impl NifStorage {
-    #[instrument(level = "debug")]
+    // #[instrument(level = "debug")]
     pub async fn create() -> Result<Self> {
         // TODO: make configurable
         let creds = tokio::fs::read_to_string("/home/skrimix/work/webdav-creds.txt")
@@ -87,7 +87,7 @@ impl NifStorage {
     }
 
     /// Creates a reader from the remote file and a buffered writer for the local file.
-    #[instrument(err, level = "debug")]
+    // #[instrument(err, level = "debug")]
     async fn prepare_file_download(
         &self,
         source_path: &str,
@@ -166,7 +166,7 @@ impl NifStorage {
     /// println!("{:?}", result);
     /// progress_stop_tx.send(()).unwrap();
     /// ```
-    #[instrument(err, ret, level = "debug")]
+    // #[instrument(err, ret, level = "debug")]
     pub async fn download_file(
         &self,
         remote_path: &str,
@@ -216,7 +216,7 @@ impl NifStorage {
     ///     .unwrap();
     /// println!("{:?}", result);
     /// ```
-    #[instrument(err, ret, level = "debug")]
+    // #[instrument(err, ret, level = "debug")]
     async fn compare_dirs(
         &self,
         remote_dir: &str,
@@ -299,7 +299,7 @@ impl NifStorage {
         Ok(CompareResult { total_bytes, total_files, to_delete, to_download })
     }
 
-    #[instrument(err, ret, level = "debug")]
+    // #[instrument(err, ret, level = "debug")]
     pub async fn download_dir(
         &self,
         remote_dir: String,
@@ -417,7 +417,7 @@ impl NifStorage {
     /// let entries = storage.list_remote_entries("Games/MyGame/").await.unwrap();
     /// println!("{:?}", entries);
     /// ```
-    #[instrument(err, ret, level = "trace")]
+    // #[instrument(err, ret, level = "trace")]
     async fn list_remote_entries(&self, source_dir: &str) -> Result<Vec<opendal::Entry>> {
         self.operator
             .list_with(source_dir)
@@ -447,13 +447,13 @@ impl NifStorage {
 }
 
 /// Finds a file in a list of remote files by its relative path.
-#[instrument(ret, level = "trace")]
+// #[instrument(ret, level = "trace")]
 fn find_remote_file<'a>(entries: &'a [RemoteFile], path: &str) -> Option<(usize, &'a RemoteFile)> {
     entries.iter().enumerate().find(|(_, e)| e.path == path)
 }
 
 /// Lists the contents of a local directory.
-#[instrument(err, ret, level = "trace")]
+// #[instrument(err, ret, level = "trace")]
 fn list_local_files(destination_dir: &Path) -> Result<Vec<PathBuf>> {
     trace!(path = ?destination_dir, "listing local directory");
     glob::glob(destination_dir.join("**/*").to_str().context("failed to create glob pattern")?)
@@ -478,7 +478,7 @@ fn list_local_files(destination_dir: &Path) -> Result<Vec<PathBuf>> {
 ///     .unwrap();
 /// println!("{:?}", result);
 /// ```
-#[instrument(err, ret, level = "trace")]
+// #[instrument(err, ret, level = "trace")]
 fn needs_update(local_file: &Path, remote_file: &RemoteFile) -> Result<bool> {
     let meta = std::fs::metadata(local_file).context("failed to get metadata for local file")?;
     let size = meta.len();

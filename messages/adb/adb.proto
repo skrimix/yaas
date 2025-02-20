@@ -6,9 +6,6 @@ enum AdbCommand {
   ADB_COMMAND_UNSPECIFIED = 0;
   ADB_COMMAND_LAUNCH_APP = 1;
   ADB_COMMAND_FORCE_STOP_APP = 2;
-  ADB_COMMAND_INSTALL_APK = 3;
-  ADB_COMMAND_UNINSTALL_PACKAGE = 4;
-  ADB_COMMAND_SIDELOAD_APP = 5;
 }
 
 // ADB Command Request
@@ -16,9 +13,7 @@ enum AdbCommand {
 message AdbRequest {
   AdbCommand command = 1;
   oneof parameters {
-    string package_name = 2; // Used for launch/stop/uninstall
-    string apk_path = 3; // Used for APK installation
-    string app_path = 4; // Used for sideloading app
+    string package_name = 2; // Used for launch/stop
   }
 }
 

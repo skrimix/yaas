@@ -1,7 +1,6 @@
 use std::{fmt::Display, path::Path, sync::LazyLock};
 
 use anyhow::{Context, Result, anyhow, bail, ensure};
-use bon::bon;
 use derive_more::Debug;
 use forensic_adb::{Device, UnixFileStatus, UnixPath, UnixPathBuf};
 use lazy_regex::{Lazy, Regex, lazy_regex};
@@ -56,7 +55,6 @@ impl Display for AdbDevice {
     }
 }
 
-#[bon]
 impl AdbDevice {
     /// Creates a new AdbDevice instance and initializes its state
     ///
@@ -86,50 +84,22 @@ impl AdbDevice {
             space_info: SpaceInfo::default(),
             installed_packages: Vec::new(),
         };
-        device.refresh_all().await.context("Failed to refresh device info")?;
+        device.refresh().await.context("Failed to refresh device info")?;
         Ok(device)
     }
 
-    /// Refreshes all device information (packages, battery, space)
-    //  #[instrument(level = "debug")]
-    pub async fn refresh_all(&mut self) -> Result<()> {
-        self.refresh().battery(true).space(true).packages(true).call().await
-    }
-
-    /// Refreshes specific device information based on provided flags
-    ///
-    /// # Arguments
-    /// * `packages` - Whether to refresh package list
-    /// * `battery` - Whether to refresh battery info
-    /// * `space` - Whether to refresh space info
-    #[builder]
-    pub async fn refresh(
-        &mut self,
-        packages: Option<bool>,
-        battery: Option<bool>,
-        space: Option<bool>,
-    ) -> Result<()> {
-        let packages = packages.unwrap_or(false);
-        let battery = battery.unwrap_or(false);
-        let space = space.unwrap_or(false);
-        ensure!((packages || battery || space), "Device info refresh called without any options");
-
+    /// Refreshes device information (packages, battery, space)
+    pub async fn refresh(&mut self) -> Result<()> {
         let mut errors = Vec::new();
 
-        if packages {
-            if let Err(e) = self.refresh_package_list().await {
-                errors.push(("packages", e));
-            }
+        if let Err(e) = self.refresh_package_list().await {
+            errors.push(("packages", e));
         }
-        if battery {
-            if let Err(e) = self.refresh_battery_info().await {
-                errors.push(("battery", e));
-            }
+        if let Err(e) = self.refresh_battery_info().await {
+            errors.push(("battery", e));
         }
-        if space {
-            if let Err(e) = self.refresh_space_info().await {
-                errors.push(("space", e));
-            }
+        if let Err(e) = self.refresh_space_info().await {
+            errors.push(("space", e));
         }
 
         if !errors.is_empty() {
@@ -845,6 +815,6 @@ impl AdbDevice {
     }
 
     async fn on_package_list_change(&mut self) -> Result<()> {
-        self.refresh().packages(true).space(true).call().await
+        self.refresh().await
     }
 }

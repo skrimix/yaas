@@ -31,7 +31,7 @@ impl AdbHandler {
     ///
     /// # Returns
     /// Arc-wrapped AdbHandler that manages ADB device connections
-    #[instrument]
+    // #[instrument]
     pub fn new() -> Arc<Self> {
         // TODO: check host and launch if not running
         let handle =
@@ -181,7 +181,7 @@ impl AdbHandler {
             AdbResponse { command: command as i32, success, message }.send_signal_to_dart();
         }
 
-        let mut device = (*self.current_device()?).clone();
+        let device = self.current_device()?;
 
         let result = match (command, parameters) {
             (
@@ -224,69 +224,6 @@ impl AdbHandler {
                         let error_msg = format!("Failed to force stop {}: {:#}", package_name, e);
                         send_response(AdbCommand::ForceStopApp, false, error_msg.clone());
                         Err(e.context(format!("Failed to force stop {}", package_name)))
-                    }
-                }
-            }
-
-            (AdbCommand::InstallApk, Some(proto::adb_request::Parameters::ApkPath(apk_path))) => {
-                let result = device.install_apk(Path::new(&apk_path)).await;
-                match result {
-                    Ok(_) => {
-                        self.set_device(Some(device), true);
-                        send_response(
-                            AdbCommand::InstallApk,
-                            true,
-                            format!("Installed {}", apk_path),
-                        );
-                        Ok(())
-                    }
-                    Err(e) => {
-                        let error_msg = format!("Failed to install {}: {:#}", apk_path, e);
-                        send_response(AdbCommand::InstallApk, false, error_msg.clone());
-                        Err(e.context(format!("Failed to install {}", apk_path)))
-                    }
-                }
-            }
-
-            (
-                AdbCommand::UninstallPackage,
-                Some(proto::adb_request::Parameters::PackageName(package_name)),
-            ) => {
-                let result = device.uninstall_package(&package_name).await;
-                match result {
-                    Ok(_) => {
-                        self.set_device(Some(device), true);
-                        send_response(
-                            AdbCommand::UninstallPackage,
-                            true,
-                            format!("Uninstalled {}", package_name),
-                        );
-                        Ok(())
-                    }
-                    Err(e) => {
-                        let error_msg = format!("Failed to uninstall {}: {:#}", package_name, e);
-                        send_response(AdbCommand::UninstallPackage, false, error_msg.clone());
-                        Err(e.context(format!("Failed to uninstall {}", package_name)))
-                    }
-                }
-            }
-
-            (AdbCommand::SideloadApp, Some(proto::adb_request::Parameters::AppPath(app_path))) => {
-                let result = device.sideload_app(Path::new(&app_path)).await;
-                match result {
-                    Ok(_) => {
-                        self.set_device(Some(device), true);
-                        send_response(
-                            AdbCommand::SideloadApp,
-                            true,
-                            format!("Sideloaded {}", app_path),
-                        );
-                        Ok(())
-                    }
-                    Err(e) => {
-                        let error_msg = format!("Failed to sideload {}: {:#}", app_path, e);
-                        send_response(AdbCommand::SideloadApp, false, error_msg.clone());
-                        Err(e.context(format!("Failed to sideload {}", app_path)))
                     }
                 }
             }
@@ -440,7 +377,7 @@ impl AdbHandler {
             if let Some(device) = self.try_current_device() {
                 let mut device = (*device).clone();
                 async {
-                    match device.refresh_all().await {
+                    match device.refresh().await {
                         Ok(_) => self.set_device(Some(device), true),
                         Err(e) => error!(
                             error = e.as_ref() as &dyn Error,
@@ -448,7 +385,7 @@ impl AdbHandler {
                         ),
                     }
                 }
-                .instrument(debug_span!("auto_refresh_run"))
+                // .instrument(debug_span!("auto_refresh_run"))
                 .await;
             }
         }
@@ -504,7 +441,7 @@ impl AdbHandler {
 ///
 /// # Returns
 /// Result indicating success or failure of ensuring server is running
-#[instrument(err, level = "debug")]
+// #[instrument(err, level = "debug")]
 async fn ensure_server_running(host: &forensic_adb::Host) -> Result<()> {
     if host.check_host_running().await.is_err() {
         debug!("Starting ADB server");

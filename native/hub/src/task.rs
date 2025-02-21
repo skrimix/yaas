@@ -139,7 +139,6 @@ impl TaskManager {
         let mut download_task = {
             let downloader = self.downloader.clone();
             let app_full_name = app_full_name.clone();
-            let tx = tx.clone();
             tokio::spawn(async move { downloader.download_app(app_full_name, tx).await })
         };
 
@@ -195,7 +194,6 @@ impl TaskManager {
         let download_task = {
             let downloader = self.downloader.clone();
             let app_full_name = app_full_name.clone();
-            let tx = tx.clone();
             tokio::spawn(async move { downloader.download_app(app_full_name, tx).await })
         };
 

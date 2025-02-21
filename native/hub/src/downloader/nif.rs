@@ -131,41 +131,6 @@ impl NifStorage {
     }
 
     /// Downloads a single file from remote server.
-    ///
-    /// # Example
-    /// ```no_run
-    /// use std::path::Path;
-    ///
-    /// use rql::downloader::webdav::WebdavStorage;
-    ///
-    /// let storage = WebdavStorage::create().await.unwrap();
-    /// let bytes_transferred = Arc::new(AtomicU64::new(0));
-    ///
-    /// let (progress_stop_tx, mut progress_stop_rx) = tokio::sync::oneshot::channel::<()>();
-    ///
-    /// tokio::spawn(async move {
-    ///     loop {
-    ///         if progress_stop_rx.try_recv().is_ok() {
-    ///             break;
-    ///         }
-    ///         println!("Transferred: {} bytes", bytes_transferred.load(Ordering::Relaxed));
-    ///         tokio::time::sleep(Duration::from_secs(1)).await;
-    ///     }
-    /// });
-    ///
-    /// let result = storage
-    ///     .download_file(
-    ///         "Games/somefile.txt",
-    ///         Path::new("/home/user/Downloads"),
-    ///         4,
-    ///         bytes_transferred.clone(),
-    ///     )
-    ///     .await
-    ///     .unwrap();
-    ///
-    /// println!("{:?}", result);
-    /// progress_stop_tx.send(()).unwrap();
-    /// ```
     // #[instrument(err, ret, level = "debug")]
     pub async fn download_file(
         &self,
@@ -202,20 +167,6 @@ impl NifStorage {
 
     /// Compares the contents of a remote directory with the local directory and returns a `CompareResult`
     /// containing summary information and a list of files to download and delete.
-    ///
-    /// # Example
-    /// ```no_run
-    /// use std::path::Path;
-    ///
-    /// use rql::downloader::webdav::WebdavStorage;
-    ///
-    /// let storage = WebdavStorage::create().await.unwrap();
-    /// let result = storage
-    ///     .compare_dirs("Games/MyGame/", &Path::new("/home/user/Downloads/MyGame/"))
-    ///     .await
-    ///     .unwrap();
-    /// println!("{:?}", result);
-    /// ```
     // #[instrument(err, ret, level = "debug")]
     async fn compare_dirs(
         &self,
@@ -408,15 +359,6 @@ impl NifStorage {
     }
 
     /// Lists the contents of a remote directory, including size and last modified date.
-    ///
-    /// # Example
-    /// ```no_run
-    /// use rql::downloader::webdav::WebdavStorage;
-    ///
-    /// let storage = WebdavStorage::create().await.unwrap();
-    /// let entries = storage.list_remote_entries("Games/MyGame/").await.unwrap();
-    /// println!("{:?}", entries);
-    /// ```
     // #[instrument(err, ret, level = "trace")]
     async fn list_remote_entries(&self, source_dir: &str) -> Result<Vec<opendal::Entry>> {
         self.operator
@@ -463,21 +405,6 @@ fn list_local_files(destination_dir: &Path) -> Result<Vec<PathBuf>> {
 }
 
 /// Compares the size and last modified date of a local file with the remote file.
-///
-/// # Example
-/// ```no_run
-/// use std::path::Path;
-///
-/// use rql::downloader::webdav::WebdavStorage;
-///
-/// let storage = WebdavStorage::create().await.unwrap();
-/// let file =
-///     RemoteFile { path: "somefile.txt".to_string(), size: 1234, last_modified: DateTime::now() };
-/// let result = storage
-///     .needs_update(&Path::new("/home/user/Downloads/MyGame/somefile.txt"), &file)
-///     .unwrap();
-/// println!("{:?}", result);
-/// ```
 // #[instrument(err, ret, level = "trace")]
 fn needs_update(local_file: &Path, remote_file: &RemoteFile) -> Result<bool> {
     let meta = std::fs::metadata(local_file).context("failed to get metadata for local file")?;

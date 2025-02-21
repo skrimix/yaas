@@ -4,8 +4,8 @@ import '../messages/all.dart';
 class TaskInfo {
   final int taskId;
   final TaskType type;
+  final String? taskName;
   final TaskStatus status;
-  final double stepProgress;
   final double totalProgress;
   final String message;
   final DateTime startTime;
@@ -14,8 +14,8 @@ class TaskInfo {
   TaskInfo({
     required this.taskId,
     required this.type,
+    this.taskName,
     required this.status,
-    required this.stepProgress,
     required this.totalProgress,
     required this.message,
     required this.startTime,
@@ -23,8 +23,8 @@ class TaskInfo {
   });
 
   TaskInfo copyWith({
+    String? taskName,
     TaskStatus? status,
-    double? stepProgress,
     double? totalProgress,
     String? message,
     DateTime? endTime,
@@ -32,8 +32,8 @@ class TaskInfo {
     return TaskInfo(
       taskId: taskId,
       type: type,
+      taskName: taskName ?? this.taskName,
       status: status ?? this.status,
-      stepProgress: stepProgress ?? this.stepProgress,
       totalProgress: totalProgress ?? this.totalProgress,
       message: message ?? this.message,
       startTime: startTime,
@@ -65,8 +65,8 @@ class TaskState extends ChangeNotifier {
 
       if (_tasks.containsKey(taskId)) {
         _tasks[taskId] = _tasks[taskId]!.copyWith(
+          taskName: progress.taskName,
           status: progress.status,
-          stepProgress: progress.stepProgress,
           totalProgress: progress.totalProgress,
           message: progress.message,
           endTime: progress.status == TaskStatus.TASK_STATUS_COMPLETED ||
@@ -79,8 +79,8 @@ class TaskState extends ChangeNotifier {
         _tasks[taskId] = TaskInfo(
           taskId: taskId,
           type: progress.type,
+          taskName: progress.taskName,
           status: progress.status,
-          stepProgress: progress.stepProgress,
           totalProgress: progress.totalProgress,
           message: progress.message,
           startTime: DateTime.now(),

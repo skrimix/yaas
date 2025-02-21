@@ -57,11 +57,25 @@ class TaskListDialog extends StatelessWidget {
     }
   }
 
-  Widget _buildTaskItem(TaskInfo task) {
+  Widget _buildTaskItem(BuildContext context, TaskInfo task) {
+    final taskName = task.taskName ?? "Unknown";
+
     return ListTile(
       title: Row(
         children: [
-          Text(_getTaskTypeString(task.type)),
+          Expanded(
+            child: Align(
+              alignment: Alignment.centerLeft,
+              child: Tooltip(
+                message: taskName,
+                waitDuration: const Duration(milliseconds: 500),
+                child: Text(
+                  taskName,
+                  overflow: TextOverflow.ellipsis,
+                ),
+              ),
+            ),
+          ),
           const SizedBox(width: 8),
           Container(
             padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 2),
@@ -85,7 +99,34 @@ class TaskListDialog extends StatelessWidget {
       subtitle: Column(
         crossAxisAlignment: CrossAxisAlignment.start,
         children: [
-          Text(task.message),
+          Row(
+            children: [
+              Text(
+                _getTaskTypeString(task.type),
+                style: TextStyle(
+                  fontSize: 12,
+                  color: Theme.of(context)
+                      .colorScheme
+                      .onSurface
+                      .withValues(alpha: 0.7),
+                ),
+              ),
+              const SizedBox(width: 8),
+              Expanded(
+                child: Align(
+                  alignment: Alignment.centerLeft,
+                  child: Tooltip(
+                    message: task.message,
+                    waitDuration: const Duration(milliseconds: 500),
+                    child: Text(
+                      task.message,
+                      overflow: TextOverflow.ellipsis,
+                    ),
+                  ),
+                ),
+              ),
+            ],
+          ),
           if (!task.isFinished)
             LinearProgressIndicator(
               value: task.totalProgress,
@@ -127,7 +168,6 @@ class TaskListDialog extends StatelessWidget {
                   ),
                 ],
               ),
-              const Divider(),
               Expanded(
                 child: DefaultTabController(
                   length: 2,
@@ -170,7 +210,7 @@ class TaskListDialog extends StatelessWidget {
 class _TaskList extends StatelessWidget {
   final List<TaskInfo> Function(TaskState) tasksSelector;
   final String emptyMessage;
-  final Widget Function(TaskInfo) itemBuilder;
+  final Widget Function(BuildContext, TaskInfo) itemBuilder;
 
   const _TaskList({
     required this.tasksSelector,
@@ -198,7 +238,7 @@ class _TaskList extends StatelessWidget {
         }
         return ListView.builder(
           itemCount: tasks.length,
-          itemBuilder: (context, index) => itemBuilder(tasks[index]),
+          itemBuilder: (context, index) => itemBuilder(context, tasks[index]),
         );
       },
     );

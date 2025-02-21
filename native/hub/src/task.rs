@@ -75,6 +75,17 @@ impl TaskManager {
     }
 
     async fn process_task(&self, id: u64, task_type: TaskType, params: TaskParams) {
+        // Send initial task data
+        let task_name = get_task_name(task_type, &params).unwrap_or("Unknown".to_string());
+        send_progress(
+            id,
+            task_type,
+            Some(task_name.clone()),
+            TaskStatus::Waiting,
+            0.0,
+            "Initializing...".into(),
+        );
+
         let result = match task_type {
             TaskType::Unspecified => {
                 error!("Received unspecified task type from Dart");
@@ -88,12 +99,22 @@ impl TaskManager {
         };
 
         match result {
-            Ok(_) => {
-                self.send_progress(id, task_type, TaskStatus::Completed, 1.0, 1.0, "Done".into())
-            }
-            Err(e) => {
-                self.send_progress(id, task_type, TaskStatus::Failed, 0.0, 0.0, e.to_string())
-            }
+            Ok(_) => send_progress(
+                id,
+                task_type,
+                Some(task_name),
+                TaskStatus::Completed,
+                1.0,
+                "Done".into(),
+            ),
+            Err(e) => send_progress(
+                id,
+                task_type,
+                Some(task_name),
+                TaskStatus::Failed,
+                0.0,
+                e.to_string(),
+            ),
         }
     }
 
@@ -101,22 +122,22 @@ impl TaskManager {
         let app_full_name =
             params.cloud_app_full_name.context("Missing cloud_app_full_name parameter")?;
 
-        self.send_progress(
+        send_progress(
             id,
             TaskType::DownloadInstall,
+            None,
             TaskStatus::Waiting,
-            0.0,
             0.0,
             "Waiting to start download...".into(),
         );
 
         let _download_permit = self.download_semaphore.acquire().await;
 
-        self.send_progress(
+        send_progress(
             id,
             TaskType::DownloadInstall,
+            None,
             TaskStatus::Running,
-            0.0,
             0.0,
             "Starting download...".into(),
         );
@@ -133,23 +154,23 @@ impl TaskManager {
 
         drop(_download_permit);
 
-        self.send_progress(
+        send_progress(
             id,
             TaskType::DownloadInstall,
+            None,
             TaskStatus::Waiting,
             0.0,
-            0.5,
             "Waiting to start installation...".into(),
         );
 
         let _adb_permit = self.adb_semaphore.acquire().await;
 
-        self.send_progress(
+        send_progress(
             id,
             TaskType::DownloadInstall,
+            None,
             TaskStatus::Running,
-            0.5,
-            0.5,
+            0.0,
             "Installing app...".into(),
         );
 
@@ -162,22 +183,22 @@ impl TaskManager {
         let app_full_name =
             params.cloud_app_full_name.context("Missing cloud_app_full_name parameter")?;
 
-        self.send_progress(
+        send_progress(
             id,
             TaskType::Download,
+            None,
             TaskStatus::Waiting,
-            0.0,
             0.0,
             "Waiting to start download...".into(),
         );
 
         let _permit = self.download_semaphore.acquire().await;
 
-        self.send_progress(
+        send_progress(
             id,
             TaskType::Download,
+            None,
             TaskStatus::Running,
-            0.0,
             0.0,
             "Starting download...".into(),
         );
@@ -209,7 +230,7 @@ impl TaskManager {
                         progress.total_files,
                         step_progress * 100.0
                     );
-                    self.send_progress(id, TaskType::Download, TaskStatus::Running, step_progress, step_progress, message);
+                    send_progress(id, TaskType::Download, None, TaskStatus::Running, step_progress, message);
                 }
             } => {
                 Ok(())
@@ -220,22 +241,22 @@ impl TaskManager {
     async fn handle_install_apk(&self, id: u64, params: TaskParams) -> Result<()> {
         let apk_path = params.apk_path.context("Missing apk_path parameter")?;
 
-        self.send_progress(
+        send_progress(
             id,
             TaskType::InstallApk,
+            None,
             TaskStatus::Waiting,
-            0.0,
             0.0,
             "Waiting to start installation...".into(),
         );
 
         let _permit = self.adb_semaphore.acquire().await;
 
-        self.send_progress(
+        send_progress(
             id,
             TaskType::InstallApk,
+            None,
             TaskStatus::Running,
-            0.0,
             0.0,
             "Installing APK...".into(),
         );
@@ -248,22 +269,22 @@ impl TaskManager {
     async fn handle_install_local_app(&self, id: u64, params: TaskParams) -> Result<()> {
         let app_path = params.local_app_path.context("Missing local_app_path parameter")?;
 
-        self.send_progress(
+        send_progress(
             id,
             TaskType::InstallLocalApp,
+            None,
             TaskStatus::Waiting,
-            0.0,
             0.0,
             "Waiting to start installation...".into(),
         );
 
         let _permit = self.adb_semaphore.acquire().await;
 
-        self.send_progress(
+        send_progress(
             id,
             TaskType::InstallLocalApp,
+            None,
             TaskStatus::Running,
-            0.0,
             0.0,
             "Installing app...".into(),
         );
@@ -276,22 +297,22 @@ impl TaskManager {
     async fn handle_uninstall(&self, id: u64, params: TaskParams) -> Result<()> {
         let package_name = params.package_name.context("Missing package_name parameter")?;
 
-        self.send_progress(
+        send_progress(
             id,
             TaskType::Uninstall,
+            None,
             TaskStatus::Waiting,
-            0.0,
             0.0,
             "Waiting to start uninstallation...".into(),
         );
 
         let _permit = self.adb_semaphore.acquire().await;
 
-        self.send_progress(
+        send_progress(
             id,
             TaskType::Uninstall,
+            None,
             TaskStatus::Running,
-            0.0,
             0.0,
             "Uninstalling app...".into(),
         );
@@ -300,24 +321,56 @@ impl TaskManager {
 
         Ok(())
     }
+}
 
-    fn send_progress(
-        &self,
-        task_id: u64,
-        task_type: TaskType,
-        status: TaskStatus,
-        step_progress: f32,
-        total_progress: f32,
-        message: String,
-    ) {
-        TaskProgress {
-            task_id,
-            r#type: task_type as i32,
-            status: status as i32,
-            step_progress,
-            total_progress,
-            message,
-        }
-        .send_signal_to_dart();
+fn send_progress(
+    task_id: u64,
+    task_type: TaskType,
+    task_name: Option<String>,
+    status: TaskStatus,
+    total_progress: f32,
+    message: String,
+) {
+    TaskProgress {
+        task_id,
+        r#type: task_type as i32,
+        task_name,
+        status: status as i32,
+        total_progress,
+        message,
     }
+    .send_signal_to_dart();
+}
+
+fn get_task_name(task_type: TaskType, params: &TaskParams) -> Result<String> {
+    Ok(match task_type {
+        TaskType::Unspecified => "Unspecified".to_string(),
+        TaskType::Download => params
+            .cloud_app_full_name
+            .as_ref()
+            .context("Missing cloud_app_full_name parameter")?
+            .clone(),
+        TaskType::DownloadInstall => params
+            .cloud_app_full_name
+            .as_ref()
+            .context("Missing cloud_app_full_name parameter")?
+            .clone(),
+        TaskType::InstallApk => {
+            Path::new(&params.apk_path.as_ref().context("Missing apk_path parameter")?)
+                .file_name()
+                .unwrap_or_default()
+                .to_string_lossy()
+                .to_string()
+        }
+        TaskType::InstallLocalApp => {
+            Path::new(&params.local_app_path.as_ref().context("Missing local_app_path parameter")?)
+                .file_name()
+                .unwrap_or_default()
+                .to_string_lossy()
+                .to_string()
+        }
+        TaskType::Uninstall => {
+            params.package_name.as_ref().context("Missing package_name parameter")?.clone()
+        }
+    })
 }

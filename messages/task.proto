@@ -16,8 +16,8 @@ message TaskCancelRequest {
 message TaskProgress {
   uint64 task_id = 1;
   TaskType type = 2;
-  TaskStatus status = 3;
-  float step_progress = 4;
+  optional string task_name = 3;
+  TaskStatus status = 4;
   float total_progress = 5;
   string message = 6;
 }

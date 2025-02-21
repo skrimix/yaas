@@ -2,6 +2,8 @@ import 'package:flutter/material.dart';
 import 'package:proper_filesize/proper_filesize.dart';
 import 'package:provider/provider.dart';
 import '../providers/device_state.dart';
+import '../providers/task_state.dart';
+import 'task_list_dialog.dart';
 
 class StatusBar extends StatelessWidget {
   const StatusBar({super.key});
@@ -83,13 +85,70 @@ class StatusBar extends StatelessWidget {
           const Icon(Icons.sd_card, size: 16),
           const SizedBox(width: 2),
           Text(available),
+          const SizedBox(width: 8),
         ],
       ),
     );
   }
 
-  Widget _buildTaskStatus() {
-    return const Text('Tasks: 0 running, 0 finished');
+  Widget _buildTaskStatus(BuildContext context, TaskState taskState) {
+    final activeTasks = taskState.activeTasks;
+    final recentTasks = taskState.recentTasks;
+    final hasActiveTasks = activeTasks.isNotEmpty;
+    final hasRecentTasks = recentTasks.isNotEmpty;
+    final progress = hasActiveTasks ? activeTasks.first.totalProgress : null;
+
+    return Material(
+      color: Colors.transparent,
+      child: InkWell(
+        onTap: () {
+          showDialog(
+            context: context,
+            builder: (context) => const TaskListDialog(),
+          );
+        },
+        child: Tooltip(
+          message: hasActiveTasks
+              ? '${activeTasks.length} active task(s)'
+              : hasRecentTasks
+                  ? 'View recent tasks'
+                  : 'No tasks',
+          child: Row(
+            children: [
+              if (hasActiveTasks) ...[
+                SizedBox(
+                  width: 16,
+                  height: 16,
+                  child: CircularProgressIndicator(
+                    value: progress,
+                    strokeWidth: 2,
+                  ),
+                ),
+                const SizedBox(width: 8),
+                Text('${activeTasks.length} active'),
+              ] else ...[
+                Icon(
+                  hasRecentTasks ? Icons.task_alt : Icons.check_circle_outline,
+                  size: 16,
+                  color: Theme.of(context).colorScheme.onSurface.withValues(
+                        alpha: hasRecentTasks ? 1.0 : 0.5,
+                      ),
+                ),
+                if (hasRecentTasks) ...[
+                  const SizedBox(width: 8),
+                  Text(
+                    'View tasks',
+                    style: TextStyle(
+                      color: Theme.of(context).colorScheme.onSurface,
+                    ),
+                  ),
+                ],
+              ],
+            ],
+          ),
+        ),
+      ),
+    );
   }
 
   @override
@@ -117,7 +176,10 @@ class StatusBar extends StatelessWidget {
               _buildStorageStatus(deviceState),
               // Right side
               const Spacer(),
-              _buildTaskStatus(),
+              Consumer<TaskState>(
+                builder: (context, taskState, _) =>
+                    _buildTaskStatus(context, taskState),
+              ),
             ],
           ),
         );

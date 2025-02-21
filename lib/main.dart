@@ -13,6 +13,7 @@ import 'widgets/local_sideload.dart';
 import 'widgets/error_screen.dart';
 import 'providers/device_state.dart';
 import 'providers/cloud_apps_state.dart';
+import 'providers/task_state.dart';
 import 'widgets/download_apps.dart';
 
 final colorScheme = ColorScheme.fromSeed(
@@ -39,6 +40,7 @@ void main() async {
         ChangeNotifierProvider(create: (_) => DeviceState()),
         ChangeNotifierProvider(create: (_) => AppState()),
         ChangeNotifierProvider(create: (_) => CloudAppsState()),
+        ChangeNotifierProvider(create: (_) => TaskState()),
       ],
       child: const RqlApp(),
     ),

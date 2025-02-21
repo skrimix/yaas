@@ -25,7 +25,7 @@ class _DownloadAppsState extends State<DownloadApps> {
   bool _sortAscending = true;
   List<CachedAppData>? _sortedApps;
   String? _lastSortKey;
-  bool _isSearching = false;
+  final _isSearching = true;
   String _searchQuery = '';
   final _searchController = TextEditingController();
   final _scrollController = ScrollController();
@@ -106,7 +106,7 @@ class _DownloadAppsState extends State<DownloadApps> {
   void _resetSearch() {
     setState(() {
       _searchQuery = '';
-      _isSearching = false;
+      // _isSearching = false;
       _searchController.clear();
     });
   }
@@ -298,7 +298,7 @@ class _DownloadAppsState extends State<DownloadApps> {
         width: 350,
         child: TextField(
           controller: _searchController,
-          autofocus: true,
+          // autofocus: true,
           decoration: InputDecoration(
             hintText: 'Search apps...',
             isDense: true,
@@ -327,7 +327,7 @@ class _DownloadAppsState extends State<DownloadApps> {
       tooltip: 'Search',
       onPressed: () {
         setState(() {
-          _isSearching = true;
+          // _isSearching = true;
         });
       },
     );

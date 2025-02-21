@@ -1,5 +1,5 @@
 use lazy_regex::regex;
-use tracing::{info, instrument, trace, warn};
+use tracing::{info, trace, warn};
 
 use crate::messages as proto;
 

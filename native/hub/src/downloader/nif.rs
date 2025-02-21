@@ -20,7 +20,7 @@ use tokio::{
     fs::File,
     io::{AsyncWriteExt, BufWriter},
 };
-use tracing::{debug, info, instrument, trace, warn};
+use tracing::{debug, info, trace, warn};
 
 use crate::{models::CloudApp, utils::AverageSpeed};
 

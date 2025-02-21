@@ -1,5 +1,4 @@
 use anyhow::{Context, Result, ensure};
-use ubyte::ByteUnit;
 
 pub static SPACE_INFO_COMMAND: &str = "stat -fc %S:%b:%a /data";
 
@@ -10,9 +9,9 @@ pub static SPACE_INFO_COMMAND: &str = "stat -fc %S:%b:%a /data";
 #[derive(Clone, Debug, Default)]
 pub struct SpaceInfo {
     /// Total storage space in bytes
-    pub total: ByteUnit,
+    pub total: u64,
     /// Available storage space in bytes
-    pub available: ByteUnit,
+    pub available: u64,
 }
 
 impl SpaceInfo {
@@ -31,12 +30,10 @@ impl SpaceInfo {
         ensure!(available_blocks <= total_blocks, "available blocks cannot exceed total blocks");
 
         Ok(Self {
-            total: ByteUnit::Byte(
-                block_size.checked_mul(total_blocks).context("total space overflow")?,
-            ),
-            available: ByteUnit::Byte(
-                block_size.checked_mul(available_blocks).context("available space overflow")?,
-            ),
+            total: block_size.checked_mul(total_blocks).context("total space overflow")?,
+            available: block_size
+                .checked_mul(available_blocks)
+                .context("available space overflow")?,
         })
     }
 }
@@ -49,8 +46,8 @@ mod tests {
     fn test_valid_space_info() {
         let output = "4096:1000000:500000";
         let info = SpaceInfo::from_stat_output(output).unwrap();
-        assert_eq!(info.total, ByteUnit::Byte(4096 * 1000000));
-        assert_eq!(info.available, ByteUnit::Byte(4096 * 500000));
+        assert_eq!(info.total, 4096 * 1000000);
+        assert_eq!(info.available, 4096 * 500000);
     }
 
     #[test]

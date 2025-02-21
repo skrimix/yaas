@@ -61,15 +61,13 @@ impl Downloader {
         }
     }
 
-    pub async fn download_app(&self, app_full_name: String) -> Result<String> {
+    pub async fn download_app(
+        &self,
+        app_full_name: String,
+        progress_tx: tokio::sync::mpsc::UnboundedSender<DirDownloadProgress>,
+    ) -> Result<String> {
         let dst_dir = PathBuf::from("/home/skrimix/work/test").join(&app_full_name);
-        let (tx, mut rx) = tokio::sync::mpsc::unbounded_channel();
-        tokio::spawn(async move {
-            while let Some(progress) = rx.recv().await {
-                println!("Progress: {:?}", progress);
-            }
-        });
-        self.storage.download_dir(app_full_name, dst_dir.clone(), 4, tx).await?;
+        self.storage.download_dir(app_full_name, dst_dir.clone(), 4, progress_tx).await?;
         Ok(dst_dir.display().to_string())
     }
 }

@@ -551,8 +551,8 @@ impl AdbDevice {
                 right: self.controllers.right.map(|c| c.into_proto()),
             }),
             space_info: Some(proto::SpaceInfo {
-                total: self.space_info.total.into(),
-                available: self.space_info.available.into(),
+                total: self.space_info.total,
+                available: self.space_info.available,
             }),
             installed_packages: self
                 .installed_packages

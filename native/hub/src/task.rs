@@ -134,10 +134,40 @@ impl TaskManager {
         let _download_permit = self.download_semaphore.acquire().await;
         update_progress(TaskStatus::Running, 0.0, "Starting download...".into());
 
-        // TODO: Use this for progress updates
-        let (_tx, mut _rx) = tokio::sync::mpsc::unbounded_channel::<DirDownloadProgress>();
-        let app_path = self.downloader.download_app(app_full_name).await?;
+        let (tx, mut rx) = tokio::sync::mpsc::unbounded_channel::<DirDownloadProgress>();
 
+        let mut download_task = {
+            let downloader = self.downloader.clone();
+            let app_full_name = app_full_name.clone();
+            let tx = tx.clone();
+            tokio::spawn(async move { downloader.download_app(app_full_name, tx).await })
+        };
+
+        // Monitor progress while waiting for download to complete
+        let mut download_result = None;
+        while download_result.is_none() {
+            tokio::select! {
+                result = &mut download_task => {
+                    download_result = Some(result.context("Download task failed")?.context("Failed to download app")?);
+                }
+                Some(progress) = rx.recv() => {
+                    let step_progress = progress.downloaded_bytes as f32 / progress.total_bytes as f32;
+                    update_progress(
+                        TaskStatus::Running,
+                        step_progress * 0.5, // Scaling to 1/2 to get total
+                        format!(
+                            "Downloaded {}/{} files ({:.1}%) - {}/s",
+                            progress.downloaded_files,
+                            progress.total_files,
+                            step_progress * 100.0,
+                            humansize::format_size(progress.speed, humansize::DECIMAL)
+                        ),
+                    );
+                }
+            }
+        }
+
+        let app_path = download_result.unwrap();
         drop(_download_permit);
 
         update_progress(TaskStatus::Waiting, 0.5, "Waiting to start installation...".into());
@@ -160,13 +190,13 @@ impl TaskManager {
         let _permit = self.download_semaphore.acquire().await;
         update_progress(TaskStatus::Running, 0.0, "Starting download...".into());
 
-        // TODO: Use this for progress updates
-        let (_tx, mut rx) = tokio::sync::mpsc::unbounded_channel::<DirDownloadProgress>();
+        let (tx, mut rx) = tokio::sync::mpsc::unbounded_channel::<DirDownloadProgress>();
 
         let download_task = {
             let downloader = self.downloader.clone();
             let app_full_name = app_full_name.clone();
-            tokio::spawn(async move { downloader.download_app(app_full_name).await })
+            let tx = tx.clone();
+            tokio::spawn(async move { downloader.download_app(app_full_name, tx).await })
         };
 
         tokio::select! {
@@ -181,10 +211,11 @@ impl TaskManager {
                         TaskStatus::Running,
                         step_progress,
                         format!(
-                            "Downloaded {}/{} files ({:.1}%)",
+                            "Downloaded {}/{} files ({:.1}%) - {}/s",
                             progress.downloaded_files,
                             progress.total_files,
-                            step_progress * 100.0
+                            step_progress * 100.0,
+                            humansize::format_size(progress.speed, humansize::DECIMAL)
                         ),
                     );
                 }

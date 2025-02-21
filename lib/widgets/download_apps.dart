@@ -380,7 +380,10 @@ class _DownloadAppsState extends State<DownloadApps> {
           const Spacer(),
           FilledButton.icon(
             onPressed: () {
-              // TODO: Implement batch download
+              for (final app in selectedApps) {
+                _download(app.app.fullName);
+              }
+              _clearSelection();
             },
             icon: const Icon(Icons.download),
             label: const Text('Download Selected'),
@@ -391,7 +394,10 @@ class _DownloadAppsState extends State<DownloadApps> {
               return FilledButton.icon(
                 onPressed: deviceState.isConnected
                     ? () {
-                        // TODO: Implement batch install
+                        for (final app in selectedApps) {
+                          _install(app.app.fullName);
+                        }
+                        _clearSelection();
                       }
                     : null,
                 icon: const Icon(Icons.install_mobile),

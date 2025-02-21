@@ -1,4 +1,4 @@
-use std::{error::Error, path::Path, sync::Arc, time::Duration};
+use std::{error::Error, sync::Arc, time::Duration};
 
 use anyhow::{Context, Result, bail, ensure};
 use arc_swap::ArcSwapOption;
@@ -8,7 +8,7 @@ use forensic_adb::{AndroidStorageInput, DeviceBrief, DeviceState};
 use lazy_regex::{Lazy, Regex, lazy_regex};
 use tokio::time;
 use tokio_stream::StreamExt;
-use tracing::{Instrument, debug, debug_span, error, instrument, trace, warn};
+use tracing::{debug, error, trace, warn};
 
 use crate::messages::{self as proto, AdbCommand, AdbResponse, DeviceChangedEvent};
 

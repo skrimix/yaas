@@ -291,7 +291,7 @@ impl NifStorage {
             let progress_channel = progress_channel.clone();
             async move {
                 debug!("starting download progress report task");
-                let mut average_speed = AverageSpeed::new(Duration::from_secs(5));
+                let mut average_speed = AverageSpeed::new(Duration::from_millis(5500));
                 loop {
                     if progress_stop_rx.try_recv().is_ok() {
                         debug!("received stop signal in progress download report task");

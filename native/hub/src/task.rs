@@ -209,8 +209,8 @@ impl TaskManager {
                         TaskStatus::Running,
                         step_progress,
                         format!(
-                            "Downloaded {}/{} files ({:.1}%) - {}/s",
-                            progress.downloaded_files,
+                            "Downloading {}/{} ({:.1}%) - {}/s",
+                            progress.downloaded_files + 1,
                             progress.total_files,
                             step_progress * 100.0,
                             humansize::format_size(progress.speed, humansize::DECIMAL)

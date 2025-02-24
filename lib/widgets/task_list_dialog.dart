@@ -3,8 +3,47 @@ import 'package:provider/provider.dart';
 import '../messages/all.dart';
 import '../providers/task_state.dart';
 
-class TaskListDialog extends StatelessWidget {
-  const TaskListDialog({super.key});
+class TaskListDialog extends StatefulWidget {
+  final int initialTabIndex;
+
+  const TaskListDialog({
+    super.key,
+    this.initialTabIndex = 0,
+  });
+
+  @override
+  State<TaskListDialog> createState() => _TaskListDialogState();
+}
+
+class _TaskListDialogState extends State<TaskListDialog>
+    with SingleTickerProviderStateMixin {
+  late final TabController _tabController;
+  TaskState? _previousTaskState;
+
+  @override
+  void initState() {
+    super.initState();
+    _tabController = TabController(
+      length: 2,
+      initialIndex: widget.initialTabIndex,
+      vsync: this,
+    );
+  }
+
+  @override
+  void dispose() {
+    _tabController.dispose();
+    super.dispose();
+  }
+
+  void _handleTaskStateChange(TaskState taskState) {
+    if (_previousTaskState != null &&
+        _previousTaskState!.activeTasks.isEmpty &&
+        taskState.activeTasks.isEmpty) {
+      _tabController.animateTo(1); // Switch to recent tab
+    }
+    _previousTaskState = taskState;
+  }
 
   String _getTaskTypeString(TaskType type) {
     switch (type) {
@@ -55,6 +94,40 @@ class TaskListDialog extends StatelessWidget {
       default:
         return Colors.grey;
     }
+  }
+
+  Widget _buildTab(BuildContext context, String label, int count) {
+    return Tab(
+      child: Row(
+        mainAxisSize: MainAxisSize.min,
+        children: [
+          Text(label),
+          if (count > 0) ...[
+            const SizedBox(width: 8),
+            Container(
+              padding: const EdgeInsets.symmetric(
+                horizontal: 6,
+                vertical: 2,
+              ),
+              decoration: BoxDecoration(
+                color: Theme.of(context)
+                    .colorScheme
+                    .primary
+                    .withValues(alpha: 0.1),
+                borderRadius: BorderRadius.circular(12),
+              ),
+              child: Text(
+                count.toString(),
+                style: TextStyle(
+                  fontSize: 12,
+                  color: Theme.of(context).colorScheme.primary,
+                ),
+              ),
+            ),
+          ],
+        ],
+      ),
+    );
   }
 
   Widget _buildTaskItem(BuildContext context, TaskInfo task) {
@@ -169,34 +242,40 @@ class TaskListDialog extends StatelessWidget {
                 ],
               ),
               Expanded(
-                child: DefaultTabController(
-                  length: 2,
-                  child: Column(
-                    children: [
-                      const TabBar(
-                        tabs: [
-                          Tab(text: 'Active'),
-                          Tab(text: 'Recent'),
-                        ],
-                      ),
-                      Expanded(
-                        child: TabBarView(
-                          children: [
-                            _TaskList(
-                              tasksSelector: (state) => state.activeTasks,
-                              emptyMessage: 'No active tasks',
-                              itemBuilder: _buildTaskItem,
-                            ),
-                            _TaskList(
-                              tasksSelector: (state) => state.recentTasks,
-                              emptyMessage: 'No recent tasks',
-                              itemBuilder: _buildTaskItem,
-                            ),
+                child: Consumer<TaskState>(
+                  builder: (context, taskState, child) {
+                    _handleTaskStateChange(taskState);
+                    final activeCount = taskState.activeTasks.length;
+                    final recentCount = taskState.recentTasks.length;
+                    return Column(
+                      children: [
+                        TabBar(
+                          controller: _tabController,
+                          tabs: [
+                            _buildTab(context, 'Active', activeCount),
+                            _buildTab(context, 'Recent', recentCount),
                           ],
                         ),
-                      ),
-                    ],
-                  ),
+                        Expanded(
+                          child: TabBarView(
+                            controller: _tabController,
+                            children: [
+                              _TaskList(
+                                tasks: taskState.activeTasks,
+                                emptyMessage: 'No active tasks',
+                                itemBuilder: _buildTaskItem,
+                              ),
+                              _TaskList(
+                                tasks: taskState.recentTasks,
+                                emptyMessage: 'No recent tasks',
+                                itemBuilder: _buildTaskItem,
+                              ),
+                            ],
+                          ),
+                        ),
+                      ],
+                    );
+                  },
                 ),
               ),
             ],
@@ -208,39 +287,32 @@ class TaskListDialog extends StatelessWidget {
 }
 
 class _TaskList extends StatelessWidget {
-  final List<TaskInfo> Function(TaskState) tasksSelector;
+  final List<TaskInfo> tasks;
   final String emptyMessage;
   final Widget Function(BuildContext, TaskInfo) itemBuilder;
 
   const _TaskList({
-    required this.tasksSelector,
+    required this.tasks,
     required this.emptyMessage,
     required this.itemBuilder,
   });
 
   @override
   Widget build(BuildContext context) {
-    return Consumer<TaskState>(
-      builder: (context, taskState, child) {
-        final tasks = tasksSelector(taskState);
-        if (tasks.isEmpty) {
-          return Center(
-            child: Text(
-              emptyMessage,
-              style: TextStyle(
-                color: Theme.of(context)
-                    .colorScheme
-                    .onSurface
-                    .withValues(alpha: 0.5),
-              ),
-            ),
-          );
-        }
-        return ListView.builder(
-          itemCount: tasks.length,
-          itemBuilder: (context, index) => itemBuilder(context, tasks[index]),
-        );
-      },
+    if (tasks.isEmpty) {
+      return Center(
+        child: Text(
+          emptyMessage,
+          style: TextStyle(
+            color:
+                Theme.of(context).colorScheme.onSurface.withValues(alpha: 0.5),
+          ),
+        ),
+      );
+    }
+    return ListView.builder(
+      itemCount: tasks.length,
+      itemBuilder: (context, index) => itemBuilder(context, tasks[index]),
     );
   }
 }

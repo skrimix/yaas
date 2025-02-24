@@ -104,7 +104,9 @@ class StatusBar extends StatelessWidget {
         onTap: () {
           showDialog(
             context: context,
-            builder: (context) => const TaskListDialog(),
+            builder: (context) => TaskListDialog(
+              initialTabIndex: hasActiveTasks ? 0 : 1,
+            ),
           );
         },
         child: Tooltip(

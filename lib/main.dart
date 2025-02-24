@@ -83,10 +83,6 @@ void main() async {
       finalizeRust(); // Rust side is in an undefined state, shut it down
     }
   });
-
-  TaskProgress.rustSignalStream.listen((progress) {
-    print(progress.message.toDebugString());
-  });
 }
 
 class RqlApp extends StatefulWidget {

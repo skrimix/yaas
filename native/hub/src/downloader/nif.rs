@@ -158,7 +158,7 @@ impl NifStorage {
             }
         }
 
-        writer.flush().await.context("error flushing file")?;
+        writer.flush().await.context("error flushing file writer")?;
 
         let file_path_str =
             target_path.to_str().context("target file path is not valid utf-8")?.to_string();
@@ -218,7 +218,7 @@ impl NifStorage {
                     .context("failed to get parent of destination directory")?
                     .to_str()
                     .context("destination path is not valid utf-8")?,
-                local_file.to_str().context("localfile path is not valid utf-8")?,
+                local_file.to_str().context("local file path is not valid utf-8")?,
             )
             .trim_start_matches("/")
             .to_string();

@@ -283,6 +283,7 @@ impl AdbHandler {
                         return;
                     }
                     // Case 3: We had a device, but it was disconnected
+                    // Swap failed, but the update is useless now
                     (Some(_), None) => {
                         return;
                     }

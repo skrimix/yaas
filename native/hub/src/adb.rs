@@ -246,6 +246,11 @@ impl AdbHandler {
     /// * `update_current` - Whether to update the current device if it exists
     //  #[instrument(level = "debug")]
     fn set_device(&self, device: Option<AdbDevice>, update_current: bool) {
+        fn report_device_change(device: &Option<AdbDevice>) {
+            let proto_device = device.clone().map(|d| d.into_proto());
+            DeviceChangedEvent { device: proto_device }.send_signal_to_dart();
+        }
+
         if update_current {
             if device.is_none() {
                 // TODO: should this be an error?
@@ -272,14 +277,12 @@ impl AdbHandler {
                 match (current.as_ref(), maybe_current.as_ref()) {
                     // Case 1: We had a device, and we successfully replaced it
                     (Some(c), Some(u)) if Arc::ptr_eq(u, c) => {
-                        let proto_device = device.clone().map(|d| d.into_proto());
-                        DeviceChangedEvent { device: proto_device }.send_signal_to_dart();
+                        report_device_change(&device);
                         return;
                     }
                     // Case 2: We had no device, and we successfully added one
                     (None, None) => {
-                        let proto_device = device.clone().map(|d| d.into_proto());
-                        DeviceChangedEvent { device: proto_device }.send_signal_to_dart();
+                        report_device_change(&device);
                         return;
                     }
                     // Case 3: We had a device, but it was disconnected
@@ -295,9 +298,8 @@ impl AdbHandler {
             }
         } else {
             // For update_current=false, we just do a direct store
-            let proto_device = device.clone().map(|d| d.into_proto());
-            self.device.store(device.map(Arc::new));
-            DeviceChangedEvent { device: proto_device }.send_signal_to_dart();
+            self.device.store(device.clone().map(Arc::new));
+            report_device_change(&device);
         }
     }
 

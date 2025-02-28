@@ -492,11 +492,9 @@ impl AdbDevice {
     /// # Arguments
     /// * `apk_path` - Path to the APK file to install
     //#[instrument(err, fields(apk_path = ?apk_path.display()))]
-    pub async fn install_apk(&mut self, apk_path: &Path) -> Result<()> {
+    pub async fn install_apk(&self, apk_path: &Path) -> Result<()> {
         // TODO: Implement backup->reinstall->restore for incompatible updates
-        let install_result = self.inner.install_package(apk_path, true, true).await;
-        let _ = self.on_package_list_change().await;
-        install_result.context("Failed to install APK")
+        self.inner.install_package(apk_path, true, true).await.context("Failed to install APK")
     }
 
     /// Uninstalls a package from the device
@@ -504,8 +502,8 @@ impl AdbDevice {
     /// # Arguments
     /// * `package_name` - The package name to uninstall
     //  #[instrument(err)]
-    pub async fn uninstall_package(&mut self, package_name: &str) -> Result<()> {
-        let uninstall_result = match self.inner.uninstall_package(package_name).await {
+    pub async fn uninstall_package(&self, package_name: &str) -> Result<()> {
+        match self.inner.uninstall_package(package_name).await {
             Ok(_) => Ok(()),
             Err(e) => {
                 if e.to_string().contains("DELETE_FAILED_INTERNAL_ERROR") {
@@ -533,9 +531,8 @@ impl AdbDevice {
                     Err(e.into())
                 }
             }
-        };
-        let _ = self.on_package_list_change().await;
-        uninstall_result
+        }
+        .context("Failed to uninstall package")
     }
 
     /// Converts the AdbDevice instance into its protobuf representation
@@ -567,7 +564,7 @@ impl AdbDevice {
     /// # Arguments
     /// * `script_path` - Path to the install script file
     //  #[instrument(err, level = "debug")]
-    async fn execute_install_script(&mut self, script_path: &Path) -> Result<()> {
+    async fn execute_install_script(&self, script_path: &Path) -> Result<()> {
         let script_content = tokio::fs::read_to_string(script_path)
             .await
             .context("Failed to read install script")?;
@@ -741,7 +738,7 @@ impl AdbDevice {
     /// # Arguments
     /// * `app_dir` - Path to directory containing the app files
     //  #[instrument(err)]
-    pub async fn sideload_app(&mut self, app_dir: &Path) -> Result<()> {
+    pub async fn sideload_app(&self, app_dir: &Path) -> Result<()> {
         // TODO: support direct streaming of app files
         // TODO: add optional checksum verification
         // TODO: check free space before proceeding
@@ -812,9 +809,5 @@ impl AdbDevice {
         }
 
         Ok(())
-    }
-
-    async fn on_package_list_change(&mut self) -> Result<()> {
-        self.refresh().await
     }
 }

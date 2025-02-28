@@ -257,7 +257,7 @@ impl AdbHandler {
                 warn!("Attempted to pass None as a device update");
                 return;
             }
-            // Jumping through hoops to (mostly) avoid race conditions
+            // Jumping through hoops to avoid (some) race conditions
             loop {
                 let current = self.device.load();
 
@@ -377,21 +377,25 @@ impl AdbHandler {
         loop {
             interval.tick().await;
             trace!("Device refresh tick");
-            if let Some(device) = self.try_current_device() {
-                let mut device = (*device).clone();
+            if self.try_current_device().is_some() {
                 async {
-                    match device.refresh().await {
-                        Ok(_) => self.set_device(Some(device), true),
-                        Err(e) => error!(
-                            error = e.as_ref() as &dyn Error,
-                            "Periodic device refresh failed"
-                        ),
-                    }
+                    let _ = self.refresh_device().await.inspect_err(|e| {
+                        error!(error = e.as_ref() as &dyn Error, "Periodic device refresh failed");
+                    });
                 }
                 // .instrument(debug_span!("auto_refresh_run"))
                 .await;
             }
         }
+    }
+
+    /// Refreshes the currently connected device
+    pub async fn refresh_device(&self) -> Result<()> {
+        let device = self.current_device()?.clone();
+        let mut device = (*device).clone();
+        device.refresh().await?;
+        self.set_device(Some(device), true);
+        Ok(())
     }
 
     /// Installs an APK on the currently connected device
@@ -400,11 +404,9 @@ impl AdbHandler {
     /// * `apk_path` - Path to the APK file to install
     pub async fn install_apk(&self, apk_path: &std::path::Path) -> Result<()> {
         let device = self.current_device()?.clone();
-        let mut device = (*device).clone();
+        let device = (*device).clone();
         let result = device.install_apk(apk_path).await;
-        if result.is_ok() {
-            self.set_device(Some(device), true);
-        }
+        self.refresh_device().await?;
         result
     }
 
@@ -414,11 +416,9 @@ impl AdbHandler {
     /// * `package_name` - The package name to uninstall
     pub async fn uninstall_package(&self, package_name: &str) -> Result<()> {
         let device = self.current_device()?.clone();
-        let mut device = (*device).clone();
+        let device = (*device).clone();
         let result = device.uninstall_package(package_name).await;
-        if result.is_ok() {
-            self.set_device(Some(device), true);
-        }
+        self.refresh_device().await?;
         result
     }
 
@@ -428,11 +428,9 @@ impl AdbHandler {
     /// * `app_path` - Path to directory containing the app files
     pub async fn sideload_app(&self, app_path: &std::path::Path) -> Result<()> {
         let device = self.current_device()?.clone();
-        let mut device = (*device).clone();
+        let device = (*device).clone();
         let result = device.sideload_app(app_path).await;
-        if result.is_ok() {
-            self.set_device(Some(device), true);
-        }
+        self.refresh_device().await?;
         result
     }
 }

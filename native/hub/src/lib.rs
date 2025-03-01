@@ -29,7 +29,6 @@ pub mod utils;
 
 #[tokio::main(flavor = "multi_thread")]
 async fn main() {
-    std::env::set_var("RUST_BACKTRACE", "1");
     let original_hook = std::panic::take_hook();
     std::panic::set_hook(Box::new(move |panic_info| {
         let backtrace = std::backtrace::Backtrace::force_capture();

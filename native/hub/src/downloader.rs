@@ -1,25 +1,27 @@
 use std::{path::PathBuf, sync::Arc};
 
-use anyhow::Result;
-use nif::NifStorage;
-use tokio::sync::Mutex;
+use anyhow::{Context, Result};
+use futures::TryStreamExt;
+use rclone::RcloneStorage;
+// use nif::NifStorage;
+use tokio::{fs::File, sync::Mutex};
 
 use crate::{messages as proto, models::CloudApp};
 
-mod nif;
-pub use nif::DirDownloadProgress;
+// mod nif;
+mod rclone;
+// pub use nif::DirDownloadProgress;
+pub use rclone::RcloneTransferStats;
 
 pub struct Downloader {
     cloud_apps: Mutex<Vec<CloudApp>>,
-    storage: NifStorage,
+    storage: RcloneStorage,
 }
 
 impl Downloader {
     pub async fn new() -> Arc<Self> {
-        let handle = Arc::new(Self {
-            cloud_apps: Mutex::new(Vec::new()),
-            storage: NifStorage::create().await.unwrap(), // TODO: handle error
-        });
+        let handle =
+            Arc::new(Self { cloud_apps: Mutex::new(Vec::new()), storage: RcloneStorage::new() });
         tokio::spawn({
             let handle = handle.clone();
             async move {
@@ -42,7 +44,7 @@ impl Downloader {
         while let Some(request) = receiver.recv().await {
             let mut cache = self.cloud_apps.lock().await;
             if cache.is_empty() || request.message.refresh {
-                let result = self.storage.get_app_list().await;
+                let result = self.get_app_list().await;
                 match result {
                     Ok(apps) => {
                         *cache = apps;
@@ -61,13 +63,26 @@ impl Downloader {
         }
     }
 
+    async fn get_app_list(&self) -> Result<Vec<CloudApp>> {
+        let path = self
+            .storage
+            .download_file("FFA.txt".to_string(), PathBuf::from("/home/skrimix/work/test"))
+            .await
+            .context("failed to download game list file")?;
+        let file = File::open(path).await.context("could not open game list file")?;
+        let mut reader =
+            csv_async::AsyncReaderBuilder::new().delimiter(b';').create_deserializer(file);
+        let records = reader.deserialize();
+        let cloud_apps: Vec<CloudApp> = records.map_ok(|r| r).try_collect().await?;
+        Ok(cloud_apps)
+    }
     pub async fn download_app(
         &self,
         app_full_name: String,
-        progress_tx: tokio::sync::mpsc::UnboundedSender<DirDownloadProgress>,
+        progress_tx: tokio::sync::mpsc::UnboundedSender<RcloneTransferStats>,
     ) -> Result<String> {
         let dst_dir = PathBuf::from("/home/skrimix/work/test").join(&app_full_name);
-        self.storage.download_dir(app_full_name, dst_dir.clone(), 4, progress_tx).await?;
+        self.storage.download_dir_with_stats(app_full_name, dst_dir.clone(), progress_tx).await?;
         Ok(dst_dir.display().to_string())
     }
 }

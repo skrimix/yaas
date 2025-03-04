@@ -360,6 +360,7 @@ class _ManageAppsState extends State<ManageApps> {
           body: SafeArea(
             child: Column(
               children: [
+                // TODO: Add refresh button
                 Padding(
                   padding: _segmentPadding,
                   child: SegmentedButton<AppCategory>(

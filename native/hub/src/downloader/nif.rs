@@ -64,7 +64,7 @@ pub struct DirDownloadProgress {
 
 impl NifStorage {
     // #[instrument(level = "debug")]
-    pub async fn create() -> Result<Self> {
+    pub async fn new() -> Result<Self> {
         // TODO: make configurable
         let creds = tokio::fs::read_to_string("/home/skrimix/work/webdav-creds.txt")
             .await

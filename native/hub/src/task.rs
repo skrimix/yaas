@@ -12,7 +12,7 @@ use tracing::error;
 
 use crate::{
     adb::AdbHandler,
-    downloader::{DirDownloadProgress, Downloader},
+    downloader::{Downloader, RcloneTransferStats},
     messages::{TaskParams, TaskProgress, TaskRequest, TaskStatus, TaskType},
 };
 
@@ -134,7 +134,7 @@ impl TaskManager {
         let _download_permit = self.download_semaphore.acquire().await;
         update_progress(TaskStatus::Running, 0.0, "Starting download...".into());
 
-        let (tx, mut rx) = tokio::sync::mpsc::unbounded_channel::<DirDownloadProgress>();
+        let (tx, mut rx) = tokio::sync::mpsc::unbounded_channel::<RcloneTransferStats>();
 
         let mut download_task = {
             let downloader = self.downloader.clone();
@@ -150,17 +150,11 @@ impl TaskManager {
                     download_result = Some(result.context("Download task failed")?.context("Failed to download app")?);
                 }
                 Some(progress) = rx.recv() => {
-                    let step_progress = progress.downloaded_bytes as f32 / progress.total_bytes as f32;
+                    let step_progress = progress.bytes as f32 / progress.total_bytes as f32;
                     update_progress(
                         TaskStatus::Running,
                         step_progress * 0.5, // Scaling to 1/2 to get total
-                        format!(
-                            "Downloading {}/{} ({:.1}%) - {}/s",
-                            progress.downloaded_files + 1,
-                            progress.total_files,
-                            step_progress * 100.0,
-                            humansize::format_size(progress.speed, humansize::DECIMAL)
-                        ),
+                        format!("Downloading ({:.1}%) - {}/s", step_progress * 100.0, humansize::format_size(progress.speed, humansize::DECIMAL)),
                     );
                 }
             }
@@ -189,7 +183,7 @@ impl TaskManager {
         let _permit = self.download_semaphore.acquire().await;
         update_progress(TaskStatus::Running, 0.0, "Starting download...".into());
 
-        let (tx, mut rx) = tokio::sync::mpsc::unbounded_channel::<DirDownloadProgress>();
+        let (tx, mut rx) = tokio::sync::mpsc::unbounded_channel::<RcloneTransferStats>();
 
         let download_task = {
             let downloader = self.downloader.clone();
@@ -204,17 +198,11 @@ impl TaskManager {
             }
             _ = async {
                 while let Some(progress) = rx.recv().await {
-                    let step_progress = progress.downloaded_bytes as f32 / progress.total_bytes as f32;
+                    let step_progress = progress.bytes as f32 / progress.total_bytes as f32;
                     update_progress(
                         TaskStatus::Running,
                         step_progress,
-                        format!(
-                            "Downloading {}/{} ({:.1}%) - {}/s",
-                            progress.downloaded_files + 1,
-                            progress.total_files,
-                            step_progress * 100.0,
-                            humansize::format_size(progress.speed, humansize::DECIMAL)
-                        ),
+                        format!("Downloading ({:.1}%) - {}/s", step_progress * 100.0, humansize::format_size(progress.speed, humansize::DECIMAL)),
                     );
                 }
             } => Ok(())

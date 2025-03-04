@@ -40,7 +40,7 @@ sevenz-rust = "0.6.1"
 sysproxy = { git = "https://github.com/zzzgydi/sysproxy-rs" }
 test-log = { version = "0.2.16", features = ["trace"] }
 tokio = { version = "1.42.0", features = ["macros", "fs", "tracing", "sync", "rt-multi-thread"] }
-tokio-stream = { version = "0.1.17", features = ["fs"] }
+tokio-stream = { version = "0.1.17", features = ["fs", "io-util"] }
 tokio-util = { version = "0.7.13", features = ["compat"] }
 tracing = { version = "0.1.41", features = [
     "max_level_trace",

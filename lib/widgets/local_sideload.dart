@@ -73,34 +73,23 @@ class _LocalSideloadState extends State<LocalSideload> {
     if (path.isEmpty) return;
 
     // Validate paths before proceeding
-    if (_isDirectory) {
-      if (!_isDirectoryValid(path)) {
-        toastification.show(
-          type: ToastificationType.error,
-          style: ToastificationStyle.flat,
-          title: const Text('Error'),
-          description: const Text('Selected path is not a valid app directory'),
-          autoCloseDuration: const Duration(seconds: 3),
-          backgroundColor: Theme.of(context).colorScheme.surfaceContainer,
-          borderSide: BorderSide.none,
-          alignment: Alignment.bottomRight,
-        );
-        return;
-      }
-    } else {
-      if (!_isValidApkFile(path)) {
-        toastification.show(
-          type: ToastificationType.error,
-          style: ToastificationStyle.flat,
-          title: const Text('Error'),
-          description: const Text('Selected path is not a valid APK file'),
-          autoCloseDuration: const Duration(seconds: 3),
-          backgroundColor: Theme.of(context).colorScheme.surfaceContainer,
-          borderSide: BorderSide.none,
-          alignment: Alignment.bottomRight,
-        );
-        return;
-      }
+    final isValid =
+        _isDirectory ? _isDirectoryValid(path) : _isValidApkFile(path);
+    if (!isValid) {
+      final errorMessage = _isDirectory
+          ? 'Selected path is not a valid app directory'
+          : 'Selected path is not a valid APK file';
+      toastification.show(
+        type: ToastificationType.error,
+        style: ToastificationStyle.flat,
+        title: const Text('Error'),
+        description: Text(errorMessage),
+        autoCloseDuration: const Duration(seconds: 3),
+        backgroundColor: Theme.of(context).colorScheme.surfaceContainer,
+        borderSide: BorderSide.none,
+        alignment: Alignment.bottomRight,
+      );
+      return;
     }
 
     (_isDirectory
@@ -113,16 +102,6 @@ class _LocalSideloadState extends State<LocalSideload> {
         .sendSignalToRust();
 
     _pathController.clear();
-    toastification.show(
-      type: ToastificationType.success,
-      style: ToastificationStyle.flat,
-      title: const Text('Installation Started'),
-      description: Text(path),
-      autoCloseDuration: const Duration(seconds: 3),
-      backgroundColor: Theme.of(context).colorScheme.surfaceContainer,
-      borderSide: BorderSide.none,
-      alignment: Alignment.bottomRight,
-    );
   }
 
   @override

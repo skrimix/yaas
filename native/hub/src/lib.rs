@@ -37,10 +37,17 @@ async fn main() {
         original_hook(panic_info);
     }));
 
-    // set current working directory to the directory of the executable
-    let current_dir = std::env::current_exe().expect("Failed to get current executable");
-    std::env::set_current_dir(current_dir.parent().expect("Failed to get parent directory"))
-        .expect("Failed to set current working directory");
+    // set working directory to the app's data directory
+    let data_dir = dirs::data_dir().expect("Failed to get data directory");
+    let app_dir = if cfg!(target_os = "macos") {
+        data_dir.join("com.skrimix.RQL")
+    } else {
+        data_dir.join("RQL")
+    };
+    if !app_dir.exists() {
+        std::fs::create_dir(&app_dir).expect("Failed to create app directory");
+    }
+    std::env::set_current_dir(app_dir).expect("Failed to set current working directory");
 
     let _guard = setup_logging();
     if let Err(e) = _guard {

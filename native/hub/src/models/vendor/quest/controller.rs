@@ -1,5 +1,5 @@
 use lazy_regex::regex;
-use tracing::{info, trace, warn};
+use tracing::{debug, trace, warn};
 
 use crate::messages as proto;
 
@@ -77,7 +77,7 @@ pub fn parse_dumpsys(lines: &str) -> HeadsetControllersInfo {
             let controller_battery = battery_str.parse::<u8>().ok();
 
             if controller_battery.is_none() {
-                info!(
+                debug!(
                     "Invalid battery level for {} controller: {}",
                     controller_type.to_lowercase(),
                     battery_str

@@ -40,7 +40,7 @@ async fn main() {
     // set working directory to the app's data directory
     let data_dir = dirs::data_dir().expect("Failed to get data directory");
     let app_dir = if cfg!(target_os = "macos") {
-        data_dir.join("com.skrimix.RQL")
+        data_dir.join("com.github.skrimix.RQL")
     } else {
         data_dir.join("RQL")
     };

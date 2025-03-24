@@ -296,22 +296,24 @@ class _DownloadAppsState extends State<DownloadApps> {
     if (_isSearching) {
       return SizedBox(
         width: 350,
+        height: 40,
         child: TextField(
           controller: _searchController,
           // autofocus: true,
           decoration: InputDecoration(
             hintText: 'Search apps...',
-            isDense: true,
             contentPadding:
                 const EdgeInsets.symmetric(horizontal: 8, vertical: 8),
             border: const OutlineInputBorder(),
-            suffixIcon: IconButton(
-              icon: const Icon(Icons.close),
-              onPressed: () {
-                _resetSearch();
-              },
-              tooltip: 'Clear search',
-            ),
+            suffixIcon: _searchQuery.isNotEmpty
+                ? IconButton(
+                    icon: const Icon(Icons.close),
+                    onPressed: () {
+                      _resetSearch();
+                    },
+                    tooltip: 'Clear search',
+                  )
+                : null,
           ),
           onChanged: (value) {
             setState(() {

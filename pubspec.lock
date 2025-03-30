@@ -340,10 +340,10 @@ packages:
     dependency: "direct main"
     description:
       name: rinf
-      sha256: c05a52e5902eae0f43c08d4b04a0e1004e2a719681cca598224a83de4ef54a2a
+      sha256: "099eb9ed3f2995bbcafba0cf85d2fc5ccd7505d4ed1f41d346ef3630c321cce5"
       url: "https://pub.dev"
     source: hosted
-    version: "7.1.0"
+    version: "7.3.1"
   sky_engine:
     dependency: transitive
     description: flutter

@@ -508,6 +508,12 @@ dependencies = [
 ]
 
 [[package]]
+name = "env_home"
+version = "0.1.0"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "c7f84e12ccf0a7ddc17a6c41c93326024c42920d7ee630d04950e6926645c0fe"
+
+[[package]]
 name = "env_logger"
 version = "0.11.6"
 source = "registry+https://github.com/rust-lang/crates.io-index"
@@ -1916,9 +1922,9 @@ dependencies = [
 
 [[package]]
 name = "rinf"
-version = "7.1.0"
+version = "7.3.1"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "1cf4d3a96c19d0ea5006ed28008118aea34f7e5cf27ea8e6bb55a196227ffd3a"
+checksum = "7d3bbc0847b5d975a5fc5a7b7e6aad4d70b482d32af79f4b2e1e70f09f29b2ca"
 dependencies = [
  "allo-isolate",
  "backtrace",
@@ -2976,12 +2982,12 @@ dependencies = [
 
 [[package]]
 name = "which"
-version = "6.0.3"
+version = "7.0.2"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "b4ee928febd44d98f2f459a4a79bd4d928591333a494a10a868418ac1b39cf1f"
+checksum = "2774c861e1f072b3aadc02f8ba886c26ad6321567ecc294c935434cad06f1283"
 dependencies = [
  "either",
- "home",
+ "env_home",
  "rustix",
  "winsafe",
 ]

@@ -30,7 +30,7 @@ log = { version = "0.4.22", features = [
 mimalloc = "0.1.43"
 opendal = { version = "0.51.0", features = ["services-webdav"] }
 prost = "0.13.0"
-rinf = { version = "7.1.0", features = ["show-backtrace"] }
+rinf = { version = "7.3.1", features = ["show-backtrace"] }
 sentry = { version = "0.36.0", features = ["backtrace"] }
 sentry-tracing = "0.36.0"
 serde = { version = "1.0.217", features = ["derive"] }
@@ -38,7 +38,13 @@ serde_json = { version = "1.0.135", features = ["preserve_order"] }
 sevenz-rust = "0.6.1"
 sysproxy = { git = "https://github.com/zzzgydi/sysproxy-rs" }
 test-log = { version = "0.2.16", features = ["trace"] }
-tokio = { version = "1.42.0", features = ["macros", "fs", "tracing", "sync", "rt-multi-thread"] }
+tokio = { version = "1.42.0", features = [
+    "macros",
+    "fs",
+    "tracing",
+    "sync",
+    "rt-multi-thread",
+] }
 tokio-stream = { version = "0.1.17", features = ["fs", "io-util"] }
 tokio-util = { version = "0.7.13", features = ["compat"] }
 tracing = { version = "0.1.41", features = [

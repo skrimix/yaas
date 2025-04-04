@@ -5,15 +5,17 @@ import 'package:flutter/material.dart';
 import 'package:provider/provider.dart';
 import 'package:rinf/rinf.dart';
 import 'package:toastification/toastification.dart'; // TODO: find an alternative
-import './messages/all.dart';
+import './messages/all.dart' as messages;
 import 'widgets/home.dart';
 import 'widgets/status_bar.dart';
 import 'widgets/manage_apps.dart';
 import 'widgets/local_sideload.dart';
 import 'widgets/error_screen.dart';
+import 'widgets/settings.dart';
 import 'providers/device_state.dart';
 import 'providers/cloud_apps_state.dart';
 import 'providers/task_state.dart';
+import 'providers/settings_state.dart';
 import 'widgets/download_apps.dart';
 
 final colorScheme = ColorScheme.fromSeed(
@@ -32,7 +34,7 @@ class AppState extends ChangeNotifier {
 }
 
 void main() async {
-  await initializeRust(assignRustSignal);
+  await initializeRust(messages.assignRustSignal);
 
   runApp(
     MultiProvider(
@@ -41,23 +43,24 @@ void main() async {
         ChangeNotifierProvider(create: (_) => AppState()),
         ChangeNotifierProvider(create: (_) => CloudAppsState()),
         ChangeNotifierProvider(create: (_) => TaskState()),
+        ChangeNotifierProvider(create: (_) => SettingsState()),
       ],
       child: const RqlApp(),
     ),
   );
   await DesktopWindow.setMinWindowSize(const Size(800, 600));
 
-  AdbResponse.rustSignalStream.listen((response) {
+  messages.AdbResponse.rustSignalStream.listen((response) {
     final type = response.message.success
         ? ToastificationType.success
         : ToastificationType.error;
 
     String title;
     switch (response.message.command) {
-      case AdbCommand.ADB_COMMAND_LAUNCH_APP:
+      case messages.AdbCommand.ADB_COMMAND_LAUNCH_APP:
         title = response.message.success ? 'App Launched' : 'Launch Failed';
         break;
-      case AdbCommand.ADB_COMMAND_FORCE_STOP_APP:
+      case messages.AdbCommand.ADB_COMMAND_FORCE_STOP_APP:
         title = response.message.success ? 'App Stopped' : 'Stop Failed';
         break;
       default:
@@ -76,7 +79,7 @@ void main() async {
     );
   });
 
-  RustPanic.rustSignalStream.listen((panic) {
+  messages.RustPanic.rustSignalStream.listen((panic) {
     final appState = RqlApp.navigatorKey.currentContext?.read<AppState>();
     if (appState != null) {
       appState.setPanicMessage(panic.message.message);
@@ -170,7 +173,7 @@ class _SinglePageState extends State<SinglePage> {
         label: 'Sideload',
         content: const LocalSideload()),
     Destination(
-        icon: Icons.settings, label: 'Settings', content: Text('Settings')),
+        icon: Icons.settings, label: 'Settings', content: const Settings()),
     Destination(icon: Icons.info, label: 'About', content: Text('About')),
   ];
 

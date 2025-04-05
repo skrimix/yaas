@@ -1,4 +1,4 @@
-use std::{fmt::Display, path::Path, sync::LazyLock};
+use std::{fmt::Display, path::Path};
 
 use anyhow::{Context, Result, anyhow, bail, ensure};
 use derive_more::Debug;
@@ -18,9 +18,8 @@ use crate::{
     },
 };
 
-/// Path to the list_apps.dex file used for package listing
-static LIST_APPS_DEX_BYTES: LazyLock<Vec<u8>> =
-    LazyLock::new(|| include_bytes!("../assets/list_apps.dex").to_vec());
+/// Java tool used for package listing
+static LIST_APPS_DEX_BYTES: &[u8] = include_bytes!("../assets/list_apps.dex");
 
 /// Regex to split command arguments
 static COMMAND_ARGS_REGEX: Lazy<Regex> = lazy_regex!(r#"[\"].+?[\"]|[^ ]+"#);

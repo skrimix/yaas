@@ -5,7 +5,7 @@ import 'package:flutter/material.dart';
 import 'package:provider/provider.dart';
 import 'package:rinf/rinf.dart';
 import 'package:toastification/toastification.dart'; // TODO: find an alternative
-import './messages/all.dart' as messages;
+import './src/bindings/bindings.dart' as messages;
 import 'widgets/home.dart';
 import 'widgets/status_bar.dart';
 import 'widgets/manage_apps.dart';
@@ -57,10 +57,10 @@ void main() async {
 
     String title;
     switch (response.message.command) {
-      case messages.AdbCommand.ADB_COMMAND_LAUNCH_APP:
+      case messages.AdbCommandLaunchApp():
         title = response.message.success ? 'App Launched' : 'Launch Failed';
         break;
-      case messages.AdbCommand.ADB_COMMAND_FORCE_STOP_APP:
+      case messages.AdbCommandForceStopApp():
         title = response.message.success ? 'App Stopped' : 'Stop Failed';
         break;
       default:

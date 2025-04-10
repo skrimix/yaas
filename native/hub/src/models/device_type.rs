@@ -1,6 +1,6 @@
 use std::fmt::Display;
 
-use crate::messages as proto;
+use crate::signals::adb::device as device_signals;
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Hash)]
 pub enum DeviceType {
@@ -42,14 +42,14 @@ impl DeviceType {
         }
     }
 
-    pub fn into_proto(self) -> proto::DeviceType {
+    pub fn into_proto(self) -> device_signals::DeviceType {
         match self {
-            Self::Quest => proto::DeviceType::Quest,
-            Self::Quest2 => proto::DeviceType::Quest2,
-            Self::Quest3 => proto::DeviceType::Quest3,
-            Self::Quest3S => proto::DeviceType::Quest3s,
-            Self::QuestPro => proto::DeviceType::QuestPro,
-            Self::Unknown => proto::DeviceType::Unknown,
+            Self::Quest => device_signals::DeviceType::Quest,
+            Self::Quest2 => device_signals::DeviceType::Quest2,
+            Self::Quest3 => device_signals::DeviceType::Quest3,
+            Self::Quest3S => device_signals::DeviceType::Quest3S,
+            Self::QuestPro => device_signals::DeviceType::QuestPro,
+            Self::Unknown => device_signals::DeviceType::Unknown,
         }
     }
 }

@@ -2,7 +2,7 @@ use std::str::FromStr;
 
 use serde::{Deserialize, Serialize};
 
-use crate::messages::download::CloudApp as ProtoCloudApp;
+use crate::signals::download::CloudApp as SignalCloudApp;
 
 #[derive(Serialize, Deserialize, Debug, Clone)]
 pub struct CloudApp {
@@ -30,8 +30,8 @@ where
 }
 
 impl CloudApp {
-    pub fn into_proto(&self) -> ProtoCloudApp {
-        ProtoCloudApp {
+    pub fn into_proto(&self) -> SignalCloudApp {
+        SignalCloudApp {
             app_name: self.app_name.clone(),
             full_name: self.full_name.clone(),
             package_name: self.package_name.clone(),

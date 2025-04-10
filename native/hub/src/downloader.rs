@@ -3,10 +3,14 @@ use std::{path::PathBuf, sync::Arc};
 use anyhow::{Context, Result};
 use futures::TryStreamExt;
 use rclone::RcloneStorage;
+use rinf::{DartSignal, RustSignal};
 // use nif::NifStorage;
 use tokio::{fs::File, sync::Mutex};
 
-use crate::{messages as proto, models::CloudApp};
+use crate::{
+    models::CloudApp,
+    signals::download::{CloudAppsChangedEvent, LoadCloudAppsRequest},
+};
 
 // mod nif;
 mod rclone;
@@ -33,14 +37,14 @@ impl Downloader {
 
     pub async fn receive_commands(&self) {
         fn send_response(apps: Vec<CloudApp>, error: Option<String>) {
-            proto::CloudAppsChangedEvent {
+            CloudAppsChangedEvent {
                 apps: apps.iter().map(|app| app.into_proto()).collect(),
                 error,
             }
             .send_signal_to_dart();
         }
 
-        let receiver = proto::LoadCloudAppsRequest::get_dart_signal_receiver();
+        let receiver = LoadCloudAppsRequest::get_dart_signal_receiver();
         while let Some(request) = receiver.recv().await {
             let mut cache = self.cloud_apps.lock().await;
             if cache.is_empty() || request.message.refresh {

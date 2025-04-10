@@ -1,7 +1,7 @@
 use anyhow::{Context, Result, bail};
 use serde::Deserialize;
 
-use crate::messages as proto;
+use crate::signals::adb::device as device_signals;
 
 /// Represents the size information of an installed application
 #[derive(Debug, Clone, Default, Deserialize)]
@@ -34,8 +34,8 @@ impl InstalledPackage {
 
     // TODO: use the proto struct directly
     /// Converts the package information into a protobuf message
-    pub fn into_proto(self) -> proto::InstalledPackage {
-        proto::InstalledPackage {
+    pub fn into_proto(self) -> device_signals::InstalledPackage {
+        device_signals::InstalledPackage {
             uid: self.uid,
             system: self.system,
             package_name: self.package_name,
@@ -44,11 +44,11 @@ impl InstalledPackage {
             label: self.label,
             launchable: self.launchable,
             vr: self.vr,
-            size: Some(proto::AppSize {
+            size: device_signals::AppSize {
                 app: self.size.app,
                 data: self.size.data,
                 cache: self.size.cache,
-            }),
+            },
         }
     }
 }

@@ -1,5 +1,5 @@
 import 'package:flutter/material.dart';
-import '../messages/all.dart';
+import '../src/bindings/bindings.dart';
 
 class TaskInfo {
   final int taskId;
@@ -42,9 +42,9 @@ class TaskInfo {
   }
 
   bool get isFinished =>
-      status == TaskStatus.TASK_STATUS_COMPLETED ||
-      status == TaskStatus.TASK_STATUS_FAILED ||
-      status == TaskStatus.TASK_STATUS_CANCELLED;
+      status == TaskStatus.completed ||
+      status == TaskStatus.failed ||
+      status == TaskStatus.cancelled;
 }
 
 class TaskState extends ChangeNotifier {
@@ -69,16 +69,16 @@ class TaskState extends ChangeNotifier {
           status: progress.status,
           totalProgress: progress.totalProgress,
           message: progress.message,
-          endTime: progress.status == TaskStatus.TASK_STATUS_COMPLETED ||
-                  progress.status == TaskStatus.TASK_STATUS_FAILED ||
-                  progress.status == TaskStatus.TASK_STATUS_CANCELLED
+          endTime: progress.status == TaskStatus.completed ||
+                  progress.status == TaskStatus.failed ||
+                  progress.status == TaskStatus.cancelled
               ? DateTime.now()
               : null,
         );
       } else {
         _tasks[taskId] = TaskInfo(
           taskId: taskId,
-          type: progress.type,
+          type: progress.taskType,
           taskName: progress.taskName,
           status: progress.status,
           totalProgress: progress.totalProgress,

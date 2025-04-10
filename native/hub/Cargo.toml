@@ -30,7 +30,7 @@ log = { version = "0.4.22", features = [
 mimalloc = "0.1.43"
 opendal = { version = "0.51.0", features = ["services-webdav"] }
 prost = "0.13.0"
-rinf = { version = "7.3.1", features = ["show-backtrace"] }
+rinf = { version = "8.0.0", features = ["show-backtrace"] }
 sentry = { version = "0.36.0", features = ["backtrace"] }
 sentry-tracing = "0.36.0"
 serde = { version = "1.0.217", features = ["derive"] }

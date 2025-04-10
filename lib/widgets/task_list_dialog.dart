@@ -1,6 +1,6 @@
 import 'package:flutter/material.dart';
 import 'package:provider/provider.dart';
-import '../messages/all.dart';
+import '../src/bindings/bindings.dart';
 import '../providers/task_state.dart';
 
 class TaskListDialog extends StatefulWidget {
@@ -47,51 +47,45 @@ class _TaskListDialogState extends State<TaskListDialog>
 
   String _getTaskTypeString(TaskType type) {
     switch (type) {
-      case TaskType.TASK_TYPE_DOWNLOAD:
+      case TaskType.download:
         return 'Download';
-      case TaskType.TASK_TYPE_DOWNLOAD_INSTALL:
+      case TaskType.downloadInstall:
         return 'Download & Install';
-      case TaskType.TASK_TYPE_INSTALL_APK:
+      case TaskType.installApk:
         return 'Install APK';
-      case TaskType.TASK_TYPE_INSTALL_LOCAL_APP:
+      case TaskType.installLocalApp:
         return 'Install Local App';
-      case TaskType.TASK_TYPE_UNINSTALL:
+      case TaskType.uninstall:
         return 'Uninstall';
-      default:
-        return 'Unknown';
     }
   }
 
   String _getStatusString(TaskStatus status) {
     switch (status) {
-      case TaskStatus.TASK_STATUS_WAITING:
+      case TaskStatus.waiting:
         return 'Waiting';
-      case TaskStatus.TASK_STATUS_RUNNING:
+      case TaskStatus.running:
         return 'Running';
-      case TaskStatus.TASK_STATUS_COMPLETED:
+      case TaskStatus.completed:
         return 'Completed';
-      case TaskStatus.TASK_STATUS_FAILED:
+      case TaskStatus.failed:
         return 'Failed';
-      case TaskStatus.TASK_STATUS_CANCELLED:
+      case TaskStatus.cancelled:
         return 'Cancelled';
-      default:
-        return 'Unknown';
     }
   }
 
   Color _getStatusColor(TaskStatus status) {
     switch (status) {
-      case TaskStatus.TASK_STATUS_WAITING:
+      case TaskStatus.waiting:
         return Colors.orange;
-      case TaskStatus.TASK_STATUS_RUNNING:
+      case TaskStatus.running:
         return Colors.blue;
-      case TaskStatus.TASK_STATUS_COMPLETED:
+      case TaskStatus.completed:
         return Colors.green;
-      case TaskStatus.TASK_STATUS_FAILED:
+      case TaskStatus.failed:
         return Colors.red;
-      case TaskStatus.TASK_STATUS_CANCELLED:
-        return Colors.grey;
-      default:
+      case TaskStatus.cancelled:
         return Colors.grey;
     }
   }

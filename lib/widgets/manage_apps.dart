@@ -1,10 +1,10 @@
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 import 'package:provider/provider.dart';
-import 'package:proper_filesize/proper_filesize.dart';
+import 'package:proper_filesize/proper_filesize.dart' as filesize;
 import 'package:toastification/toastification.dart';
 import '../providers/device_state.dart';
-import '../messages/all.dart';
+import '../src/bindings/bindings.dart';
 
 class ManageApps extends StatefulWidget {
   const ManageApps({super.key});
@@ -88,10 +88,10 @@ class _ManageAppsState extends State<ManageApps> {
   }
 
   String _formatSize(int bytes) {
-    return FileSize.fromBytes(bytes).toString(
-      unit: Unit.auto(
+    return filesize.FileSize.fromBytes(bytes).toString(
+      unit: filesize.Unit.auto(
         size: bytes,
-        baseType: BaseType.metric,
+        baseType: filesize.BaseType.metric,
       ),
       decimals: 2,
     );
@@ -305,8 +305,8 @@ class _ManageAppsState extends State<ManageApps> {
                     tooltip: 'Launch',
                     onPressed: () async {
                       AdbRequest(
-                              command: AdbCommand.ADB_COMMAND_LAUNCH_APP,
-                              packageName: app.packageName)
+                              command:
+                                  AdbCommandLaunchApp(value: app.packageName))
                           .sendSignalToRust();
                     },
                   ),
@@ -315,8 +315,8 @@ class _ManageAppsState extends State<ManageApps> {
                     tooltip: 'Force Stop',
                     onPressed: () async {
                       AdbRequest(
-                              command: AdbCommand.ADB_COMMAND_FORCE_STOP_APP,
-                              packageName: app.packageName)
+                              command: AdbCommandForceStopApp(
+                                  value: app.packageName))
                           .sendSignalToRust();
                     },
                   ),

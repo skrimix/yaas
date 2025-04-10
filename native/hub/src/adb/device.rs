@@ -9,13 +9,13 @@ use tracing::{Span, debug, error, info, trace, warn};
 
 use crate::{
     adb::PACKAGE_NAME_REGEX,
-    messages as proto,
     models::{
         DeviceType, InstalledPackage, SPACE_INFO_COMMAND, SpaceInfo, packages_from_device_output,
         vendor::quest::controller::{
             CONTROLLER_INFO_COMMAND, HeadsetControllersInfo, parse_dumpsys,
         },
     },
+    signals::adb::device as device_signals,
 };
 
 /// Java tool used for package listing
@@ -535,21 +535,21 @@ impl AdbDevice {
     }
 
     /// Converts the AdbDevice instance into its protobuf representation
-    pub fn into_proto(self) -> proto::AdbDevice {
-        proto::AdbDevice {
+    pub fn into_proto(self) -> device_signals::AdbDevice {
+        device_signals::AdbDevice {
             name: self.name,
             product: self.product,
-            device_type: self.device_type.into_proto() as i32,
+            device_type: self.device_type.into_proto(),
             serial: self.serial,
-            battery_level: self.battery_level as u32,
-            controllers: Some(proto::ControllersInfo {
+            battery_level: self.battery_level,
+            controllers: device_signals::ControllersInfo {
                 left: self.controllers.left.map(|c| c.into_proto()),
                 right: self.controllers.right.map(|c| c.into_proto()),
-            }),
-            space_info: Some(proto::SpaceInfo {
+            },
+            space_info: device_signals::SpaceInfo {
                 total: self.space_info.total,
                 available: self.space_info.available,
-            }),
+            },
             installed_packages: self
                 .installed_packages
                 .into_iter()

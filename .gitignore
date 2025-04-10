@@ -48,6 +48,7 @@ app.*.map.json
 .cargo/
 target/
 
-# Generated messages
-*/**/messages/
+# Generated bindings
+*/**/bindings/
+
 .aider*

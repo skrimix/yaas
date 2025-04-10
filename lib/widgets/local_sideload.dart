@@ -3,7 +3,7 @@ import 'package:file_picker/file_picker.dart';
 import 'package:provider/provider.dart';
 import 'package:toastification/toastification.dart';
 import '../providers/device_state.dart';
-import '../messages/all.dart';
+import '../src/bindings/bindings.dart';
 import 'dart:io';
 
 class LocalSideload extends StatefulWidget {
@@ -94,10 +94,10 @@ class _LocalSideloadState extends State<LocalSideload> {
 
     (_isDirectory
             ? TaskRequest(
-                type: TaskType.TASK_TYPE_INSTALL_LOCAL_APP,
+                taskType: TaskType.installLocalApp,
                 params: TaskParams(localAppPath: path))
             : TaskRequest(
-                type: TaskType.TASK_TYPE_INSTALL_APK,
+                taskType: TaskType.installApk,
                 params: TaskParams(apkPath: path)))
         .sendSignalToRust();
 

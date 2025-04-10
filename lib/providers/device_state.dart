@@ -1,5 +1,5 @@
 import 'package:flutter/material.dart';
-import '../messages/all.dart';
+import '../src/bindings/bindings.dart';
 
 class DeviceState extends ChangeNotifier {
   AdbDevice? _device;
@@ -7,11 +7,7 @@ class DeviceState extends ChangeNotifier {
 
   DeviceState() {
     DeviceChangedEvent.rustSignalStream.listen((event) {
-      if (event.message.hasDevice()) {
-        _device = event.message.device;
-      } else {
-        _device = null;
-      }
+      _device = event.message.device;
       notifyListeners();
     });
   }
@@ -31,11 +27,11 @@ class DeviceState extends ChangeNotifier {
   String controllerStatusString(ControllerInfo? controller) {
     if (controller == null) return 'Not Connected';
     switch (controller.status) {
-      case ControllerStatus.CONTROLLER_STATUS_ACTIVE:
+      case ControllerStatus.active:
         return 'Active';
-      case ControllerStatus.CONTROLLER_STATUS_DISABLED:
+      case ControllerStatus.disabled:
         return 'Disabled';
-      case ControllerStatus.CONTROLLER_STATUS_SEARCHING:
+      case ControllerStatus.searching:
         return 'Searching';
       default:
         return 'Unknown';
@@ -43,6 +39,6 @@ class DeviceState extends ChangeNotifier {
   }
 
   int controllerBatteryLevel(ControllerInfo? controller) {
-    return controller?.batteryLevel.toInt() ?? 0;
+    return controller?.batteryLevel ?? 0;
   }
 }

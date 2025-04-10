@@ -7,13 +7,14 @@ use std::{
 };
 
 use anyhow::{Context, Result};
+use rinf::{DartSignal, RustSignal};
 use tokio::sync::{Mutex, Semaphore};
 use tracing::error;
 
 use crate::{
     adb::AdbHandler,
     downloader::{Downloader, RcloneTransferStats},
-    messages::{TaskParams, TaskProgress, TaskRequest, TaskStatus, TaskType},
+    signals::task::{TaskParams, TaskProgress, TaskRequest, TaskStatus, TaskType},
 };
 
 pub struct TaskManager {
@@ -49,13 +50,8 @@ impl TaskManager {
     async fn receive_create_requests(self: Arc<Self>) {
         let receiver = TaskRequest::get_dart_signal_receiver();
         while let Some(request) = receiver.recv().await {
-            if let (Ok(task_type), Some(params)) =
-                (TaskType::try_from(request.message.r#type), request.message.params)
-            {
-                Self::enqueue_task(self.clone(), task_type, params).await;
-            } else {
-                error!("Received invalid task request from Dart");
-            }
+            Self::enqueue_task(self.clone(), request.message.task_type, request.message.params)
+                .await;
         }
     }
 
@@ -98,10 +94,6 @@ impl TaskManager {
         update_progress(TaskStatus::Waiting, 0.0, "Initializing...".into());
 
         let result = match task_type {
-            TaskType::Unspecified => {
-                error!("Received unspecified task type");
-                Err(anyhow::anyhow!("Invalid task type: Unspecified"))
-            }
             TaskType::Download => self.handle_download(params, &update_progress).await,
             TaskType::DownloadInstall => {
                 self.handle_download_install(params, &update_progress).await
@@ -266,20 +258,12 @@ fn send_progress(
     total_progress: f32,
     message: String,
 ) {
-    TaskProgress {
-        task_id,
-        r#type: task_type as i32,
-        task_name,
-        status: status as i32,
-        total_progress,
-        message,
-    }
-    .send_signal_to_dart();
+    TaskProgress { task_id, task_type, task_name, status, total_progress, message }
+        .send_signal_to_dart();
 }
 
 fn get_task_name(task_type: TaskType, params: &TaskParams) -> Result<String> {
     Ok(match task_type {
-        TaskType::Unspecified => "Unspecified".to_string(),
         TaskType::Download | TaskType::DownloadInstall => params
             .cloud_app_full_name
             .as_ref()

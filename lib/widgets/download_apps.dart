@@ -1,9 +1,9 @@
 import 'package:flutter/material.dart';
 import 'package:provider/provider.dart';
-import 'package:proper_filesize/proper_filesize.dart';
+import 'package:proper_filesize/proper_filesize.dart' as filesize;
 import 'package:intl/intl.dart';
 import '../providers/cloud_apps_state.dart';
-import '../messages/all.dart';
+import '../src/bindings/bindings.dart';
 import '../providers/device_state.dart';
 import 'cloud_app_list.dart';
 
@@ -42,10 +42,10 @@ class _DownloadAppsState extends State<DownloadApps> {
   }
 
   String _formatSize(int bytes) {
-    return FileSize.fromBytes(bytes).toString(
-      unit: Unit.auto(
+    return filesize.FileSize.fromBytes(bytes).toString(
+      unit: filesize.Unit.auto(
         size: bytes,
-        baseType: BaseType.metric,
+        baseType: filesize.BaseType.metric,
       ),
       decimals: 2,
     );
@@ -187,14 +187,14 @@ class _DownloadAppsState extends State<DownloadApps> {
 
   void _install(String appFullName) {
     TaskRequest(
-      type: TaskType.TASK_TYPE_DOWNLOAD_INSTALL,
+      taskType: TaskType.downloadInstall,
       params: TaskParams(cloudAppFullName: appFullName),
     ).sendSignalToRust();
   }
 
   void _download(String appFullName) {
     TaskRequest(
-      type: TaskType.TASK_TYPE_DOWNLOAD,
+      taskType: TaskType.download,
       params: TaskParams(cloudAppFullName: appFullName),
     ).sendSignalToRust();
   }

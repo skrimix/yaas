@@ -4,8 +4,9 @@
 use adb::AdbHandler;
 use anyhow::{Context, Result};
 use downloader::Downloader;
-use messages::RustPanic;
 use mimalloc::MiMalloc;
+use rinf::RustSignal;
+use signals::system::RustPanic;
 use task::TaskManager;
 use tracing::Level;
 use tracing_appender::{
@@ -13,8 +14,6 @@ use tracing_appender::{
     rolling::{RollingFileAppender, Rotation},
 };
 use tracing_subscriber::fmt::format::{self, FmtSpan};
-
-mod messages;
 
 #[global_allocator]
 static GLOBAL: MiMalloc = MiMalloc;
@@ -24,6 +23,7 @@ rinf::write_interface!();
 pub mod adb;
 pub mod downloader;
 pub mod models;
+pub mod signals;
 pub mod task;
 pub mod utils;
 

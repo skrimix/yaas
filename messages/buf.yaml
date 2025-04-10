@@ -1,9 +1,0 @@
-version: v2
-
-lint:
-  use:
-    - STANDARD
-  
-  except:
-    - PACKAGE_VERSION_SUFFIX
-    - PACKAGE_DIRECTORY_MATCH

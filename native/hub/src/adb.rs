@@ -6,11 +6,12 @@ use derive_more::Debug;
 use device::AdbDevice;
 use forensic_adb::{AndroidStorageInput, DeviceBrief, DeviceState};
 use lazy_regex::{Lazy, Regex, lazy_regex};
+use rinf::{DartSignal, RustSignal};
 use tokio::time;
 use tokio_stream::StreamExt;
 use tracing::{debug, error, trace, warn};
 
-use crate::messages::{self as proto, AdbCommand, AdbResponse, DeviceChangedEvent};
+use crate::signals::adb::{command::*, device::DeviceChangedEvent};
 
 pub mod device;
 
@@ -147,18 +148,10 @@ impl AdbHandler {
     /// Listens for and processes ADB commands received from Dart
     //  #[instrument(level = "debug")]
     async fn receive_commands(&self) {
-        let receiver = proto::AdbRequest::get_dart_signal_receiver();
+        let receiver = AdbRequest::get_dart_signal_receiver();
         while let Some(request) = receiver.recv().await {
-            match AdbCommand::try_from(request.message.command) {
-                Ok(command) => {
-                    if let Err(e) = self.execute_command(command, request.message.parameters).await
-                    {
-                        error!(error = e.as_ref() as &dyn Error, "ADB command execution failed");
-                    }
-                }
-                Err(unknown_value) => {
-                    error!(command = ?unknown_value, "Received invalid command from Dart");
-                }
+            if let Err(e) = self.execute_command(request.message.command).await {
+                error!(error = e.as_ref() as &dyn Error, "ADB command execution failed");
             }
         }
     }
@@ -172,67 +165,42 @@ impl AdbHandler {
     /// # Returns
     /// Result indicating success or failure of the command execution
     //  #[instrument(level = "debug")]
-    async fn execute_command(
-        &self,
-        command: AdbCommand,
-        parameters: Option<proto::adb_request::Parameters>,
-    ) -> Result<()> {
+    async fn execute_command(&self, command: AdbCommand) -> Result<()> {
         fn send_response(command: AdbCommand, success: bool, message: String) {
-            AdbResponse { command: command as i32, success, message }.send_signal_to_dart();
+            AdbResponse { command, success, message }.send_signal_to_dart();
         }
 
         let device = self.current_device()?;
 
-        let result = match (command, parameters) {
-            (
-                AdbCommand::LaunchApp,
-                Some(proto::adb_request::Parameters::PackageName(package_name)),
-            ) => {
+        let result = match command.clone() {
+            AdbCommand::LaunchApp(package_name) => {
                 let result = device.launch(&package_name).await;
                 match result {
                     Ok(_) => {
-                        send_response(
-                            AdbCommand::LaunchApp,
-                            true,
-                            format!("Launched {}", package_name),
-                        );
+                        send_response(command, true, format!("Launched {}", package_name));
                         Ok(())
                     }
                     Err(e) => {
                         let error_msg = format!("Failed to launch {}: {:#}", package_name, e);
-                        send_response(AdbCommand::LaunchApp, false, error_msg.clone());
+                        send_response(command, false, error_msg);
                         Err(e.context(format!("Failed to launch {}", package_name)))
                     }
                 }
             }
 
-            (
-                AdbCommand::ForceStopApp,
-                Some(proto::adb_request::Parameters::PackageName(package_name)),
-            ) => {
+            AdbCommand::ForceStopApp(package_name) => {
                 let result = device.force_stop(&package_name).await;
                 match result {
                     Ok(_) => {
-                        send_response(
-                            AdbCommand::ForceStopApp,
-                            true,
-                            format!("Stopped {}", package_name),
-                        );
+                        send_response(command, true, format!("Stopped {}", package_name));
                         Ok(())
                     }
                     Err(e) => {
                         let error_msg = format!("Failed to force stop {}: {:#}", package_name, e);
-                        send_response(AdbCommand::ForceStopApp, false, error_msg.clone());
+                        send_response(command, false, error_msg);
                         Err(e.context(format!("Failed to force stop {}", package_name)))
                     }
                 }
-            }
-
-            (cmd, params) => {
-                error!(command = ?cmd, parameters = ?params, "Invalid parameters for command");
-                let error_msg = format!("Invalid parameters for command {:?}", cmd);
-                send_response(cmd, false, error_msg.clone());
-                bail!(error_msg)
             }
         };
 

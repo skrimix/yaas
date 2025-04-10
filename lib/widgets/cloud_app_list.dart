@@ -3,7 +3,7 @@ import 'package:flutter/services.dart';
 import 'package:provider/provider.dart';
 import 'package:toastification/toastification.dart';
 import '../providers/device_state.dart';
-import '../messages/all.dart';
+import '../src/bindings/bindings.dart';
 
 class CachedAppData {
   final CloudApp app;

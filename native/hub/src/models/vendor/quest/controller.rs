@@ -1,7 +1,7 @@
 use lazy_regex::regex;
 use tracing::{debug, trace, warn};
 
-use crate::messages as proto;
+use crate::signals::adb::device as device_signals;
 
 pub static CONTROLLER_INFO_COMMAND: &str = "dumpsys OVRRemoteService | grep Battery";
 
@@ -40,15 +40,15 @@ pub struct ControllerInfo {
 }
 
 impl ControllerInfo {
-    pub fn into_proto(self) -> proto::ControllerInfo {
-        proto::ControllerInfo {
-            battery_level: self.battery_level.map(|l| l as u32),
+    pub fn into_proto(self) -> device_signals::ControllerInfo {
+        device_signals::ControllerInfo {
+            battery_level: self.battery_level,
             status: match self.status {
-                ControllerStatus::Active => proto::ControllerStatus::Active,
-                ControllerStatus::Disabled => proto::ControllerStatus::Disabled,
-                ControllerStatus::Searching => proto::ControllerStatus::Searching,
-                ControllerStatus::Unknown => proto::ControllerStatus::Unknown,
-            } as i32,
+                ControllerStatus::Active => device_signals::ControllerStatus::Active,
+                ControllerStatus::Disabled => device_signals::ControllerStatus::Disabled,
+                ControllerStatus::Searching => device_signals::ControllerStatus::Searching,
+                ControllerStatus::Unknown => device_signals::ControllerStatus::Unknown,
+            },
         }
     }
 }

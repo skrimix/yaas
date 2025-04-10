@@ -1,5 +1,5 @@
 import 'package:flutter/material.dart';
-import '../messages/all.dart';
+import '../src/bindings/bindings.dart';
 
 class CloudAppsState extends ChangeNotifier {
   List<CloudApp> _apps = [];
@@ -13,7 +13,7 @@ class CloudAppsState extends ChangeNotifier {
   CloudAppsState() {
     CloudAppsChangedEvent.rustSignalStream.listen((event) {
       _apps = event.message.apps;
-      _error = event.message.hasError() ? event.message.error : null;
+      _error = event.message.error;
       _isLoading = false;
       notifyListeners();
     });

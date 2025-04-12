@@ -134,7 +134,7 @@ impl AdbDevice {
     //  #[instrument(err, level = "debug")]
     async fn refresh_package_list(&mut self) -> Result<()> {
         // Push the list_apps.dex tool to device
-        self.push_bytes(&LIST_APPS_DEX_BYTES, UnixPath::new("/data/local/tmp/list_apps.dex"))
+        self.push_bytes(LIST_APPS_DEX_BYTES, UnixPath::new("/data/local/tmp/list_apps.dex"))
             .await
             .context("Failed to push list_apps.dex")?;
 

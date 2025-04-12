@@ -1,10 +1,9 @@
 use anyhow::{Context, Result, bail};
-use serde::Deserialize;
-
-use crate::signals::adb::device as device_signals;
+use rinf::SignalPiece;
+use serde::{Deserialize, Serialize};
 
 /// Represents the size information of an installed application
-#[derive(Debug, Clone, Default, Deserialize)]
+#[derive(Debug, Clone, Default, Deserialize, Serialize, SignalPiece)]
 pub struct AppSize {
     app: u64,
     data: u64,
@@ -12,7 +11,7 @@ pub struct AppSize {
 }
 
 /// Represents an installed package on the device with its metadata
-#[derive(Debug, Clone, Default, Deserialize)]
+#[derive(Debug, Clone, Default, Deserialize, Serialize, SignalPiece)]
 pub struct InstalledPackage {
     uid: u64,
     system: bool,
@@ -30,26 +29,6 @@ impl InstalledPackage {
     /// Updates the size information for the package
     fn update_sizes(&mut self, app_size: u64, data_size: u64, cache_size: u64) {
         self.size = AppSize { app: app_size, data: data_size, cache: cache_size };
-    }
-
-    // TODO: use the proto struct directly
-    /// Converts the package information into a protobuf message
-    pub fn into_proto(self) -> device_signals::InstalledPackage {
-        device_signals::InstalledPackage {
-            uid: self.uid,
-            system: self.system,
-            package_name: self.package_name,
-            version_code: self.version_code,
-            version_name: self.version_name,
-            label: self.label,
-            launchable: self.launchable,
-            vr: self.vr,
-            size: device_signals::AppSize {
-                app: self.size.app,
-                data: self.size.data,
-                cache: self.size.cache,
-            },
-        }
     }
 }
 

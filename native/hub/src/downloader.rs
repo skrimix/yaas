@@ -37,11 +37,7 @@ impl Downloader {
 
     pub async fn receive_commands(&self) {
         fn send_response(apps: Vec<CloudApp>, error: Option<String>) {
-            CloudAppsChangedEvent {
-                apps: apps.iter().map(|app| app.into_proto()).collect(),
-                error,
-            }
-            .send_signal_to_dart();
+            CloudAppsChangedEvent { apps, error }.send_signal_to_dart();
         }
 
         let receiver = LoadCloudAppsRequest::get_dart_signal_receiver();

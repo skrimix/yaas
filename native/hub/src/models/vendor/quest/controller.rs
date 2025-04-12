@@ -1,11 +1,11 @@
 use lazy_regex::regex;
+use rinf::SignalPiece;
+use serde::Serialize;
 use tracing::{debug, trace, warn};
-
-use crate::signals::adb::device as device_signals;
 
 pub static CONTROLLER_INFO_COMMAND: &str = "dumpsys OVRRemoteService | grep Battery";
 
-#[derive(Debug, Clone, Copy, PartialEq, Eq, Hash)]
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Hash, Serialize, SignalPiece)]
 /// Represents the current status of a Quest controller.
 pub enum ControllerStatus {
     Active,
@@ -32,27 +32,14 @@ impl From<&str> for ControllerStatus {
     }
 }
 
-#[derive(Debug, Default, Clone, Copy, PartialEq, Eq, Hash)]
+#[derive(Debug, Default, Clone, Copy, PartialEq, Eq, Hash, Serialize, SignalPiece)]
 /// Info about a Quest controller status.
 pub struct ControllerInfo {
     pub battery_level: Option<u8>,
     pub status: ControllerStatus,
 }
 
-impl ControllerInfo {
-    pub fn into_proto(self) -> device_signals::ControllerInfo {
-        device_signals::ControllerInfo {
-            battery_level: self.battery_level,
-            status: match self.status {
-                ControllerStatus::Active => device_signals::ControllerStatus::Active,
-                ControllerStatus::Disabled => device_signals::ControllerStatus::Disabled,
-                ControllerStatus::Searching => device_signals::ControllerStatus::Searching,
-                ControllerStatus::Unknown => device_signals::ControllerStatus::Unknown,
-            },
-        }
-    }
-}
-#[derive(Debug, Default, Clone, Copy, PartialEq, Eq, Hash)]
+#[derive(Debug, Default, Clone, Copy, PartialEq, Eq, Hash, Serialize, SignalPiece)]
 /// Holds info about both controllers connected to the headset.
 pub struct HeadsetControllersInfo {
     pub left: Option<ControllerInfo>,

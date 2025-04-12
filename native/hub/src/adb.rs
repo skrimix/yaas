@@ -215,7 +215,7 @@ impl AdbHandler {
     //  #[instrument(level = "debug")]
     fn set_device(&self, device: Option<AdbDevice>, update_current: bool) {
         fn report_device_change(device: &Option<AdbDevice>) {
-            let proto_device = device.clone().map(|d| d.into_proto());
+            let proto_device = device.clone().map(|d| d.into());
             DeviceChangedEvent { device: proto_device }.send_signal_to_dart();
         }
 

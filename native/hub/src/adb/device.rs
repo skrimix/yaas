@@ -15,7 +15,6 @@ use crate::{
             CONTROLLER_INFO_COMMAND, HeadsetControllersInfo, parse_dumpsys,
         },
     },
-    signals::adb::device as device_signals,
 };
 
 /// Java tool used for package listing
@@ -532,30 +531,6 @@ impl AdbDevice {
             }
         }
         .context("Failed to uninstall package")
-    }
-
-    /// Converts the AdbDevice instance into its protobuf representation
-    pub fn into_proto(self) -> device_signals::AdbDevice {
-        device_signals::AdbDevice {
-            name: self.name,
-            product: self.product,
-            device_type: self.device_type.into_proto(),
-            serial: self.serial,
-            battery_level: self.battery_level,
-            controllers: device_signals::ControllersInfo {
-                left: self.controllers.left.map(|c| c.into_proto()),
-                right: self.controllers.right.map(|c| c.into_proto()),
-            },
-            space_info: device_signals::SpaceInfo {
-                total: self.space_info.total,
-                available: self.space_info.available,
-            },
-            installed_packages: self
-                .installed_packages
-                .into_iter()
-                .map(InstalledPackage::into_proto)
-                .collect(),
-        }
     }
 
     /// Executes an install script from the given path

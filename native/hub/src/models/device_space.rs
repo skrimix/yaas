@@ -1,4 +1,6 @@
 use anyhow::{Context, Result, ensure};
+use rinf::SignalPiece;
+use serde::Serialize;
 
 pub static SPACE_INFO_COMMAND: &str = "stat -fc %S:%b:%a /data";
 
@@ -6,7 +8,7 @@ pub static SPACE_INFO_COMMAND: &str = "stat -fc %S:%b:%a /data";
 ///
 /// Contains information about total and available storage space
 /// measured in bytes using the ByteUnit type.
-#[derive(Clone, Debug, Default)]
+#[derive(Clone, Debug, Default, Serialize, SignalPiece)]
 pub struct SpaceInfo {
     /// Total storage space in bytes
     pub total: u64,

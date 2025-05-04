@@ -186,7 +186,7 @@ class _TaskListDialogState extends State<TaskListDialog>
                     message: task.message,
                     waitDuration: const Duration(milliseconds: 500),
                     child: Text(
-                      task.message,
+                      task.message, // TODO: make copyable
                       overflow: TextOverflow.ellipsis,
                     ),
                   ),

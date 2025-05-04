@@ -1,4 +1,4 @@
-use anyhow::{Context, Result, bail};
+use anyhow::Result;
 use rinf::SignalPiece;
 use serde::{Deserialize, Serialize};
 
@@ -21,95 +21,12 @@ pub struct InstalledPackage {
     label: String,
     launchable: bool,
     vr: bool,
-    #[serde(default)]
     size: AppSize,
 }
 
-impl InstalledPackage {
-    /// Updates the size information for the package
-    fn update_sizes(&mut self, app_size: u64, data_size: u64, cache_size: u64) {
-        self.size = AppSize { app: app_size, data: data_size, cache: cache_size };
-    }
-}
-
 /// Parses the output of list_apps.dex command
-fn parse_list_apps_dex(dex_output: &str) -> Result<Vec<InstalledPackage>, serde_json::Error> {
+pub fn parse_list_apps_dex(dex_output: &str) -> Result<Vec<InstalledPackage>, serde_json::Error> {
     serde_json::from_str(dex_output)
-}
-
-/// Populates size information for packages from dumpsys output
-fn populate_sizes(packages: &mut [InstalledPackage], dumpsys_output: &str) -> Result<()> {
-    let mut package_names: Vec<String> = Vec::new();
-    let mut app_sizes: Vec<u64> = Vec::new();
-    let mut data_sizes: Vec<u64> = Vec::new();
-    let mut cache_sizes: Vec<u64> = Vec::new();
-
-    // Parse each line of the dumpsys output
-    for line in dumpsys_output.lines() {
-        if let Some((key, value)) = line.split_once(':') {
-            let value = value.trim();
-            match key {
-                "Package Names" => {
-                    package_names =
-                        serde_json::from_str(value).context("failed to parse package names")?;
-                }
-                "App Sizes" => {
-                    app_sizes = serde_json::from_str(value).context("failed to parse app sizes")?;
-                }
-                "App Data Sizes" => {
-                    data_sizes =
-                        serde_json::from_str(value).context("failed to parse data sizes")?;
-                }
-                "Cache Sizes" => {
-                    cache_sizes =
-                        serde_json::from_str(value).context("failed to parse cache sizes")?;
-                }
-                _ => continue,
-            }
-        }
-    }
-
-    // Validate that we have all required information
-    if package_names.is_empty() {
-        bail!("package names not found in dumpsys output");
-    }
-    if app_sizes.is_empty() {
-        bail!("app sizes not found in dumpsys output");
-    }
-    if data_sizes.is_empty() {
-        bail!("data sizes not found in dumpsys output");
-    }
-    if cache_sizes.is_empty() {
-        bail!("cache sizes not found in dumpsys output");
-    }
-
-    // Validate array lengths match
-    if app_sizes.len() != package_names.len()
-        || data_sizes.len() != package_names.len()
-        || cache_sizes.len() != package_names.len()
-    {
-        bail!("size arrays have mismatched lengths");
-    }
-
-    // Update package sizes
-    for (i, package_name) in package_names.iter().enumerate() {
-        if let Some(package) = packages.iter_mut().find(|p| &p.package_name == package_name) {
-            package.update_sizes(app_sizes[i], data_sizes[i], cache_sizes[i]);
-        }
-    }
-
-    Ok(())
-}
-
-/// Creates a list of installed packages from device output
-pub fn packages_from_device_output(
-    dex_output: &str,
-    dumpsys_output: &str,
-) -> Result<Vec<InstalledPackage>> {
-    let mut packages =
-        parse_list_apps_dex(dex_output).context("failed to parse list_apps.dex output")?;
-    populate_sizes(&mut packages, dumpsys_output).context("failed to populate package sizes")?;
-    Ok(packages)
 }
 
 #[cfg(test)]
@@ -127,7 +44,12 @@ mod tests {
   "version_name": "69.0.0.556.352",
   "label": "ShellEnv",
   "launchable": true,
-  "vr": true
+  "vr": true,
+  "size": {
+    "app": 1,
+    "data": 2,
+    "cache": 3
+  }
 },
 {
   "uid": 10148,
@@ -137,7 +59,12 @@ mod tests {
   "version_name": "8.0.0.0.110",
   "label": "PCLinkService",
   "launchable": false,
-  "vr": false
+  "vr": false,
+  "size": {
+    "app": 3,
+    "data": 4,
+    "cache": 5
+  }
 },
 {
   "uid": 10038,
@@ -147,7 +74,12 @@ mod tests {
   "version_name": "69.0.0.562.335",
   "label": "com.oculus.mrservice",
   "launchable": false,
-  "vr": false
+  "vr": false,
+  "size": {
+    "app": 6,
+    "data": 7,
+    "cache": 8
+  }
 },
 {
   "uid": 10131,
@@ -157,7 +89,12 @@ mod tests {
   "version_name": "69.0.0.628.468",
   "label": "com.oculus.configuration.OsConfigApplication",
   "launchable": false,
-  "vr": false
+  "vr": false,
+  "size": {
+    "app": 9,
+    "data": 10,
+    "cache": 11
+  }
 }
 ]
 "#;
@@ -200,11 +137,21 @@ mod tests {
         assert!(!packages[2].vr);
         assert!(!packages[3].vr);
 
-        for package in packages {
-            assert!(package.size.app == 0);
-            assert!(package.size.data == 0);
-            assert!(package.size.cache == 0);
-        }
+        assert_eq!(packages[0].size.app, 1);
+        assert_eq!(packages[0].size.data, 2);
+        assert_eq!(packages[0].size.cache, 3);
+
+        assert_eq!(packages[1].size.app, 3);
+        assert_eq!(packages[1].size.data, 4);
+        assert_eq!(packages[1].size.cache, 5);
+
+        assert_eq!(packages[2].size.app, 6);
+        assert_eq!(packages[2].size.data, 7);
+        assert_eq!(packages[2].size.cache, 8);
+
+        assert_eq!(packages[3].size.app, 9);
+        assert_eq!(packages[3].size.data, 10);
+        assert_eq!(packages[3].size.cache, 11);
     }
 
     #[test]
@@ -223,81 +170,5 @@ mod tests {
         }
         ]"#;
         assert!(parse_list_apps_dex(output).is_err());
-    }
-
-    #[test]
-    fn test_update_packages_with_sizes() {
-        let mut packages = vec![
-            InstalledPackage {
-                uid: 10029,
-                system: true,
-                package_name: "com.oculus.avatareditor".to_string(),
-                version_code: 640490640,
-                version_name: "69.0.0.556.352".to_string(),
-                label: "AvatarEditor".to_string(),
-                launchable: true,
-                vr: true,
-                size: AppSize::default(),
-            },
-            InstalledPackage {
-                uid: 10148,
-                system: false,
-                package_name: "de.blinkt.openvpn".to_string(),
-                version_code: 700100136,
-                version_name: "8.0.0.0.110".to_string(),
-                label: "OpenVPN".to_string(),
-                launchable: false,
-                vr: false,
-                size: AppSize::default(),
-            },
-        ];
-
-        let dumpsys_output = r#"Latency: 1ms [512B Data Write]
-Recent Disk Write Speed (kB/s) = 33635
-Data-Free: 6264024K / 55247244K total = 11% free
-Cache-Free: 6264024K / 55247244K total = 11% free
-System-Free: 0K / 1801992K total = 0% free
-File-based Encryption: true
-App Size: 34883465664
-App Data Size: 365203760
-App Cache Size: 73829424
-Photos Size: 130072
-Videos Size: 60125992
-Audio Size: 0
-Downloads Size: 0
-System Size: 64000000000
-Other Size: 126559304
-Package Names: ["com.android.cts.priv.ctsshim","com.oculus.assetdelivery","com.oculus.avatareditor","de.blinkt.openvpn"]
-App Sizes: [0,51712,23151616,66741760]
-App Data Sizes: [0,25088,475136,16384]
-Cache Sizes: [0,14336,16384,4096]"#;
-
-        populate_sizes(&mut packages, dumpsys_output).unwrap();
-
-        assert_eq!(packages[0].size.app, 23151616);
-        assert_eq!(packages[0].size.data, 475136);
-        assert_eq!(packages[0].size.cache, 16384);
-
-        assert_eq!(packages[1].size.app, 66741760);
-        assert_eq!(packages[1].size.data, 16384);
-        assert_eq!(packages[1].size.cache, 4096);
-    }
-
-    #[test]
-    fn test_update_packages_with_sizes_invalid() {
-        let mut packages = vec![InstalledPackage {
-            uid: 10029,
-            system: true,
-            package_name: "com.oculus.avatareditor".to_string(),
-            version_code: 640490640,
-            version_name: "69.0.0.556.352".to_string(),
-            label: "AvatarEditor".to_string(),
-            launchable: true,
-            vr: true,
-            size: AppSize::default(),
-        }];
-
-        let dumpsys_output = "Invalid output";
-        assert!(populate_sizes(&mut packages, dumpsys_output).is_err());
     }
 }

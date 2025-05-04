@@ -10,7 +10,7 @@ use tracing::{Span, debug, error, info, trace, warn};
 use crate::{
     adb::PACKAGE_NAME_REGEX,
     models::{
-        DeviceType, InstalledPackage, SPACE_INFO_COMMAND, SpaceInfo, packages_from_device_output,
+        DeviceType, InstalledPackage, SPACE_INFO_COMMAND, SpaceInfo, parse_list_apps_dex,
         vendor::quest::controller::{
             CONTROLLER_INFO_COMMAND, HeadsetControllersInfo, parse_dumpsys,
         },
@@ -155,11 +155,8 @@ impl AdbDevice {
             return Err(anyhow!("app_process command failed with exit code {}", exit_code));
         }
 
-        // TODO: See if getting this through the list_apps.dex tool is better
-        let dumpsys_output = self.shell("dumpsys diskstats").await?;
-
-        let packages = packages_from_device_output(list_output, &dumpsys_output)
-            .context("Failed to parse device output")?;
+        let packages =
+            parse_list_apps_dex(list_output).context("Failed to parse list_apps.dex output")?;
 
         Span::current().record("result", format!("found {} packages", packages.len()));
         Span::current().record("count", packages.len());

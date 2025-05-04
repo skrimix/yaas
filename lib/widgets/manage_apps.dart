@@ -167,8 +167,6 @@ class _ManageAppsState extends State<ManageApps> {
   }
 
   void _showAppDetailsDialog(BuildContext context, InstalledPackage app) {
-    final totalSize =
-        app.size.app.toInt() + app.size.data.toInt() + app.size.cache.toInt();
     showDialog(
       context: context,
       builder: (context) => AlertDialog(
@@ -195,16 +193,6 @@ class _ManageAppsState extends State<ManageApps> {
                 'Cache:', _formatSize(app.size.cache.toInt()), false),
             const Divider(height: 4),
             _buildDetailsRow('Total:', _formatAppSize(app.size), false),
-            if (totalSize == 0 && !app.system) ...[
-              const SizedBox(height: 8),
-              const Text(
-                'Note: If this app was recently installed, the OS might not be reporting its size yet.',
-                style: TextStyle(
-                  fontStyle: FontStyle.italic,
-                  // fontSize: 12,
-                ),
-              ),
-            ],
           ],
         ),
         actions: [

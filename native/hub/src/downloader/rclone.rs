@@ -7,7 +7,7 @@ use tokio::{
     process::Command,
     sync::mpsc::UnboundedSender,
 };
-use tracing::{error, trace};
+use tracing::{debug, error, trace};
 
 use crate::utils::get_sys_proxy;
 
@@ -118,7 +118,7 @@ impl RcloneClient {
 
     pub async fn size(&self, path: &str) -> Result<RcloneSizeOutput> {
         let output = self.run_to_string(&["size", "--fast-list", "--json", path]).await?;
-        serde_json::from_str(&output).context("failed to parse rclone size output")
+        serde_json::from_str(&output).context("Failed to parse rclone size output")
     }
 
     pub async fn transfer(
@@ -159,7 +159,7 @@ impl RcloneClient {
         ];
 
         let mut child = self.command(&args).stderr(Stdio::piped()).spawn()?;
-        let stderr = child.stderr.take().context("failed to get stderr")?;
+        let stderr = child.stderr.take().context("Failed to get stderr")?;
         let mut lines = BufReader::new(stderr).lines();
         let mut log_messages = Vec::new();
 
@@ -168,7 +168,7 @@ impl RcloneClient {
             while let Some(line) = lines.next_line().await? {
                 match serde_json::from_str::<RcloneStatLine>(&line) {
                     Ok(stat_line) => {
-                        println!("parsed line");
+                        trace!(?stat_line, "parsed rclone stat line");
                         let mut stats = stat_line.stats;
                         stats.total_bytes = total_bytes;
                         trace!(?stats, "sending stats update");
@@ -177,8 +177,7 @@ impl RcloneClient {
                         }
                     }
                     Err(e) => {
-                        // println!("failed to parse line: {}", line);
-                        println!("error: {}", e);
+                        debug!("error parsing rclone stat line: {}", e);
                     }
                 }
                 log_messages.push(line);
@@ -232,7 +231,7 @@ impl RcloneStorage {
         ensure!(dest.parent().is_some(), "destination must have a parent directory");
         let source = self.format_remote_path(&source);
         let total_bytes =
-            self.client.size(&source).await.context("failed to get remote dir size")?.bytes;
+            self.client.size(&source).await.context("Failed to get remote dir size")?.bytes;
         self.client
             .transfer_with_stats(
                 source,
@@ -249,7 +248,7 @@ impl RcloneStorage {
         ensure!(dest.is_dir(), "destination must be a directory");
         let source = self.format_remote_path(&source);
         let total_bytes =
-            self.client.size(&source).await.context("failed to get remote file size")?.bytes;
+            self.client.size(&source).await.context("Failed to get remote file size")?.bytes;
         let mut dest = dest;
         self.client
             .transfer(
@@ -259,7 +258,7 @@ impl RcloneStorage {
                 total_bytes,
             )
             .await?;
-        dest.push(source.split('/').next_back().context("failed to get source file name")?);
+        dest.push(source.split('/').next_back().context("Failed to get source file name")?);
         Ok(dest)
     }
 }

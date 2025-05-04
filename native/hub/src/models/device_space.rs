@@ -24,18 +24,18 @@ impl SpaceInfo {
 
         ensure!(parts.len() == 3, "invalid stat output: {}", output);
 
-        let block_size: u64 = parts[0].parse().context("failed to parse block size")?;
-        let total_blocks: u64 = parts[1].parse().context("failed to parse total blocks")?;
-        let available_blocks: u64 = parts[2].parse().context("failed to parse available blocks")?;
+        let block_size: u64 = parts[0].parse().context("Failed to parse block size")?;
+        let total_blocks: u64 = parts[1].parse().context("Failed to parse total blocks")?;
+        let available_blocks: u64 = parts[2].parse().context("Failed to parse available blocks")?;
 
         // A small sanity check
-        ensure!(available_blocks <= total_blocks, "available blocks cannot exceed total blocks");
+        ensure!(available_blocks <= total_blocks, "Available blocks cannot exceed total blocks");
 
         Ok(Self {
-            total: block_size.checked_mul(total_blocks).context("total space overflow")?,
+            total: block_size.checked_mul(total_blocks).context("Total space overflow")?,
             available: block_size
                 .checked_mul(available_blocks)
-                .context("available space overflow")?,
+                .context("Available space overflow")?,
         })
     }
 }

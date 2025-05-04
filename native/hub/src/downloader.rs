@@ -73,7 +73,8 @@ impl Downloader {
         let mut reader =
             csv_async::AsyncReaderBuilder::new().delimiter(b';').create_deserializer(file);
         let records = reader.deserialize();
-        let cloud_apps: Vec<CloudApp> = records.map_ok(|r| r).try_collect().await?;
+        let cloud_apps: Vec<CloudApp> =
+            records.try_collect().await.context("Failed to parse game list file")?;
         Ok(cloud_apps)
     }
     pub async fn download_app(

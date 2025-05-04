@@ -68,7 +68,7 @@ impl NifStorage {
         // TODO: make configurable
         let creds = tokio::fs::read_to_string("/home/skrimix/work/webdav-creds.txt")
             .await
-            .context("failed to read webdav credentials")?;
+            .context("Failed to read webdav credentials")?;
         let creds = creds.trim().split(":").collect::<Vec<&str>>();
         let builder = Webdav::default()
             .endpoint("https://drive.5698452.xyz:33456")
@@ -98,7 +98,7 @@ impl NifStorage {
 
         let file_name = Path::new(source_path)
             .file_name()
-            .context("failed to get source file name")?
+            .context("Failed to get source file name")?
             .to_str()
             .context("directory entry is not a valid utf-8 string")?;
 
@@ -109,10 +109,10 @@ impl NifStorage {
             .concurrent(concurrency)
             .chunk(8 * 1024 * 1024) // 8 MiB
             .await
-            .context("failed to create reader")?
+            .context("Failed to create reader")?
             .into_bytes_stream(..)
             .await
-            .context("failed to create byte stream");
+            .context("Failed to create byte stream");
         let stream = match stream {
             Ok(stream) => stream,
             Err(e) => {
@@ -183,7 +183,7 @@ impl NifStorage {
             self.operator
                 .exists(remote_dir)
                 .await
-                .context("failed to check source directory exists")?,
+                .context("Failed to check source directory exists")?,
             "source directory not found"
         );
 
@@ -196,7 +196,7 @@ impl NifStorage {
                 let last_modified = entry
                     .metadata()
                     .last_modified()
-                    .context("failed to get last modified date for remote file")?;
+                    .context("Failed to get last modified date for remote file")?;
                 to_check.push(RemoteFile {
                     path: remote_path,
                     size: content_length,
@@ -215,7 +215,7 @@ impl NifStorage {
             let rel_path = build_rel_path(
                 destination_dir
                     .parent()
-                    .context("failed to get parent of destination directory")?
+                    .context("Failed to get parent of destination directory")?
                     .to_str()
                     .context("destination path is not valid utf-8")?,
                 local_file.to_str().context("local file path is not valid utf-8")?,
@@ -266,7 +266,7 @@ impl NifStorage {
 
         if !destination_dir.is_dir() {
             std::fs::create_dir(&destination_dir)
-                .context("failed to create destination directory")?;
+                .context("Failed to create destination directory")?;
         }
 
         let CompareResult { total_bytes, total_files, to_download, to_delete } =
@@ -331,10 +331,10 @@ impl NifStorage {
                     destination_dir.join(build_rel_path(&format!("/{source_dir}"), &path));
                 let download_destination = local_path
                     .parent()
-                    .context("failed to get download destination")?
+                    .context("Failed to get download destination")?
                     .to_path_buf();
                 std::fs::create_dir_all(&download_destination)
-                    .context("failed to create parent directory for local file")?;
+                    .context("Failed to create parent directory for local file")?;
 
                 self.download_file(&path, download_destination, 4, bytes_transferred.clone())
                     .await?; // TODO: configure?
@@ -345,14 +345,14 @@ impl NifStorage {
             .buffer_unordered(transfers)
             .try_collect::<()>()
             .await
-            .context("failed to download files")?;
+            .context("Failed to download files")?;
 
         progress_stop_tx.send(()).expect("stop channel closed unexpectedly");
 
         // delete local files that are not in the remote directory
         for path in to_delete {
             std::fs::remove_file(destination_dir.join(&path))
-                .context("failed to delete old local file")?;
+                .context("Failed to delete old local file")?;
         }
 
         Ok(destination_dir.to_str().context("destination path is not valid utf-8")?.to_string())
@@ -365,7 +365,7 @@ impl NifStorage {
             .list_with(source_dir)
             .recursive(true)
             .await
-            .context("failed to list directory")
+            .context("Failed to list directory")
     }
 
     pub async fn get_app_list(&self) -> Result<Vec<CloudApp>> {
@@ -398,16 +398,16 @@ fn find_remote_file<'a>(entries: &'a [RemoteFile], path: &str) -> Option<(usize,
 // #[instrument(err, ret, level = "trace")]
 fn list_local_files(destination_dir: &Path) -> Result<Vec<PathBuf>> {
     trace!(path = ?destination_dir, "listing local directory");
-    glob::glob(destination_dir.join("**/*").to_str().context("failed to create glob pattern")?)
-        .context("failed to glob directory")?
+    glob::glob(destination_dir.join("**/*").to_str().context("Failed to create glob pattern")?)
+        .context("Failed to glob directory")?
         .collect::<Result<Vec<_>, _>>()
-        .context("failed to get local file metadata")
+        .context("Failed to get local file metadata")
 }
 
 /// Compares the size and last modified date of a local file with the remote file.
 // #[instrument(err, ret, level = "trace")]
 fn needs_update(local_file: &Path, remote_file: &RemoteFile) -> Result<bool> {
-    let meta = std::fs::metadata(local_file).context("failed to get metadata for local file")?;
+    let meta = std::fs::metadata(local_file).context("Failed to get metadata for local file")?;
     let size = meta.len();
     let last_modified: DateTime<Utc> = meta.modified()?.into();
     Ok(size != remote_file.size || last_modified < remote_file.last_modified)

@@ -35,9 +35,11 @@ class _LocalSideloadState extends State<LocalSideload> {
     // TODO: remember last path
     String? path;
     if (_isDirectory) {
-      path = await FilePicker.platform.getDirectoryPath();
+      path = await FilePicker.platform
+          .getDirectoryPath(dialogTitle: 'Select app directory');
     } else {
       final result = await FilePicker.platform.pickFiles(
+        dialogTitle: 'Select APK file',
         type: FileType.custom,
         allowedExtensions: ['apk'],
       );
@@ -184,7 +186,7 @@ class _LocalSideloadState extends State<LocalSideload> {
                         if (_isDirectory) ...[
                           const SizedBox(height: 16),
                           Text(
-                            'Note: The app directory should contain an APK file and optionally an OBB data directory, or an install.txt file.',
+                            'The directory should contain an APK file and optionally an OBB data directory, or the install.txt file.',
                             style:
                                 Theme.of(context).textTheme.bodySmall?.copyWith(
                                       fontStyle: FontStyle.italic,

@@ -1,13 +1,12 @@
 use std::{error::Error, sync::Arc, time::Duration};
 
 use anyhow::{Context, Result, bail, ensure};
-use arc_swap::ArcSwapOption;
 use derive_more::Debug;
 use device::AdbDevice;
 use forensic_adb::{AndroidStorageInput, DeviceBrief, DeviceState};
 use lazy_regex::{Lazy, Regex, lazy_regex};
 use rinf::{DartSignal, RustSignal};
-use tokio::time;
+use tokio::{sync::RwLock, time};
 use tokio_stream::StreamExt;
 use tracing::{debug, error, trace, warn};
 
@@ -23,7 +22,7 @@ pub struct AdbHandler {
     /// The ADB host instance for device communication
     adb_host: forensic_adb::Host,
     /// Currently connected device (if any)
-    device: ArcSwapOption<AdbDevice>,
+    device: RwLock<Option<Arc<AdbDevice>>>,
 }
 
 impl AdbHandler {
@@ -122,7 +121,7 @@ impl AdbHandler {
         while let Some(device_update) = receiver.recv().await {
             debug!(update = ?device_update, "Received device update");
 
-            match (adb_handler.try_current_device(), &device_update.state) {
+            match (adb_handler.try_current_device().await, &device_update.state) {
                 // Current device went offline
                 (Some(device), DeviceState::Offline) if device.serial == device_update.serial => {
                     debug!("Device is offline, disconnecting");
@@ -170,7 +169,7 @@ impl AdbHandler {
             AdbResponse { command, success, message }.send_signal_to_dart();
         }
 
-        let device = self.current_device()?;
+        let device = self.current_device().await?;
 
         let result = match command.clone() {
             AdbCommand::LaunchApp(package_name) => {
@@ -213,11 +212,13 @@ impl AdbHandler {
     /// * `device` - Optional new device state
     /// * `update_current` - Whether to update the current device if it exists
     //  #[instrument(level = "debug")]
-    fn set_device(&self, device: Option<AdbDevice>, update_current: bool) {
+    async fn set_device(&self, device: Option<AdbDevice>, update_current: bool) {
         fn report_device_change(device: &Option<AdbDevice>) {
             let proto_device = device.clone().map(|d| d.into());
             DeviceChangedEvent { device: proto_device }.send_signal_to_dart();
         }
+
+        let mut current_device = self.device.write().await;
 
         if update_current {
             if device.is_none() {
@@ -225,50 +226,17 @@ impl AdbHandler {
                 warn!("Attempted to pass None as a device update");
                 return;
             }
-            // Jumping through hoops to avoid (some) race conditions
-            loop {
-                let current = self.device.load();
 
-                if let (Some(current_device), Some(new_device)) = (current.as_ref(), &device) {
-                    if current_device.serial != new_device.serial {
-                        debug!("Ignoring device update for different device");
-                        return;
-                    }
+            if let (Some(current_device), Some(new_device)) = (current_device.as_ref(), &device) {
+                if current_device.serial != new_device.serial {
+                    debug!("Ignoring device update for different device");
+                    return;
                 }
-
-                // This returns whatever was in the slot before the swap attempt
-                // If the value differs from our `current` variable, the swap failed
-                let maybe_current =
-                    self.device.compare_and_swap(&current, device.clone().map(Arc::new));
-
-                // Verify that the update was successful
-                match (current.as_ref(), maybe_current.as_ref()) {
-                    // Case 1: We had a device, and we successfully replaced it
-                    (Some(c), Some(u)) if Arc::ptr_eq(u, c) => {
-                        report_device_change(&device);
-                        return;
-                    }
-                    // Case 2: We had no device, and we successfully added one
-                    (None, None) => {
-                        report_device_change(&device);
-                        return;
-                    }
-                    // Case 3: We had a device, but it was disconnected
-                    // Swap failed, but the update is useless now
-                    (Some(_), None) => {
-                        return;
-                    }
-                    _ => {}
-                }
-
-                // If verification failed, another thread modified the device
-                // Loop and try again
             }
-        } else {
-            // For update_current=false, we just do a direct store
-            self.device.store(device.clone().map(Arc::new));
-            report_device_change(&device);
         }
+
+        *current_device = device.clone().map(Arc::new);
+        report_device_change(&device);
     }
 
     /// Attempts to get the currently connected device
@@ -276,8 +244,8 @@ impl AdbHandler {
     /// # Returns
     /// Option containing the current device if one is connected
     //  #[instrument(level = "trace")]
-    fn try_current_device(&self) -> Option<Arc<AdbDevice>> {
-        self.device.load().as_ref().map(Arc::clone)
+    async fn try_current_device(&self) -> Option<Arc<AdbDevice>> {
+        self.device.read().await.as_ref().map(Arc::clone)
     }
 
     /// Gets the currently connected device or returns an error if none is connected
@@ -285,8 +253,8 @@ impl AdbHandler {
     /// # Returns
     /// Result containing the current device or an error if no device is connected
     //  #[instrument(level = "trace")]
-    fn current_device(&self) -> Result<Arc<AdbDevice>> {
-        self.try_current_device().context("No device connected")
+    async fn current_device(&self) -> Result<Arc<AdbDevice>> {
+        self.try_current_device().await.context("No device connected")
     }
 
     /// Connects to an ADB device
@@ -318,7 +286,7 @@ impl AdbHandler {
 
         let device = AdbDevice::new(inner_device).await?;
 
-        self.set_device(Some(device.clone()), false);
+        self.set_device(Some(device.clone()), false).await;
         Ok(device)
     }
 
@@ -329,10 +297,10 @@ impl AdbHandler {
     //  #[instrument(err)]
     async fn disconnect_device(&self) -> Result<()> {
         ensure!(
-            self.device.load().is_some(),
+            self.device.read().await.is_some(),
             "Cannot disconnect from a device when none is connected"
         );
-        self.set_device(None, false);
+        self.set_device(None, false).await;
         Ok(())
     }
 
@@ -345,7 +313,7 @@ impl AdbHandler {
         loop {
             interval.tick().await;
             trace!("Device refresh tick");
-            if self.try_current_device().is_some() {
+            if self.try_current_device().await.is_some() {
                 async {
                     let _ = self.refresh_device().await.inspect_err(|e| {
                         error!(error = e.as_ref() as &dyn Error, "Periodic device refresh failed");
@@ -359,10 +327,10 @@ impl AdbHandler {
 
     /// Refreshes the currently connected device
     pub async fn refresh_device(&self) -> Result<()> {
-        let device = self.current_device()?.clone();
+        let device = self.current_device().await?;
         let mut device = (*device).clone();
         device.refresh().await?;
-        self.set_device(Some(device), true);
+        self.set_device(Some(device), true).await;
         Ok(())
     }
 
@@ -371,7 +339,7 @@ impl AdbHandler {
     /// # Arguments
     /// * `apk_path` - Path to the APK file to install
     pub async fn install_apk(&self, apk_path: &std::path::Path) -> Result<()> {
-        let device = self.current_device()?.clone();
+        let device = self.current_device().await?;
         let device = (*device).clone();
         let result = device.install_apk(apk_path).await;
         self.refresh_device().await?;
@@ -383,7 +351,7 @@ impl AdbHandler {
     /// # Arguments
     /// * `package_name` - The package name to uninstall
     pub async fn uninstall_package(&self, package_name: &str) -> Result<()> {
-        let device = self.current_device()?.clone();
+        let device = self.current_device().await?;
         let device = (*device).clone();
         let result = device.uninstall_package(package_name).await;
         self.refresh_device().await?;
@@ -395,7 +363,7 @@ impl AdbHandler {
     /// # Arguments
     /// * `app_path` - Path to directory containing the app files
     pub async fn sideload_app(&self, app_path: &std::path::Path) -> Result<()> {
-        let device = self.current_device()?.clone();
+        let device = self.current_device().await?;
         let device = (*device).clone();
         let result = device.sideload_app(app_path).await;
         self.refresh_device().await?;

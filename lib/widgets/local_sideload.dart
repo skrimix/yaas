@@ -1,5 +1,6 @@
 import 'package:flutter/material.dart';
 import 'package:file_picker/file_picker.dart';
+import 'package:flutter/services.dart';
 import 'package:provider/provider.dart';
 import 'package:toastification/toastification.dart';
 import '../providers/device_state.dart';
@@ -20,6 +21,7 @@ class _LocalSideloadState extends State<LocalSideload> {
   @override
   void initState() {
     super.initState();
+    ServicesBinding.instance.keyboard.addHandler(_onKey);
     _pathController.addListener(() {
       setState(() {});
     });
@@ -28,6 +30,7 @@ class _LocalSideloadState extends State<LocalSideload> {
   @override
   void dispose() {
     _pathController.dispose();
+    ServicesBinding.instance.keyboard.removeHandler(_onKey);
     super.dispose();
   }
 
@@ -106,6 +109,17 @@ class _LocalSideloadState extends State<LocalSideload> {
     _pathController.clear();
   }
 
+  bool _onKey(KeyEvent event) {
+    if (event is KeyDownEvent &&
+        (event.logicalKey == LogicalKeyboardKey.enter ||
+            event.logicalKey == LogicalKeyboardKey.numpadEnter) &&
+        _pathController.text.isNotEmpty) {
+      _install();
+      return true;
+    }
+    return false;
+  }
+
   @override
   Widget build(BuildContext context) {
     return Consumer<DeviceState>(
@@ -123,7 +137,7 @@ class _LocalSideloadState extends State<LocalSideload> {
           body: SafeArea(
             child: Center(
               child: ConstrainedBox(
-                constraints: const BoxConstraints(maxWidth: 600),
+                constraints: const BoxConstraints(maxWidth: 610),
                 child: Card(
                   child: Padding(
                     padding: const EdgeInsets.all(24.0),
@@ -195,7 +209,6 @@ class _LocalSideloadState extends State<LocalSideload> {
                           ),
                         ],
                         const SizedBox(height: 16),
-                        // TODO: trigger on keyboard enter
                         FilledButton.icon(
                           onPressed:
                               _pathController.text.isEmpty ? null : _install,

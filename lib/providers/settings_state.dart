@@ -1,76 +1,74 @@
 import 'package:flutter/material.dart';
-
-enum ConnectionType {
-  usb,
-  wireless,
-}
-
-enum DownloadCleanupPolicy {
-  deleteAfterInstall,
-  keepOneVersion,
-  keepTwoVersions,
-  keepAllVersions,
-}
+import 'package:rql/src/bindings/bindings.dart';
 
 class SettingsState extends ChangeNotifier {
-  String _rclonePath = '/usr/bin/rclone';
-  String _rcloneRemoteName = 'remote';
-  String _adbPath = '/usr/bin/adb';
-  ConnectionType _preferredConnectionType = ConnectionType.usb;
-  String _downloadsLocation = '~/Downloads/rql';
-  String _backupsLocation = '~/Documents/rql/backups';
-  String _bandwidthLimit = '';
-  DownloadCleanupPolicy _cleanupPolicy =
-      DownloadCleanupPolicy.deleteAfterInstall;
+  Settings _settings = Settings(
+    rclonePath: '',
+    rcloneRemoteName: '',
+    adbPath: '',
+    preferredConnectionType: ConnectionType.usb,
+    downloadsLocation: '',
+    backupsLocation: '',
+    bandwidthLimit: '',
+    cleanupPolicy: DownloadCleanupPolicy.deleteAfterInstall,
+  );
 
-  // Getters
-  String get rclonePath => _rclonePath;
-  String get rcloneRemoteName => _rcloneRemoteName;
-  String get adbPath => _adbPath;
-  ConnectionType get preferredConnectionType => _preferredConnectionType;
-  String get downloadsLocation => _downloadsLocation;
-  String get backupsLocation => _backupsLocation;
-  String get bandwidthLimit => _bandwidthLimit;
-  DownloadCleanupPolicy get cleanupPolicy => _cleanupPolicy;
+  bool _isLoading = false;
+  String? _error;
 
-  // Setters
-  void setRclonePath(String path) {
-    _rclonePath = path;
+  SettingsState() {
+    loadSettings();
+    _registerSignalHandlers();
+  }
+
+  void _setIsLoading(bool isLoading) {
+    print('isLoading: $isLoading');
+    _isLoading = isLoading;
     notifyListeners();
   }
 
-  void setRcloneRemoteName(String name) {
-    _rcloneRemoteName = name;
-    notifyListeners();
+  void _registerSignalHandlers() {
+    print('registerSignalHandlers');
+    SettingsLoadedEvent.rustSignalStream.listen((event) {
+      print('SettingsLoadedEvent.rustSignalStream');
+      if (event.message.error != null) {
+        print(
+            'SettingsLoadedEvent.rustSignalStream error: ${event.message.error}');
+        _error = event.message.error;
+      } else {
+        print(
+            'SettingsLoadedEvent.rustSignalStream settings: ${event.message.settings}');
+        _settings = event.message.settings;
+        _error = null;
+      }
+      _setIsLoading(false);
+    });
+
+    SettingsSavedEvent.rustSignalStream.listen((event) {
+      print('SettingsSavedEvent.rustSignalStream');
+      _error = event.message.error; // TODO: Show a toast if there is an error
+      _setIsLoading(false);
+    });
   }
 
-  void setAdbPath(String path) {
-    _adbPath = path;
-    notifyListeners();
+  Future<void> loadSettings() async {
+    print('loadSettings');
+    _setIsLoading(true);
+
+    LoadSettingsRequest().sendSignalToRust();
   }
 
-  void setPreferredConnectionType(ConnectionType type) {
-    _preferredConnectionType = type;
-    notifyListeners();
+  Future<void> saveSettings(Settings settings) async {
+    print('saveSettings');
+    _setIsLoading(true);
+
+    SaveSettingsRequest(settings: settings).sendSignalToRust();
+
+    // For now, just notify listeners
+    _setIsLoading(false);
   }
 
-  void setDownloadsLocation(String path) {
-    _downloadsLocation = path;
-    notifyListeners();
-  }
-
-  void setBackupsLocation(String path) {
-    _backupsLocation = path;
-    notifyListeners();
-  }
-
-  void setBandwidthLimit(String limit) {
-    _bandwidthLimit = limit;
-    notifyListeners();
-  }
-
-  void setCleanupPolicy(DownloadCleanupPolicy policy) {
-    _cleanupPolicy = policy;
-    notifyListeners();
-  }
+  Settings get settings => _settings;
+  bool get isLoading => _isLoading;
+  String? get error => _error;
 }

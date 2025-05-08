@@ -6,6 +6,7 @@ use anyhow::{Context, Result};
 use downloader::Downloader;
 use mimalloc::MiMalloc;
 use rinf::RustSignal;
+use settings::SettingsHandler;
 use signals::system::RustPanic;
 use task::TaskManager;
 use tracing::Level;
@@ -23,6 +24,7 @@ rinf::write_interface!();
 pub mod adb;
 pub mod downloader;
 pub mod models;
+pub mod settings;
 pub mod signals;
 pub mod task;
 pub mod utils;
@@ -47,7 +49,7 @@ async fn main() {
     if !app_dir.exists() {
         std::fs::create_dir(&app_dir).expect("Failed to create app directory");
     }
-    std::env::set_current_dir(app_dir).expect("Failed to set current working directory");
+    std::env::set_current_dir(&app_dir).expect("Failed to set current working directory");
 
     let _guard = setup_logging();
     if let Err(e) = _guard {
@@ -57,6 +59,8 @@ async fn main() {
     let adb_handler = AdbHandler::new();
     let downloader = Downloader::new().await;
     let _task_manager = TaskManager::new(adb_handler.clone(), downloader.clone());
+
+    let _settings_handler = SettingsHandler::new(app_dir);
 
     // Keep the main function running until Dart shutdown.
     rinf::dart_shutdown().await;

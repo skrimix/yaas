@@ -11,7 +11,7 @@ import 'widgets/status_bar.dart';
 import 'widgets/manage_apps.dart';
 import 'widgets/local_sideload.dart';
 import 'widgets/error_screen.dart';
-import 'widgets/settings.dart';
+import 'widgets/settings_screen.dart';
 import 'providers/device_state.dart';
 import 'providers/cloud_apps_state.dart';
 import 'providers/task_state.dart';
@@ -106,12 +106,17 @@ class _RqlAppState extends State<RqlApp> {
     _listener = AppLifecycleListener(
       onExitRequested: () async {
         finalizeRust();
+        // TODO: Cooperative shutdown
+        // Give the backend a chance to clean up
+        await Future.delayed(const Duration(milliseconds: 200));
         return AppExitResponse.exit;
       },
     );
 
+    // Kick off the initial load of some providers
     WidgetsBinding.instance.addPostFrameCallback((_) {
       context.read<CloudAppsState>().load();
+      context.read<SettingsState>();
     });
   }
 
@@ -173,7 +178,9 @@ class _SinglePageState extends State<SinglePage> {
         label: 'Sideload',
         content: const LocalSideload()),
     Destination(
-        icon: Icons.settings, label: 'Settings', content: const Settings()),
+        icon: Icons.settings,
+        label: 'Settings',
+        content: const SettingsScreen()),
     Destination(icon: Icons.info, label: 'About', content: Text('About')),
   ];
 

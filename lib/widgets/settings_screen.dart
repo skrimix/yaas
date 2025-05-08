@@ -1,49 +1,156 @@
 import 'package:flutter/material.dart';
 import 'package:provider/provider.dart';
 import 'package:file_picker/file_picker.dart';
+import 'package:rql/src/bindings/bindings.dart';
 import '../providers/settings_state.dart';
 
-class Settings extends StatefulWidget {
-  const Settings({super.key});
+class SettingsScreen extends StatefulWidget {
+  const SettingsScreen({super.key});
 
   @override
-  State<Settings> createState() => _SettingsState();
+  State<SettingsScreen> createState() => _SettingsScreenState();
 }
 
-class _SettingsState extends State<Settings> {
-  late String _rclonePath;
-  late String _rcloneRemoteName;
-  late String _adbPath;
+class _SettingsScreenState extends State<SettingsScreen> {
+  String _rclonePath = '';
+  String _rcloneRemoteName = '';
+  String _adbPath = '';
   late ConnectionType _preferredConnectionType;
-  late String _downloadsLocation;
-  late String _backupsLocation;
-  late String _bandwidthLimit;
+  String _downloadsLocation = '';
+  String _backupsLocation = '';
+  String _bandwidthLimit = '';
   late DownloadCleanupPolicy _cleanupPolicy;
+
+  // Text controllers to maintain cursor position
+  late TextEditingController _rclonePathController;
+  late TextEditingController _rcloneRemoteNameController;
+  late TextEditingController _adbPathController;
+  late TextEditingController _downloadsLocationController;
+  late TextEditingController _backupsLocationController;
+  late TextEditingController _bandwidthLimitController;
+
+  // Store original settings to detect changes
+  late Settings _originalSettings;
+  bool _hasChanges = false;
+
+  String? _error;
 
   @override
   void initState() {
     super.initState();
-    final settings = Provider.of<SettingsState>(context, listen: false);
-    _rclonePath = settings.rclonePath;
-    _rcloneRemoteName = settings.rcloneRemoteName;
-    _adbPath = settings.adbPath;
-    _preferredConnectionType = settings.preferredConnectionType;
-    _downloadsLocation = settings.downloadsLocation;
-    _backupsLocation = settings.backupsLocation;
-    _bandwidthLimit = settings.bandwidthLimit;
-    _cleanupPolicy = settings.cleanupPolicy;
+    final settingsState = Provider.of<SettingsState>(context, listen: false);
+    final currentSettings = settingsState.settings;
+
+    // Store original settings
+    _originalSettings = currentSettings;
+
+    _rclonePath = currentSettings.rclonePath;
+    _rcloneRemoteName = currentSettings.rcloneRemoteName;
+    _adbPath = currentSettings.adbPath;
+    _preferredConnectionType = currentSettings.preferredConnectionType;
+    _downloadsLocation = currentSettings.downloadsLocation;
+    _backupsLocation = currentSettings.backupsLocation;
+    _bandwidthLimit = currentSettings.bandwidthLimit;
+    _cleanupPolicy = currentSettings.cleanupPolicy;
+
+    // Initialize controllers with current values
+    _rclonePathController = TextEditingController(text: _rclonePath);
+    _rcloneRemoteNameController =
+        TextEditingController(text: _rcloneRemoteName);
+    _adbPathController = TextEditingController(text: _adbPath);
+    _downloadsLocationController =
+        TextEditingController(text: _downloadsLocation);
+    _backupsLocationController = TextEditingController(text: _backupsLocation);
+    _bandwidthLimitController = TextEditingController(text: _bandwidthLimit);
+
+    _error = settingsState.error;
+    settingsState.addListener(() {
+      setState(() {
+        print('settingsState changed');
+        _error = settingsState.error;
+      });
+    });
+  }
+
+  @override
+  void dispose() {
+    // Dispose controllers to prevent memory leaks
+    _rclonePathController.dispose();
+    _rcloneRemoteNameController.dispose();
+    _adbPathController.dispose();
+    _downloadsLocationController.dispose();
+    _backupsLocationController.dispose();
+    _bandwidthLimitController.dispose();
+    super.dispose();
+  }
+
+  void _checkForChanges() {
+    final newSettings = Settings(
+      rclonePath: _rclonePath,
+      rcloneRemoteName: _rcloneRemoteName,
+      adbPath: _adbPath,
+      preferredConnectionType: _preferredConnectionType,
+      downloadsLocation: _downloadsLocation,
+      backupsLocation: _backupsLocation,
+      bandwidthLimit: _bandwidthLimit,
+      cleanupPolicy: _cleanupPolicy,
+    );
+
+    setState(() {
+      _hasChanges = _originalSettings.rclonePath != newSettings.rclonePath ||
+          _originalSettings.rcloneRemoteName != newSettings.rcloneRemoteName ||
+          _originalSettings.adbPath != newSettings.adbPath ||
+          _originalSettings.preferredConnectionType !=
+              newSettings.preferredConnectionType ||
+          _originalSettings.downloadsLocation !=
+              newSettings.downloadsLocation ||
+          _originalSettings.backupsLocation != newSettings.backupsLocation ||
+          _originalSettings.bandwidthLimit != newSettings.bandwidthLimit ||
+          _originalSettings.cleanupPolicy != newSettings.cleanupPolicy;
+    });
+  }
+
+  void _revertChanges() {
+    setState(() {
+      _rclonePath = _originalSettings.rclonePath;
+      _rcloneRemoteName = _originalSettings.rcloneRemoteName;
+      _adbPath = _originalSettings.adbPath;
+      _preferredConnectionType = _originalSettings.preferredConnectionType;
+      _downloadsLocation = _originalSettings.downloadsLocation;
+      _backupsLocation = _originalSettings.backupsLocation;
+      _bandwidthLimit = _originalSettings.bandwidthLimit;
+      _cleanupPolicy = _originalSettings.cleanupPolicy;
+
+      // Update controller values
+      _rclonePathController.text = _rclonePath;
+      _rcloneRemoteNameController.text = _rcloneRemoteName;
+      _adbPathController.text = _adbPath;
+      _downloadsLocationController.text = _downloadsLocation;
+      _backupsLocationController.text = _backupsLocation;
+      _bandwidthLimitController.text = _bandwidthLimit;
+
+      _hasChanges = false;
+    });
   }
 
   void _saveSettings() {
-    final settings = Provider.of<SettingsState>(context, listen: false);
-    settings.setRclonePath(_rclonePath);
-    settings.setRcloneRemoteName(_rcloneRemoteName);
-    settings.setAdbPath(_adbPath);
-    settings.setPreferredConnectionType(_preferredConnectionType);
-    settings.setDownloadsLocation(_downloadsLocation);
-    settings.setBackupsLocation(_backupsLocation);
-    settings.setBandwidthLimit(_bandwidthLimit);
-    settings.setCleanupPolicy(_cleanupPolicy);
+    final newSettings = Settings(
+      rclonePath: _rclonePath,
+      rcloneRemoteName: _rcloneRemoteName,
+      adbPath: _adbPath,
+      preferredConnectionType: _preferredConnectionType,
+      downloadsLocation: _downloadsLocation,
+      backupsLocation: _backupsLocation,
+      bandwidthLimit: _bandwidthLimit,
+      cleanupPolicy: _cleanupPolicy,
+    );
+    Provider.of<SettingsState>(context, listen: false)
+        .saveSettings(newSettings);
+
+    setState(() {
+      _originalSettings = newSettings;
+      _hasChanges = false;
+    });
   }
 
   Future<void> _pickPath(BuildContext context, String label, bool isDirectory,
@@ -52,23 +159,40 @@ class _SettingsState extends State<Settings> {
     if (!isDirectory) {
       final result = await FilePicker.platform.pickFiles(
         dialogTitle: 'Select $label',
-        initialDirectory: currentValue.replaceAll('~', '/home'),
+        initialDirectory: currentValue,
       );
       path = result?.files.single.path;
     } else {
       path = await FilePicker.platform.getDirectoryPath(
         dialogTitle: 'Select $label Directory',
-        initialDirectory: currentValue.replaceAll('~', '/home'),
+        initialDirectory: currentValue,
       );
     }
 
     if (path != null) {
       onChanged(path);
+      _checkForChanges();
     }
   }
 
   @override
   Widget build(BuildContext context) {
+    if (_error != null) {
+      return Center(
+        child: Column(
+          mainAxisSize: MainAxisSize.min,
+          children: [
+            Text(
+              'Error loading settings',
+              style: Theme.of(context).textTheme.titleLarge,
+            ),
+            const SizedBox(height: 8),
+            Text(_error!),
+          ],
+        ),
+      );
+    }
+
     return SingleChildScrollView(
       padding: const EdgeInsets.all(16.0),
       child: Column(
@@ -81,10 +205,25 @@ class _SettingsState extends State<Settings> {
                 'Settings',
                 style: Theme.of(context).textTheme.headlineMedium,
               ),
-              FilledButton.icon(
-                onPressed: _saveSettings,
-                icon: const Icon(Icons.save),
-                label: const Text('Save Changes'),
+              Row(
+                children: [
+                  SizedBox(
+                    height: 32,
+                    width: 32,
+                    child: IconButton.filledTonal(
+                      onPressed: _hasChanges ? _revertChanges : null,
+                      iconSize: 16,
+                      icon: const Icon(Icons.undo),
+                      tooltip: 'Revert Changes',
+                    ),
+                  ),
+                  const SizedBox(width: 8),
+                  FilledButton.icon(
+                    onPressed: _hasChanges ? _saveSettings : null,
+                    icon: const Icon(Icons.save),
+                    label: const Text('Save Changes'),
+                  ),
+                ],
               ),
             ],
           ),
@@ -97,10 +236,11 @@ class _SettingsState extends State<Settings> {
                 context,
                 label: 'Rclone Path',
                 value: _rclonePath,
+                controller: _rclonePathController,
                 onChanged: (value) => setState(() => _rclonePath = value),
                 onBrowse: () => _pickPath(
                     context,
-                    'Rclone Binary',
+                    'Rclone binary',
                     false,
                     _rclonePath,
                     (value) => setState(() => _rclonePath = value)),
@@ -109,12 +249,14 @@ class _SettingsState extends State<Settings> {
                 context,
                 label: 'Rclone Remote Name',
                 value: _rcloneRemoteName,
+                controller: _rcloneRemoteNameController,
                 onChanged: (value) => setState(() => _rcloneRemoteName = value),
               ),
               _buildPathSetting(
                 context,
-                label: 'ADB Path',
+                label: 'ADB binary',
                 value: _adbPath,
+                controller: _adbPathController,
                 onChanged: (value) => setState(() => _adbPath = value),
                 onBrowse: () => _pickPath(context, 'ADB Binary', false,
                     _adbPath, (value) => setState(() => _adbPath = value)),
@@ -153,11 +295,12 @@ class _SettingsState extends State<Settings> {
                 context,
                 label: 'Downloads Location',
                 value: _downloadsLocation,
+                controller: _downloadsLocationController,
                 onChanged: (value) =>
                     setState(() => _downloadsLocation = value),
                 onBrowse: () => _pickPath(
                     context,
-                    'Downloads Location',
+                    'Downloads',
                     true,
                     _downloadsLocation,
                     (value) => setState(() => _downloadsLocation = value)),
@@ -166,10 +309,11 @@ class _SettingsState extends State<Settings> {
                 context,
                 label: 'Backups Location',
                 value: _backupsLocation,
+                controller: _backupsLocationController,
                 onChanged: (value) => setState(() => _backupsLocation = value),
                 onBrowse: () => _pickPath(
                     context,
-                    'Backups Location',
+                    'Backups',
                     true,
                     _backupsLocation,
                     (value) => setState(() => _backupsLocation = value)),
@@ -185,6 +329,7 @@ class _SettingsState extends State<Settings> {
                 context,
                 label: 'Bandwidth Limit',
                 value: _bandwidthLimit,
+                controller: _bandwidthLimitController,
                 onChanged: (value) => setState(() => _bandwidthLimit = value),
                 helperText:
                     'Value in KiB/s or with B|K|M|G|T|P suffix (empty for no limit)',
@@ -261,12 +406,17 @@ class _SettingsState extends State<Settings> {
     required String value,
     required ValueChanged<String> onChanged,
     required VoidCallback onBrowse,
+    TextEditingController? controller,
   }) {
     return _buildTextSetting(
       context,
       label: label,
       value: value,
-      onChanged: onChanged,
+      controller: controller,
+      onChanged: (value) {
+        onChanged(value);
+        _checkForChanges();
+      },
       trailing: IconButton.filledTonal(
         icon: const Icon(Icons.folder_open),
         onPressed: onBrowse,
@@ -282,6 +432,7 @@ class _SettingsState extends State<Settings> {
     required ValueChanged<String> onChanged,
     Widget? trailing,
     String? helperText,
+    TextEditingController? controller,
   }) {
     return Padding(
       padding: const EdgeInsets.symmetric(vertical: 8.0),
@@ -289,13 +440,16 @@ class _SettingsState extends State<Settings> {
         children: [
           Expanded(
             child: TextField(
-              controller: TextEditingController(text: value),
+              controller: controller ?? TextEditingController(text: value),
               decoration: InputDecoration(
                 labelText: label,
                 helperText: helperText,
                 border: const OutlineInputBorder(),
               ),
-              onChanged: onChanged,
+              onChanged: (value) {
+                onChanged(value);
+                _checkForChanges();
+              },
             ),
           ),
           if (trailing != null) ...[
@@ -319,7 +473,10 @@ class _SettingsState extends State<Settings> {
       child: DropdownButtonFormField<T>(
         value: value,
         items: items,
-        onChanged: onChanged,
+        onChanged: (value) {
+          onChanged(value);
+          _checkForChanges();
+        },
         decoration: InputDecoration(
           labelText: label,
           border: const OutlineInputBorder(),

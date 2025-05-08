@@ -307,7 +307,7 @@ impl AdbHandler {
     /// Runs a periodic refresh of device information
     //  #[instrument]
     async fn run_periodic_refresh(&self) {
-        let refresh_interval = Duration::from_secs(180); // 3 minutes
+        let refresh_interval = Duration::from_secs(60);
         let mut interval = time::interval(refresh_interval);
 
         loop {

@@ -22,22 +22,15 @@ class SettingsState extends ChangeNotifier {
   }
 
   void _setIsLoading(bool isLoading) {
-    print('isLoading: $isLoading');
     _isLoading = isLoading;
     notifyListeners();
   }
 
   void _registerSignalHandlers() {
-    print('registerSignalHandlers');
     SettingsLoadedEvent.rustSignalStream.listen((event) {
-      print('SettingsLoadedEvent.rustSignalStream');
       if (event.message.error != null) {
-        print(
-            'SettingsLoadedEvent.rustSignalStream error: ${event.message.error}');
         _error = event.message.error;
       } else {
-        print(
-            'SettingsLoadedEvent.rustSignalStream settings: ${event.message.settings}');
         _settings = event.message.settings;
         _error = null;
       }
@@ -45,21 +38,18 @@ class SettingsState extends ChangeNotifier {
     });
 
     SettingsSavedEvent.rustSignalStream.listen((event) {
-      print('SettingsSavedEvent.rustSignalStream');
       _error = event.message.error; // TODO: Show a toast if there is an error
       _setIsLoading(false);
     });
   }
 
   Future<void> loadSettings() async {
-    print('loadSettings');
     _setIsLoading(true);
 
     LoadSettingsRequest().sendSignalToRust();
   }
 
   Future<void> saveSettings(Settings settings) async {
-    print('saveSettings');
     _setIsLoading(true);
 
     SaveSettingsRequest(settings: settings).sendSignalToRust();

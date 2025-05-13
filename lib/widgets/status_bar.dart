@@ -167,6 +167,10 @@ class StatusBar extends StatelessWidget {
                 color: Theme.of(context).colorScheme.outlineVariant,
                 width: 1,
               ),
+              left: BorderSide(
+                color: Theme.of(context).colorScheme.outlineVariant,
+                width: 1,
+              ),
             ),
           ),
           child: Row(

@@ -1,7 +1,7 @@
 use rinf::{DartSignal, RustSignal};
 use serde::{Deserialize, Serialize};
 
-use crate::settings::Settings;
+use crate::models::Settings;
 
 #[derive(Serialize, Deserialize, DartSignal)]
 pub struct LoadSettingsRequest {}

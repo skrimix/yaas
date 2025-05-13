@@ -7,8 +7,8 @@ use rinf::{DartSignal, RustSignal};
 // use nif::NifStorage;
 use tokio::{fs::File, sync::Mutex};
 
-use crate::{
-    models::CloudApp,
+use crate::models::{
+    CloudApp,
     signals::download::{CloudAppsChangedEvent, LoadCloudAppsRequest},
 };
 

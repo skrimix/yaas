@@ -5,72 +5,10 @@ use std::{
 };
 
 use anyhow::{Context, Result, ensure};
-use rinf::{DartSignal, RustSignal, SignalPiece};
-use serde::{Deserialize, Serialize};
+use rinf::{DartSignal, RustSignal};
 use tracing::{debug, error, info};
 
-use crate::signals::settings::*;
-
-#[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize, SignalPiece)]
-pub enum ConnectionType {
-    Usb,
-    Wireless,
-}
-
-impl Default for ConnectionType {
-    fn default() -> Self {
-        Self::Usb
-    }
-}
-
-#[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize, SignalPiece)]
-pub enum DownloadCleanupPolicy {
-    DeleteAfterInstall,
-    KeepOneVersion,
-    KeepTwoVersions,
-    KeepAllVersions,
-}
-
-impl Default for DownloadCleanupPolicy {
-    fn default() -> Self {
-        Self::DeleteAfterInstall
-    }
-}
-
-#[derive(Debug, Clone, Serialize, Deserialize, SignalPiece)]
-pub struct Settings {
-    pub rclone_path: String,
-    pub rclone_remote_name: String,
-    pub adb_path: String,
-    pub preferred_connection_type: ConnectionType,
-    pub downloads_location: String,
-    pub backups_location: String,
-    pub bandwidth_limit: String,
-    pub cleanup_policy: DownloadCleanupPolicy,
-}
-
-impl Default for Settings {
-    fn default() -> Self {
-        Self {
-            rclone_path: "rclone".to_string(),
-            rclone_remote_name: "".to_string(),
-            adb_path: "adb".to_string(),
-            preferred_connection_type: ConnectionType::default(),
-            downloads_location: dirs::download_dir()
-                .expect("Failed to get download directory")
-                .join("RQL")
-                .to_string_lossy()
-                .to_string(),
-            backups_location: dirs::document_dir()
-                .expect("Failed to get document directory")
-                .join("RQL_backups")
-                .to_string_lossy()
-                .to_string(),
-            bandwidth_limit: "".to_string(),
-            cleanup_policy: DownloadCleanupPolicy::default(),
-        }
-    }
-}
+use crate::models::{Settings, signals::settings::*};
 
 /// Handles application settings
 #[derive(Debug, Clone)]
@@ -141,6 +79,8 @@ impl SettingsHandler {
                 }
             }
         });
+
+        // TODO: Add reset to defaults request
     }
 
     /// Load settings from file or return defaults if file doesn't exist

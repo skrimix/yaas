@@ -5,9 +5,9 @@ use adb::AdbHandler;
 use anyhow::{Context, Result};
 use downloader::Downloader;
 use mimalloc::MiMalloc;
+use models::signals::system::RustPanic;
 use rinf::RustSignal;
 use settings::SettingsHandler;
-use signals::system::RustPanic;
 use task::TaskManager;
 use tracing::Level;
 use tracing_appender::{
@@ -25,7 +25,6 @@ pub mod adb;
 pub mod downloader;
 pub mod models;
 pub mod settings;
-pub mod signals;
 pub mod task;
 pub mod utils;
 

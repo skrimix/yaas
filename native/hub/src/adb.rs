@@ -10,7 +10,7 @@ use tokio::{sync::RwLock, time};
 use tokio_stream::StreamExt;
 use tracing::{debug, error, trace, warn};
 
-use crate::signals::adb::{command::*, device::DeviceChangedEvent};
+use crate::models::signals::adb::{command::*, device::DeviceChangedEvent};
 
 pub mod device;
 

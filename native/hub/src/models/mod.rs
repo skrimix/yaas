@@ -6,4 +6,7 @@ mod device_space;
 pub use device_space::*;
 mod installed_package;
 pub use installed_package::*;
+mod settings;
+pub use settings::*;
+pub mod signals;
 pub mod vendor;

@@ -14,7 +14,7 @@ use tracing::error;
 use crate::{
     adb::AdbHandler,
     downloader::{Downloader, RcloneTransferStats},
-    signals::task::{TaskParams, TaskProgress, TaskRequest, TaskStatus, TaskType},
+    models::signals::task::{TaskParams, TaskProgress, TaskRequest, TaskStatus, TaskType},
 };
 
 pub struct TaskManager {

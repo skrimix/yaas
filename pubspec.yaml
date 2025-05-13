@@ -44,6 +44,7 @@ dependencies:
   file_picker: ^8.3.5
   intl: ^0.20.2
   desktop_window: ^0.4.2
+  desktop_drop: ^0.6.0
 
 dev_dependencies:
   flutter_test:

@@ -12,6 +12,7 @@ import 'widgets/manage_apps.dart';
 import 'widgets/local_sideload.dart';
 import 'widgets/error_screen.dart';
 import 'widgets/settings_screen.dart';
+import 'widgets/drag_drop_overlay.dart';
 import 'providers/device_state.dart';
 import 'providers/cloud_apps_state.dart';
 import 'providers/task_state.dart';
@@ -153,7 +154,9 @@ class _RqlAppState extends State<RqlApp> {
             if (appState.panicMessage != null) {
               return ErrorScreen(message: appState.panicMessage!);
             }
-            return const SinglePage();
+            return DragDropOverlay(
+              child: const SinglePage(),
+            );
           },
         ),
       ),

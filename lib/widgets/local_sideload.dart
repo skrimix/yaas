@@ -2,10 +2,8 @@ import 'package:flutter/material.dart';
 import 'package:file_picker/file_picker.dart';
 import 'package:flutter/services.dart';
 import 'package:provider/provider.dart';
-import 'package:toastification/toastification.dart';
 import '../providers/device_state.dart';
-import '../src/bindings/bindings.dart';
-import 'dart:io';
+import '../utils/sideload_utils.dart';
 
 class LocalSideload extends StatefulWidget {
   const LocalSideload({super.key});
@@ -54,58 +52,23 @@ class _LocalSideloadState extends State<LocalSideload> {
     }
   }
 
-  bool _isValidApkFile(String path) {
-    final file = File(path);
-    return file.existsSync() && file.path.toLowerCase().endsWith('.apk');
-  }
-
-  bool _isDirectoryValid(String path) {
-    final dir = Directory(path);
-    if (!dir.existsSync()) return false;
-
-    try {
-      return dir.listSync(recursive: false).any((entity) =>
-          entity is File &&
-          (entity.path.toLowerCase().endsWith('.apk') ||
-              entity.path.toLowerCase() == 'install.txt'));
-    } catch (e) {
-      // TODO: log error
-      return false;
-    }
-  }
-
   void _install() {
     final path = _pathController.text;
     if (path.isEmpty) return;
 
     // Validate paths before proceeding
-    final isValid =
-        _isDirectory ? _isDirectoryValid(path) : _isValidApkFile(path);
+    final isValid = _isDirectory
+        ? SideloadUtils.isDirectoryValid(path)
+        : SideloadUtils.isValidApkFile(path);
     if (!isValid) {
       final errorMessage = _isDirectory
           ? 'Selected path is not a valid app directory'
           : 'Selected path is not a valid APK file';
-      toastification.show(
-        type: ToastificationType.error,
-        style: ToastificationStyle.flat,
-        title: const Text('Error'),
-        description: Text(errorMessage),
-        autoCloseDuration: const Duration(seconds: 3),
-        backgroundColor: Theme.of(context).colorScheme.surfaceContainer,
-        borderSide: BorderSide.none,
-        alignment: Alignment.bottomRight,
-      );
+      SideloadUtils.showErrorToast(context, errorMessage);
       return;
     }
 
-    (_isDirectory
-            ? TaskRequest(
-                taskType: TaskType.installLocalApp,
-                params: TaskParams(localAppPath: path))
-            : TaskRequest(
-                taskType: TaskType.installApk,
-                params: TaskParams(apkPath: path)))
-        .sendSignalToRust();
+    SideloadUtils.installApp(path, _isDirectory);
 
     _pathController.clear();
   }

@@ -129,6 +129,18 @@ class _RqlAppState extends State<RqlApp> {
   @override
   Widget build(BuildContext context) {
     return ToastificationWrapper(
+      config: ToastificationConfig(
+        // Increase the bottom margin for the toast notifications
+        marginBuilder: (context, alignment) {
+          final y = alignment.resolve(Directionality.of(context)).y;
+
+          return switch (y) {
+            <= -0.5 => const EdgeInsets.only(top: 12),
+            >= 0.5 => const EdgeInsets.only(bottom: 16),
+            _ => EdgeInsets.zero,
+          };
+        },
+      ),
       child: MaterialApp(
         navigatorKey: RqlApp.navigatorKey,
         title: 'RQL',

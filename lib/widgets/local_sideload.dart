@@ -64,11 +64,12 @@ class _LocalSideloadState extends State<LocalSideload> {
     if (!dir.existsSync()) return false;
 
     try {
-      return dir.listSync(recursive: true).any((entity) =>
+      return dir.listSync(recursive: false).any((entity) =>
           entity is File &&
           (entity.path.toLowerCase().endsWith('.apk') ||
               entity.path.toLowerCase() == 'install.txt'));
     } catch (e) {
+      // TODO: log error
       return false;
     }
   }
@@ -146,7 +147,7 @@ class _LocalSideloadState extends State<LocalSideload> {
                       crossAxisAlignment: CrossAxisAlignment.stretch,
                       children: [
                         Text(
-                          'Local Sideload',
+                          'Sideload',
                           style: Theme.of(context).textTheme.headlineMedium,
                           textAlign: TextAlign.center,
                         ),
@@ -200,7 +201,7 @@ class _LocalSideloadState extends State<LocalSideload> {
                         if (_isDirectory) ...[
                           const SizedBox(height: 16),
                           Text(
-                            'The directory should contain an APK file and optionally an OBB data directory, or the install.txt file.',
+                            'The directory should contain an APK file and optionally an OBB data directory, or install.txt file.',
                             style:
                                 Theme.of(context).textTheme.bodySmall?.copyWith(
                                       fontStyle: FontStyle.italic,

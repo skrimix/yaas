@@ -1,4 +1,5 @@
 use std::{
+    error::Error,
     path::Path,
     sync::{
         Arc,
@@ -74,7 +75,7 @@ impl TaskManager {
         let task_name = match get_task_name(task_type, &params) {
             Ok(name) => name,
             Err(e) => {
-                error!("Failed to get task name: {}", e);
+                error!(error = e.as_ref() as &dyn Error, "Failed to get task name");
                 send_progress(
                     id,
                     task_type,
@@ -108,7 +109,7 @@ impl TaskManager {
         match result {
             Ok(_) => update_progress(TaskStatus::Completed, 1.0, "Done".into()),
             Err(e) => {
-                error!("Task {} failed: {}", task_name, e);
+                error!(error = e.as_ref() as &dyn Error, "Task {} failed", task_name);
                 update_progress(TaskStatus::Failed, 0.0, format!("Task failed: {:#}", e));
             }
         }

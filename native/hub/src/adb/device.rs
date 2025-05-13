@@ -18,7 +18,7 @@ use crate::{
 };
 
 /// Java tool used for package listing
-static LIST_APPS_DEX_BYTES: &[u8] = include_bytes!("../assets/list_apps.dex");
+static LIST_APPS_DEX_BYTES: &[u8] = include_bytes!("../../assets/list_apps.dex");
 
 /// Regex to split command arguments
 static COMMAND_ARGS_REGEX: Lazy<Regex> = lazy_regex!(r#"[\"].+?[\"]|[^ ]+"#);

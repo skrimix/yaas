@@ -2,6 +2,7 @@ import 'package:flutter/material.dart';
 import 'package:flutter_svg/svg.dart';
 import 'package:provider/provider.dart';
 import '../providers/device_state.dart';
+import '../src/bindings/bindings.dart';
 
 class Home extends StatelessWidget {
   const Home({super.key});
@@ -11,33 +12,37 @@ class Home extends StatelessWidget {
     String? status,
     required int batteryLevel,
     required Widget icon,
+    bool isDimmed = false,
   }) {
     return Tooltip(
       message:
           '$title\n${status != null ? 'Status: $status\n' : ''}Battery: $batteryLevel%',
-      child: Column(
-        children: [
-          icon,
-          const SizedBox(height: 8),
-          Container(
-            width: 30,
-            height: 4,
-            decoration: BoxDecoration(
-              borderRadius: BorderRadius.circular(2),
-              color: Colors.grey[300],
-            ),
-            child: FractionallySizedBox(
-              alignment: Alignment.centerLeft,
-              widthFactor: batteryLevel / 100,
-              child: Container(
-                decoration: BoxDecoration(
-                  borderRadius: BorderRadius.circular(2),
-                  color: Colors.green,
+      child: Opacity(
+        opacity: isDimmed ? 0.5 : 1.0,
+        child: Column(
+          children: [
+            icon,
+            const SizedBox(height: 8),
+            Container(
+              width: 30,
+              height: 4,
+              decoration: BoxDecoration(
+                borderRadius: BorderRadius.circular(2),
+                color: Colors.grey[300],
+              ),
+              child: FractionallySizedBox(
+                alignment: Alignment.centerLeft,
+                widthFactor: batteryLevel / 100,
+                child: Container(
+                  decoration: BoxDecoration(
+                    borderRadius: BorderRadius.circular(2),
+                    color: Colors.green,
+                  ),
                 ),
               ),
             ),
-          ),
-        ],
+          ],
+        ),
       ),
     );
   }
@@ -111,6 +116,9 @@ class Home extends StatelessWidget {
                                           deviceState.leftController),
                                   icon: SvgPicture.asset(
                                       'assets/svg/controller_l.svg'),
+                                  isDimmed:
+                                      deviceState.leftController?.status !=
+                                          ControllerStatus.active,
                                 ),
                                 const SizedBox(width: 12),
                                 _buildDeviceStatus(
@@ -129,6 +137,9 @@ class Home extends StatelessWidget {
                                           deviceState.rightController),
                                   icon: SvgPicture.asset(
                                       'assets/svg/controller_r.svg'),
+                                  isDimmed:
+                                      deviceState.rightController?.status !=
+                                          ControllerStatus.active,
                                 ),
                               ],
                             )

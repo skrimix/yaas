@@ -385,11 +385,7 @@ impl AdbDevice {
     /// * `remote_path` - Destination path on the device
     // #[instrument(err, level = "debug", skip(bytes, remote_path))] // BUG: segfaults
     async fn push_bytes(&self, mut bytes: &[u8], remote_path: &UnixPath) -> Result<()> {
-        debug!(
-            bytes_len = bytes.len(),
-            remote_path = remote_path.display().to_string(),
-            "Pushing bytes"
-        );
+        trace!(len = bytes.len(), remote_path = remote_path.display().to_string(), "Pushing bytes");
         self.inner.push(&mut bytes, remote_path, 0o777).await.context("Failed to push bytes")
     }
 

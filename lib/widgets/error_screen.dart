@@ -1,7 +1,6 @@
 import 'dart:io' show exit;
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
-// import 'package:rinf/rinf.dart';
 import 'package:toastification/toastification.dart';
 
 class ErrorScreen extends StatelessWidget {
@@ -58,8 +57,8 @@ class ErrorScreen extends StatelessWidget {
                     children: [
                       FilledButton.icon(
                         onPressed: () {
-                          // finalizeRust();
-                          exit(1);
+                          // exit(1);
+                          SystemNavigator.pop();
                         },
                         icon: const Icon(Icons.close),
                         label: const Text('Exit Application'),

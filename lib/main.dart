@@ -117,7 +117,7 @@ class _RqlAppState extends State<RqlApp> {
     // Kick off the initial load of some providers
     WidgetsBinding.instance.addPostFrameCallback((_) {
       context.read<CloudAppsState>().load();
-      context.read<SettingsState>();
+      context.read<SettingsState>().load();
     });
   }
 

@@ -17,7 +17,6 @@ class SettingsState extends ChangeNotifier {
   String? _error;
 
   SettingsState() {
-    loadSettings();
     _registerSignalHandlers();
   }
 
@@ -43,13 +42,13 @@ class SettingsState extends ChangeNotifier {
     });
   }
 
-  Future<void> loadSettings() async {
+  Future<void> load() async {
     _setIsLoading(true);
 
     LoadSettingsRequest().sendSignalToRust();
   }
 
-  Future<void> saveSettings(Settings settings) async {
+  Future<void> save(Settings settings) async {
     // _setIsLoading(true);
 
     SaveSettingsRequest(settings: settings).sendSignalToRust();

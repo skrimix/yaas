@@ -121,7 +121,7 @@ class _SettingsScreenState extends State<SettingsScreen> {
 
   void _saveSettings() {
     Provider.of<SettingsState>(context, listen: false)
-        .saveSettings(_currentFormSettings);
+        .save(_currentFormSettings);
 
     setState(() {
       _originalSettings = _currentFormSettings;

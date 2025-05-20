@@ -4,6 +4,7 @@ import 'package:flutter/material.dart';
 import 'package:provider/provider.dart';
 import 'package:file_picker/file_picker.dart';
 import 'package:rql/src/bindings/bindings.dart';
+import 'package:url_launcher/url_launcher.dart';
 import '../providers/settings_state.dart';
 
 enum SettingTextField {
@@ -168,6 +169,19 @@ class _SettingsScreenState extends State<SettingsScreen> {
     );
   }
 
+  Future<void> _launchURL(String url) async {
+    final uri = Uri.parse(url);
+    if (!await launchUrl(uri)) {
+      if (mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(
+            content: Text('Could not open $url'),
+          ),
+        );
+      }
+    }
+  }
+
   String _formatCleanupPolicy(DownloadCleanupPolicy policy) => switch (policy) {
         DownloadCleanupPolicy.deleteAfterInstall => 'Remove after installation',
         DownloadCleanupPolicy.keepOneVersion => 'Keep latest version only',
@@ -286,7 +300,7 @@ class _SettingsScreenState extends State<SettingsScreen> {
         children: [
           _buildPathSetting(
             field: SettingTextField.adbPath,
-            label: 'ADB binary',
+            label: 'ADB Path',
             isDirectory: false,
             currentValue: _currentFormSettings.adbPath,
           ),
@@ -315,7 +329,7 @@ class _SettingsScreenState extends State<SettingsScreen> {
         children: [
           _buildPathSetting(
             field: SettingTextField.rclonePath,
-            label: 'Rclone Binary',
+            label: 'Rclone Path',
             isDirectory: false,
             currentValue: _currentFormSettings.rclonePath,
           ),
@@ -326,8 +340,18 @@ class _SettingsScreenState extends State<SettingsScreen> {
           _buildTextSetting(
             field: SettingTextField.bandwidthLimit,
             label: 'Bandwidth Limit',
-            helperText:
-                'Value in KiB/s or with B|K|M|G|T|P suffix (empty for no limit)',
+            // helperText:
+            //     'Value in KiB/s or with B|K|M|G|T|P suffix (empty for no limit)',
+            helper: InkWell(
+              onTap: () =>
+                  _launchURL('https://rclone.org/docs/#bwlimit-bandwidth-spec'),
+              child: Text(
+                'Value in KiB/s or with B|K|M|G|T|P suffix (click for documentation)',
+                style: Theme.of(context).textTheme.bodySmall?.copyWith(
+                      color: Theme.of(context).hintColor,
+                    ),
+              ),
+            ),
           ),
           _buildDropdownSetting<DownloadCleanupPolicy>(
             label: 'Downloads Cleanup',
@@ -394,6 +418,7 @@ class _SettingsScreenState extends State<SettingsScreen> {
     required String label,
     Widget? trailing,
     String? helperText,
+    Widget? helper,
   }) {
     final controller = _textControllers[field];
 
@@ -407,8 +432,9 @@ class _SettingsScreenState extends State<SettingsScreen> {
               controller: controller,
               decoration: InputDecoration(
                 labelText: label,
-                helperText: helperText,
+                helperText: helper == null ? helperText : null,
                 border: const OutlineInputBorder(),
+                helper: helper,
               ),
               onChanged: (value) => _updateSetting(field, value),
             ),

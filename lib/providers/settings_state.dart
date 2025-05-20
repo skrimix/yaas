@@ -27,7 +27,7 @@ class SettingsState extends ChangeNotifier {
   }
 
   void _registerSignalHandlers() {
-    SettingsLoadedEvent.rustSignalStream.listen((event) {
+    SettingsChangedEvent.rustSignalStream.listen((event) {
       if (event.message.error != null) {
         _error = event.message.error;
       } else {
@@ -50,12 +50,12 @@ class SettingsState extends ChangeNotifier {
   }
 
   Future<void> saveSettings(Settings settings) async {
-    _setIsLoading(true);
+    // _setIsLoading(true);
 
     SaveSettingsRequest(settings: settings).sendSignalToRust();
 
     // For now, just notify listeners
-    _setIsLoading(false);
+    // _setIsLoading(false);
   }
 
   Settings get settings => _settings;

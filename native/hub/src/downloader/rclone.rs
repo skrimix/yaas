@@ -59,6 +59,7 @@ impl RcloneTransferOperation {
     }
 }
 
+#[derive(Debug, Clone, PartialEq, Eq)]
 pub struct RcloneClient {
     rclone_path: PathBuf,
     config_path: Option<PathBuf>,
@@ -127,8 +128,10 @@ impl RcloneClient {
         dest: String,
         operation: RcloneTransferOperation,
         total_bytes: u64,
+        bandwidth_limit: String,
     ) -> Result<()> {
-        self.transfer_with_stats(source, dest, operation, total_bytes, None).await
+        // FIXME: disallow concurrent transfers to the same destination
+        self.transfer_with_stats(source, dest, operation, total_bytes, None, bandwidth_limit).await
     }
 
     pub async fn transfer_with_stats(
@@ -138,8 +141,9 @@ impl RcloneClient {
         operation: RcloneTransferOperation,
         total_bytes: u64,
         stats_tx: Option<UnboundedSender<RcloneTransferStats>>,
+        bandwidth_limit: String,
     ) -> Result<()> {
-        let args = vec![
+        let mut args = vec![
             operation.as_str(),
             "--stats",
             "0.5s",
@@ -154,9 +158,13 @@ impl RcloneClient {
             "3",
             "--transfers",
             "8", // TODO: make configurable
-            &source,
-            &dest,
         ];
+
+        if !bandwidth_limit.is_empty() {
+            args.extend_from_slice(&["--bwlimit", &bandwidth_limit]);
+        }
+
+        args.extend_from_slice(&[&source, &dest]);
 
         let mut child = self.command(&args).stderr(Stdio::piped()).spawn()?;
         let stderr = child.stderr.take().context("Failed to get stderr")?;
@@ -199,18 +207,26 @@ impl RcloneClient {
     }
 }
 
+#[derive(Debug, Clone, PartialEq, Eq)]
 pub struct RcloneStorage {
     client: RcloneClient,
     remote: String,
     root_dir: String,
+    bandwidth_limit: String,
 }
 
 impl RcloneStorage {
-    pub fn new() -> Self {
+    pub fn new(
+        rclone_path: PathBuf,
+        config_path: Option<PathBuf>,
+        remote: String,
+        bandwidth_limit: String,
+    ) -> Self {
         Self {
-            client: RcloneClient::new(PathBuf::from("rclone"), None),
-            remote: "FFA-90".to_string(),
+            client: RcloneClient::new(rclone_path, config_path),
+            remote,
             root_dir: "Quest Games/".to_string(),
+            bandwidth_limit,
         }
     }
 
@@ -239,6 +255,7 @@ impl RcloneStorage {
                 RcloneTransferOperation::Sync,
                 total_bytes,
                 Some(stats_tx),
+                self.bandwidth_limit.clone(),
             )
             .await
             .map(|_| dest)
@@ -256,6 +273,7 @@ impl RcloneStorage {
                 dest.display().to_string(),
                 RcloneTransferOperation::Copy,
                 total_bytes,
+                self.bandwidth_limit.clone(),
             )
             .await?;
         dest.push(source.split('/').next_back().context("Failed to get source file name")?);

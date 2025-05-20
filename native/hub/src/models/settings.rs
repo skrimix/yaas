@@ -15,16 +15,16 @@ pub enum DownloadCleanupPolicy {
     KeepAllVersions,
 }
 
-#[derive(Debug, Clone, Serialize, Deserialize, SignalPiece)]
+#[derive(Debug, Clone, Serialize, Deserialize, PartialEq, Eq, SignalPiece)]
 pub struct Settings {
     pub rclone_path: String,
     pub rclone_remote_name: String,
     pub adb_path: String,
-    pub preferred_connection_type: ConnectionType,
+    pub preferred_connection_type: ConnectionType, // TODO: implement
     pub downloads_location: String,
-    pub backups_location: String,
+    pub backups_location: String, // TODO: implement
     pub bandwidth_limit: String,
-    pub cleanup_policy: DownloadCleanupPolicy,
+    pub cleanup_policy: DownloadCleanupPolicy, // TODO: implement
 }
 
 impl Default for Settings {

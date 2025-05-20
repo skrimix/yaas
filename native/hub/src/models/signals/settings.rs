@@ -12,7 +12,7 @@ pub struct SaveSettingsRequest {
 }
 
 #[derive(Serialize, Deserialize, RustSignal)]
-pub struct SettingsLoadedEvent {
+pub struct SettingsChangedEvent {
     pub settings: Settings,
     pub error: Option<String>,
 }

@@ -29,7 +29,7 @@ log = { version = "0.4.22", features = [
 mimalloc = "0.1.43"
 opendal = { version = "0.51.0", features = ["services-webdav"] }
 prost = "0.13.0"
-rinf = { version = "8.0.0", features = ["show-backtrace"] }
+rinf = { version = "8.2.0", features = ["show-backtrace"] }
 sentry = { version = "0.36.0", features = ["backtrace"] }
 sentry-tracing = "0.36.0"
 serde = { version = "1.0.217", features = ["derive"] }
@@ -44,7 +44,7 @@ tokio = { version = "1.42.0", features = [
     "sync",
     "rt-multi-thread",
 ] }
-tokio-stream = { version = "0.1.17", features = ["fs", "io-util"] }
+tokio-stream = { version = "0.1.17", features = ["fs", "io-util", "sync"] }
 tokio-util = { version = "0.7.13", features = ["compat"] }
 tracing = { version = "0.1.41", features = [
     "max_level_trace",
@@ -56,6 +56,7 @@ tracing-subscriber = { version = "0.3.19", features = [
     "env-filter",
     "tracing-log",
 ] }
+which = { version = "7.0.3", features = ["tracing"] }
 
 [package.metadata.cargo-machete]
 ignored = ["log"]

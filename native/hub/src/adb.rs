@@ -1,4 +1,4 @@
-use std::{error::Error, sync::Arc, time::Duration};
+use std::{error::Error, path::PathBuf, sync::Arc, time::Duration};
 
 use anyhow::{Context, Result, bail, ensure};
 use derive_more::Debug;
@@ -6,11 +6,18 @@ use device::AdbDevice;
 use forensic_adb::{AndroidStorageInput, DeviceBrief, DeviceState};
 use lazy_regex::{Lazy, Regex, lazy_regex};
 use rinf::{DartSignal, RustSignal};
-use tokio::{sync::RwLock, time};
-use tokio_stream::StreamExt;
+use tokio::{
+    sync::{Mutex, RwLock},
+    time,
+};
+use tokio_stream::{StreamExt, wrappers::WatchStream};
+use tokio_util::sync::CancellationToken;
 use tracing::{debug, error, trace, warn};
 
-use crate::models::signals::adb::{command::*, device::DeviceChangedEvent};
+use crate::models::{
+    Settings,
+    signals::adb::{command::*, device::DeviceChangedEvent},
+};
 
 pub mod device;
 
@@ -21,8 +28,14 @@ pub static PACKAGE_NAME_REGEX: Lazy<Regex> = lazy_regex!(r"^(?:[A-Za-z]{1}[\w]*\
 pub struct AdbHandler {
     /// The ADB host instance for device communication
     adb_host: forensic_adb::Host,
+    /// ADB server check/start mutex
+    adb_server_mutex: Mutex<()>,
+    /// ADB binary path
+    adb_path: RwLock<Option<String>>,
     /// Currently connected device (if any)
     device: RwLock<Option<Arc<AdbDevice>>>,
+    /// Cancellation token for running tasks
+    cancel_token: RwLock<CancellationToken>,
 }
 
 impl AdbHandler {
@@ -32,11 +45,26 @@ impl AdbHandler {
     /// # Returns
     /// Arc-wrapped AdbHandler that manages ADB device connections
     // #[instrument]
-    pub fn new() -> Arc<Self> {
-        // TODO: check host and launch if not running
-        let handle =
-            Arc::new(Self { adb_host: forensic_adb::Host::default(), device: None.into() });
-        Self::start_tasks(handle.clone());
+    pub async fn new(mut settings_stream: WatchStream<Settings>) -> Arc<Self> {
+        let adb_path =
+            settings_stream.next().await.expect("Settings stream closed on adb init").adb_path;
+        let adb_path = if adb_path.is_empty() { None } else { Some(adb_path) };
+        let handle = Arc::new(Self {
+            adb_host: forensic_adb::Host::default(),
+            adb_server_mutex: Mutex::new(()),
+            adb_path: RwLock::new(adb_path),
+            device: None.into(),
+            cancel_token: RwLock::new(CancellationToken::new()),
+        });
+        tokio::spawn({
+            let handle = handle.clone();
+            async move {
+                if let Err(e) = handle.ensure_server_running().await {
+                    panic!("Failed to start ADB server: {}", e)
+                }
+            } // TODO: handle error
+        });
+        tokio::spawn(Self::start_tasks(handle.clone(), settings_stream));
         handle
     }
 
@@ -44,45 +72,102 @@ impl AdbHandler {
     /// This includes device monitoring, command handling, and periodic refreshes.
     ///
     /// # Arguments
-    /// * `adb_handler` - Reference to the AdbHandler instance
+    /// * `settings_stream` - WatchStream for application settings updates
     //  #[instrument(level = "debug")]
-    fn start_tasks(adb_handler: Arc<AdbHandler>) {
+    async fn start_tasks(self: Arc<AdbHandler>, mut settings_stream: WatchStream<Settings>) {
+        // Handle settings updates
+        tokio::spawn({
+            let handle = self.clone();
+            async move {
+                while let Some(settings) = settings_stream.next().await {
+                    let new_adb_path = settings.adb_path.clone();
+                    let new_adb_path =
+                        if new_adb_path.is_empty() { None } else { Some(new_adb_path) };
+                    if new_adb_path != *handle.adb_path.read().await {
+                        *handle.adb_path.write().await = new_adb_path;
+                        handle.clone().restart_adb().await.expect("Failed to restart ADB server"); // TODO: handle error
+                    }
+                }
+            }
+        });
+
+        self.start_adb_tasks().await;
+    }
+
+    /// Starts the ADB tasks
+    async fn start_adb_tasks(self: Arc<AdbHandler>) {
+        let cancel_token = self.cancel_token.read().await.clone();
+
         // Start device monitoring
         let (sender, receiver) = tokio::sync::mpsc::unbounded_channel();
-        tokio::spawn(Self::handle_device_updates(adb_handler.clone(), receiver));
-        tokio::spawn(Self::run_device_tracker(adb_handler.adb_host.clone(), sender));
+        tokio::spawn({
+            let cancel_token = cancel_token.clone();
+            let handler = self.clone();
+            async move {
+                cancel_token
+                    .run_until_cancelled(Self::handle_device_updates(handler, receiver))
+                    .await
+            }
+        });
+
+        // Start device tracker
+        tokio::spawn({
+            let cancel_token = cancel_token.clone();
+            let handler = self.clone();
+            async move {
+                cancel_token.run_until_cancelled(Self::run_device_tracker(handler, sender)).await
+            }
+        });
 
         // Start command receiver
         tokio::spawn({
-            let handle = adb_handler.clone();
+            let handle = self.clone();
             async move {
-                handle.receive_commands().await;
+                cancel_token.run_until_cancelled(handle.receive_commands()).await;
             }
         });
 
         // Start periodic device info refresh
         tokio::spawn({
-            let handle = adb_handler.clone();
+            let handle = self.clone();
+            let cancel_token = self.cancel_token.read().await.clone();
             async move {
-                handle.run_periodic_refresh().await;
+                cancel_token.run_until_cancelled(handle.run_periodic_refresh()).await;
             }
         });
+    }
+
+    /// Restarts the ADB handling
+    async fn restart_adb(self: Arc<AdbHandler>) -> Result<()> {
+        debug!("Restarting ADB server and tasks");
+        // Cancel all tasks
+        self.cancel_token.write().await.cancel();
+        // Disconnect from device
+        let _ = self.disconnect_device().await;
+        // Kill ADB server
+        let adb_path = self.adb_path.read().await.clone();
+        let _ = self.adb_host.kill_server(adb_path.as_deref()).await;
+        // Restart ADB server
+        self.ensure_server_running().await?;
+        // Restart tasks
+        *self.cancel_token.write().await = CancellationToken::new();
+        tokio::spawn(self.clone().start_adb_tasks());
+        Ok(())
     }
 
     /// Runs the device tracking loop that monitors for device connections and disconnections
     ///
     /// # Arguments
-    /// * `adb_host` - The ADB host instance to track devices from
     /// * `sender` - Channel sender to communicate device updates
     //  #[instrument(level = "debug", err)]
     async fn run_device_tracker(
-        adb_host: forensic_adb::Host,
+        self: Arc<AdbHandler>,
         sender: tokio::sync::mpsc::UnboundedSender<DeviceBrief>,
     ) -> Result<()> {
         loop {
-            ensure_server_running(&adb_host).await?;
             debug!("Starting track_devices loop");
-            let stream = adb_host.track_devices();
+            self.ensure_server_running().await?;
+            let stream = self.adb_host.track_devices();
             tokio::pin!(stream);
             let mut got_update = false;
 
@@ -94,7 +179,11 @@ impl AdbHandler {
                     }
                     Err(e) => {
                         if got_update {
-                            warn!(error = &e as &dyn Error, "Track_devices stream returned error");
+                            warn!(
+                                error = &e as &dyn Error,
+                                "track_devices stream returned an unexpected error and will \
+                                 attempt to restart"
+                            );
                             break;
                         } else {
                             return Err(e).context("Failed to start track_devices stream");
@@ -111,28 +200,27 @@ impl AdbHandler {
     /// Handles device state updates received from the device tracker
     ///
     /// # Arguments
-    /// * `adb_handler` - Reference to the AdbHandler instance
     /// * `receiver` - Channel receiver for device updates
     //  #[instrument(level = "debug", err)]
     async fn handle_device_updates(
-        adb_handler: Arc<AdbHandler>,
+        self: Arc<AdbHandler>,
         mut receiver: tokio::sync::mpsc::UnboundedReceiver<DeviceBrief>,
     ) -> Result<()> {
         while let Some(device_update) = receiver.recv().await {
             debug!(update = ?device_update, "Received device update");
 
-            match (adb_handler.try_current_device().await, &device_update.state) {
+            match (self.try_current_device().await, &device_update.state) {
                 // Current device went offline
                 (Some(device), DeviceState::Offline) if device.serial == device_update.serial => {
                     debug!("Device is offline, disconnecting");
-                    if let Err(e) = adb_handler.disconnect_device().await {
+                    if let Err(e) = self.disconnect_device().await {
                         error!(error = e.as_ref() as &dyn Error, "Auto-disconnect failed");
                     }
                 }
                 // New device available
                 (None, DeviceState::Device) => {
                     debug!("Auto-connecting to device");
-                    if let Err(e) = adb_handler.connect_device().await {
+                    if let Err(e) = self.connect_device().await {
                         error!(error = e.as_ref() as &dyn Error, "Auto-connect failed");
                     }
                 }
@@ -153,6 +241,7 @@ impl AdbHandler {
                 error!(error = e.as_ref() as &dyn Error, "ADB command execution failed");
             }
         }
+        error!("ADB command receiver channel closed");
     }
 
     /// Executes a received ADB command with the given parameters
@@ -369,21 +458,39 @@ impl AdbHandler {
         self.refresh_device().await?;
         result
     }
-}
 
-/// Ensures the ADB server is running, starting it if necessary
-///
-/// # Arguments
-/// * `host` - The ADB host instance to check
-///
-/// # Returns
-/// Result indicating success or failure of ensuring server is running
-// #[instrument(err, level = "debug")]
-async fn ensure_server_running(host: &forensic_adb::Host) -> Result<()> {
-    if host.check_host_running().await.is_err() {
-        debug!("Starting ADB server");
-        // TODO: include adb binary
-        host.start_server(None).await?;
+    /// Ensures the ADB server is running, starting it if necessary
+    ///
+    /// # Arguments
+    /// * `host` - The ADB host instance to check
+    ///
+    /// # Returns
+    /// Result indicating success or failure of ensuring server is running
+    // #[instrument(err, level = "debug")]
+    async fn ensure_server_running(&self) -> Result<()> {
+        let _guard = self.adb_server_mutex.lock().await;
+        if self.adb_host.check_host_running().await.is_err() {
+            debug!("Starting ADB server");
+            let adb_path_buf: PathBuf = self
+                .adb_path
+                .read()
+                .await
+                .clone()
+                .map(which::which)
+                .transpose()
+                .unwrap_or_else(|e| {
+                    warn!(
+                        error = &e as &dyn Error,
+                        "Failed to resolve ADB path from settings, trying default"
+                    );
+                    which::which("adb").ok()
+                })
+                .expect("Failed to resolve ADB path"); // TODO: handle error
+            self.adb_host
+                .start_server(adb_path_buf.to_str())
+                .await
+                .expect("Failed to start ADB server"); // TODO: handle error
+        }
+        Ok(())
     }
-    Ok(())
 }

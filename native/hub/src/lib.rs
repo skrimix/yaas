@@ -9,7 +9,8 @@ use models::signals::system::RustPanic;
 use rinf::RustSignal;
 use settings::SettingsHandler;
 use task::TaskManager;
-use tracing::Level;
+use tokio_stream::wrappers::WatchStream;
+use tracing::{Level, error, info};
 use tracing_appender::{
     non_blocking::WorkerGuard,
     rolling::{RollingFileAppender, Rotation},
@@ -34,11 +35,12 @@ async fn main() {
     std::panic::set_hook(Box::new(move |panic_info| {
         let backtrace = std::backtrace::Backtrace::force_capture();
         let message = format!("{panic_info}\n{backtrace}");
+        error!(message, "Rust panic");
         RustPanic { message }.send_signal_to_dart();
         original_hook(panic_info);
     }));
 
-    // set working directory to the app's data directory
+    // Set working directory to the app's data directory
     let data_dir = dirs::data_dir().expect("Failed to get data directory");
     let app_dir = if cfg!(target_os = "macos") {
         data_dir.join("com.github.skrimix.RQL")
@@ -52,21 +54,23 @@ async fn main() {
 
     let _guard = setup_logging();
     if let Err(e) = _guard {
-        rinf::debug_print!("Failed to setup logging: {e}");
+        rinf::debug_print!("Failed to setup logging: {:#}", e);
     }
 
-    let adb_handler = AdbHandler::new();
-    let downloader = Downloader::new().await;
-    let _task_manager = TaskManager::new(adb_handler.clone(), downloader.clone());
+    info!("Starting RQL backend");
 
-    let _settings_handler = SettingsHandler::new(app_dir);
+    let settings_handler = SettingsHandler::new(app_dir);
+
+    let adb_handler = AdbHandler::new(WatchStream::new(settings_handler.subscribe())).await;
+    let downloader = Downloader::new(WatchStream::new(settings_handler.subscribe())).await;
+    let _task_manager = TaskManager::new(adb_handler.clone(), downloader.clone());
 
     // Keep the main function running until Dart shutdown.
     rinf::dart_shutdown().await;
 }
 
 fn setup_logging() -> Result<WorkerGuard> {
-    // log to file
+    // Log to file
     std::fs::create_dir_all("logs").context("Failed to create logs directory")?;
     let file_appender = RollingFileAppender::builder()
         .rotation(Rotation::DAILY)

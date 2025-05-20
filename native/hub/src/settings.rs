@@ -1,4 +1,5 @@
 use std::{
+    error::Error,
     fs,
     path::{Path, PathBuf},
     sync::Arc,
@@ -6,7 +7,8 @@ use std::{
 
 use anyhow::{Context, Result, ensure};
 use rinf::{DartSignal, RustSignal};
-use tracing::{debug, error, info};
+use tokio::sync::watch;
+use tracing::{debug, error, info, trace};
 
 use crate::models::{Settings, signals::settings::*};
 
@@ -14,11 +16,17 @@ use crate::models::{Settings, signals::settings::*};
 #[derive(Debug, Clone)]
 pub struct SettingsHandler {
     settings_file_path: PathBuf,
+    watch_tx: watch::Sender<Settings>,
 }
 
 impl SettingsHandler {
     pub fn new(app_dir: PathBuf) -> Arc<Self> {
-        let handler = Arc::new(Self { settings_file_path: app_dir.join("settings.json") });
+        let watch_tx = watch::Sender::<Settings>::new(Settings::default());
+        let handler =
+            Arc::new(Self { settings_file_path: app_dir.join("settings.json"), watch_tx });
+
+        let settings = handler.load_settings().expect("Failed to load settings"); // TODO: handle error
+        handler.on_settings_change(settings, None);
 
         // Start receiving settings requests
         tokio::spawn({
@@ -44,18 +52,24 @@ impl SettingsHandler {
 
                 match result {
                     Ok(settings) => {
-                        SettingsLoadedEvent { settings, error: None }.send_signal_to_dart();
+                        handler.on_settings_change(settings.clone(), None);
                     }
                     Err(e) => {
-                        error!("Failed to load settings: {}", e);
-                        SettingsLoadedEvent {
-                            settings: Settings::default(),
-                            error: Some(format!("Failed to load settings: {:#}", e)),
-                        }
-                        .send_signal_to_dart();
+                        error!(
+                            error = e.as_ref() as &dyn Error,
+                            "Failed to load settings, using defaults"
+                        );
+                        let settings = handler
+                            .load_default_settings()
+                            .expect("Failed to load default settings"); // TODO: handle error?
+                        handler.on_settings_change(
+                            settings.clone(),
+                            Some(format!("Failed to load settings: {:#}", e)),
+                        );
                     }
                 }
             }
+            error!("LoadSettingsRequest receiver closed");
         });
 
         // Handle save requests
@@ -63,14 +77,15 @@ impl SettingsHandler {
         tokio::spawn(async move {
             while let Some(signal_pack) = save_receiver.recv().await {
                 let handler = handler_clone.clone();
-                let result = handler.save_settings(&signal_pack.message.settings);
+                let settings = signal_pack.message.settings;
+                let result = handler.save_settings(&settings);
 
                 match result {
                     Ok(_) => {
-                        SettingsSavedEvent { error: None }.send_signal_to_dart();
+                        handler.on_settings_change(settings.clone(), None);
                     }
                     Err(e) => {
-                        error!("Failed to save settings: {}", e);
+                        error!(error = e.as_ref() as &dyn Error, "Failed to save settings");
                         SettingsSavedEvent {
                             error: Some(format!("Failed to save settings: {:#}", e)),
                         }
@@ -78,9 +93,35 @@ impl SettingsHandler {
                     }
                 }
             }
+            error!("SaveSettingsRequest receiver closed");
         });
 
         // TODO: Add reset to defaults request
+    }
+
+    /// Handle settings change
+    ///
+    /// # Arguments
+    ///
+    /// * `settings` - The new settings
+    /// * `error` - An optional error message for the UI
+    fn on_settings_change(&self, settings: Settings, error: Option<String>) {
+        trace!("on_settings_change called");
+        self.watch_tx.send_if_modified(|s| {
+            if s != &settings {
+                debug!(settings = ?settings, "Active settings changed");
+                *s = settings.clone();
+                SettingsChangedEvent { settings, error }.send_signal_to_dart();
+                true
+            } else {
+                false
+            }
+        });
+    }
+
+    /// Create a receiver for settings changes
+    pub fn subscribe(&self) -> watch::Receiver<Settings> {
+        self.watch_tx.subscribe()
     }
 
     /// Load settings from file or return defaults if file doesn't exist
@@ -98,7 +139,7 @@ impl SettingsHandler {
 
         // TODO: Validate settings
 
-        debug!("Settings loaded successfully");
+        debug!("Loaded application settings");
         Ok(settings)
     }
 
@@ -119,7 +160,7 @@ impl SettingsHandler {
         fs::write(&self.settings_file_path, settings_json)
             .context("Failed to write settings file")?;
 
-        debug!("Settings saved successfully");
+        debug!("Saved application settings");
         Ok(())
     }
 

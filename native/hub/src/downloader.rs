@@ -26,6 +26,7 @@ pub use rclone::RcloneTransferStats;
 pub struct Downloader {
     cloud_apps: Mutex<Vec<CloudApp>>,
     storage: RwLock<RcloneStorage>,
+    download_dir: RwLock<PathBuf>,
     current_load_token: RwLock<CancellationToken>,
 }
 
@@ -41,6 +42,7 @@ impl Downloader {
                 settings.rclone_remote_name,
                 settings.bandwidth_limit,
             )),
+            download_dir: RwLock::new(PathBuf::from(settings.downloads_location)),
             current_load_token: RwLock::new(CancellationToken::new()),
         });
         tokio::spawn({
@@ -70,6 +72,8 @@ impl Downloader {
                         // Refresh app list
                         handle.load_app_list(true, new_token).await; // FIXME: this should set the UI to loading state
                     }
+
+                    *handle.download_dir.write().await = PathBuf::from(settings.downloads_location);
                 }
             }
         });
@@ -126,7 +130,7 @@ impl Downloader {
             .read()
             .await
             .clone()
-            .download_file("FFA.txt".to_string(), PathBuf::from("/home/skrimix/work/test"))
+            .download_file("FFA.txt".to_string(), self.download_dir.read().await.clone())
             .await
             .context("failed to download game list file")?;
         let file = File::open(path).await.context("could not open game list file")?;
@@ -143,7 +147,8 @@ impl Downloader {
         app_full_name: String,
         progress_tx: tokio::sync::mpsc::UnboundedSender<RcloneTransferStats>,
     ) -> Result<String> {
-        let dst_dir = PathBuf::from("/home/skrimix/work/test").join(&app_full_name);
+        let dst_dir = self.download_dir.read().await.join(&app_full_name);
+        println!("dst_dir: {}", dst_dir.display());
         self.storage
             .read()
             .await

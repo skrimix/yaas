@@ -346,7 +346,7 @@ class _SettingsScreenState extends State<SettingsScreen> {
               onTap: () =>
                   _launchURL('https://rclone.org/docs/#bwlimit-bandwidth-spec'),
               child: Text(
-                'Value in KiB/s or with B|K|M|G|T|P suffix (click for documentation)',
+                'Value in KiB/s or with B|K|M|G|T|P suffix or more (click for documentation)',
                 style: Theme.of(context).textTheme.bodySmall?.copyWith(
                       color: Theme.of(context).hintColor,
                     ),

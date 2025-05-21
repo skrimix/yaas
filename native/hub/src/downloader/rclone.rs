@@ -60,16 +60,20 @@ impl RcloneTransferOperation {
 }
 
 #[derive(Debug, Clone, PartialEq, Eq)]
-pub struct RcloneClient {
+struct RcloneClient {
     rclone_path: PathBuf,
     config_path: Option<PathBuf>,
     sys_proxy: Option<String>,
+    bandwidth_limit: String,
 }
 
 impl RcloneClient {
-    pub fn new(rclone_path: PathBuf, config_path: Option<PathBuf>) -> Self {
-        let proxy = get_sys_proxy();
-        Self { rclone_path, config_path, sys_proxy: proxy }
+    pub fn new(
+        rclone_path: PathBuf,
+        config_path: Option<PathBuf>,
+        bandwidth_limit: String,
+    ) -> Self {
+        Self { rclone_path, config_path, sys_proxy: get_sys_proxy(), bandwidth_limit }
     }
 
     fn command(&self, args: &[&str]) -> Command {
@@ -128,10 +132,9 @@ impl RcloneClient {
         dest: String,
         operation: RcloneTransferOperation,
         total_bytes: u64,
-        bandwidth_limit: String,
     ) -> Result<()> {
         // FIXME: disallow concurrent transfers to the same destination
-        self.transfer_with_stats(source, dest, operation, total_bytes, None, bandwidth_limit).await
+        self.transfer_with_stats(source, dest, operation, total_bytes, None).await
     }
 
     pub async fn transfer_with_stats(
@@ -141,7 +144,6 @@ impl RcloneClient {
         operation: RcloneTransferOperation,
         total_bytes: u64,
         stats_tx: Option<UnboundedSender<RcloneTransferStats>>,
-        bandwidth_limit: String,
     ) -> Result<()> {
         let mut args = vec![
             operation.as_str(),
@@ -160,8 +162,8 @@ impl RcloneClient {
             "8", // TODO: make configurable
         ];
 
-        if !bandwidth_limit.is_empty() {
-            args.extend_from_slice(&["--bwlimit", &bandwidth_limit]);
+        if !self.bandwidth_limit.is_empty() {
+            args.extend_from_slice(&["--bwlimit", &self.bandwidth_limit]);
         }
 
         args.extend_from_slice(&[&source, &dest]);
@@ -212,7 +214,6 @@ pub struct RcloneStorage {
     client: RcloneClient,
     remote: String,
     root_dir: String,
-    bandwidth_limit: String,
 }
 
 impl RcloneStorage {
@@ -223,10 +224,9 @@ impl RcloneStorage {
         bandwidth_limit: String,
     ) -> Self {
         Self {
-            client: RcloneClient::new(rclone_path, config_path),
+            client: RcloneClient::new(rclone_path, config_path, bandwidth_limit),
             remote,
             root_dir: "Quest Games/".to_string(),
-            bandwidth_limit,
         }
     }
 
@@ -255,7 +255,6 @@ impl RcloneStorage {
                 RcloneTransferOperation::Sync,
                 total_bytes,
                 Some(stats_tx),
-                self.bandwidth_limit.clone(),
             )
             .await
             .map(|_| dest)
@@ -273,7 +272,6 @@ impl RcloneStorage {
                 dest.display().to_string(),
                 RcloneTransferOperation::Copy,
                 total_bytes,
-                self.bandwidth_limit.clone(),
             )
             .await?;
         dest.push(source.split('/').next_back().context("Failed to get source file name")?);

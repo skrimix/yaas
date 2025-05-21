@@ -7,7 +7,6 @@ mod speed;
 pub use speed::*;
 
 // #[instrument(ret, level = "trace")]
-// TODO: use this for downloads
 pub fn get_sys_proxy() -> Option<String> {
     let proxy = Sysproxy::get_system_proxy();
     match proxy {

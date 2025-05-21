@@ -1,4 +1,3 @@
-import 'dart:io' show exit;
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 import 'package:toastification/toastification.dart';

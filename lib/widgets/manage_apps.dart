@@ -4,6 +4,7 @@ import 'package:provider/provider.dart';
 import 'package:proper_filesize/proper_filesize.dart' as filesize;
 import 'package:toastification/toastification.dart';
 import '../providers/device_state.dart';
+import '../providers/cloud_apps_state.dart';
 import '../src/bindings/bindings.dart';
 
 class ManageApps extends StatefulWidget {
@@ -38,12 +39,36 @@ class _ManageAppsState extends State<ManageApps> {
       EdgeInsets.symmetric(horizontal: 12, vertical: 8);
 
   final bool _sortAscending = true;
+  final ValueNotifier<bool> _isShiftPressedNotifier =
+      ValueNotifier<bool>(false);
 
   // Cache filtered apps to avoid recalculating on every build
   List<InstalledPackage>? _cachedVrApps;
   List<InstalledPackage>? _cachedOtherApps;
   List<InstalledPackage>? _cachedSystemApps;
   List<InstalledPackage>? _installedPackages;
+
+  @override
+  void initState() {
+    super.initState();
+    HardwareKeyboard.instance.addHandler(_handleKeyEvent);
+  }
+
+  @override
+  void dispose() {
+    HardwareKeyboard.instance.removeHandler(_handleKeyEvent);
+    _isShiftPressedNotifier.dispose();
+    super.dispose();
+  }
+
+  bool _handleKeyEvent(KeyEvent event) {
+    final isShiftPressed = HardwareKeyboard.instance.isShiftPressed;
+    if (_isShiftPressedNotifier.value != isShiftPressed) {
+      _isShiftPressedNotifier.value = isShiftPressed;
+      setState(() {});
+    }
+    return false; // Pass the event through
+  }
 
   void _updateCachedLists(List<InstalledPackage>? packages) {
     if (_installedPackages == packages) return;
@@ -131,12 +156,9 @@ class _ManageAppsState extends State<ManageApps> {
                   child: Text(text),
                 )),
           )
-        : MouseRegion(
-            cursor: SystemMouseCursors.click,
-            child: GestureDetector(
-              onTap: () => _copyToClipboard(text, true),
-              child: Text(text),
-            ),
+        : InkWell(
+            onTap: () => _copyToClipboard(text, true),
+            child: Text(text),
           );
   }
 
@@ -239,6 +261,180 @@ class _ManageAppsState extends State<ManageApps> {
     );
   }
 
+  List<CloudApp> _findMatchingCloudApps(
+      InstalledPackage app, List<CloudApp> cloudApps) {
+    return cloudApps
+        .where((cloudApp) => cloudApp.packageName == app.packageName)
+        .toList();
+  }
+
+  bool _isNewerVersion(InstalledPackage installedApp, CloudApp cloudApp) {
+    return cloudApp.versionCode > installedApp.versionCode.toInt();
+  }
+
+  void _showUpdateDialog(BuildContext context, InstalledPackage app,
+      List<CloudApp> matchingCloudApps) {
+    showDialog(
+      context: context,
+      builder: (context) => AlertDialog(
+        title: const Text('Available Versions'),
+        content: SizedBox(
+          width: 500,
+          height: 300,
+          child: ValueListenableBuilder<bool>(
+              valueListenable: _isShiftPressedNotifier,
+              builder: (context, isShiftPressed, _) {
+                return ListView.builder(
+                  itemCount: matchingCloudApps.length,
+                  itemBuilder: (context, index) {
+                    final cloudApp = matchingCloudApps[index];
+                    final isNewer = _isNewerVersion(app, cloudApp);
+                    final isSameVersion =
+                        cloudApp.versionCode == app.versionCode.toInt();
+
+                    final bool canInstall =
+                        isNewer || (isSameVersion && isShiftPressed);
+
+                    String tooltipText;
+                    if (isNewer) {
+                      tooltipText = 'Install newer version';
+                    } else if (isSameVersion) {
+                      tooltipText = isShiftPressed
+                          ? 'Reinstall same version'
+                          : 'Hold Shift to reinstall same version';
+                    } else {
+                      tooltipText = 'Cannot downgrade to older version';
+                    }
+
+                    return ListTile(
+                      title: Text(cloudApp.fullName),
+                      subtitle: Column(
+                        crossAxisAlignment: CrossAxisAlignment.start,
+                        children: [
+                          Text(
+                              '${app.versionName} (${app.versionCode}) → v${cloudApp.versionCode}'),
+                          Text(
+                            isNewer
+                                ? 'Newer version'
+                                : isSameVersion
+                                    ? 'Same version'
+                                    : 'Older version',
+                            style: TextStyle(
+                              color: isNewer
+                                  ? Colors.green
+                                  : isSameVersion
+                                      ? Colors.blue
+                                      : Colors.red,
+                              fontWeight: FontWeight.bold,
+                            ),
+                          ),
+                        ],
+                      ),
+                      trailing: Tooltip(
+                        message: tooltipText,
+                        child: FilledButton(
+                          onPressed: canInstall
+                              ? () {
+                                  Navigator.of(context).pop();
+                                  _installCloudApp(cloudApp.fullName);
+                                }
+                              : null,
+                          child: Text(isNewer ? 'Update' : 'Install'),
+                        ),
+                      ),
+                    );
+                  },
+                );
+              }),
+        ),
+        actions: [
+          TextButton(
+            onPressed: () => Navigator.of(context).pop(),
+            child: const Text('Cancel'),
+          ),
+        ],
+      ),
+    );
+  }
+
+  void _installCloudApp(String appFullName) {
+    TaskRequest(
+      taskType: TaskType.downloadInstall,
+      params: TaskParams(cloudAppFullName: appFullName),
+    ).sendSignalToRust();
+  }
+
+  Widget _buildUpdateButton(BuildContext context, InstalledPackage app) {
+    return Consumer<CloudAppsState>(
+      builder: (context, cloudAppsState, _) {
+        if (cloudAppsState.apps.isEmpty) {
+          return IconButton(
+            icon: const Icon(Icons.update),
+            tooltip: 'Check for updates',
+            onPressed: null,
+          );
+        }
+
+        final matchingCloudApps =
+            _findMatchingCloudApps(app, cloudAppsState.apps);
+
+        if (matchingCloudApps.isEmpty) {
+          return IconButton(
+            icon: const Icon(Icons.update),
+            tooltip: 'No matching app found in cloud repository',
+            onPressed: null,
+          );
+        }
+
+        final hasNewerVersion =
+            matchingCloudApps.any((cloudApp) => _isNewerVersion(app, cloudApp));
+
+        // Prioritize newer versions
+        matchingCloudApps
+            .sort((a, b) => b.versionCode.compareTo(a.versionCode));
+
+        final newestCloudApp = matchingCloudApps.first;
+
+        return ValueListenableBuilder<bool>(
+            valueListenable: _isShiftPressedNotifier,
+            builder: (context, isShiftPressed, _) {
+              if (matchingCloudApps.length == 1) {
+                // Single match
+                return IconButton(
+                  icon: Icon(
+                    hasNewerVersion ? Icons.system_update : Icons.update,
+                    color: hasNewerVersion ? Colors.green : null,
+                  ),
+                  tooltip: hasNewerVersion
+                      ? 'Update from ${app.versionName} (${app.versionCode}) to v${newestCloudApp.versionCode}'
+                      : isShiftPressed
+                          ? 'Force reinstall current version'
+                          : 'Already on latest version (hold Shift to force reinstall)',
+                  onPressed: hasNewerVersion || isShiftPressed
+                      ? () => _installCloudApp(newestCloudApp.fullName)
+                      : null,
+                );
+              } else {
+                // Multiple matches
+                return IconButton(
+                  icon: Icon(
+                    hasNewerVersion ? Icons.system_update_alt : Icons.update,
+                    color:
+                        hasNewerVersion || isShiftPressed ? Colors.amber : null,
+                  ),
+                  tooltip: hasNewerVersion || isShiftPressed
+                      ? 'Multiple versions available (click to select)'
+                      : 'No newer versions available (hold Shift to force reinstall)',
+                  onPressed: hasNewerVersion || isShiftPressed
+                      ? () => _showUpdateDialog(context, app, matchingCloudApps)
+                      : null,
+                );
+              }
+            });
+      },
+    );
+  }
+
   Widget _buildAppList(List<InstalledPackage> apps) {
     if (apps.isEmpty) {
       return const Center(
@@ -289,6 +485,7 @@ class _ManageAppsState extends State<ManageApps> {
                   onPressed: () => _showAppDetailsDialog(context, app),
                 ),
                 if (_selectedCategory != AppCategory.system) ...[
+                  _buildUpdateButton(context, app),
                   IconButton(
                     icon: const Icon(Icons.play_arrow),
                     tooltip: 'Launch',

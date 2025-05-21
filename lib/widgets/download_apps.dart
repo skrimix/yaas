@@ -25,7 +25,7 @@ class _DownloadAppsState extends State<DownloadApps> {
   bool _sortAscending = true;
   List<CachedAppData>? _sortedApps;
   String? _lastSortKey;
-  final _isSearching = true;
+  final _isSearching = true; // Always true
   String _searchQuery = '';
   final _searchController = TextEditingController();
   final _scrollController = ScrollController();
@@ -159,7 +159,7 @@ class _DownloadAppsState extends State<DownloadApps> {
       if (_selectedFullNames.contains(fullName)) {
         _selectedFullNames.remove(fullName);
         if (_selectedFullNames.isEmpty) {
-          // _showCheckboxes = false;
+          _showCheckboxes = false;
           _showOnlySelected = false;
         }
       } else {
@@ -298,29 +298,32 @@ class _DownloadAppsState extends State<DownloadApps> {
       return SizedBox(
         width: 350,
         height: 40,
-        child: TextField(
-          controller: _searchController,
-          // autofocus: true,
-          decoration: InputDecoration(
-            hintText: 'Search apps...',
-            contentPadding:
-                const EdgeInsets.symmetric(horizontal: 8, vertical: 8),
-            border: const OutlineInputBorder(),
-            suffixIcon: _searchQuery.isNotEmpty
-                ? IconButton(
-                    icon: const Icon(Icons.close),
-                    onPressed: () {
-                      _resetSearch();
-                    },
-                    tooltip: 'Clear search',
-                  )
-                : null,
+        child: Padding(
+          padding: const EdgeInsets.only(right: 4.0),
+          child: TextField(
+            controller: _searchController,
+            // autofocus: true,
+            decoration: InputDecoration(
+              hintText: 'Search apps...',
+              contentPadding:
+                  const EdgeInsets.symmetric(horizontal: 8, vertical: 8),
+              border: const OutlineInputBorder(),
+              suffixIcon: _searchQuery.isNotEmpty
+                  ? IconButton(
+                      icon: const Icon(Icons.close),
+                      onPressed: () {
+                        _resetSearch();
+                      },
+                      tooltip: 'Clear search',
+                    )
+                  : null,
+            ),
+            onChanged: (value) {
+              setState(() {
+                _searchQuery = value;
+              });
+            },
           ),
-          onChanged: (value) {
-            setState(() {
-              _searchQuery = value;
-            });
-          },
         ),
       );
     }
@@ -513,6 +516,7 @@ class _DownloadAppsState extends State<DownloadApps> {
                     showCheckboxes: _showCheckboxes,
                     selectedFullNames: _selectedFullNames,
                     scrollController: _scrollController,
+                    isSearching: _searchQuery.isNotEmpty,
                     onSelectionChanged: _toggleSelection,
                     onDownload: _download,
                     onInstall: _install,

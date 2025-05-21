@@ -29,6 +29,7 @@ class CloudAppList extends StatelessWidget {
   final ScrollController scrollController;
   final Function(String) onDownload;
   final Function(String) onInstall;
+  final bool isSearching;
 
   const CloudAppList({
     super.key,
@@ -36,6 +37,7 @@ class CloudAppList extends StatelessWidget {
     required this.showCheckboxes,
     required this.selectedFullNames,
     required this.scrollController,
+    required this.isSearching,
     this.onSelectionChanged,
     required this.onDownload,
     required this.onInstall,
@@ -44,10 +46,10 @@ class CloudAppList extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     if (apps.isEmpty) {
-      return const Center(
+      return Center(
         child: Padding(
           padding: EdgeInsets.all(16.0),
-          child: Text('No apps available'),
+          child: Text(isSearching ? 'No apps found' : 'No apps available'),
         ),
       );
     }

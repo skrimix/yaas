@@ -174,7 +174,6 @@ impl RcloneClient {
         let mut log_messages = Vec::new();
 
         if let Some(stats_tx) = stats_tx {
-            println!("starting stats loop");
             while let Some(line) = lines.next_line().await? {
                 match serde_json::from_str::<RcloneStatLine>(&line) {
                     Ok(stat_line) => {

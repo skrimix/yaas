@@ -148,7 +148,6 @@ impl Downloader {
         progress_tx: tokio::sync::mpsc::UnboundedSender<RcloneTransferStats>,
     ) -> Result<String> {
         let dst_dir = self.download_dir.read().await.join(&app_full_name);
-        println!("dst_dir: {}", dst_dir.display());
         self.storage
             .read()
             .await

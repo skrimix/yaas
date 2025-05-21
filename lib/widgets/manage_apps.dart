@@ -19,7 +19,7 @@ enum AppCategory {
   system,
 }
 
-// Some of these aren't technically system apps, but they belong to the OS
+// Some of these aren't technically system apps, but they belong to the OS on Quest devices
 const hiddenPrefixes = [
   'com.oculus.',
   'com.meta.',
@@ -226,6 +226,7 @@ class _ManageAppsState extends State<ManageApps> {
           TextButton(
             onPressed: () {
               Navigator.of(context).pop();
+              // TODO: implement uninstall
               // AdbRequest(
               //         command: AdbCommand.ADB_COMMAND_UNINSTALL_PACKAGE,
               //         packageName: app.packageName)

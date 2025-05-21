@@ -281,6 +281,7 @@ class _DownloadAppsState extends State<DownloadApps> {
             ],
           ),
         ),
+        // TODO: add sort by version
       ],
       onSelected: (value) {
         setState(() {

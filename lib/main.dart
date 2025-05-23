@@ -108,8 +108,6 @@ class _RqlAppState extends State<RqlApp> {
       onExitRequested: () async {
         finalizeRust();
         // TODO: Cooperative shutdown
-        // Give the backend a chance to clean up
-        await Future.delayed(const Duration(milliseconds: 200));
         return AppExitResponse.exit;
       },
     );

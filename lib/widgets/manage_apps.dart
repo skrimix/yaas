@@ -300,8 +300,8 @@ class _ManageAppsState extends State<ManageApps> {
                       tooltipText = 'Install newer version';
                     } else if (isSameVersion) {
                       tooltipText = isShiftPressed
-                          ? 'Reinstall same version'
-                          : 'Hold Shift to reinstall same version';
+                          ? 'Reinstall this version'
+                          : 'Hold Shift to reinstall this version';
                     } else {
                       tooltipText = 'Cannot downgrade to older version';
                     }
@@ -406,10 +406,10 @@ class _ManageAppsState extends State<ManageApps> {
                     color: hasNewerVersion ? Colors.green : null,
                   ),
                   tooltip: hasNewerVersion
-                      ? 'Update from ${app.versionName} (${app.versionCode}) to v${newestCloudApp.versionCode}'
+                      ? 'Update from ${app.versionCode} to ${newestCloudApp.versionCode}'
                       : isShiftPressed
-                          ? 'Force reinstall current version'
-                          : 'Already on latest version (hold Shift to force reinstall)',
+                          ? 'Reinstall current version'
+                          : 'Already on latest version (hold Shift to allow reinstall)',
                   onPressed: hasNewerVersion || isShiftPressed
                       ? () => _installCloudApp(newestCloudApp.fullName)
                       : null,
@@ -419,12 +419,13 @@ class _ManageAppsState extends State<ManageApps> {
                 return IconButton(
                   icon: Icon(
                     hasNewerVersion ? Icons.system_update_alt : Icons.update,
-                    color:
-                        hasNewerVersion || isShiftPressed ? Colors.amber : null,
+                    color: hasNewerVersion || isShiftPressed
+                        ? Colors.lightBlue
+                        : null,
                   ),
                   tooltip: hasNewerVersion || isShiftPressed
                       ? 'Multiple versions available (click to select)'
-                      : 'No newer versions available (hold Shift to force reinstall)',
+                      : 'No newer versions available (hold Shift to allow reinstall)',
                   onPressed: hasNewerVersion || isShiftPressed
                       ? () => _showUpdateDialog(context, app, matchingCloudApps)
                       : null,

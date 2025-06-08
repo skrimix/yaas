@@ -15,8 +15,10 @@ use tokio_util::sync::CancellationToken;
 use tracing::{debug, error, trace, warn};
 
 use crate::models::{
-    Settings,
-    signals::adb::{command::*, device::DeviceChangedEvent},
+    signals::{
+        adb::{command::*, device::DeviceChangedEvent},
+        system::Toast,
+    },
 };
 
 pub mod device;
@@ -98,7 +100,7 @@ impl AdbHandler {
     async fn start_adb_tasks(self: Arc<AdbHandler>) {
         let cancel_token = self.cancel_token.read().await.clone();
 
-        // Start device monitoring
+        // Listen for ADB device updates
         let (sender, receiver) = tokio::sync::mpsc::unbounded_channel();
         tokio::spawn({
             let cancel_token = cancel_token.clone();
@@ -110,7 +112,7 @@ impl AdbHandler {
             }
         });
 
-        // Start device tracker
+        // Track ADB device changes
         tokio::spawn({
             let cancel_token = cancel_token.clone();
             let handler = self.clone();
@@ -119,7 +121,7 @@ impl AdbHandler {
             }
         });
 
-        // Start command receiver
+        // Listen for commands
         tokio::spawn({
             let handle = self.clone();
             async move {
@@ -127,7 +129,7 @@ impl AdbHandler {
             }
         });
 
-        // Start periodic device info refresh
+        // Refresh device info periodically
         tokio::spawn({
             let handle = self.clone();
             let cancel_token = self.cancel_token.read().await.clone();
@@ -179,6 +181,7 @@ impl AdbHandler {
                     }
                     Err(e) => {
                         if got_update {
+                            // The stream worked, but encountered an error
                             warn!(
                                 error = &e as &dyn Error,
                                 "track_devices stream returned an unexpected error and will \
@@ -186,13 +189,13 @@ impl AdbHandler {
                             );
                             break;
                         } else {
+                            // The stream closed immediately
                             return Err(e).context("Failed to start track_devices stream");
                         }
                     }
                 }
             }
 
-            // Wait before retrying the tracking loop
             time::sleep(Duration::from_secs(1)).await;
         }
     }
@@ -254,8 +257,8 @@ impl AdbHandler {
     /// Result indicating success or failure of the command execution
     //  #[instrument(level = "debug")]
     async fn execute_command(&self, command: AdbCommand) -> Result<()> {
-        fn send_response(command: AdbCommand, success: bool, message: String) {
-            AdbResponse { command, success, message }.send_signal_to_dart();
+        fn send_toast(title: String, description: String, error: bool, duration: Option<u32>) {
+            Toast::send(title, description, error, duration);
         }
 
         let device = self.current_device().await?;
@@ -265,12 +268,17 @@ impl AdbHandler {
                 let result = device.launch(&package_name).await;
                 match result {
                     Ok(_) => {
-                        send_response(command, true, format!("Launched {}", package_name));
+                        send_toast(
+                            "App Launched".to_string(),
+                            format!("Launched {}", package_name),
+                            false,
+                            None,
+                        );
                         Ok(())
                     }
                     Err(e) => {
                         let error_msg = format!("Failed to launch {}: {:#}", package_name, e);
-                        send_response(command, false, error_msg);
+                        send_toast("Launch Failed".to_string(), error_msg, true, None);
                         Err(e.context(format!("Failed to launch {}", package_name)))
                     }
                 }
@@ -280,12 +288,17 @@ impl AdbHandler {
                 let result = device.force_stop(&package_name).await;
                 match result {
                     Ok(_) => {
-                        send_response(command, true, format!("Stopped {}", package_name));
+                        send_toast(
+                            "App Stopped".to_string(),
+                            format!("Stopped {}", package_name),
+                            false,
+                            None,
+                        );
                         Ok(())
                     }
                     Err(e) => {
                         let error_msg = format!("Failed to force stop {}: {:#}", package_name, e);
-                        send_response(command, false, error_msg);
+                        send_toast("Stop Failed".to_string(), error_msg, true, None);
                         Err(e.context(format!("Failed to force stop {}", package_name)))
                     }
                 }

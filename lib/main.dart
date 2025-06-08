@@ -51,29 +51,14 @@ void main() async {
   );
   await DesktopWindow.setMinWindowSize(const Size(800, 600));
 
-  messages.AdbResponse.rustSignalStream.listen((response) {
-    final type = response.message.success
-        ? ToastificationType.success
-        : ToastificationType.error;
-
-    String title;
-    switch (response.message.command) {
-      case messages.AdbCommandLaunchApp():
-        title = response.message.success ? 'App Launched' : 'Launch Failed';
-        break;
-      case messages.AdbCommandForceStopApp():
-        title = response.message.success ? 'App Stopped' : 'Stop Failed';
-        break;
-      default:
-        title = response.message.success ? 'Success' : 'Error';
-    }
-
+  messages.Toast.rustSignalStream.listen((message) {
+    final toast = message.message;
     toastification.show(
-      type: type,
+      type: toast.error ? ToastificationType.error : ToastificationType.success,
+      title: Text(toast.title),
+      description: Text(toast.description),
+      autoCloseDuration: Duration(seconds: toast.duration ?? 3),
       style: ToastificationStyle.flat,
-      title: Text(title),
-      description: Text(response.message.message),
-      autoCloseDuration: const Duration(seconds: 3),
       backgroundColor: colorScheme.surfaceContainer,
       borderSide: BorderSide.none,
       alignment: Alignment.bottomRight,

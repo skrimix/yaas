@@ -7,17 +7,21 @@ use forensic_adb::{AndroidStorageInput, DeviceBrief, DeviceState};
 use lazy_regex::{Lazy, Regex, lazy_regex};
 use rinf::{DartSignal, RustSignal};
 use tokio::{
-    sync::{Mutex, RwLock},
-    time,
+    sync::{Mutex, RwLock, mpsc::UnboundedSender},
+    time::{self, timeout},
 };
 use tokio_stream::{StreamExt, wrappers::WatchStream};
 use tokio_util::sync::CancellationToken;
 use tracing::{debug, error, trace, warn};
 
-use crate::models::{
+use crate::{
+    adb::device::SideloadProgress,
+    models::{
+        AdbState, Settings,
     signals::{
         adb::{command::*, device::DeviceChangedEvent},
         system::Toast,
+        },
     },
 };
 
@@ -440,12 +444,16 @@ impl AdbHandler {
     ///
     /// # Arguments
     /// * `apk_path` - Path to the APK file to install
-    pub async fn install_apk(&self, apk_path: &std::path::Path) -> Result<()> {
+    pub async fn install_apk(
+        &self,
+        apk_path: &std::path::Path,
+        progress_sender: UnboundedSender<f32>,
+    ) -> Result<()> {
         let device = self.current_device().await?;
         let device = (*device).clone();
-        let result = device.install_apk(apk_path).await;
+        device.install_apk_with_progress(apk_path, progress_sender).await?;
         self.refresh_device().await?;
-        result
+        Ok(())
     }
 
     /// Uninstalls a package from the currently connected device
@@ -464,10 +472,15 @@ impl AdbHandler {
     ///
     /// # Arguments
     /// * `app_path` - Path to directory containing the app files
-    pub async fn sideload_app(&self, app_path: &std::path::Path) -> Result<()> {
+    /// * `progress_sender` - Sender for progress updates
+    pub async fn sideload_app(
+        &self,
+        app_path: &std::path::Path,
+        progress_sender: UnboundedSender<SideloadProgress>,
+    ) -> Result<()> {
         let device = self.current_device().await?;
         let device = (*device).clone();
-        let result = device.sideload_app(app_path).await;
+        let result = device.sideload_app(app_path, progress_sender).await;
         self.refresh_device().await?;
         result
     }

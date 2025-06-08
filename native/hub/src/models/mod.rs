@@ -8,5 +8,7 @@ mod installed_package;
 pub use installed_package::*;
 mod settings;
 pub use settings::*;
+pub mod adb_state;
 pub mod signals;
 pub mod vendor;
+pub use adb_state::*;

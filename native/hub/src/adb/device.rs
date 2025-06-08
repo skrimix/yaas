@@ -2,9 +2,13 @@ use std::{fmt::Display, path::Path};
 
 use anyhow::{Context, Result, anyhow, bail, ensure};
 use derive_more::Debug;
-use forensic_adb::{Device, UnixFileStatus, UnixPath, UnixPathBuf};
+use forensic_adb::{Device, DirectoryTransferProgress, UnixFileStatus, UnixPath, UnixPathBuf};
 use lazy_regex::{Lazy, Regex, lazy_regex};
-use tokio::{fs::File, io::BufReader};
+use tokio::{
+    fs::File,
+    io::BufReader,
+    sync::mpsc::{self, UnboundedSender},
+};
 use tracing::{Span, debug, error, info, trace, warn};
 
 use crate::{
@@ -357,6 +361,40 @@ impl AdbDevice {
         self.inner.push(&mut file, &dest_path, 0o777).await.context("Failed to push file")
     }
 
+    // /// Pushes a file to the device (with progress)
+    // ///
+    // /// # Arguments
+    // /// * `source_file` - Local path of the file to push
+    // /// * `dest_file` - Destination path on the device
+    // /// * `total_bytes` - Total size of the file to push
+    // /// * `progress_sender` - Sender for progress updates
+    // async fn push_with_progress(
+    //     &self,
+    //     source_file: &Path,
+    //     dest_file: &UnixPath,
+    //     total_bytes: u64,
+    //     progress_sender: UnboundedSender<FileTransferProgress>,
+    // ) -> Result<()> {
+    //     ensure!(
+    //         source_file.is_file(),
+    //         "Path does not exist or is not a file: {}",
+    //         source_file.display()
+    //     );
+
+    //     let dest_path = self.resolve_push_dest_path(source_file, dest_file).await?;
+    //     debug!(
+    //         source_file = source_file.display().to_string(),
+    //         dest_path = dest_path.display().to_string(),
+    //         "Pushing file"
+    //     );
+
+    //     let mut file = BufReader::new(File::open(source_file).await?);
+    //     self.inner
+    //         .push_with_progress(&mut file, &dest_path, 0o777, total_bytes, progress_sender)
+    //         .await
+    //         .context("Failed to push file")
+    // }
+
     /// Pushes a directory to the device
     ///
     /// # Arguments
@@ -376,6 +414,36 @@ impl AdbDevice {
             "Pushing directory"
         );
         self.inner.push_dir(source, &dest_path, 0o777).await.context("Failed to push directory")
+    }
+
+    /// Pushes a directory to the device (with progress)
+    ///
+    /// # Arguments
+    /// * `source` - Local directory path to push
+    /// * `dest_dir` - Destination directory path on device
+    /// * `progress_sender` - Sender for progress updates
+    async fn push_dir_with_progress(
+        &self,
+        source: &Path,
+        dest: &UnixPath,
+        progress_sender: UnboundedSender<DirectoryTransferProgress>,
+    ) -> Result<()> {
+        ensure!(
+            source.is_dir(),
+            "Source path does not exist or is not a directory: {}",
+            source.display()
+        );
+
+        let dest_path = self.resolve_push_dest_path(source, dest).await?;
+        debug!(
+            source = source.display().to_string(),
+            dest_path = dest_path.display().to_string(),
+            "Pushing directory"
+        );
+        self.inner
+            .push_dir_with_progress(source, dest, 0o777, progress_sender)
+            .await
+            .context("Failed to push directory")
     }
 
     /// Pushes raw bytes to a file on the device
@@ -486,6 +554,22 @@ impl AdbDevice {
     pub async fn install_apk(&self, apk_path: &Path) -> Result<()> {
         // TODO: Implement backup->reinstall->restore for incompatible updates
         self.inner.install_package(apk_path, true, true).await.context("Failed to install APK")
+    }
+
+    /// Installs an APK on the device (with progress)
+    ///
+    /// # Arguments
+    /// * `apk_path` - Path to the APK file to install
+    /// * `progress_sender` - Sender for progress updates
+    pub async fn install_apk_with_progress(
+        &self,
+        apk_path: &Path,
+        progress_sender: UnboundedSender<f32>,
+    ) -> Result<()> {
+        self.inner
+            .install_package_with_progress(apk_path, true, true, progress_sender)
+            .await
+            .context("Failed to install APK")
     }
 
     /// Uninstalls a package from the device
@@ -704,12 +788,27 @@ impl AdbDevice {
     ///
     /// # Arguments
     /// * `app_dir` - Path to directory containing the app files
+    /// * `progress_sender` - Sender for progress updates
     //  #[instrument(err)]
-    pub async fn sideload_app(&self, app_dir: &Path) -> Result<()> {
+    pub async fn sideload_app(
+        &self,
+        app_dir: &Path,
+        progress_sender: UnboundedSender<SideloadProgress>,
+    ) -> Result<()> {
+        fn send_progress(
+            progress_sender: &UnboundedSender<SideloadProgress>,
+            status: &str,
+            progress: f32,
+        ) {
+            let _ = progress_sender.send(SideloadProgress { status: status.to_string(), progress });
+        }
+
         // TODO: support direct streaming of app files
         // TODO: add optional checksum verification
         // TODO: check free space before proceeding
         ensure!(app_dir.is_dir(), "App path must be a directory");
+
+        send_progress(&progress_sender, "Enumerating files", 0.0);
 
         let mut entries = Vec::new();
         let mut dir = tokio::fs::read_dir(app_dir).await?;
@@ -722,6 +821,7 @@ impl AdbDevice {
         for entry in &entries {
             if let Some(name) = entry.file_name().to_str() {
                 if name.to_lowercase() == "install.txt" {
+                    send_progress(&progress_sender, "Executing install script", 0.5);
                     return self
                         .execute_install_script(&entry.path())
                         .await
@@ -763,7 +863,27 @@ impl AdbDevice {
         }
 
         // Install APK
-        self.install_apk(&apk_path).await?;
+        send_progress(&progress_sender, "Installing APK", 0.0);
+        let install_progress_scale = match obb_dir {
+            Some(_) => 0.5,
+            None => 1.0,
+        };
+        // self.install_apk(&apk_path).await?;
+
+        let (tx, mut rx) = mpsc::unbounded_channel::<f32>();
+        tokio::spawn({
+            let progress_sender = progress_sender.clone();
+            async move {
+                while let Some(progress) = rx.recv().await {
+                    send_progress(
+                        &progress_sender,
+                        &format!("Installing APK ({:.0}%)", progress * 100.0),
+                        progress * install_progress_scale,
+                    );
+                }
+            }
+        });
+        self.install_apk_with_progress(&apk_path, tx).await?;
 
         // Push OBB directory
         if let Some(obb_dir) = obb_dir {
@@ -772,9 +892,34 @@ impl AdbDevice {
                 .and_then(|n| n.to_str())
                 .context("Failed to get package name from OBB path")?;
             let remote_obb_path = UnixPath::new("/sdcard/Android/obb").join(package_name);
-            self.push_dir(&obb_dir, &remote_obb_path).await?;
+            // self.push_dir_with(&obb_dir, &remote_obb_path).await?;
+
+            let (tx, mut rx) = mpsc::unbounded_channel::<DirectoryTransferProgress>();
+            tokio::spawn(async move {
+                while let Some(progress) = rx.recv().await {
+                    let push_progress =
+                        progress.transferred_bytes as f32 / progress.total_bytes as f32;
+                    let file_progress = progress.current_file_progress.transferred_bytes as f32
+                        / progress.current_file_progress.total_bytes as f32;
+                    let status = format!(
+                        "Pushing OBB {}/{} ({:.0}%)",
+                        progress.transferred_files + 1,
+                        progress.total_files,
+                        file_progress * 100.0
+                    );
+                    send_progress(&progress_sender, &status, 0.5 + push_progress * 0.5);
+                }
+            });
+
+            self.push_dir_with_progress(&obb_dir, &remote_obb_path, tx).await?;
         }
 
         Ok(())
     }
+}
+
+// TODO: move somewhere else?
+pub struct SideloadProgress {
+    pub status: String,
+    pub progress: f32,
 }

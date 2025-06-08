@@ -9,11 +9,11 @@ use std::{
 
 use anyhow::{Context, Result};
 use rinf::{DartSignal, RustSignal};
-use tokio::sync::{Mutex, Semaphore};
+use tokio::sync::{Mutex, Semaphore, mpsc};
 use tracing::error;
 
 use crate::{
-    adb::AdbHandler,
+    adb::{AdbHandler, device::SideloadProgress},
     downloader::{Downloader, RcloneTransferStats},
     models::signals::task::{TaskParams, TaskProgress, TaskRequest, TaskStatus, TaskType},
 };
@@ -92,7 +92,7 @@ impl TaskManager {
             send_progress(id, task_type, Some(task_name.clone()), status, progress, message);
         };
 
-        update_progress(TaskStatus::Waiting, 0.0, "Initializing...".into());
+        update_progress(TaskStatus::Waiting, 0.0, "Starting...".into());
 
         let result = match task_type {
             TaskType::Download => self.handle_download(params, &update_progress).await,
@@ -127,7 +127,7 @@ impl TaskManager {
         let _download_permit = self.download_semaphore.acquire().await;
         update_progress(TaskStatus::Running, 0.0, "Starting download...".into());
 
-        let (tx, mut rx) = tokio::sync::mpsc::unbounded_channel::<RcloneTransferStats>();
+        let (tx, mut rx) = mpsc::unbounded_channel::<RcloneTransferStats>();
 
         let mut download_task = {
             let downloader = self.downloader.clone();
@@ -160,7 +160,31 @@ impl TaskManager {
         let _adb_permit = self.adb_semaphore.acquire().await;
         update_progress(TaskStatus::Running, 0.75, "Installing app...".into());
 
-        self.adb_handler.sideload_app(Path::new(&app_path)).await?;
+        // self.adb_handler.sideload_app(Path::new(&app_path)).await?;
+
+        let (tx, mut rx) = mpsc::unbounded_channel::<SideloadProgress>();
+
+        let mut sideload_task = {
+            let adb_handler = self.adb_handler.clone();
+            let app_path = app_path.clone();
+            tokio::spawn(async move { adb_handler.sideload_app(Path::new(&app_path), tx).await })
+        };
+
+        let mut sideload_result = None;
+        while sideload_result.is_none() {
+            tokio::select! {
+                result = &mut sideload_task => {
+                    sideload_result = Some(result.context("Sideload task failed")?);
+                }
+                Some(progress) = rx.recv() => {
+                    let step_progress = progress.progress;
+                    update_progress(TaskStatus::Running, 0.75 + step_progress * 0.25, progress.status);
+                }
+            }
+        }
+
+        sideload_result.unwrap()?;
+
         Ok(())
     }
 
@@ -176,7 +200,7 @@ impl TaskManager {
         let _permit = self.download_semaphore.acquire().await;
         update_progress(TaskStatus::Running, 0.0, "Starting download...".into());
 
-        let (tx, mut rx) = tokio::sync::mpsc::unbounded_channel::<RcloneTransferStats>();
+        let (tx, mut rx) = mpsc::unbounded_channel::<RcloneTransferStats>();
 
         let download_task = {
             let downloader = self.downloader.clone();
@@ -213,7 +237,27 @@ impl TaskManager {
         let _permit = self.adb_semaphore.acquire().await;
         update_progress(TaskStatus::Running, 0.0, "Installing APK...".into());
 
-        self.adb_handler.install_apk(Path::new(&apk_path)).await?;
+        let (tx, mut rx) = mpsc::unbounded_channel::<f32>();
+
+        let mut install_task = {
+            let adb_handler = self.adb_handler.clone();
+            let apk_path = apk_path.clone();
+            tokio::spawn(async move { adb_handler.install_apk(Path::new(&apk_path), tx).await })
+        };
+
+        let mut install_result = None;
+        while install_result.is_none() {
+            tokio::select! {
+                result = &mut install_task => {
+                    install_result = Some(result.context("Install task failed")?);
+                }
+                Some(progress) = rx.recv() => {
+                    let step_progress = progress;
+                    update_progress(TaskStatus::Running, step_progress, "Installing APK...".into());
+                }
+            }
+        }
+        install_result.unwrap()?;
 
         Ok(())
     }
@@ -229,8 +273,30 @@ impl TaskManager {
         let _permit = self.adb_semaphore.acquire().await;
         update_progress(TaskStatus::Running, 0.0, "Installing app...".into());
 
-        self.adb_handler.sideload_app(Path::new(&app_path)).await?;
+        // self.adb_handler.sideload_app(Path::new(&app_path)).await?;
 
+        let (tx, mut rx) = mpsc::unbounded_channel::<SideloadProgress>();
+
+        let mut sideload_task = {
+            let adb_handler = self.adb_handler.clone();
+            let app_path = app_path.clone();
+            tokio::spawn(async move { adb_handler.sideload_app(Path::new(&app_path), tx).await })
+        };
+
+        let mut sideload_result = None;
+        while sideload_result.is_none() {
+            tokio::select! {
+                result = &mut sideload_task => {
+                    sideload_result = Some(result.context("Sideload task failed")?);
+                }
+                Some(progress) = rx.recv() => {
+                    let step_progress = progress.progress;
+                    update_progress(TaskStatus::Running, step_progress, progress.status);
+                }
+            }
+        }
+
+        sideload_result.unwrap()?;
         Ok(())
     }
 

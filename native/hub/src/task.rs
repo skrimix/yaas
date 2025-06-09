@@ -51,8 +51,7 @@ impl TaskManager {
     async fn receive_create_requests(self: Arc<Self>) {
         let receiver = TaskRequest::get_dart_signal_receiver();
         while let Some(request) = receiver.recv().await {
-            Self::enqueue_task(self.clone(), request.message.task_type, request.message.params)
-                .await;
+            self.clone().enqueue_task(request.message.task_type, request.message.params).await;
         }
     }
 

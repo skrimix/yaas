@@ -70,7 +70,7 @@ impl AdbHandler {
                 }
             } // TODO: handle error
         });
-        tokio::spawn(Self::start_tasks(handle.clone(), settings_stream));
+        tokio::spawn(handle.clone().start_tasks(settings_stream));
         handle
     }
 
@@ -110,9 +110,7 @@ impl AdbHandler {
             let cancel_token = cancel_token.clone();
             let handler = self.clone();
             async move {
-                cancel_token
-                    .run_until_cancelled(Self::handle_device_updates(handler, receiver))
-                    .await
+                cancel_token.run_until_cancelled(handler.handle_device_updates(receiver)).await
             }
         });
 
@@ -120,9 +118,7 @@ impl AdbHandler {
         tokio::spawn({
             let cancel_token = cancel_token.clone();
             let handler = self.clone();
-            async move {
-                cancel_token.run_until_cancelled(Self::run_device_tracker(handler, sender)).await
-            }
+            async move { cancel_token.run_until_cancelled(handler.run_device_tracker(sender)).await }
         });
 
         // Listen for commands

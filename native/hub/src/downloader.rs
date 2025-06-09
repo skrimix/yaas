@@ -4,7 +4,6 @@ use anyhow::{Context, Result};
 use futures::TryStreamExt;
 use rclone::RcloneStorage;
 use rinf::{DartSignal, RustSignal};
-// use nif::NifStorage;
 use tokio::{
     fs::File,
     sync::{Mutex, RwLock},
@@ -18,9 +17,7 @@ use crate::models::{
     signals::download::{CloudAppsChangedEvent, LoadCloudAppsRequest},
 };
 
-// mod nif;
 mod rclone;
-// pub use nif::DirDownloadProgress;
 pub use rclone::RcloneTransferStats;
 
 pub struct Downloader {

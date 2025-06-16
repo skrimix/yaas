@@ -421,13 +421,16 @@ impl AdbDevice {
     /// # Arguments
     /// * `source` - Local directory path to push
     /// * `dest_dir` - Destination directory path on device
+    /// * `overwrite` - Whether to clean up destination directory before pushing
     /// * `progress_sender` - Sender for progress updates
     async fn push_dir_with_progress(
         &self,
         source: &Path,
         dest: &UnixPath,
+        overwrite: bool,
         progress_sender: UnboundedSender<DirectoryTransferProgress>,
     ) -> Result<()> {
+        // TODO: add overwrite flag for cleaning up destination directory
         ensure!(
             source.is_dir(),
             "Source path does not exist or is not a directory: {}",
@@ -440,6 +443,14 @@ impl AdbDevice {
             dest_path = dest_path.display().to_string(),
             "Pushing directory"
         );
+        if overwrite {
+            let output = self.shell(&format!("rm -rf {}", dest_path.display())).await?;
+            debug!(
+                dest_path = dest_path.display().to_string(),
+                output = output,
+                "Cleaned up destination directory"
+            );
+        }
         self.inner
             .push_dir_with_progress(source, dest, 0o777, progress_sender)
             .await
@@ -911,7 +922,7 @@ impl AdbDevice {
                 }
             });
 
-            self.push_dir_with_progress(&obb_dir, &remote_obb_path, tx).await?;
+            self.push_dir_with_progress(&obb_dir, &remote_obb_path, true, tx).await?;
         }
 
         Ok(())

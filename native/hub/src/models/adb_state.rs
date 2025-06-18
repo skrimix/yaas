@@ -1,11 +1,12 @@
-use forensic_adb::DeviceBrief;
+use rinf::RustSignal;
+use serde::Serialize;
 
-#[derive(Debug, Clone)]
+#[derive(Debug, Clone, Serialize, RustSignal)]
 pub enum AdbState {
     ServerNotRunning,
     NoDevices,
-    DevicesAvailable(Vec<DeviceBrief>),
-    DeviceNotAuthorized,
+    DevicesAvailable(Vec<String>),
+    DeviceUnauthorized,
     DeviceConnected,
 }
 

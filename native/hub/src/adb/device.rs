@@ -653,10 +653,10 @@ impl AdbDevice {
         }
 
         for (line_index, line) in script_content.lines().enumerate() {
-            let line = line.trim();
-
             // Skip empty lines and comments
-            if line.is_empty() || line.starts_with('#') || line.starts_with("REM") {
+            let line =
+                line.split('#').next().unwrap_or(line).split("REM").next().unwrap_or(line).trim();
+            if line.is_empty() {
                 trace!(line = line, "Skipping empty or comment line");
                 continue;
             }

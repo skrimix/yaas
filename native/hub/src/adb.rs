@@ -303,6 +303,26 @@ impl AdbHandler {
                     }
                 }
             }
+
+            AdbCommand::UninstallPackage(package_name) => {
+                let result = self.uninstall_package(&package_name).await;
+                match result {
+                    Ok(_) => {
+                        send_toast(
+                            "App Uninstalled".to_string(),
+                            format!("Uninstalled {}", package_name),
+                            false,
+                            None,
+                        );
+                        Ok(())
+                    }
+                    Err(e) => {
+                        let error_msg = format!("Failed to uninstall {}: {:#}", package_name, e);
+                        send_toast("Uninstall Failed".to_string(), error_msg, true, None);
+                        Err(e.context(format!("Failed to uninstall {}", package_name)))
+                    }
+                }
+            }
         };
 
         result.context("Command execution failed")

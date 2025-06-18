@@ -5,6 +5,7 @@ use serde::{Deserialize, Serialize};
 pub enum AdbCommand {
     LaunchApp(String),
     ForceStopApp(String),
+    UninstallPackage(String),
 }
 
 #[derive(Serialize, Deserialize, DartSignal)]

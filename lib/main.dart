@@ -14,6 +14,7 @@ import 'widgets/error_screen.dart';
 import 'widgets/settings_screen.dart';
 import 'widgets/drag_drop_overlay.dart';
 import 'providers/device_state.dart';
+import 'providers/adb_state.dart';
 import 'providers/cloud_apps_state.dart';
 import 'providers/task_state.dart';
 import 'providers/settings_state.dart';
@@ -41,6 +42,7 @@ void main() async {
     MultiProvider(
       providers: [
         ChangeNotifierProvider(create: (_) => DeviceState()),
+        ChangeNotifierProvider(create: (_) => AdbStateProvider()),
         ChangeNotifierProvider(create: (_) => AppState()),
         ChangeNotifierProvider(create: (_) => CloudAppsState()),
         ChangeNotifierProvider(create: (_) => TaskState()),

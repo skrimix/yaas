@@ -2,22 +2,23 @@ import 'package:flutter/material.dart';
 import 'package:proper_filesize/proper_filesize.dart';
 import 'package:provider/provider.dart';
 import '../providers/device_state.dart';
+import '../providers/adb_state.dart';
 import '../providers/task_state.dart';
 import 'task_list_dialog.dart';
 
 class StatusBar extends StatelessWidget {
   const StatusBar({super.key});
 
-  Widget _buildConnectionStatus(bool isConnected) {
+  Widget _buildConnectionStatus(AdbStateProvider adbState) {
     return Tooltip(
-      message: 'Status: ${isConnected ? 'Connected' : 'Disconnected'}',
+      message: 'ADB Status: ${adbState.statusDescription}',
       child: Row(
         children: [
           Container(
             width: 18,
             height: 18,
             decoration: BoxDecoration(
-              color: isConnected ? Colors.green : Colors.red,
+              color: adbState.connectionColor,
               shape: BoxShape.circle,
             ),
           ),
@@ -29,7 +30,7 @@ class StatusBar extends StatelessWidget {
 
   Widget _buildDeviceInfo(DeviceState deviceState) {
     if (!deviceState.isConnected) {
-      return const Text('No device connected');
+      return const Text('No device connection');
     }
     return Tooltip(
       message:
@@ -155,8 +156,8 @@ class StatusBar extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    return Consumer<DeviceState>(
-      builder: (context, deviceState, _) {
+    return Consumer2<DeviceState, AdbStateProvider>(
+      builder: (context, deviceState, adbState, _) {
         return Container(
           height: 24,
           padding: const EdgeInsets.symmetric(horizontal: 8),
@@ -176,7 +177,7 @@ class StatusBar extends StatelessWidget {
           child: Row(
             children: [
               // Left side
-              _buildConnectionStatus(deviceState.isConnected),
+              _buildConnectionStatus(adbState),
               _buildDeviceInfo(deviceState),
               _buildBatteryStatus(deviceState),
               _buildStorageStatus(deviceState),

@@ -241,11 +241,19 @@ impl AdbHandler {
                     info!("Auto-connecting to device");
                     if let Err(e) = self.connect_device().await {
                         error!(error = e.as_ref() as &dyn Error, "Auto-connect failed");
+                        Toast::send(
+                            "Failed to connect to device".to_string(),
+                            format!("{:#}", e),
+                            true,
+                            None,
+                        );
                     }
                 }
                 // TODO: handle other state combinations
                 _ => {}
             }
+
+            self.refresh_adb_state().await;
         }
 
         bail!("Device update channel closed unexpectedly");
@@ -570,23 +578,27 @@ impl AdbHandler {
     /// Refreshes the ADB state based on the current device and server status
     async fn refresh_adb_state(&self) {
         let mut adb_state = self.adb_state.write().await;
-        if !self.is_server_running().await {
-            *adb_state = AdbState::ServerNotRunning;
+        let new_state = if !self.is_server_running().await {
+            AdbState::ServerNotRunning
         } else if self.try_current_device().await.is_some() {
-            *adb_state = AdbState::DeviceConnected;
+            AdbState::DeviceConnected
         } else {
             let devices: Vec<DeviceBrief> = self.get_adb_devices().await.unwrap_or_else(|_| {
                 error!("Failed to get ADB devices");
                 vec![]
             });
             if devices.is_empty() {
-                *adb_state = AdbState::NoDevices;
+                AdbState::NoDevices
             } else if devices.iter().all(|d| d.state == DeviceState::Unauthorized) {
-                *adb_state = AdbState::DeviceUnauthorized
+                AdbState::DeviceUnauthorized
             } else {
                 let device_serials = devices.iter().map(|d| d.serial.clone()).collect();
-                *adb_state = AdbState::DevicesAvailable(device_serials);
+                AdbState::DevicesAvailable(device_serials)
             }
-        }
+        };
+
+        // Update state and send signal
+        *adb_state = new_state.clone();
+        new_state.send_signal_to_dart();
     }
 }

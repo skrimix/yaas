@@ -96,21 +96,25 @@ impl AdbDevice {
 
         if let Err(e) = self.refresh_package_list().await {
             errors.push(("packages", e));
+            self.installed_packages = Vec::new();
         }
         if let Err(e) = self.refresh_battery_info().await {
             errors.push(("battery", e));
+            self.battery_level = 0;
+            self.controllers = HeadsetControllersInfo::default();
         }
         if let Err(e) = self.refresh_space_info().await {
             errors.push(("space", e));
+            self.space_info = SpaceInfo::default();
         }
 
         if !errors.is_empty() {
             let error_msg = errors
                 .into_iter()
-                .map(|(component, error)| format!("{}: {}", component, error))
+                .map(|(component, error)| format!("{}: {:#}", component, error))
                 .collect::<Vec<_>>()
                 .join(", ");
-            bail!("Failed to refresh device info: {}", error_msg);
+            warn!("Errors while refreshing device info: {}", error_msg);
         }
 
         Ok(())
@@ -174,7 +178,7 @@ impl AdbDevice {
     async fn refresh_battery_info(&mut self) -> Result<()> {
         // Get device battery level
         let device_level: u8 = self
-            .shell("dumpsys battery | grep level | awk '{print $2}'")
+            .shell("dumpsys battery | grep '  level' | awk '{print $2}'")
             .await
             .context("Failed to get device battery level")?
             .trim()
@@ -224,6 +228,7 @@ impl AdbDevice {
         if !output.contains("monkey aborted") {
             return Ok(());
         }
+        debug!(output = output, "Monkey command returned error");
 
         // If VR launch fails, try default launch
         info!("Monkey command failed with VR category, retrying with default");

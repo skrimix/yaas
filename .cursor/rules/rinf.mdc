@@ -1,0 +1,6 @@
+---
+description: 
+globs: *.rs
+alwaysApply: false
+---
+Use `rinf gen` for generating Dart classes for Rust<->Dart signals.

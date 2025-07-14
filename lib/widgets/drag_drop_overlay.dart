@@ -28,31 +28,32 @@ class _DragDropOverlayState extends State<DragDropOverlay> {
       return;
     }
 
-    // TODO: handle multiple items
-    final path = files.first.path;
-    final isDirectory = FileSystemEntity.isDirectorySync(path);
+    for (final file in files) {
+      final path = file.path;
+      final isDirectory = FileSystemEntity.isDirectorySync(path);
 
-    // Validate paths before proceeding
-    final isValid = isDirectory
-        ? SideloadUtils.isDirectoryValid(path)
-        : SideloadUtils.isValidApkFile(path);
+      // Validate paths before proceeding
+      final isValid = isDirectory
+          ? SideloadUtils.isDirectoryValid(path)
+          : SideloadUtils.isValidApkFile(path);
 
-    if (!isValid) {
-      final errorMessage = isDirectory
-          ? 'Selected path is not a valid app directory'
-          : 'Selected path is not a valid APK file';
+      if (!isValid) {
+        final errorMessage = isDirectory
+            ? 'Selected path is not a valid app directory'
+            : 'Selected path is not a valid APK file';
 
-      SideloadUtils.showErrorToast(context, errorMessage);
-      return;
+        SideloadUtils.showErrorToast(context, errorMessage);
+        return;
+      }
+
+      SideloadUtils.installApp(path, isDirectory);
+
+      SideloadUtils.showInfoToast(
+        context,
+        'Installation Started',
+        'Installing ${isDirectory ? 'app from directory' : 'APK file'}',
+      );
     }
-
-    SideloadUtils.installApp(path, isDirectory);
-
-    SideloadUtils.showInfoToast(
-      context,
-      'Installation Started',
-      'Installing ${isDirectory ? 'app from directory' : 'APK file'}',
-    );
   }
 
   @override

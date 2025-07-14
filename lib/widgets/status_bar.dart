@@ -110,45 +110,41 @@ class StatusBar extends StatelessWidget {
             ),
           );
         },
-        child: Tooltip(
-          message: hasActiveTasks
-              ? '${activeTasks.length} active task(s)'
-              : hasRecentTasks
-                  ? 'View recent tasks'
-                  : 'No tasks',
-          child: Row(
-            children: [
-              if (hasActiveTasks) ...[
-                SizedBox(
-                  width: 16,
-                  height: 16,
-                  child: CircularProgressIndicator(
-                    value: progress,
-                    strokeWidth: 2,
-                  ),
+        child: Row(
+          children: [
+            if (hasActiveTasks) ...[
+              SizedBox(
+                width: 16,
+                height: 16,
+                child: CircularProgressIndicator(
+                  value: progress,
+                  strokeWidth: 2,
                 ),
-                const SizedBox(width: 8),
-                Text('${activeTasks.length} active'),
-              ] else ...[
-                Icon(
-                  hasRecentTasks ? Icons.task_alt : Icons.check_circle_outline,
-                  size: 16,
-                  color: Theme.of(context).colorScheme.onSurface.withValues(
-                        alpha: hasRecentTasks ? 1.0 : 0.5,
-                      ),
-                ),
-                if (hasRecentTasks) ...[
-                  const SizedBox(width: 8),
-                  Text(
-                    'View tasks',
-                    style: TextStyle(
-                      color: Theme.of(context).colorScheme.onSurface,
+              ),
+              const SizedBox(width: 8),
+              Text(
+                '${activeTasks.length} active task${activeTasks.length > 1 ? 's' : ''}',
+              ),
+            ] else ...[
+              Icon(
+                hasRecentTasks ? Icons.task_alt : Icons.check_circle_outline,
+                size: 16,
+                color: Theme.of(context).colorScheme.onSurface.withValues(
+                      alpha: hasRecentTasks ? 1.0 : 0.5,
                     ),
+              ),
+              if (hasRecentTasks || true) ...[
+                // TODO: decide how we want to show this
+                const SizedBox(width: 8),
+                Text(
+                  'View tasks',
+                  style: TextStyle(
+                    color: Theme.of(context).colorScheme.onSurface,
                   ),
-                ],
+                ),
               ],
             ],
-          ),
+          ],
         ),
       ),
     );

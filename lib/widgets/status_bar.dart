@@ -1,6 +1,7 @@
 import 'package:flutter/material.dart';
 import 'package:proper_filesize/proper_filesize.dart';
 import 'package:provider/provider.dart';
+import 'package:toastification/toastification.dart';
 import '../providers/device_state.dart';
 import '../providers/adb_state.dart';
 import '../providers/task_state.dart';
@@ -177,6 +178,35 @@ class StatusBar extends StatelessWidget {
               _buildDeviceInfo(deviceState),
               _buildBatteryStatus(deviceState),
               _buildStorageStatus(deviceState),
+              // TODO: Implement refresh button
+              if (deviceState.isConnected) ...[
+                Tooltip(
+                  message: 'Refresh all data',
+                  child: SizedBox(
+                    width: 23,
+                    height: 23,
+                    child: IconButton(
+                      onPressed: () {
+                        toastification.show(
+                          type: ToastificationType.info,
+                          style: ToastificationStyle.flat,
+                          title: const Text('Not implemented'),
+                          description:
+                              const Text('This feature is not implemented yet'),
+                          autoCloseDuration: const Duration(seconds: 3),
+                          backgroundColor:
+                              Theme.of(context).colorScheme.surfaceContainer,
+                          borderSide: BorderSide.none,
+                          alignment: Alignment.bottomRight,
+                        );
+                      },
+                      icon: const Icon(Icons.refresh),
+                      padding: EdgeInsets.zero,
+                      iconSize: 16,
+                    ),
+                  ),
+                ),
+              ],
               // Right side
               const Spacer(),
               Consumer<TaskState>(

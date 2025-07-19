@@ -81,7 +81,7 @@ impl TaskManager {
                     None,
                     TaskStatus::Failed,
                     0.0,
-                    format!("Failed to initialize task: {:#}", e),
+                    format!("Failed to initialize task: {e:#}"),
                 );
                 return;
             }
@@ -109,7 +109,7 @@ impl TaskManager {
             Ok(_) => update_progress(TaskStatus::Completed, 1.0, "Done".into()),
             Err(e) => {
                 error!(error = e.as_ref() as &dyn Error, "Task {} failed", task_name);
-                update_progress(TaskStatus::Failed, 0.0, format!("Task failed: {:#}", e));
+                update_progress(TaskStatus::Failed, 0.0, format!("Task failed: {e:#}"));
             }
         }
     }

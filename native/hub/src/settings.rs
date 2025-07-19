@@ -64,7 +64,7 @@ impl SettingsHandler {
                             .expect("Failed to load default settings"); // TODO: handle error?
                         handler.on_settings_change(
                             settings.clone(),
-                            Some(format!("Failed to load settings: {:#}", e)),
+                            Some(format!("Failed to load settings: {e:#}")),
                         );
                     }
                 }
@@ -87,7 +87,7 @@ impl SettingsHandler {
                     Err(e) => {
                         error!(error = e.as_ref() as &dyn Error, "Failed to save settings");
                         SettingsSavedEvent {
-                            error: Some(format!("Failed to save settings: {:#}", e)),
+                            error: Some(format!("Failed to save settings: {e:#}")),
                         }
                         .send_signal_to_dart();
                     }

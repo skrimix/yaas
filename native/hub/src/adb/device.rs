@@ -72,7 +72,7 @@ impl AdbDevice {
             .to_string();
         let device_type = DeviceType::from_product_name(&product);
         let name = match device_type {
-            DeviceType::Unknown => format!("Unknown ({})", product),
+            DeviceType::Unknown => format!("Unknown ({product})"),
             _ => device_type.to_string(),
         };
         let mut device = Self {
@@ -111,7 +111,7 @@ impl AdbDevice {
         if !errors.is_empty() {
             let error_msg = errors
                 .into_iter()
-                .map(|(component, error)| format!("{}: {:#}", component, error))
+                .map(|(component, error)| format!("{component}: {error:#}"))
                 .collect::<Vec<_>>()
                 .join(", ");
             warn!("Errors while refreshing device info: {}", error_msg);
@@ -221,7 +221,7 @@ impl AdbDevice {
     pub async fn launch(&self, package: &str) -> Result<()> {
         // First try launching with VR category
         let output = self
-            .shell(&format!("monkey -p {} -c com.oculus.intent.category.VR 1", package))
+            .shell(&format!("monkey -p {package} -c com.oculus.intent.category.VR 1"))
             .await
             .context("Failed to execute monkey command")?;
 
@@ -233,7 +233,7 @@ impl AdbDevice {
         // If VR launch fails, try default launch
         info!("Monkey command failed with VR category, retrying with default");
         let output = self
-            .shell(&format!("monkey -p {} 1", package))
+            .shell(&format!("monkey -p {package} 1"))
             .await
             .context("Failed to execute monkey command")?;
 
@@ -601,7 +601,7 @@ impl AdbDevice {
                     // Check if package exists
                     let escaped = package_name.replace(".", "\\.");
                     let output = self
-                        .shell(&format!("pm list packages | grep -w ^package:{}", escaped))
+                        .shell(&format!("pm list packages | grep -w ^package:{escaped}"))
                         .await
                         .unwrap_or_default();
 
@@ -616,7 +616,7 @@ impl AdbDevice {
                         "Package {} is protected by device policy, trying to force uninstall",
                         package_name
                     );
-                    self.shell(&format!("pm disable-user {}", package_name)).await?;
+                    self.shell(&format!("pm disable-user {package_name}")).await?;
                     self.inner.uninstall_package(package_name).await.map_err(Into::into)
                 } else {
                     Err(e.into())

@@ -107,10 +107,7 @@ impl Downloader {
                     }
                     Err(e) => {
                         error!(error = e.as_ref() as &dyn Error, "Failed to load app list");
-                        send_app_list(
-                            Vec::new(),
-                            Some(format!("Failed to load app list: {:#}", e)),
-                        );
+                        send_app_list(Vec::new(), Some(format!("Failed to load app list: {e:#}")));
                     }
                 }
             } else {

@@ -69,7 +69,7 @@ impl AdbHandler {
             let handle = handle.clone();
             async move {
                 if let Err(e) = handle.ensure_server_running().await {
-                    panic!("Failed to start ADB server: {}", e)
+                    panic!("Failed to start ADB server: {e}")
                 }
             } // TODO: handle error
         });
@@ -243,7 +243,7 @@ impl AdbHandler {
                         error!(error = e.as_ref() as &dyn Error, "Auto-connect failed");
                         Toast::send(
                             "Failed to connect to device".to_string(),
-                            format!("{:#}", e),
+                            format!("{e:#}"),
                             true,
                             None,
                         );
@@ -294,16 +294,16 @@ impl AdbHandler {
                     Ok(_) => {
                         send_toast(
                             "App Launched".to_string(),
-                            format!("Launched {}", package_name),
+                            format!("Launched {package_name}"),
                             false,
                             None,
                         );
                         Ok(())
                     }
                     Err(e) => {
-                        let error_msg = format!("Failed to launch {}: {:#}", package_name, e);
+                        let error_msg = format!("Failed to launch {package_name}: {e:#}");
                         send_toast("Launch Failed".to_string(), error_msg, true, None);
-                        Err(e.context(format!("Failed to launch {}", package_name)))
+                        Err(e.context(format!("Failed to launch {package_name}")))
                     }
                 }
             }
@@ -314,16 +314,16 @@ impl AdbHandler {
                     Ok(_) => {
                         send_toast(
                             "App Stopped".to_string(),
-                            format!("Stopped {}", package_name),
+                            format!("Stopped {package_name}"),
                             false,
                             None,
                         );
                         Ok(())
                     }
                     Err(e) => {
-                        let error_msg = format!("Failed to force stop {}: {:#}", package_name, e);
+                        let error_msg = format!("Failed to force stop {package_name}: {e:#}");
                         send_toast("Stop Failed".to_string(), error_msg, true, None);
-                        Err(e.context(format!("Failed to force stop {}", package_name)))
+                        Err(e.context(format!("Failed to force stop {package_name}")))
                     }
                 }
             }
@@ -334,16 +334,16 @@ impl AdbHandler {
                     Ok(_) => {
                         send_toast(
                             "App Uninstalled".to_string(),
-                            format!("Uninstalled {}", package_name),
+                            format!("Uninstalled {package_name}"),
                             false,
                             None,
                         );
                         Ok(())
                     }
                     Err(e) => {
-                        let error_msg = format!("Failed to uninstall {}: {:#}", package_name, e);
+                        let error_msg = format!("Failed to uninstall {package_name}: {e:#}");
                         send_toast("Uninstall Failed".to_string(), error_msg, true, None);
-                        Err(e.context(format!("Failed to uninstall {}", package_name)))
+                        Err(e.context(format!("Failed to uninstall {package_name}")))
                     }
                 }
             }

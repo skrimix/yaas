@@ -59,7 +59,7 @@ void main() async {
       type: toast.error ? ToastificationType.error : ToastificationType.success,
       title: Text(toast.title),
       description: Text(toast.description),
-      autoCloseDuration: Duration(seconds: toast.duration ?? 3),
+      autoCloseDuration: Duration(milliseconds: toast.duration ?? 3000),
       style: ToastificationStyle.flat,
       backgroundColor: colorScheme.surfaceContainer,
       borderSide: BorderSide.none,

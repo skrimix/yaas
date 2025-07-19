@@ -649,7 +649,7 @@ impl AdbDevice {
                     debug!(path = path.display().to_string(), "Decompressing 7z archive");
                     let script_dir = script_dir.to_path_buf();
                     move || {
-                        sevenz_rust::decompress_file(&path, script_dir)
+                        sevenz_rust2::decompress_file(&path, script_dir)
                             .context("Error decompressing 7z archive")
                     }
                 })

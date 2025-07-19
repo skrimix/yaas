@@ -33,7 +33,7 @@ sentry = { version = "0.36.0", features = ["backtrace"] }
 sentry-tracing = "0.36.0"
 serde = { version = "1.0.217", features = ["derive"] }
 serde_json = { version = "1.0.135", features = ["preserve_order"] }
-sevenz-rust = "0.6.1"
+sevenz-rust2 = "0.16.2"
 sysproxy = { git = "https://github.com/zzzgydi/sysproxy-rs" }
 test-log = { version = "0.2.16", features = ["trace"] }
 tokio = { version = "1.42.0", features = [
@@ -56,6 +56,7 @@ tracing-subscriber = { version = "0.3.19", features = [
     "tracing-log",
 ] }
 which = { version = "7.0.3", features = ["tracing"] }
+zip = { version = "4.3.0", default-features = false, features = ["deflate"] }
 
 [package.metadata.cargo-machete]
 ignored = ["log"]

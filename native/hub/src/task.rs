@@ -97,6 +97,13 @@ impl TaskManager {
 
         update_progress(TaskStatus::Waiting, 0.0, "Starting...".into());
 
+        Toast::send(
+            task_name.clone(),
+            format!("{task_type}: starting"),
+            false,
+            Some(Duration::from_secs(2)),
+        );
+
         let result = match task_type {
             TaskType::Download => self.handle_download(params, &update_progress).await,
             TaskType::DownloadInstall => {
@@ -119,7 +126,7 @@ impl TaskManager {
                 update_progress(TaskStatus::Failed, 0.0, format!("Task failed: {e:#}"));
                 Toast::send(
                     task_name,
-                    "Task failed".to_string(),
+                    format!("{task_type}: failed"),
                     true,
                     Some(Duration::from_secs(10)),
                 );

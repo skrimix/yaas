@@ -6,6 +6,7 @@ pub enum AdbCommand {
     LaunchApp(String),
     ForceStopApp(String),
     UninstallPackage(String),
+    RefreshDevice,
 }
 
 #[derive(Serialize, Deserialize, DartSignal)]

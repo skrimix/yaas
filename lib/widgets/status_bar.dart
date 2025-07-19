@@ -1,7 +1,7 @@
 import 'package:flutter/material.dart';
 import 'package:proper_filesize/proper_filesize.dart';
 import 'package:provider/provider.dart';
-import 'package:toastification/toastification.dart';
+import 'package:rql/src/bindings/signals/signals.dart' as signals;
 import '../providers/device_state.dart';
 import '../providers/adb_state.dart';
 import '../providers/task_state.dart';
@@ -30,9 +30,6 @@ class StatusBar extends StatelessWidget {
   }
 
   Widget _buildDeviceInfo(DeviceState deviceState) {
-    if (!deviceState.isConnected) {
-      return const Text('No device connection');
-    }
     return Tooltip(
       message:
           'Device: ${deviceState.deviceName}\nSerial: ${deviceState.deviceSerial}',
@@ -46,8 +43,6 @@ class StatusBar extends StatelessWidget {
   }
 
   Widget _buildBatteryStatus(DeviceState deviceState) {
-    if (!deviceState.isConnected) return const SizedBox.shrink();
-
     return Tooltip(
       message: 'Headset: ${deviceState.batteryLevel}%\n'
           'Left Controller: ${deviceState.controllerBatteryLevel(deviceState.leftController)}%\n'
@@ -64,7 +59,7 @@ class StatusBar extends StatelessWidget {
   }
 
   Widget _buildStorageStatus(DeviceState deviceState) {
-    if (!deviceState.isConnected || deviceState.spaceInfo == null) {
+    if (deviceState.spaceInfo == null) {
       return const SizedBox.shrink();
     }
     final spaceInfo = deviceState.spaceInfo;
@@ -89,6 +84,25 @@ class StatusBar extends StatelessWidget {
           Text(available),
           const SizedBox(width: 8),
         ],
+      ),
+    );
+  }
+
+  Widget _buildRefreshButton(DeviceState deviceState) {
+    return Tooltip(
+      message: 'Refresh all data',
+      child: SizedBox(
+        width: 23,
+        height: 23,
+        child: IconButton(
+          onPressed: () {
+            signals.AdbRequest(command: signals.AdbCommandRefreshDevice())
+                .sendSignalToRust();
+          },
+          icon: const Icon(Icons.refresh),
+          padding: EdgeInsets.zero,
+          iconSize: 16,
+        ),
       ),
     );
   }
@@ -175,37 +189,14 @@ class StatusBar extends StatelessWidget {
             children: [
               // Left side
               _buildConnectionStatus(adbState),
-              _buildDeviceInfo(deviceState),
-              _buildBatteryStatus(deviceState),
-              _buildStorageStatus(deviceState),
-              // TODO: Implement refresh button
               if (deviceState.isConnected) ...[
-                Tooltip(
-                  message: 'Refresh all data',
-                  child: SizedBox(
-                    width: 23,
-                    height: 23,
-                    child: IconButton(
-                      onPressed: () {
-                        toastification.show(
-                          type: ToastificationType.info,
-                          style: ToastificationStyle.flat,
-                          title: const Text('Not implemented'),
-                          description:
-                              const Text('This feature is not implemented yet'),
-                          autoCloseDuration: const Duration(seconds: 3),
-                          backgroundColor:
-                              Theme.of(context).colorScheme.surfaceContainer,
-                          borderSide: BorderSide.none,
-                          alignment: Alignment.bottomRight,
-                        );
-                      },
-                      icon: const Icon(Icons.refresh),
-                      padding: EdgeInsets.zero,
-                      iconSize: 16,
-                    ),
-                  ),
-                ),
+                _buildDeviceInfo(deviceState),
+                _buildBatteryStatus(deviceState),
+                _buildStorageStatus(deviceState),
+                _buildRefreshButton(deviceState),
+              ] else ...[
+                const SizedBox(width: 8),
+                Text('No device connected'),
               ],
               // Right side
               const Spacer(),

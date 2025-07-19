@@ -281,7 +281,7 @@ impl AdbHandler {
     /// Result indicating success or failure of the command execution
     //  #[instrument(level = "debug")]
     async fn execute_command(&self, command: AdbCommand) -> Result<()> {
-        fn send_toast(title: String, description: String, error: bool, duration: Option<u32>) {
+        fn send_toast(title: String, description: String, error: bool, duration: Option<Duration>) {
             Toast::send(title, description, error, duration);
         }
 
@@ -344,6 +344,26 @@ impl AdbHandler {
                         let error_msg = format!("Failed to uninstall {package_name}: {e:#}");
                         send_toast("Uninstall Failed".to_string(), error_msg, true, None);
                         Err(e.context(format!("Failed to uninstall {package_name}")))
+                    }
+                }
+            }
+
+            AdbCommand::RefreshDevice => {
+                let result = self.refresh_device().await;
+                match result {
+                    Ok(_) => {
+                        send_toast(
+                            "Refresh".to_string(),
+                            "Device data refreshed".to_string(),
+                            false,
+                            Some(Duration::from_secs(2)),
+                        );
+                        Ok(())
+                    }
+                    Err(e) => {
+                        let error_msg = format!("Failed to refresh device: {e:#}");
+                        send_toast("Refresh Failed".to_string(), error_msg, true, None);
+                        Err(e.context("Failed to refresh device"))
                     }
                 }
             }

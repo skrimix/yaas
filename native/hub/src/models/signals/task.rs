@@ -1,3 +1,6 @@
+use core::fmt;
+use std::fmt::Display;
+
 use rinf::{DartSignal, RustSignal, SignalPiece};
 use serde::{Deserialize, Serialize};
 
@@ -8,6 +11,18 @@ pub enum TaskType {
     InstallApk,
     InstallLocalApp,
     Uninstall,
+}
+
+impl Display for TaskType {
+    fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
+        match self {
+            TaskType::Download => write!(f, "Download"),
+            TaskType::DownloadInstall => write!(f, "Download & Install"),
+            TaskType::InstallApk => write!(f, "Install APK"),
+            TaskType::InstallLocalApp => write!(f, "Install Local App"),
+            TaskType::Uninstall => write!(f, "Uninstall"),
+        }
+    }
 }
 
 #[derive(Clone, Copy, Serialize, Deserialize, SignalPiece)]

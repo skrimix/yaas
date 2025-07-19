@@ -5,6 +5,7 @@ use std::{
         Arc,
         atomic::{AtomicU64, Ordering},
     },
+    time::Duration,
 };
 
 use anyhow::{Context, Result};
@@ -15,7 +16,10 @@ use tracing::error;
 use crate::{
     adb::{AdbHandler, device::SideloadProgress},
     downloader::{Downloader, RcloneTransferStats},
-    models::signals::task::{TaskParams, TaskProgress, TaskRequest, TaskStatus, TaskType},
+    models::signals::{
+        system::Toast,
+        task::{TaskParams, TaskProgress, TaskRequest, TaskStatus, TaskType},
+    },
 };
 
 pub struct TaskManager {
@@ -106,10 +110,19 @@ impl TaskManager {
         };
 
         match result {
-            Ok(_) => update_progress(TaskStatus::Completed, 1.0, "Done".into()),
+            Ok(_) => {
+                update_progress(TaskStatus::Completed, 1.0, "Done".into());
+                Toast::send(task_name, format!("{task_type}: completed"), false, None);
+            }
             Err(e) => {
                 error!(error = e.as_ref() as &dyn Error, "Task {} failed", task_name);
                 update_progress(TaskStatus::Failed, 0.0, format!("Task failed: {e:#}"));
+                Toast::send(
+                    task_name,
+                    "Task failed".to_string(),
+                    true,
+                    Some(Duration::from_secs(10)),
+                );
             }
         }
     }

@@ -54,7 +54,7 @@ class CloudAppList extends StatelessWidget {
       );
     }
 
-    // BUG: scrolling slowly leaks memory until navigated away and back
+    // BUG: scrolling leaks memory slowly until navigated away and back
     return ListView.builder(
       controller: scrollController,
       padding: listPadding,

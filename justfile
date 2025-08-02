@@ -22,14 +22,6 @@ build-release:
 build-profile:
     flutter build linux --profile
 
-# Add a dependency to the main Cargo package
-cargo-add *ARGS:
-    cargo add --package hub {{ARGS}}
-
-# Remove a dependency from the main Cargo package
-cargo-remove *ARGS:
-    cargo remove --package hub {{ARGS}}
-
 # Run all tests
 test:
     cargo test

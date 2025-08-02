@@ -25,7 +25,7 @@ impl Display for TaskType {
     }
 }
 
-#[derive(Clone, Copy, Serialize, Deserialize, SignalPiece)]
+#[derive(Clone, Copy, Debug, Serialize, Deserialize, SignalPiece)]
 pub enum TaskStatus {
     Waiting,
     Running,

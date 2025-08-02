@@ -1,3 +1,4 @@
+import 'package:flutter/foundation.dart';
 import 'package:flutter/material.dart';
 import '../src/bindings/bindings.dart';
 
@@ -64,7 +65,8 @@ class TaskState extends ChangeNotifier {
       final taskId = progress.taskId.toInt();
 
       if (_tasks.containsKey(taskId)) {
-        _tasks[taskId] = _tasks[taskId]!.copyWith(
+        final oldTask = _tasks[taskId]!;
+        _tasks[taskId] = oldTask.copyWith(
           taskName: progress.taskName,
           status: progress.status,
           totalProgress: progress.totalProgress,
@@ -75,6 +77,22 @@ class TaskState extends ChangeNotifier {
               ? DateTime.now()
               : null,
         );
+
+        if (oldTask.status != progress.status) {
+          debugPrint(
+              '[TaskState] Task $taskId (${progress.taskName ?? 'Unknown'}) '
+              'status changed: ${oldTask.status} -> ${progress.status}');
+        }
+
+        // Log completion with duration
+        if (progress.status == TaskStatus.completed ||
+            progress.status == TaskStatus.failed ||
+            progress.status == TaskStatus.cancelled) {
+          final duration = DateTime.now().difference(oldTask.startTime);
+          debugPrint(
+              '[TaskState] Task $taskId completed in ${duration.inSeconds}s '
+              'with status: ${progress.status}');
+        }
       } else {
         _tasks[taskId] = TaskInfo(
           taskId: taskId,
@@ -85,6 +103,10 @@ class TaskState extends ChangeNotifier {
           message: progress.message,
           startTime: DateTime.now(),
         );
+
+        debugPrint(
+            '[TaskState] New task created: $taskId (${progress.taskName ?? 'Unknown'}) '
+            'type: ${progress.taskType}');
       }
 
       _cleanupOldTasks();
@@ -99,8 +121,15 @@ class TaskState extends ChangeNotifier {
       ..sort((a, b) => b.endTime!.compareTo(a.endTime!));
 
     if (finishedTasks.length > _maxFinishedTasks) {
+      final tasksToRemove = finishedTasks.length - _maxFinishedTasks;
+      debugPrint('[TaskState] Cleaning up $tasksToRemove old finished tasks '
+          '(keeping $_maxFinishedTasks most recent)');
+
       for (var i = _maxFinishedTasks; i < finishedTasks.length; i++) {
-        _tasks.remove(finishedTasks[i].taskId);
+        final task = finishedTasks[i];
+        debugPrint('[TaskState] Removing old task: ${task.taskId} '
+            '(${task.taskName ?? 'Unknown'})');
+        _tasks.remove(task.taskId);
       }
     }
   }

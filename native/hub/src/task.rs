@@ -1,4 +1,5 @@
 use std::{
+    collections::HashMap,
     error::Error,
     path::Path,
     sync::{
@@ -8,17 +9,18 @@ use std::{
     time::Duration,
 };
 
-use anyhow::{Context, Result};
+use anyhow::{Context, Result, anyhow};
 use rinf::{DartSignal, RustSignal};
 use tokio::sync::{Mutex, Semaphore, mpsc};
-use tracing::error;
+use tokio_util::sync::CancellationToken;
+use tracing::{error, info, warn};
 
 use crate::{
     adb::{AdbHandler, device::SideloadProgress},
     downloader::{Downloader, RcloneTransferStats},
     models::signals::{
         system::Toast,
-        task::{TaskParams, TaskProgress, TaskRequest, TaskStatus, TaskType},
+        task::{TaskCancelRequest, TaskParams, TaskProgress, TaskRequest, TaskStatus, TaskType},
     },
 };
 
@@ -26,7 +28,7 @@ pub struct TaskManager {
     adb_semaphore: Semaphore,
     download_semaphore: Semaphore,
     id_counter: AtomicU64,
-    tasks: Mutex<Vec<u64>>,
+    tasks: Mutex<HashMap<u64, (TaskType, CancellationToken)>>,
     adb_handler: Arc<AdbHandler>,
     downloader: Arc<Downloader>,
 }
@@ -37,7 +39,7 @@ impl TaskManager {
             adb_semaphore: Semaphore::new(1),
             download_semaphore: Semaphore::new(1),
             id_counter: AtomicU64::new(0),
-            tasks: Mutex::new(Vec::new()),
+            tasks: Mutex::new(HashMap::new()),
             adb_handler,
             downloader,
         });
@@ -46,6 +48,13 @@ impl TaskManager {
             let handle = handle.clone();
             async move {
                 handle.receive_create_requests().await;
+            }
+        });
+
+        tokio::spawn({
+            let handle = handle.clone();
+            async move {
+                handle.receive_cancel_requests().await;
             }
         });
 
@@ -59,22 +68,43 @@ impl TaskManager {
         }
     }
 
+    async fn receive_cancel_requests(self: Arc<Self>) {
+        let receiver = TaskCancelRequest::get_dart_signal_receiver();
+        while let Some(request) = receiver.recv().await {
+            let task_id = request.message.task_id;
+            let tasks = self.tasks.lock().await;
+            if let Some((_, token)) = tasks.get(&task_id) {
+                info!("Trying to cancel task {task_id}");
+                token.cancel();
+            } else {
+                warn!("Task {} not found for cancellation", task_id);
+            }
+        }
+    }
+
     async fn enqueue_task(self: Arc<Self>, task_type: TaskType, params: TaskParams) -> u64 {
         let id = self.id_counter.fetch_add(1, Ordering::Relaxed);
+        let token = CancellationToken::new();
+
+        self.tasks.lock().await.insert(id, (task_type, token.clone()));
 
         tokio::spawn({
             let manager = self.clone();
             async move {
-                manager.process_task(id, task_type, params).await;
+                manager.process_task(id, task_type, params, token).await;
             }
         });
-
-        self.tasks.lock().await.push(id);
 
         id
     }
 
-    async fn process_task(&self, id: u64, task_type: TaskType, params: TaskParams) {
+    async fn process_task(
+        &self,
+        id: u64,
+        task_type: TaskType,
+        params: TaskParams,
+        token: CancellationToken,
+    ) {
         let task_name = match get_task_name(task_type, &params) {
             Ok(name) => name,
             Err(e) => {
@@ -105,15 +135,21 @@ impl TaskManager {
         );
 
         let result = match task_type {
-            TaskType::Download => self.handle_download(params, &update_progress).await,
+            TaskType::Download => {
+                self.handle_download(params, &update_progress, token.clone()).await
+            }
             TaskType::DownloadInstall => {
-                self.handle_download_install(params, &update_progress).await
+                self.handle_download_install(params, &update_progress, token.clone()).await
             }
-            TaskType::InstallApk => self.handle_install_apk(params, &update_progress).await,
+            TaskType::InstallApk => {
+                self.handle_install_apk(params, &update_progress, token.clone()).await
+            }
             TaskType::InstallLocalApp => {
-                self.handle_install_local_app(params, &update_progress).await
+                self.handle_install_local_app(params, &update_progress, token.clone()).await
             }
-            TaskType::Uninstall => self.handle_uninstall(params, &update_progress).await,
+            TaskType::Uninstall => {
+                self.handle_uninstall(params, &update_progress, token.clone()).await
+            }
         };
 
         match result {
@@ -122,22 +158,29 @@ impl TaskManager {
                 Toast::send(task_name, format!("{task_type}: completed"), false, None);
             }
             Err(e) => {
-                error!(error = e.as_ref() as &dyn Error, "Task {} failed", task_name);
-                update_progress(TaskStatus::Failed, 0.0, format!("Task failed: {e:#}"));
-                Toast::send(
-                    task_name,
-                    format!("{task_type}: failed"),
-                    true,
-                    Some(Duration::from_secs(10)),
-                );
+                if token.is_cancelled() {
+                    update_progress(TaskStatus::Cancelled, 0.0, "Task cancelled by user".into());
+                    Toast::send(task_name, format!("{task_type}: cancelled"), false, None);
+                } else {
+                    error!(error = e.as_ref() as &dyn Error, "Task {} failed", task_name);
+                    update_progress(TaskStatus::Failed, 0.0, format!("Task failed: {e:#}"));
+                    Toast::send(
+                        task_name,
+                        format!("{task_type}: failed"),
+                        true,
+                        Some(Duration::from_secs(10)),
+                    );
+                }
             }
         }
+        self.tasks.lock().await.remove(&id);
     }
 
     async fn handle_download_install(
         &self,
         params: TaskParams,
         update_progress: &impl Fn(TaskStatus, f32, String),
+        token: CancellationToken,
     ) -> Result<()> {
         let app_full_name =
             params.cloud_app_full_name.context("Missing cloud_app_full_name parameter")?;
@@ -151,7 +194,8 @@ impl TaskManager {
         let mut download_task = {
             let downloader = self.downloader.clone();
             let app_full_name = app_full_name.clone();
-            tokio::spawn(async move { downloader.download_app(app_full_name, tx).await })
+            let token = token.clone();
+            tokio::spawn(async move { downloader.download_app(app_full_name, tx, token).await })
         };
 
         // Monitor progress while waiting for download to complete
@@ -174,6 +218,10 @@ impl TaskManager {
 
         let app_path = download_result.unwrap();
         drop(_download_permit);
+
+        if token.is_cancelled() {
+            return Err(anyhow!("Task cancelled after download"));
+        }
 
         update_progress(TaskStatus::Waiting, 0.5, "Waiting to start installation...".into());
         let _adb_permit = self.adb_semaphore.acquire().await;
@@ -211,6 +259,7 @@ impl TaskManager {
         &self,
         params: TaskParams,
         update_progress: &impl Fn(TaskStatus, f32, String),
+        token: CancellationToken,
     ) -> Result<()> {
         let app_full_name =
             params.cloud_app_full_name.context("Missing cloud_app_full_name parameter")?;
@@ -221,19 +270,19 @@ impl TaskManager {
 
         let (tx, mut rx) = mpsc::unbounded_channel::<RcloneTransferStats>();
 
-        let download_task = {
+        let mut download_task = {
             let downloader = self.downloader.clone();
             let app_full_name = app_full_name.clone();
-            tokio::spawn(async move { downloader.download_app(app_full_name, tx).await })
+            tokio::spawn(async move { downloader.download_app(app_full_name, tx, token).await })
         };
 
-        tokio::select! {
-            result = download_task => {
-                result.context("Download task failed")?.context("Failed to download app")?;
-                Ok(())
-            }
-            _ = async {
-                while let Some(progress) = rx.recv().await {
+        let mut download_result = None;
+        while download_result.is_none() {
+            tokio::select! {
+                result = &mut download_task => {
+                    download_result = Some(result.context("Download task failed")?.context("Failed to download app"));
+                }
+                Some(progress) = rx.recv() => {
                     let step_progress = progress.bytes as f32 / progress.total_bytes as f32;
                     update_progress(
                         TaskStatus::Running,
@@ -241,14 +290,19 @@ impl TaskManager {
                         format!("Downloading ({:.1}%) - {}/s", step_progress * 100.0, humansize::format_size(progress.speed, humansize::DECIMAL)),
                     );
                 }
-            } => Ok(())
+            }
         }
+
+        download_result.unwrap()?;
+
+        Ok(())
     }
 
     async fn handle_install_apk(
         &self,
         params: TaskParams,
         update_progress: &impl Fn(TaskStatus, f32, String),
+        _token: CancellationToken,
     ) -> Result<()> {
         let apk_path = params.apk_path.context("Missing apk_path parameter")?;
 
@@ -285,6 +339,7 @@ impl TaskManager {
         &self,
         params: TaskParams,
         update_progress: &impl Fn(TaskStatus, f32, String),
+        _token: CancellationToken,
     ) -> Result<()> {
         let app_path = params.local_app_path.context("Missing local_app_path parameter")?;
 
@@ -323,6 +378,7 @@ impl TaskManager {
         &self,
         params: TaskParams,
         update_progress: &impl Fn(TaskStatus, f32, String),
+        _token: CancellationToken,
     ) -> Result<()> {
         let package_name = params.package_name.context("Missing package_name parameter")?;
 

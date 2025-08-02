@@ -144,6 +144,19 @@ class _TaskListDialogState extends State<TaskListDialog>
             ),
           ),
           const SizedBox(width: 8),
+          if (task.isFinished) ...[
+            Text(
+              '${task.endTime!.hour}:${task.endTime!.minute.toString().padLeft(2, '0')}',
+              style: TextStyle(
+                fontSize: 12,
+                color: Theme.of(context)
+                    .colorScheme
+                    .onSurface
+                    .withValues(alpha: 0.7),
+              ),
+            ),
+            const SizedBox(width: 8),
+          ],
           Container(
             padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 2),
             decoration: BoxDecoration(
@@ -201,11 +214,26 @@ class _TaskListDialogState extends State<TaskListDialog>
             ),
         ],
       ),
-      trailing: Text(
-        task.isFinished
-            ? '${task.endTime!.hour}:${task.endTime!.minute.toString().padLeft(2, '0')}'
-            : '${(task.totalProgress * 100).toInt()}%',
-      ),
+      trailing: task.isFinished
+          ? null
+          : Row(
+              mainAxisSize: MainAxisSize.min,
+              children: [
+                Text('${(task.totalProgress * 100).toInt()}%'),
+                const SizedBox(width: 4),
+                // TODO: disable button when task is not cancellable
+                IconButton(
+                  visualDensity: VisualDensity.compact,
+                  icon: const Icon(Icons.close),
+                  tooltip: 'Cancel Task',
+                  onPressed: () {
+                    TaskCancelRequest(
+                            taskId: Uint64.fromBigInt(BigInt.from(task.taskId)))
+                        .sendSignalToRust();
+                  },
+                ),
+              ],
+            ),
     );
   }
 

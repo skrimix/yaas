@@ -1,13 +1,14 @@
 use std::{path::PathBuf, process::Stdio};
 
-use anyhow::{Context, Result, anyhow, ensure};
+use anyhow::{anyhow, Context, Result, ensure};
 use serde::Deserialize;
 use tokio::{
     io::{AsyncBufReadExt, BufReader},
     process::Command,
     sync::mpsc::UnboundedSender,
 };
-use tracing::{debug, error, trace};
+use tokio_util::sync::CancellationToken;
+use tracing::{debug, error, info, trace};
 
 use crate::utils::get_sys_proxy;
 
@@ -132,9 +133,11 @@ impl RcloneClient {
         dest: String,
         operation: RcloneTransferOperation,
         total_bytes: u64,
+        cancellation_token: Option<CancellationToken>,
     ) -> Result<()> {
         // FIXME: disallow concurrent transfers to the same destination
-        self.transfer_with_stats(source, dest, operation, total_bytes, None).await
+        self.transfer_with_stats(source, dest, operation, total_bytes, None, cancellation_token)
+            .await
     }
 
     pub async fn transfer_with_stats(
@@ -144,6 +147,7 @@ impl RcloneClient {
         operation: RcloneTransferOperation,
         total_bytes: u64,
         stats_tx: Option<UnboundedSender<RcloneTransferStats>>,
+        cancellation_token: Option<CancellationToken>,
     ) -> Result<()> {
         let mut args = vec![
             operation.as_str(),
@@ -173,37 +177,52 @@ impl RcloneClient {
         let mut lines = BufReader::new(stderr).lines();
         let mut log_messages = Vec::new();
 
-        if let Some(stats_tx) = stats_tx {
-            while let Some(line) = lines.next_line().await? {
-                match serde_json::from_str::<RcloneStatLine>(&line) {
-                    Ok(stat_line) => {
-                        trace!(?stat_line, "parsed rclone stat line");
-                        let mut stats = stat_line.stats;
-                        stats.total_bytes = total_bytes;
-                        trace!(?stats, "sending stats update");
-                        if stats_tx.send(stats).is_err() {
-                            break;
+        let transfer_future = async {
+            if let Some(stats_tx) = stats_tx {
+                while let Some(line) = lines.next_line().await? {
+                    match serde_json::from_str::<RcloneStatLine>(&line) {
+                        Ok(stat_line) => {
+                            trace!(?stat_line, "parsed rclone stat line");
+                            let mut stats = stat_line.stats;
+                            stats.total_bytes = total_bytes;
+                            trace!(?stats, "sending stats update");
+                            if stats_tx.send(stats).is_err() {
+                                break;
+                            }
+                        }
+                        Err(e) => {
+                            debug!("error parsing rclone stat line: {}", e);
                         }
                     }
-                    Err(e) => {
-                        debug!("error parsing rclone stat line: {}", e);
-                    }
+                    log_messages.push(line);
                 }
-                log_messages.push(line);
             }
-        }
 
-        let status = child.wait().await?;
-        match status.success() {
-            true => Ok(()),
-            false => {
-                let stderr = log_messages.join("\n");
-                error!(code = status.code().unwrap_or(-1), stderr, "rclone transfer failed");
-                Err(anyhow!(
-                    "rclone failed with exit code: {}",
-                    status.code().map_or("unknown".to_string(), |c| c.to_string())
-                ))
+            let status = child.wait().await?;
+            match status.success() {
+                true => Ok(()),
+                false => {
+                    let stderr = log_messages.join("\n");
+                    error!(code = status.code().unwrap_or(-1), stderr, "rclone transfer failed");
+                    Err(anyhow!(
+                        "rclone failed with exit code: {}",
+                        status.code().map_or("unknown".to_string(), |c| c.to_string())
+                    ))
+                }
             }
+        };
+
+        if let Some(token) = cancellation_token {
+            tokio::select! {
+                res = transfer_future => res,
+                _ = token.cancelled() => {
+                    info!("Rclone transfer cancelled by token");
+                    child.kill().await.context("Failed to kill rclone process")?;
+                    Err(anyhow!("Download cancelled by user"))
+                }
+            }
+        } else {
+            transfer_future.await
         }
     }
 }
@@ -242,6 +261,7 @@ impl RcloneStorage {
         source: String,
         dest: PathBuf,
         stats_tx: UnboundedSender<RcloneTransferStats>,
+        cancellation_token: CancellationToken,
     ) -> Result<PathBuf> {
         ensure!(dest.parent().is_some(), "destination must have a parent directory");
         let source = self.format_remote_path(&source);
@@ -254,6 +274,7 @@ impl RcloneStorage {
                 RcloneTransferOperation::Sync,
                 total_bytes,
                 Some(stats_tx),
+                Some(cancellation_token),
             )
             .await
             .map(|_| dest)
@@ -271,6 +292,7 @@ impl RcloneStorage {
                 dest.display().to_string(),
                 RcloneTransferOperation::Copy,
                 total_bytes,
+                None,
             )
             .await?;
         dest.push(source.split('/').next_back().context("Failed to get source file name")?);

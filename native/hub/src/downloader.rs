@@ -140,13 +140,14 @@ impl Downloader {
         &self,
         app_full_name: String,
         progress_tx: tokio::sync::mpsc::UnboundedSender<RcloneTransferStats>,
+        cancellation_token: CancellationToken,
     ) -> Result<String> {
         let dst_dir = self.download_dir.read().await.join(&app_full_name);
         self.storage
             .read()
             .await
             .clone()
-            .download_dir_with_stats(app_full_name, dst_dir.clone(), progress_tx)
+            .download_dir_with_stats(app_full_name, dst_dir.clone(), progress_tx, cancellation_token)
             .await?;
         Ok(dst_dir.display().to_string())
     }

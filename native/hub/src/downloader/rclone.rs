@@ -1,6 +1,6 @@
-use std::{path::PathBuf, process::Stdio};
+use std::{error::Error, path::PathBuf, process::Stdio};
 
-use anyhow::{anyhow, Context, Result, ensure};
+use anyhow::{Context, Result, anyhow, ensure};
 use serde::Deserialize;
 use tokio::{
     io::{AsyncBufReadExt, BufReader},
@@ -8,7 +8,7 @@ use tokio::{
     sync::mpsc::UnboundedSender,
 };
 use tokio_util::sync::CancellationToken;
-use tracing::{debug, error, info, trace};
+use tracing::{Span, debug, error, info, instrument, trace, warn};
 
 use crate::utils::get_sys_proxy;
 
@@ -46,6 +46,7 @@ pub struct RcloneStatLine {
     pub stats: RcloneTransferStats,
 }
 
+#[derive(Debug)]
 pub enum RcloneTransferOperation {
     Copy,
     Sync,
@@ -69,20 +70,24 @@ struct RcloneClient {
 }
 
 impl RcloneClient {
+    #[instrument(fields(sys_proxy))]
     pub fn new(
         rclone_path: PathBuf,
         config_path: Option<PathBuf>,
         bandwidth_limit: String,
     ) -> Self {
-        Self { rclone_path, config_path, sys_proxy: get_sys_proxy(), bandwidth_limit }
+        let sys_proxy = get_sys_proxy();
+        Span::current().record("sys_proxy", sys_proxy.as_deref());
+        Self { rclone_path, config_path, sys_proxy, bandwidth_limit }
     }
 
+    #[instrument(skip(self), level = "trace")]
     fn command(&self, args: &[&str]) -> Command {
         let mut command = Command::new(&self.rclone_path);
         command.kill_on_drop(true);
 
         if let Some(proxy) = &self.sys_proxy {
-            trace!("Using system proxy: {}", proxy);
+            trace!(proxy, "Using system proxy");
             command.env("http_proxy", proxy);
             command.env("https_proxy", proxy);
         }
@@ -93,40 +98,37 @@ impl RcloneClient {
         command.arg("--use-json-log");
 
         command.args(args);
+        trace!(command = ?command, "Constructed rclone command");
         command
     }
 
+    #[instrument(skip(self), level = "trace")]
     async fn run_to_string(&self, args: &[&str]) -> Result<String> {
         let output = self.command(args).output().await.context("rclone command failed")?;
-        // TODO: handle expected non-zero exit codes
         if output.status.success() {
-            Ok(String::from_utf8_lossy(&output.stdout).to_string())
+            let stdout = String::from_utf8_lossy(&output.stdout).to_string();
+            trace!(stdout, "rclone command successful");
+            Ok(stdout)
         } else {
-            let error = String::from_utf8_lossy(&output.stderr).to_string();
+            let stderr = String::from_utf8_lossy(&output.stderr).to_string();
+            error!(code = output.status.code().unwrap_or(-1), stderr, "rclone command failed");
             Err(anyhow::anyhow!(
                 "rclone returned exit code {}, stderr:\n{}",
                 output.status.code().map_or("unknown".to_string(), |c| c.to_string()),
-                error
+                stderr
             ))
         }
     }
 
-    // pub async fn list_remotes(&self) -> Result<Vec<String>> {
-    //     let remotes = self
-    //         .run_to_string(&["listremotes"])
-    //         .await
-    //         .context("failed to list remotes")?
-    //         .lines()
-    //         .map(|line| line.trim().to_string())
-    //         .collect();
-    //     Ok(remotes)
-    // }
-
+    #[instrument(skip(self), ret, err)]
     pub async fn size(&self, path: &str) -> Result<RcloneSizeOutput> {
         let output = self.run_to_string(&["size", "--fast-list", "--json", path]).await?;
-        serde_json::from_str(&output).context("Failed to parse rclone size output")
+        let size_output: RcloneSizeOutput =
+            serde_json::from_str(&output).context("Failed to parse rclone size output")?;
+        Ok(size_output)
     }
 
+    #[instrument(skip(self, cancellation_token), err)]
     pub async fn transfer(
         &self,
         source: String,
@@ -135,11 +137,11 @@ impl RcloneClient {
         total_bytes: u64,
         cancellation_token: Option<CancellationToken>,
     ) -> Result<()> {
-        // FIXME: disallow concurrent transfers to the same destination
         self.transfer_with_stats(source, dest, operation, total_bytes, None, cancellation_token)
             .await
     }
 
+    #[instrument(skip(self, stats_tx, cancellation_token), err)]
     pub async fn transfer_with_stats(
         &self,
         source: String,
@@ -175,11 +177,11 @@ impl RcloneClient {
         let mut child = self.command(&args).stderr(Stdio::piped()).spawn()?;
         let stderr = child.stderr.take().context("Failed to get stderr")?;
         let mut lines = BufReader::new(stderr).lines();
-        let mut log_messages = Vec::new();
 
         let transfer_future = async {
             if let Some(stats_tx) = stats_tx {
                 while let Some(line) = lines.next_line().await? {
+                    let line: String = line;
                     match serde_json::from_str::<RcloneStatLine>(&line) {
                         Ok(stat_line) => {
                             trace!(?stat_line, "parsed rclone stat line");
@@ -187,14 +189,18 @@ impl RcloneClient {
                             stats.total_bytes = total_bytes;
                             trace!(?stats, "sending stats update");
                             if stats_tx.send(stats).is_err() {
+                                warn!("Stats receiver dropped, stopping stats processing.");
                                 break;
                             }
                         }
                         Err(e) => {
-                            debug!("error parsing rclone stat line: {}", e);
+                            debug!(
+                                line = line,
+                                error = &e as &dyn Error,
+                                "Error parsing rclone stat line"
+                            );
                         }
                     }
-                    log_messages.push(line);
                 }
             }
 
@@ -202,8 +208,11 @@ impl RcloneClient {
             match status.success() {
                 true => Ok(()),
                 false => {
-                    let stderr = log_messages.join("\n");
-                    error!(code = status.code().unwrap_or(-1), stderr, "rclone transfer failed");
+                    let mut stderr_str = String::new();
+                    while let Some(line) = lines.next_line().await? {
+                        stderr_str.push_str(&line);
+                    }
+                    error!(code = status.code().unwrap_or(-1), stderr = %stderr_str, "rclone transfer failed");
                     Err(anyhow!(
                         "rclone failed with exit code: {}",
                         status.code().map_or("unknown".to_string(), |c| c.to_string())
@@ -216,7 +225,7 @@ impl RcloneClient {
             tokio::select! {
                 res = transfer_future => res,
                 _ = token.cancelled() => {
-                    info!("Rclone transfer cancelled by token");
+                    warn!("Rclone transfer cancelled by token");
                     child.kill().await.context("Failed to kill rclone process")?;
                     Err(anyhow!("Download cancelled by user"))
                 }
@@ -235,6 +244,7 @@ pub struct RcloneStorage {
 }
 
 impl RcloneStorage {
+    #[instrument]
     pub fn new(
         rclone_path: PathBuf,
         config_path: Option<PathBuf>,
@@ -244,7 +254,7 @@ impl RcloneStorage {
         Self {
             client: RcloneClient::new(rclone_path, config_path, bandwidth_limit),
             remote,
-            root_dir: "Quest Games/".to_string(),
+            root_dir: "Quest Games/".to_string(), // TODO: make configurable
         }
     }
 
@@ -256,6 +266,7 @@ impl RcloneStorage {
         )
     }
 
+    #[instrument(skip(self, stats_tx, cancellation_token), err, ret)]
     pub async fn download_dir_with_stats(
         &self,
         source: String,
@@ -280,12 +291,14 @@ impl RcloneStorage {
             .map(|_| dest)
     }
 
+    #[instrument(skip(self), err, ret)]
     pub async fn download_file(&self, source: String, dest: PathBuf) -> Result<PathBuf> {
         ensure!(dest.is_dir(), "destination must be a directory");
         let source = self.format_remote_path(&source);
         let total_bytes =
             self.client.size(&source).await.context("Failed to get remote file size")?.bytes;
-        let mut dest = dest;
+        let mut dest_path = dest.clone();
+        info!(source = %source, dest = %dest.display(), total_bytes, "Starting file download");
         self.client
             .transfer(
                 source.clone(),
@@ -295,7 +308,7 @@ impl RcloneStorage {
                 None,
             )
             .await?;
-        dest.push(source.split('/').next_back().context("Failed to get source file name")?);
-        Ok(dest)
+        dest_path.push(source.split('/').next_back().context("Failed to get source file name")?);
+        Ok(dest_path)
     }
 }

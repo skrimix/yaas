@@ -8,7 +8,7 @@ use std::{
 use anyhow::{Context, Result, ensure};
 use rinf::{DartSignal, RustSignal};
 use tokio::sync::watch;
-use tracing::{debug, error, info, trace};
+use tracing::{debug, error, info, instrument, trace, warn};
 
 use crate::models::{Settings, signals::settings::*};
 
@@ -20,12 +20,19 @@ pub struct SettingsHandler {
 }
 
 impl SettingsHandler {
+    #[instrument(skip(app_dir))]
     pub fn new(app_dir: PathBuf) -> Arc<Self> {
         let watch_tx = watch::Sender::<Settings>::new(Settings::default());
         let handler =
             Arc::new(Self { settings_file_path: app_dir.join("settings.json"), watch_tx });
 
-        let settings = handler.load_settings().expect("Failed to load settings"); // TODO: handle error
+        let settings = match handler.load_settings() {
+            Ok(s) => s,
+            Err(e) => {
+                warn!(error = e.as_ref() as &dyn Error, "Failed to load settings, using defaults.");
+                handler.load_default_settings().expect("Failed to load default settings")
+            }
+        };
         handler.on_settings_change(settings, None);
 
         // Start receiving settings requests
@@ -43,59 +50,57 @@ impl SettingsHandler {
         let load_receiver = LoadSettingsRequest::get_dart_signal_receiver();
         let save_receiver = SaveSettingsRequest::get_dart_signal_receiver();
 
-        // Handle load requests
-        let handler_clone = self.clone();
-        tokio::spawn(async move {
-            while load_receiver.recv().await.is_some() {
-                let handler = handler_clone.clone();
-                let result = handler.load_settings();
+        info!("Starting to listen for settings requests");
 
-                match result {
-                    Ok(settings) => {
-                        handler.on_settings_change(settings.clone(), None);
-                    }
-                    Err(e) => {
-                        error!(
-                            error = e.as_ref() as &dyn Error,
-                            "Failed to load settings, using defaults"
-                        );
-                        let settings = handler
-                            .load_default_settings()
-                            .expect("Failed to load default settings"); // TODO: handle error?
-                        handler.on_settings_change(
-                            settings.clone(),
-                            Some(format!("Failed to load settings: {e:#}")),
-                        );
-                    }
-                }
-            }
-            error!("LoadSettingsRequest receiver closed");
-        });
+        loop {
+            tokio::select! {
+                Some(_) = load_receiver.recv() => {
+                    info!("Received LoadSettingsRequest");
+                    let handler = self.clone();
+                    let result = handler.load_settings();
 
-        // Handle save requests
-        let handler_clone = self.clone();
-        tokio::spawn(async move {
-            while let Some(signal_pack) = save_receiver.recv().await {
-                let handler = handler_clone.clone();
-                let settings = signal_pack.message.settings;
-                let result = handler.save_settings(&settings);
-
-                match result {
-                    Ok(_) => {
-                        handler.on_settings_change(settings.clone(), None);
-                    }
-                    Err(e) => {
-                        error!(error = e.as_ref() as &dyn Error, "Failed to save settings");
-                        SettingsSavedEvent {
-                            error: Some(format!("Failed to save settings: {e:#}")),
+                    match result {
+                        Ok(settings) => {
+                            handler.on_settings_change(settings.clone(), None);
                         }
-                        .send_signal_to_dart();
+                        Err(e) => {
+                            error!(error = e.as_ref() as &dyn Error, "Failed to load settings, using defaults");
+                            let settings = handler
+                                .load_default_settings()
+                                .expect("Failed to load default settings"); // TODO: handle error?
+                            handler.on_settings_change(
+                                settings.clone(),
+                                Some(format!("Failed to load settings: {e:#}")),
+                            );
+                        }
                     }
+                },
+                Some(signal_pack) = save_receiver.recv() => {
+                    info!("Received SaveSettingsRequest");
+                    let handler = self.clone();
+                    let settings = signal_pack.message.settings;
+                    let result = handler.save_settings(&settings);
+
+                    match result {
+                        Ok(_) => {
+                            handler.on_settings_change(settings.clone(), None);
+                        }
+                        Err(e) => {
+                            error!(error = e.as_ref() as &dyn Error, "Failed to save settings");
+                            SettingsSavedEvent {
+                                error: Some(format!("Failed to save settings: {e:#}")),
+                            }
+                            .send_signal_to_dart();
+                        }
+                    }
+                },
+                else => {
+                    error!("All settings request channels closed");
+                    break;
                 }
             }
-            error!("SaveSettingsRequest receiver closed");
-        });
-
+        }
+        panic!("Settings request receiver loop ended");
         // TODO: Add reset to defaults request
     }
 
@@ -105,6 +110,7 @@ impl SettingsHandler {
     ///
     /// * `settings` - The new settings
     /// * `error` - An optional error message for the UI
+    #[instrument(skip(self, settings, error))]
     fn on_settings_change(&self, settings: Settings, error: Option<String>) {
         trace!("on_settings_change called");
         self.watch_tx.send_if_modified(|s| {
@@ -114,6 +120,7 @@ impl SettingsHandler {
                 SettingsChangedEvent { settings, error }.send_signal_to_dart();
                 true
             } else {
+                trace!("Settings unchanged, not sending event");
                 false
             }
         });
@@ -125,12 +132,14 @@ impl SettingsHandler {
     }
 
     /// Load settings from file or return defaults if file doesn't exist
+    #[instrument(skip(self))]
     fn load_settings(&self) -> Result<Settings> {
         if !self.settings_file_path.exists() {
-            info!("Settings file doesn't exist, using defaults");
+            info!(path = %self.settings_file_path.display(), "Settings file doesn't exist, using defaults");
             return self.load_default_settings().context("Failed to load default settings");
         }
 
+        info!(path = %self.settings_file_path.display(), "Loading settings from file");
         let file_content =
             fs::read_to_string(&self.settings_file_path).context("Failed to read settings file")?;
 
@@ -139,18 +148,21 @@ impl SettingsHandler {
 
         // TODO: Validate settings
 
-        debug!("Loaded application settings");
+        debug!("Loaded application settings successfully");
         Ok(settings)
     }
 
     /// Save settings to file
+    #[instrument(skip(self, settings))]
     pub fn save_settings(&self, settings: &Settings) -> Result<()> {
+        info!(path = %self.settings_file_path.display(), "Saving settings to file");
         let settings_json =
             serde_json::to_string_pretty(settings).context("Failed to serialize settings")?;
 
         // Ensure parent directory exists
         if let Some(parent) = self.settings_file_path.parent() {
             if !parent.exists() {
+                info!(path = %parent.display(), "Creating settings directory");
                 fs::create_dir_all(parent).context("Failed to create settings directory")?;
             }
         }
@@ -160,18 +172,22 @@ impl SettingsHandler {
         fs::write(&self.settings_file_path, settings_json)
             .context("Failed to write settings file")?;
 
-        debug!("Saved application settings");
+        info!("Saved application settings successfully");
         Ok(())
     }
 
     /// Load default settings
+    #[instrument(skip(self))]
     pub fn load_default_settings(&self) -> Result<Settings> {
+        info!("Loading default settings");
         let settings = Settings::default();
 
         // Create default directories if they don't exist (and parents do)
+        debug!(path = %settings.downloads_location, "Ensuring downloads directory exists");
         let downloads_parent = Path::new(&settings.downloads_location)
             .parent()
             .context("Failed to get downloads directory parent")?;
+        debug!(path = %settings.backups_location, "Ensuring backups directory exists");
         let backups_parent = Path::new(&settings.backups_location)
             .parent()
             .context("Failed to get backups directory parent")?;
@@ -195,6 +211,7 @@ impl SettingsHandler {
             .context("Failed to create backups directory")?;
 
         self.save_settings(&settings)?;
+        info!("Default settings loaded and saved");
         Ok(settings)
     }
 }

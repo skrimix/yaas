@@ -1,7 +1,7 @@
 use rinf::RustSignal;
 use serde::Serialize;
 
-#[derive(Debug, Clone, Serialize, RustSignal)]
+#[derive(Debug, Clone, Serialize, RustSignal, PartialEq)]
 pub enum AdbState {
     ServerNotRunning,
     NoDevices,

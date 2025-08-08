@@ -9,7 +9,7 @@ use tokio::{
     io::BufReader,
     sync::mpsc::{self, UnboundedSender},
 };
-use tracing::{Span, debug, error, info, trace, warn};
+use tracing::{Instrument, Span, debug, error, info, instrument, trace, warn};
 
 use crate::{
     adb::PACKAGE_NAME_REGEX,
@@ -24,8 +24,9 @@ use crate::{
 /// Java tool used for package listing
 static LIST_APPS_DEX_BYTES: &[u8] = include_bytes!("../../assets/list_apps.dex");
 
+// TODO: this or `r#"[\"]?.+?[\"]|[^ ]+"#`? Verify that it's correct
 /// Regex to split command arguments
-static COMMAND_ARGS_REGEX: Lazy<Regex> = lazy_regex!(r#"[\"].+?[\"]|[^ ]+"#);
+static COMMAND_ARGS_REGEX: Lazy<Regex> = lazy_regex!(r#"[\"]?.+?[\"]|[^ ]+"#);
 
 /// Represents a connected Android device with ADB capabilities
 #[derive(Debug, Clone)]
@@ -62,7 +63,7 @@ impl AdbDevice {
     ///
     /// # Arguments
     /// * `inner` - The underlying forensic_adb Device instance
-    //  #[instrument(level = "trace")]
+    #[instrument(skip(inner), err)]
     pub async fn new(inner: Device) -> Result<Self> {
         let serial = inner.serial.clone();
         let product = inner
@@ -91,6 +92,7 @@ impl AdbDevice {
     }
 
     /// Refreshes device information (packages, battery, space)
+    #[instrument(skip(self), err)]
     pub async fn refresh(&mut self) -> Result<()> {
         let mut errors = Vec::new();
 
@@ -114,21 +116,15 @@ impl AdbDevice {
                 .map(|(component, error)| format!("{component}: {error:#}"))
                 .collect::<Vec<_>>()
                 .join(", ");
-            warn!("Errors while refreshing device info: {}", error_msg);
+            warn!(errors = error_msg, "Errors while refreshing device info");
         }
 
         Ok(())
     }
 
     /// Executes a shell command on the device
-    ///
-    /// # Arguments
-    /// * `command` - The shell command to execute
-    ///
-    /// # Returns
-    /// Result containing the command output as a string
-    //  #[instrument(err, level = "debug")]
     // TODO: Add `check_exit_code` parameter
+    #[instrument(skip(self), err)]
     async fn shell(&self, command: &str) -> Result<String> {
         self.inner
             .execute_host_shell_command(command)
@@ -138,14 +134,13 @@ impl AdbDevice {
     }
 
     /// Refreshes the list of installed packages on the device
-    //  #[instrument(err, level = "debug")]
+    #[instrument(skip(self), fields(count), err)]
     async fn refresh_package_list(&mut self) -> Result<()> {
-        // Push the list_apps.dex tool to device
+        info!("Refreshing package list");
         self.push_bytes(LIST_APPS_DEX_BYTES, UnixPath::new("/data/local/tmp/list_apps.dex"))
             .await
             .context("Failed to push list_apps.dex")?;
 
-        // Execute the "magic" tool and get package list
         let shell_output = self
             .shell("CLASSPATH=/data/local/tmp/list_apps.dex app_process / Main ; echo -n $?")
             .await
@@ -156,7 +151,7 @@ impl AdbDevice {
 
         if exit_code != "0" {
             error!(
-                exit_code = exit_code,
+                exit_code,
                 output = list_output,
                 "app_process command returned non-zero exit code"
             );
@@ -166,15 +161,13 @@ impl AdbDevice {
         let packages =
             parse_list_apps_dex(list_output).context("Failed to parse list_apps.dex output")?;
 
-        Span::current().record("result", format!("found {} packages", packages.len()));
         Span::current().record("count", packages.len());
-
         self.installed_packages = packages;
         Ok(())
     }
 
     /// Refreshes battery information for the device and controllers
-    //  #[instrument(err, level = "debug")]
+    #[instrument(skip(self), err)]
     async fn refresh_battery_info(&mut self) -> Result<()> {
         // Get device battery level
         let device_level: u8 = self
@@ -192,6 +185,7 @@ impl AdbDevice {
             .await
             .context("Failed to get controller battery level")?;
         let controllers = parse_dumpsys(&dump_result);
+        trace!(?controllers, "Parsed controller info");
 
         self.battery_level = device_level;
         self.controllers = controllers;
@@ -199,7 +193,7 @@ impl AdbDevice {
     }
 
     /// Refreshes storage space information
-    //  #[instrument(err, level = "debug")]
+    #[instrument(skip(self), err)]
     async fn refresh_space_info(&mut self) -> Result<()> {
         let space_info = self.get_space_info().await?;
         self.space_info = space_info;
@@ -207,17 +201,14 @@ impl AdbDevice {
     }
 
     /// Gets storage space information from the device
-    //  #[instrument(err, level = "debug")]
+    #[instrument(skip(self), err)]
     async fn get_space_info(&self) -> Result<SpaceInfo> {
         let output = self.shell(SPACE_INFO_COMMAND).await.context("Failed to get space info")?;
         SpaceInfo::from_stat_output(&output)
     }
 
     /// Launches an application on the device
-    ///
-    /// # Arguments
-    /// * `package` - The package name to launch
-    //  #[instrument(err)]
+    #[instrument(skip(self), err)]
     pub async fn launch(&self, package: &str) -> Result<()> {
         // First try launching with VR category
         let output = self
@@ -226,30 +217,28 @@ impl AdbDevice {
             .context("Failed to execute monkey command")?;
 
         if !output.contains("monkey aborted") {
+            info!("Launched with VR category");
             return Ok(());
         }
-        debug!(output = output, "Monkey command returned error");
+        info!(output, "Monkey command with VR category failed");
 
-        // If VR launch fails, try default launch
-        info!("Monkey command failed with VR category, retrying with default");
+        debug!("Retrying with default launch category");
         let output = self
             .shell(&format!("monkey -p {package} 1"))
             .await
             .context("Failed to execute monkey command")?;
 
         if output.contains("monkey aborted") {
-            warn!(output = output, package = package, "Monkey command returned error");
+            warn!(output, package, "Monkey command returned error");
             return Err(anyhow!("Failed to launch package '{}'", package));
         }
 
+        info!("Launched with default category");
         Ok(())
     }
 
     /// Force stops an application on the device
-    ///
-    /// # Arguments
-    /// * `package` - The package name to force stop
-    //  #[instrument(err)]
+    #[instrument(skip(self), err)]
     pub async fn force_stop(&self, package: &str) -> Result<()> {
         self.inner.force_stop(package).await.context("Failed to force stop package")
     }
@@ -280,18 +269,14 @@ impl AdbDevice {
                 // Use destination path as is
                 Ok(UnixPathBuf::from(dest))
             }
-        } else {
-            // Check if parent exists
-            if let Some(parent) = dest.parent() {
-                let parent_stat = self.inner.stat(parent).await;
-                if parent_stat.is_ok() {
-                    Ok(UnixPathBuf::from(dest))
-                } else {
-                    bail!("Parent directory '{}' does not exist", parent.display())
-                }
+        } else if let Some(parent) = dest.parent() {
+            if self.inner.stat(parent).await.is_ok() {
+                Ok(UnixPathBuf::from(dest))
             } else {
-                bail!("Invalid destination path: no parent directory")
+                bail!("Parent directory '{}' does not exist", parent.display())
             }
+        } else {
+            bail!("Invalid destination path: no parent directory")
         }
     }
 
@@ -307,17 +292,13 @@ impl AdbDevice {
             .to_str()
             .context("Source file name is not valid UTF-8")?;
 
-        // Check if destination exists
         if dest.exists() {
             if dest.is_dir() {
                 // If destination is a directory, append source file name
                 Ok(dest.join(source_name))
             } else {
                 // Can't pull to existing file if source is directory
-                let source_is_dir = match self.inner.stat(source).await {
-                    Ok(stat) => stat.file_mode == UnixFileStatus::Directory,
-                    Err(_) => false,
-                };
+                let source_is_dir = matches!(self.inner.stat(source).await, Ok(stat) if stat.file_mode == UnixFileStatus::Directory);
                 if source_is_dir {
                     bail!(
                         "Cannot pull directory '{}' to existing file '{}'",
@@ -325,22 +306,18 @@ impl AdbDevice {
                         dest.display()
                     )
                 } else {
-                    // Use destination path as is for file
                     Ok(dest.to_path_buf())
                 }
+            }
+        } else if let Some(parent) = dest.parent() {
+            if parent.exists() {
+                // Parent exists, use destination path as is
+                Ok(dest.to_path_buf())
+            } else {
+                bail!("Parent directory '{}' does not exist", parent.display())
             }
         } else {
-            // Check if parent exists
-            if let Some(parent) = dest.parent() {
-                if parent.exists() {
-                    // Parent exists, use destination path as is
-                    Ok(dest.to_path_buf())
-                } else {
-                    bail!("Parent directory '{}' does not exist", parent.display())
-                }
-            } else {
-                bail!("Invalid destination path: no parent directory")
-            }
+            bail!("Invalid destination path: no parent directory")
         }
     }
 
@@ -349,6 +326,7 @@ impl AdbDevice {
     /// # Arguments
     /// * `source_file` - Local path of the file to push
     /// * `dest_file` - Destination path on the device
+    #[instrument(skip(self), err)]
     async fn push(&self, source_file: &Path, dest_file: &UnixPath) -> Result<()> {
         ensure!(
             source_file.is_file(),
@@ -357,54 +335,17 @@ impl AdbDevice {
         );
 
         let dest_path = self.resolve_push_dest_path(source_file, dest_file).await?;
-        debug!(
-            source_file = source_file.display().to_string(),
-            dest_path = dest_path.display().to_string(),
-            "Pushing file"
-        );
+        debug!(source = %source_file.display(), dest = %dest_path.display(), "Pushing file");
         let mut file = BufReader::new(File::open(source_file).await?);
         self.inner.push(&mut file, &dest_path, 0o777).await.context("Failed to push file")
     }
 
-    // /// Pushes a file to the device (with progress)
-    // ///
-    // /// # Arguments
-    // /// * `source_file` - Local path of the file to push
-    // /// * `dest_file` - Destination path on the device
-    // /// * `total_bytes` - Total size of the file to push
-    // /// * `progress_sender` - Sender for progress updates
-    // async fn push_with_progress(
-    //     &self,
-    //     source_file: &Path,
-    //     dest_file: &UnixPath,
-    //     total_bytes: u64,
-    //     progress_sender: UnboundedSender<FileTransferProgress>,
-    // ) -> Result<()> {
-    //     ensure!(
-    //         source_file.is_file(),
-    //         "Path does not exist or is not a file: {}",
-    //         source_file.display()
-    //     );
-
-    //     let dest_path = self.resolve_push_dest_path(source_file, dest_file).await?;
-    //     debug!(
-    //         source_file = source_file.display().to_string(),
-    //         dest_path = dest_path.display().to_string(),
-    //         "Pushing file"
-    //     );
-
-    //     let mut file = BufReader::new(File::open(source_file).await?);
-    //     self.inner
-    //         .push_with_progress(&mut file, &dest_path, 0o777, total_bytes, progress_sender)
-    //         .await
-    //         .context("Failed to push file")
-    // }
-
     /// Pushes a directory to the device
     ///
     /// # Arguments
-    /// * `source` - Local directory path to push
-    /// * `dest_dir` - Destination directory path on device
+    /// * `source` - Local path of the directory to push
+    /// * `dest` - Destination path on the device
+    #[instrument(skip(self), err)]
     pub async fn push_dir(&self, source: &Path, dest: &UnixPath) -> Result<()> {
         ensure!(
             source.is_dir(),
@@ -413,11 +354,7 @@ impl AdbDevice {
         );
 
         let dest_path = self.resolve_push_dest_path(source, dest).await?;
-        debug!(
-            source = source.display().to_string(),
-            dest_path = dest_path.display().to_string(),
-            "Pushing directory"
-        );
+        info!(source = %source.display(), dest = %dest_path.display(), "Pushing directory");
         self.inner.push_dir(source, &dest_path, 0o777).await.context("Failed to push directory")
     }
 
@@ -428,6 +365,7 @@ impl AdbDevice {
     /// * `dest_dir` - Destination directory path on device
     /// * `overwrite` - Whether to clean up destination directory before pushing
     /// * `progress_sender` - Sender for progress updates
+    #[instrument(skip(self, progress_sender), err)]
     async fn push_dir_with_progress(
         &self,
         source: &Path,
@@ -435,7 +373,6 @@ impl AdbDevice {
         overwrite: bool,
         progress_sender: UnboundedSender<DirectoryTransferProgress>,
     ) -> Result<()> {
-        // TODO: add overwrite flag for cleaning up destination directory
         ensure!(
             source.is_dir(),
             "Source path does not exist or is not a directory: {}",
@@ -443,57 +380,42 @@ impl AdbDevice {
         );
 
         let dest_path = self.resolve_push_dest_path(source, dest).await?;
-        debug!(
-            source = source.display().to_string(),
-            dest_path = dest_path.display().to_string(),
-            "Pushing directory"
-        );
+        // debug!(source = %source.display(), dest = %dest_path.display(), overwrite, "Pushing directory with progress");
         if overwrite {
+            debug!(path = %dest_path.display(), "Cleaning up destination directory");
             let output = self.shell(&format!("rm -rf {}", dest_path.display())).await?;
-            debug!(
-                dest_path = dest_path.display().to_string(),
-                output = output,
-                "Cleaned up destination directory"
-            );
+            debug!(output, "Cleaned up destination directory");
         }
         self.inner
-            .push_dir_with_progress(source, dest, 0o777, progress_sender)
+            .push_dir_with_progress(source, &dest_path, 0o777, progress_sender)
             .await
             .context("Failed to push directory")
     }
 
     /// Pushes raw bytes to a file on the device
-    ///
-    /// # Arguments
-    /// * `bytes` - The bytes to push
-    /// * `remote_path` - Destination path on the device
-    // #[instrument(err, level = "debug", skip(bytes, remote_path))] // BUG: segfaults
+    #[instrument(skip(self, bytes), fields(len = bytes.len()), err)]
     async fn push_bytes(&self, mut bytes: &[u8], remote_path: &UnixPath) -> Result<()> {
-        trace!(len = bytes.len(), remote_path = remote_path.display().to_string(), "Pushing bytes");
+        // debug!(len = bytes.len(), path = %remote_path.display(), "Pushing bytes");
         self.inner.push(&mut bytes, remote_path, 0o777).await.context("Failed to push bytes")
     }
 
     /// Pulls a file from the device
     ///
     /// # Arguments
-    /// * `source_file` - Remote path to the file on the device
-    /// * `dest_file` - Destination local file path
+    /// * `source_file` - Source path on the device
+    /// * `dest_file` - Local path to save the file
+    #[instrument(skip(self), err)]
     async fn pull(&self, source_file: &UnixPath, dest_file: &Path) -> Result<()> {
-        // Verify source exists and is a file
         let source_stat =
             self.inner.stat(source_file).await.context("Failed to stat source file")?;
         ensure!(
             source_stat.file_mode == UnixFileStatus::RegularFile,
             "Source path is not a regular file: {}",
-            source_file.display().to_string()
+            source_file.display()
         );
 
         let dest_path = self.resolve_pull_dest_path(source_file, dest_file).await?;
-        debug!(
-            source_file = source_file.display().to_string(),
-            dest_path = dest_path.display().to_string(),
-            "Pulling file"
-        );
+        // debug!(source = %source_file.display(), dest = %dest_path.display(), "Pulling file");
         let mut file = File::create(&dest_path).await?;
         self.inner.pull(source_file, &mut file).await?;
         Ok(())
@@ -502,32 +424,25 @@ impl AdbDevice {
     /// Pulls a directory from the device
     ///
     /// # Arguments
-    /// * `source` - Remote path to the directory on the device
-    /// * `dest` - Destination local directory path
+    /// * `source` - Source path on the device
+    /// * `dest` - Local path to save the directory
+    #[instrument(skip(self), err)]
     async fn pull_dir(&self, source: &UnixPath, dest: &Path) -> Result<()> {
-        // Verify source exists and is a directory
         let source_stat =
             self.inner.stat(source).await.context("Failed to stat source directory")?;
         ensure!(
             source_stat.file_mode == UnixFileStatus::Directory,
             "Source path is not a directory: {}",
-            source.display().to_string()
+            source.display()
         );
 
         let dest_path = self.resolve_pull_dest_path(source, dest).await?;
-        debug!(
-            source = source.display().to_string(),
-            dest_path = dest_path.display().to_string(),
-            "Pulling directory"
-        );
+        // debug!(source = %source.display(), dest = %dest_path.display(), "Pulling directory");
         self.inner.pull_dir(source, &dest_path).await.context("Failed to pull directory")
     }
 
-    /// Pulls an item from the device. A stat command is used to determine if the remote path is a file or directory
-    ///
-    /// # Arguments
-    /// * `remote_path` - Remote path to the file/directory on the device
-    /// * `local_path` - Local path to save the file/directory on the local machine
+    /// Pulls an item from the device.
+    #[instrument(skip(self, remote_path, local_path), err)]
     async fn pull_any(&self, remote_path: &UnixPath, local_path: &Path) -> Result<()> {
         ensure!(
             local_path.is_dir(),
@@ -546,10 +461,7 @@ impl AdbDevice {
     }
 
     /// Pushes an item to the device
-    ///
-    /// # Arguments
-    /// * `source` - Local path to the file/directory to push
-    /// * `dest` - Destination path on the device
+    #[instrument(skip(self, source, dest), err)]
     async fn push_any(&self, source: &Path, dest: &UnixPath) -> Result<()> {
         ensure!(source.exists(), "Source path does not exist: {}", source.display());
         if source.is_dir() {
@@ -563,25 +475,20 @@ impl AdbDevice {
     }
 
     /// Installs an APK on the device
-    ///
-    /// # Arguments
-    /// * `apk_path` - Path to the APK file to install
-    //#[instrument(err, fields(apk_path = ?apk_path.display()))]
+    #[instrument(skip(self, apk_path), err)]
     pub async fn install_apk(&self, apk_path: &Path) -> Result<()> {
-        // TODO: Implement backup->reinstall->restore for incompatible updates
+        info!(path = %apk_path.display(), "Installing APK");
         self.inner.install_package(apk_path, true, true).await.context("Failed to install APK")
     }
 
     /// Installs an APK on the device (with progress)
-    ///
-    /// # Arguments
-    /// * `apk_path` - Path to the APK file to install
-    /// * `progress_sender` - Sender for progress updates
+    #[instrument(skip(self, apk_path, progress_sender), err)]
     pub async fn install_apk_with_progress(
         &self,
         apk_path: &Path,
         progress_sender: UnboundedSender<f32>,
     ) -> Result<()> {
+        info!(path = %apk_path.display(), "Installing APK with progress");
         self.inner
             .install_package_with_progress(apk_path, true, true, progress_sender)
             .await
@@ -589,17 +496,14 @@ impl AdbDevice {
     }
 
     /// Uninstalls a package from the device
-    ///
-    /// # Arguments
-    /// * `package_name` - The package name to uninstall
-    //  #[instrument(err)]
+    #[instrument(skip(self), err)]
     pub async fn uninstall_package(&self, package_name: &str) -> Result<()> {
         match self.inner.uninstall_package(package_name).await {
             Ok(_) => Ok(()),
             Err(e) => {
                 if e.to_string().contains("DELETE_FAILED_INTERNAL_ERROR") {
                     // Check if package exists
-                    let escaped = package_name.replace(".", "\\.");
+                    let escaped = package_name.replace('.', "\\.");
                     let output = self
                         .shell(&format!("pm list packages | grep -w ^package:{escaped}"))
                         .await
@@ -611,13 +515,15 @@ impl AdbDevice {
                         Err(e.into())
                     }
                 } else if e.to_string().contains("DELETE_FAILED_DEVICE_POLICY_MANAGER") {
-                    // Try force uninstall for protected packages
                     info!(
                         "Package {} is protected by device policy, trying to force uninstall",
                         package_name
                     );
                     self.shell(&format!("pm disable-user {package_name}")).await?;
-                    self.inner.uninstall_package(package_name).await.map_err(Into::into)
+                    self.inner
+                        .uninstall_package(package_name)
+                        .await
+                        .map_err(Into::<anyhow::Error>::into)
                 } else {
                     Err(e.into())
                 }
@@ -627,10 +533,7 @@ impl AdbDevice {
     }
 
     /// Executes an install script from the given path
-    ///
-    /// # Arguments
-    /// * `script_path` - Path to the install script file
-    //  #[instrument(err, level = "debug")]
+    #[instrument(skip(self), err)]
     async fn execute_install_script(&self, script_path: &Path) -> Result<()> {
         let script_content = tokio::fs::read_to_string(script_path)
             .await
@@ -641,73 +544,65 @@ impl AdbDevice {
         // Unpack all 7z archives if present
         let mut dir = tokio::fs::read_dir(script_dir).await?;
         while let Some(entry) = dir.next_entry().await? {
-            if entry.file_type().await.context("Failed to get directory entry file type")?.is_file()
+            if entry.file_type().await?.is_file()
                 && entry.path().extension().and_then(|e| e.to_str()) == Some("7z")
             {
-                tokio::task::spawn_blocking({
-                    let path = entry.path();
-                    debug!(path = path.display().to_string(), "Decompressing 7z archive");
-                    let script_dir = script_dir.to_path_buf();
-                    move || {
-                        sevenz_rust2::decompress_file(&path, script_dir)
-                            .context("Error decompressing 7z archive")
-                    }
+                let path = entry.path();
+                info!(path = %path.display(), "Decompressing 7z archive");
+                let script_dir_clone = script_dir.to_path_buf();
+                tokio::task::spawn_blocking(move || {
+                    sevenz_rust2::decompress_file(&path, script_dir_clone)
+                        .context("Error decompressing 7z archive")
                 })
                 .await??;
             }
         }
 
         for (line_index, line) in script_content.lines().enumerate() {
-            // Skip empty lines and comments
+            let line_num = line_index + 1;
+            // Remove comments and redirections
             let line =
-                line.split('#').next().unwrap_or(line).split("REM").next().unwrap_or(line).trim();
+                line.split('#').next().unwrap_or("").split("REM").next().unwrap_or("").trim();
             if line.is_empty() {
-                trace!(line = line, "Skipping empty or comment line");
+                trace!(line_num, "Skipping empty or comment line");
                 continue;
             }
 
-            // Remove redirections
             let command = line.split('>').next().unwrap_or("").trim();
             ensure!(
                 !command.is_empty(),
-                "Line {}: Line is empty after removing redirections",
-                line_index + 1
+                "Line {line_num}: Line is empty after removing redirections"
             );
-            debug!(command = command, "Parsed command");
+            debug!(line_num, command, "Parsed command");
 
             let tokens: Vec<&str> = COMMAND_ARGS_REGEX
                 .find_iter(command)
                 .map(|m| m.as_str().trim_matches('"'))
-                .filter(|token| !token.starts_with("-"))
+                .filter(|token| !token.starts_with('-'))
                 .collect();
 
             if tokens[0] == "7z" {
-                debug!(line = line, "Skipping 7z command");
+                debug!(line_num, command, "Skipping 7z command");
                 continue;
             }
-            ensure!(
-                tokens[0] == "adb",
-                "Line {}: Unsupported command '{}'",
-                line_index + 1,
-                command
-            );
+            ensure!(tokens[0] == "adb", "Line {line_num}: Unsupported command '{command}'");
 
-            ensure!(tokens.len() >= 2, "Line {}: Missing ADB subcommand", line_index + 1);
+            ensure!(tokens.len() >= 2, "Line {line_num}: ADB command missing operation");
             let adb_command = tokens[1];
             let adb_args = tokens[2..].to_vec();
 
             match adb_command {
                 "install" => {
-                    // Find argument ending with .apk
+                    // We only care about the APK path
+                    // TODO: see if we should care about other arguments
                     let apk_path = script_dir.join(
                         adb_args.iter().find(|arg| arg.ends_with(".apk")).with_context(|| {
-                            format!("Line {}: adb install: missing APK path", line_index + 1)
+                            format!("Line {line_num}: adb install: missing APK path")
                         })?,
                     );
                     self.install_apk(&apk_path).await.with_context(|| {
                         format!(
-                            "Line {}: adb install: failed to install APK '{}'",
-                            line_index + 1,
+                            "Line {line_num}: adb install: failed to install APK '{}'",
                             apk_path.display()
                         )
                     })?;
@@ -715,43 +610,35 @@ impl AdbDevice {
                 "uninstall" => {
                     ensure!(
                         adb_args.len() == 1,
-                        "Line {}: adb uninstall: wrong number of arguments: expected 1, got {}",
-                        line_index + 1,
+                        "Line {line_num}: adb uninstall: wrong number of arguments: expected 1, \
+                         got {}",
                         adb_args.len()
                     );
                     let package = adb_args[0];
                     self.uninstall_package(package).await.with_context(|| {
                         format!(
-                            "Line {}: adb uninstall: failed to uninstall package '{}'",
-                            line_index + 1,
-                            package
+                            "Line {line_num}: adb uninstall: failed to uninstall package \
+                             '{package}'"
                         )
                     })?;
                 }
                 "shell" => {
-                    ensure!(
-                        !adb_args.is_empty(),
-                        "Line {}: adb shell: missing command",
-                        line_index + 1
-                    );
-
+                    ensure!(!adb_args.is_empty(), "Line {line_num}: adb shell: missing command");
                     // Handle special case for 'pm uninstall'
                     if adb_args.len() == 3 && adb_args[0] == "pm" && adb_args[1] == "uninstall" {
                         let package = adb_args[2];
                         self.uninstall_package(package).await.with_context(|| {
                             format!(
-                                "Line {}: adb shell: failed to uninstall package '{}'",
-                                line_index + 1,
-                                package
+                                "Line {line_num}: adb shell: failed to uninstall package \
+                                 '{package}'"
                             )
                         })?;
                     } else {
                         let shell_cmd = adb_args.join(" ");
                         self.shell(&shell_cmd).await.with_context(|| {
                             format!(
-                                "Line {}: adb shell: failed to execute command '{}'",
-                                line_index + 1,
-                                shell_cmd
+                                "Line {line_num}: adb shell: failed to execute command \
+                                 '{shell_cmd}'"
                             )
                         })?;
                     }
@@ -759,17 +646,14 @@ impl AdbDevice {
                 "push" => {
                     ensure!(
                         adb_args.len() == 2,
-                        "Line {}: adb push: wrong number of arguments: expected 2, got {}",
-                        line_index + 1,
+                        "Line {line_num}: adb push: wrong number of arguments: expected 2, got {}",
                         adb_args.len()
                     );
                     let source = script_dir.join(adb_args[0]);
                     let dest = UnixPath::new(adb_args[1]);
-
                     self.push_any(&source, dest).await.with_context(|| {
                         format!(
-                            "Line {}: adb push: failed to push file/directory '{}' to '{}'",
-                            line_index + 1,
+                            "Line {line_num}: adb push: failed to push '{}' to '{}'",
                             source.display(),
                             dest.display()
                         )
@@ -778,22 +662,19 @@ impl AdbDevice {
                 "pull" => {
                     ensure!(
                         adb_args.len() == 2,
-                        "Line {}: adb pull: wrong number of arguments: expected 2, got {}",
-                        line_index + 1,
+                        "Line {line_num}: adb pull: wrong number of arguments: expected 2, got {}",
                         adb_args.len()
                     );
                     let source = UnixPath::new(adb_args[0]);
                     let dest = script_dir.join(adb_args[1]);
                     self.pull_any(source, &dest).await.with_context(|| {
                         format!(
-                            "Line {}: adb pull: failed to pull file/directory '{}' to '{}'",
-                            line_index + 1,
-                            adb_args[0],
-                            adb_args[1]
+                            "Line {line_num}: adb pull: failed to pull '{}' to '{}'",
+                            adb_args[0], adb_args[1]
                         )
                     })?;
                 }
-                _ => bail!("Line {}: Unsupported ADB command '{}'", line_index + 1, command),
+                _ => bail!("Line {line_num}: Unsupported ADB command '{command}'"),
             }
         }
 
@@ -805,7 +686,7 @@ impl AdbDevice {
     /// # Arguments
     /// * `app_dir` - Path to directory containing the app files
     /// * `progress_sender` - Sender for progress updates
-    //  #[instrument(err)]
+    #[instrument(skip(self, progress_sender), err)]
     pub async fn sideload_app(
         &self,
         app_dir: &Path,
@@ -825,107 +706,96 @@ impl AdbDevice {
         ensure!(app_dir.is_dir(), "App path must be a directory");
 
         send_progress(&progress_sender, "Enumerating files", 0.0);
-
         let mut entries = Vec::new();
         let mut dir = tokio::fs::read_dir(app_dir).await?;
         while let Some(entry) = dir.next_entry().await? {
             entries.push(entry);
         }
 
-        // TODO: optimize multiple iterations
-        // Execute install script if present
-        for entry in &entries {
-            if let Some(name) = entry.file_name().to_str() {
-                if name.to_lowercase() == "install.txt" {
-                    send_progress(&progress_sender, "Executing install script", 0.5);
-                    return self
-                        .execute_install_script(&entry.path())
-                        .await
-                        .context("Failed to execute install script");
-                }
-            }
+        if let Some(entry) = entries
+            .iter()
+            .find(|e| e.file_name().to_str().is_some_and(|n| n.to_lowercase() == "install.txt"))
+        {
+            send_progress(&progress_sender, "Executing install script", 0.5);
+            return self
+                .execute_install_script(&entry.path())
+                .await
+                .context("Failed to execute install script");
         }
 
-        // Find APK file
-        let mut apk_path = None;
-        for entry in &entries {
-            if entry.file_type().await.context("Failed to get directory entry file type")?.is_file()
-                && entry.path().extension().and_then(|e| e.to_str()) == Some("apk")
-            {
-                if apk_path.is_some() {
-                    bail!("Multiple APK files found in app directory");
-                }
-                apk_path = Some(entry.path());
+        let apk_paths = entries
+            .iter()
+            .filter(|e| e.path().extension().and_then(|s| s.to_str()) == Some("apk"))
+            .map(|e| e.path())
+            .collect::<Vec<_>>();
+        let apk_path = match apk_paths.len() {
+            0 => bail!("No APK file found in app directory"),
+            1 => &apk_paths[0],
+            _ => bail!("Multiple APK files found in app directory"),
+        };
+
+        // TODO: read package name from APK file and use it to find OBB directory
+        let obb_dir = entries.iter().find_map(|e| {
+            if e.path().is_dir() {
+                e.file_name().to_str().and_then(|n| {
+                    if PACKAGE_NAME_REGEX.is_match(n) { Some(e.path()) } else { None }
+                })
+            } else {
+                None
             }
-        }
+        });
 
-        let apk_path = apk_path.context("No APK file found in app directory")?;
+        send_progress(&progress_sender, "Installing APK", 0.0);
+        let install_progress_scale = if obb_dir.is_some() { 0.5 } else { 1.0 };
 
-        // Look for OBB directory
-        let mut obb_dir = None;
-        for entry in &entries {
-            if entry.file_type().await.context("Failed to get directory entry file type")?.is_dir()
+        let (tx, mut rx) = mpsc::unbounded_channel::<f32>();
+        tokio::spawn(
             {
-                let path = entry.path();
-                if let Some(dir_name) = path.file_name().and_then(|n| n.to_str()) {
-                    if PACKAGE_NAME_REGEX.is_match(dir_name) {
-                        if obb_dir.is_some() {
-                            bail!("Multiple possible OBB directories found");
-                        }
-                        obb_dir = Some(path);
+                let progress_sender = progress_sender.clone();
+                async move {
+                    while let Some(progress) = rx.recv().await {
+                        send_progress(
+                            &progress_sender,
+                            &format!("Installing APK ({:.0}%)", progress * 100.0),
+                            progress * install_progress_scale,
+                        );
                     }
                 }
             }
-        }
+            .instrument(Span::current()),
+        );
+        self.install_apk_with_progress(apk_path, tx).await?;
 
-        // Install APK
-        send_progress(&progress_sender, "Installing APK", 0.0);
-        let install_progress_scale = match obb_dir {
-            Some(_) => 0.5,
-            None => 1.0,
-        };
-        // self.install_apk(&apk_path).await?;
-
-        let (tx, mut rx) = mpsc::unbounded_channel::<f32>();
-        tokio::spawn({
-            let progress_sender = progress_sender.clone();
-            async move {
-                while let Some(progress) = rx.recv().await {
-                    send_progress(
-                        &progress_sender,
-                        &format!("Installing APK ({:.0}%)", progress * 100.0),
-                        progress * install_progress_scale,
-                    );
-                }
-            }
-        });
-        self.install_apk_with_progress(&apk_path, tx).await?;
-
-        // Push OBB directory
         if let Some(obb_dir) = obb_dir {
             let package_name = obb_dir
                 .file_name()
                 .and_then(|n| n.to_str())
                 .context("Failed to get package name from OBB path")?;
             let remote_obb_path = UnixPath::new("/sdcard/Android/obb").join(package_name);
-            // self.push_dir_with(&obb_dir, &remote_obb_path).await?;
 
             let (tx, mut rx) = mpsc::unbounded_channel::<DirectoryTransferProgress>();
-            tokio::spawn(async move {
-                while let Some(progress) = rx.recv().await {
-                    let push_progress =
-                        progress.transferred_bytes as f32 / progress.total_bytes as f32;
-                    let file_progress = progress.current_file_progress.transferred_bytes as f32
-                        / progress.current_file_progress.total_bytes as f32;
-                    let status = format!(
-                        "Pushing OBB {}/{} ({:.0}%)",
-                        progress.transferred_files + 1,
-                        progress.total_files,
-                        file_progress * 100.0
-                    );
-                    send_progress(&progress_sender, &status, 0.5 + push_progress * 0.5);
+            tokio::spawn(
+                {
+                    let progress_sender = progress_sender.clone();
+                    async move {
+                        while let Some(progress) = rx.recv().await {
+                            let push_progress =
+                                progress.transferred_bytes as f32 / progress.total_bytes as f32;
+                            let file_progress = progress.current_file_progress.transferred_bytes
+                                as f32
+                                / progress.current_file_progress.total_bytes as f32;
+                            let status = format!(
+                                "Pushing OBB {}/{} ({:.0}%)",
+                                progress.transferred_files + 1,
+                                progress.total_files,
+                                file_progress * 100.0
+                            );
+                            send_progress(&progress_sender, &status, 0.5 + push_progress * 0.5);
+                        }
+                    }
                 }
-            });
+                .instrument(Span::current()),
+            );
 
             self.push_dir_with_progress(&obb_dir, &remote_obb_path, true, tx).await?;
         }
@@ -935,6 +805,7 @@ impl AdbDevice {
 }
 
 // TODO: move somewhere else?
+#[derive(Debug)]
 pub struct SideloadProgress {
     pub status: String,
     pub progress: f32,

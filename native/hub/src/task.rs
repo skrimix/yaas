@@ -1,5 +1,6 @@
 use std::{
     collections::HashMap,
+    error::Error,
     path::Path,
     sync::{
         Arc,
@@ -12,7 +13,7 @@ use anyhow::{Context, Result, anyhow};
 use rinf::{DartSignal, RustSignal};
 use tokio::sync::{Mutex, Semaphore, mpsc};
 use tokio_util::sync::CancellationToken;
-use tracing::{debug, error, info, instrument, warn};
+use tracing::{Instrument, Span, debug, error, info, instrument, warn};
 
 use crate::{
     adb::{AdbHandler, device::SideloadProgress},
@@ -167,11 +168,7 @@ impl TaskManager {
                 name
             }
             Err(e) => {
-                error!(
-                    task_id = id,
-                    error = %e,
-                    "Failed to get task name"
-                );
+                error!(task_id = id, error = e.as_ref() as &dyn Error, "Failed to get task name");
                 send_progress(
                     id,
                     task_type,
@@ -271,7 +268,7 @@ impl TaskManager {
                         task_id = id,
                         task_name = %task_name,
                         duration_ms = duration.as_millis(),
-                        error = %e,
+                        error = e.as_ref() as &dyn Error,
                         error_chain = ?e.chain().collect::<Vec<_>>(),
                         "Task failed with error"
                     );
@@ -329,7 +326,10 @@ impl TaskManager {
             let downloader = self.downloader.clone();
             let app_full_name = app_full_name.clone();
             let token = token.clone();
-            tokio::spawn(async move { downloader.download_app(app_full_name, tx, token).await })
+            tokio::spawn(
+                async move { downloader.download_app(app_full_name, tx, token).await }
+                    .instrument(Span::current()),
+            )
         };
 
         // Monitor progress while waiting for download to complete
@@ -404,7 +404,10 @@ impl TaskManager {
         let mut sideload_task = {
             let adb_handler = self.adb_handler.clone();
             let app_path = app_path.clone();
-            tokio::spawn(async move { adb_handler.sideload_app(Path::new(&app_path), tx).await })
+            tokio::spawn(
+                async move { adb_handler.sideload_app(Path::new(&app_path), tx).await }
+                    .instrument(Span::current()),
+            )
         };
 
         info!("Starting sideload monitoring");
@@ -478,7 +481,10 @@ impl TaskManager {
         let mut download_task = {
             let downloader = self.downloader.clone();
             let app_full_name = app_full_name.clone();
-            tokio::spawn(async move { downloader.download_app(app_full_name, tx, token).await })
+            tokio::spawn(
+                async move { downloader.download_app(app_full_name, tx, token).await }
+                    .instrument(Span::current()),
+            )
         };
 
         info!("Starting download monitoring");
@@ -562,7 +568,10 @@ impl TaskManager {
         let mut install_task = {
             let adb_handler = self.adb_handler.clone();
             let apk_path = apk_path.clone();
-            tokio::spawn(async move { adb_handler.install_apk(Path::new(&apk_path), tx).await })
+            tokio::spawn(
+                async move { adb_handler.install_apk(Path::new(&apk_path), tx).await }
+                    .instrument(Span::current()),
+            )
         };
 
         info!("Starting APK install monitoring");
@@ -635,7 +644,10 @@ impl TaskManager {
         let mut sideload_task = {
             let adb_handler = self.adb_handler.clone();
             let app_path = app_path.clone();
-            tokio::spawn(async move { adb_handler.sideload_app(Path::new(&app_path), tx).await })
+            tokio::spawn(
+                async move { adb_handler.sideload_app(Path::new(&app_path), tx).await }
+                    .instrument(Span::current()),
+            )
         };
 
         info!("Starting local app sideload monitoring");

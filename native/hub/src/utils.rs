@@ -1,12 +1,9 @@
 use std::error::Error;
 
 use sysproxy::Sysproxy;
-use tracing::{debug, error};
+use tracing::{debug, error, instrument};
 
-mod speed;
-pub use speed::*;
-
-// #[instrument(ret, level = "trace")]
+#[instrument(ret, level = "debug")]
 pub fn get_sys_proxy() -> Option<String> {
     let proxy = Sysproxy::get_system_proxy();
     match proxy {

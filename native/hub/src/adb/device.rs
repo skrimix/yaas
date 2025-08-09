@@ -87,7 +87,7 @@ impl AdbDevice {
             space_info: SpaceInfo::default(),
             installed_packages: Vec::new(),
         };
-        device.refresh().await.context("Failed to refresh device info")?;
+        Box::pin(device.refresh()).await.context("Failed to refresh device info")?;
         Ok(device)
     }
 

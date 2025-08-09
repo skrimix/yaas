@@ -506,7 +506,7 @@ impl AdbHandler {
         // TODO: just add serial to instrument span
         debug!(serial = %device.serial, "Refreshing device data");
         let mut device_clone = (*device).clone();
-        device_clone.refresh().await?;
+        Box::pin(device_clone.refresh()).await?;
         self.set_device(Some(device_clone), true).await;
         debug!("Device data refreshed successfully");
         Ok(())

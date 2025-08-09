@@ -60,3 +60,6 @@ zip = { version = "4.3.0", default-features = false, features = ["deflate"] }
 
 [package.metadata.cargo-machete]
 ignored = ["log"]
+
+[lints.clippy]
+large_futures = "warn"

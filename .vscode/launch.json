@@ -3,9 +3,17 @@
     "configurations": [
         {
             "type": "lldb",
-            "request": "attach",
-            "pid": "${command:pickProcess}",
-            "name": "Rust Debug Attach"
+            "request": "launch",
+            "program": "${workspaceFolder}/build/linux/x64/debug/bundle/rql",
+            "preLaunchTask": "flutter: build linux debug",
+            "name": "Rust Debug Launch"
+        },
+        {
+            "type": "lldb",
+            "request": "launch",
+            "program": "${workspaceFolder}/build/linux/x64/release/bundle/rql",
+            "preLaunchTask": "flutter: build linux release",
+            "name": "Rust Release Launch"
         }
     ]
 }

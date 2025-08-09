@@ -1,0 +1,17 @@
+{
+    // See https://go.microsoft.com/fwlink/?LinkId=733558
+    // for the documentation about the tasks.json format
+    "version": "2.0.0",
+    "tasks": [
+        {
+            "label": "flutter: build linux debug",
+            "type": "shell",
+            "command": "flutter build linux --debug"
+        },
+        {
+            "label": "flutter: build linux release",
+            "type": "shell",
+            "command": "flutter build linux --release"
+        }
+    ]
+}

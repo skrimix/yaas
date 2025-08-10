@@ -521,7 +521,8 @@ impl AdbHandler {
     ) -> Result<()> {
         let device = self.current_device().await?;
         let device_clone = (*device).clone();
-        let result = device_clone.install_apk_with_progress(apk_path, progress_sender).await;
+        let result =
+            Box::pin(device_clone.install_apk_with_progress(apk_path, progress_sender)).await;
         self.refresh_device().await?;
         result
     }
@@ -545,7 +546,7 @@ impl AdbHandler {
     ) -> Result<()> {
         let device = self.current_device().await?;
         let device_clone = (*device).clone();
-        let result = device_clone.sideload_app(app_path, progress_sender).await;
+        let result = Box::pin(device_clone.sideload_app(app_path, progress_sender)).await;
         self.refresh_device().await?;
         result
     }

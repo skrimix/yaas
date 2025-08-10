@@ -337,7 +337,7 @@ impl AdbDevice {
         let dest_path = self.resolve_push_dest_path(source_file, dest_file).await?;
         debug!(source = %source_file.display(), dest = %dest_path.display(), "Pushing file");
         let mut file = BufReader::new(File::open(source_file).await?);
-        self.inner.push(&mut file, &dest_path, 0o777).await.context("Failed to push file")
+        Box::pin(self.inner.push(&mut file, &dest_path, 0o777)).await.context("Failed to push file")
     }
 
     /// Pushes a directory to the device
@@ -355,7 +355,9 @@ impl AdbDevice {
 
         let dest_path = self.resolve_push_dest_path(source, dest).await?;
         info!(source = %source.display(), dest = %dest_path.display(), "Pushing directory");
-        self.inner.push_dir(source, &dest_path, 0o777).await.context("Failed to push directory")
+        Box::pin(self.inner.push_dir(source, &dest_path, 0o777))
+            .await
+            .context("Failed to push directory")
     }
 
     /// Pushes a directory to the device (with progress)
@@ -386,8 +388,7 @@ impl AdbDevice {
             let output = self.shell(&format!("rm -rf {}", dest_path.display())).await?;
             debug!(output, "Cleaned up destination directory");
         }
-        self.inner
-            .push_dir_with_progress(source, &dest_path, 0o777, progress_sender)
+        Box::pin(self.inner.push_dir_with_progress(source, &dest_path, 0o777, progress_sender))
             .await
             .context("Failed to push directory")
     }
@@ -396,7 +397,9 @@ impl AdbDevice {
     #[instrument(skip(self, bytes), fields(len = bytes.len()), err)]
     async fn push_bytes(&self, mut bytes: &[u8], remote_path: &UnixPath) -> Result<()> {
         // debug!(len = bytes.len(), path = %remote_path.display(), "Pushing bytes");
-        self.inner.push(&mut bytes, remote_path, 0o777).await.context("Failed to push bytes")
+        Box::pin(self.inner.push(&mut bytes, remote_path, 0o777))
+            .await
+            .context("Failed to push bytes")
     }
 
     /// Pulls a file from the device
@@ -417,7 +420,7 @@ impl AdbDevice {
         let dest_path = self.resolve_pull_dest_path(source_file, dest_file).await?;
         // debug!(source = %source_file.display(), dest = %dest_path.display(), "Pulling file");
         let mut file = File::create(&dest_path).await?;
-        self.inner.pull(source_file, &mut file).await?;
+        Box::pin(self.inner.pull(source_file, &mut file)).await?;
         Ok(())
     }
 
@@ -438,7 +441,7 @@ impl AdbDevice {
 
         let dest_path = self.resolve_pull_dest_path(source, dest).await?;
         // debug!(source = %source.display(), dest = %dest_path.display(), "Pulling directory");
-        self.inner.pull_dir(source, &dest_path).await.context("Failed to pull directory")
+        Box::pin(self.inner.pull_dir(source, &dest_path)).await.context("Failed to pull directory")
     }
 
     /// Pulls an item from the device.
@@ -451,9 +454,9 @@ impl AdbDevice {
         );
         let stat = self.inner.stat(remote_path).await.context("Stat command failed")?;
         if stat.file_mode == UnixFileStatus::Directory {
-            self.pull_dir(remote_path, local_path).await?;
+            Box::pin(self.pull_dir(remote_path, local_path)).await?;
         } else if stat.file_mode == UnixFileStatus::RegularFile {
-            self.pull(remote_path, local_path).await?;
+            Box::pin(self.pull(remote_path, local_path)).await?;
         } else {
             bail!("Unsupported file type: {:?}", stat.file_mode);
         }
@@ -465,9 +468,9 @@ impl AdbDevice {
     async fn push_any(&self, source: &Path, dest: &UnixPath) -> Result<()> {
         ensure!(source.exists(), "Source path does not exist: {}", source.display());
         if source.is_dir() {
-            self.push_dir(source, dest).await?;
+            Box::pin(self.push_dir(source, dest)).await?;
         } else if source.is_file() {
-            self.push(source, dest).await?;
+            Box::pin(self.push(source, dest)).await?;
         } else {
             bail!("Unsupported source file type: {}", source.display());
         }
@@ -478,7 +481,9 @@ impl AdbDevice {
     #[instrument(skip(self, apk_path), err)]
     pub async fn install_apk(&self, apk_path: &Path) -> Result<()> {
         info!(path = %apk_path.display(), "Installing APK");
-        self.inner.install_package(apk_path, true, true).await.context("Failed to install APK")
+        Box::pin(self.inner.install_package(apk_path, true, true))
+            .await
+            .context("Failed to install APK")
     }
 
     /// Installs an APK on the device (with progress)
@@ -489,8 +494,7 @@ impl AdbDevice {
         progress_sender: UnboundedSender<f32>,
     ) -> Result<()> {
         info!(path = %apk_path.display(), "Installing APK with progress");
-        self.inner
-            .install_package_with_progress(apk_path, true, true, progress_sender)
+        Box::pin(self.inner.install_package_with_progress(apk_path, true, true, progress_sender))
             .await
             .context("Failed to install APK")
     }
@@ -600,7 +604,7 @@ impl AdbDevice {
                             format!("Line {line_num}: adb install: missing APK path")
                         })?,
                     );
-                    self.install_apk(&apk_path).await.with_context(|| {
+                    Box::pin(self.install_apk(&apk_path)).await.with_context(|| {
                         format!(
                             "Line {line_num}: adb install: failed to install APK '{}'",
                             apk_path.display()
@@ -651,7 +655,7 @@ impl AdbDevice {
                     );
                     let source = script_dir.join(adb_args[0]);
                     let dest = UnixPath::new(adb_args[1]);
-                    self.push_any(&source, dest).await.with_context(|| {
+                    Box::pin(self.push_any(&source, dest)).await.with_context(|| {
                         format!(
                             "Line {line_num}: adb push: failed to push '{}' to '{}'",
                             source.display(),
@@ -667,7 +671,7 @@ impl AdbDevice {
                     );
                     let source = UnixPath::new(adb_args[0]);
                     let dest = script_dir.join(adb_args[1]);
-                    self.pull_any(source, &dest).await.with_context(|| {
+                    Box::pin(self.pull_any(source, &dest)).await.with_context(|| {
                         format!(
                             "Line {line_num}: adb pull: failed to pull '{}' to '{}'",
                             adb_args[0], adb_args[1]
@@ -717,8 +721,7 @@ impl AdbDevice {
             .find(|e| e.file_name().to_str().is_some_and(|n| n.to_lowercase() == "install.txt"))
         {
             send_progress(&progress_sender, "Executing install script", 0.5);
-            return self
-                .execute_install_script(&entry.path())
+            return Box::pin(self.execute_install_script(&entry.path()))
                 .await
                 .context("Failed to execute install script");
         }
@@ -764,7 +767,7 @@ impl AdbDevice {
             }
             .instrument(Span::current()),
         );
-        self.install_apk_with_progress(apk_path, tx).await?;
+        Box::pin(self.install_apk_with_progress(apk_path, tx)).await?;
 
         if let Some(obb_dir) = obb_dir {
             let package_name = obb_dir
@@ -797,7 +800,7 @@ impl AdbDevice {
                 .instrument(Span::current()),
             );
 
-            self.push_dir_with_progress(&obb_dir, &remote_obb_path, true, tx).await?;
+            Box::pin(self.push_dir_with_progress(&obb_dir, &remote_obb_path, true, tx)).await?;
         }
 
         Ok(())

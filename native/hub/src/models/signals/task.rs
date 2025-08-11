@@ -34,7 +34,7 @@ pub enum TaskStatus {
     Cancelled,
 }
 
-#[derive(Serialize, Deserialize, SignalPiece)]
+#[derive(Clone, Serialize, Deserialize, SignalPiece)]
 pub struct TaskParams {
     pub cloud_app_full_name: Option<String>,
     pub apk_path: Option<String>,
@@ -61,4 +61,11 @@ pub struct TaskProgress {
     pub status: TaskStatus,
     pub total_progress: f32,
     pub message: String,
+}
+
+#[derive(Serialize, Deserialize, RustSignal)]
+pub struct TaskCreatedEvent {
+    pub task_id: u64,
+    pub task_type: TaskType,
+    pub params: TaskParams,
 }

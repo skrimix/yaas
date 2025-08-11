@@ -300,16 +300,15 @@ impl AdbHandler {
         let result = match command.clone() {
             AdbCommand::LaunchApp(package_name) => {
                 let result = device.launch(&package_name).await;
+                AdbCommandCompletedEvent {
+                    command_type: AdbCommandType::LaunchApp,
+                    package_name: package_name.clone(),
+                    success: result.is_ok(),
+                }
+                .send_signal_to_dart();
+
                 match result {
-                    Ok(_) => {
-                        send_toast(
-                            "App Launched".to_string(),
-                            format!("Launched {package_name}"),
-                            false,
-                            None,
-                        );
-                        Ok(())
-                    }
+                    Ok(_) => Ok(()),
                     Err(e) => {
                         let error_msg = format!("Failed to launch {package_name}: {e:#}");
                         send_toast("Launch Failed".to_string(), error_msg, true, None);
@@ -320,16 +319,15 @@ impl AdbHandler {
 
             AdbCommand::ForceStopApp(package_name) => {
                 let result = device.force_stop(&package_name).await;
+                AdbCommandCompletedEvent {
+                    command_type: AdbCommandType::ForceStopApp,
+                    package_name: package_name.clone(),
+                    success: result.is_ok(),
+                }
+                .send_signal_to_dart();
+
                 match result {
-                    Ok(_) => {
-                        send_toast(
-                            "App Stopped".to_string(),
-                            format!("Stopped {package_name}"),
-                            false,
-                            None,
-                        );
-                        Ok(())
-                    }
+                    Ok(_) => Ok(()),
                     Err(e) => {
                         let error_msg = format!("Failed to force stop {package_name}: {e:#}");
                         send_toast("Stop Failed".to_string(), error_msg, true, None);
@@ -340,16 +338,15 @@ impl AdbHandler {
 
             AdbCommand::UninstallPackage(package_name) => {
                 let result = self.uninstall_package(&package_name).await;
+                AdbCommandCompletedEvent {
+                    command_type: AdbCommandType::UninstallPackage,
+                    package_name: package_name.clone(),
+                    success: result.is_ok(),
+                }
+                .send_signal_to_dart();
+
                 match result {
-                    Ok(_) => {
-                        send_toast(
-                            "App Uninstalled".to_string(),
-                            format!("Uninstalled {package_name}"),
-                            false,
-                            None,
-                        );
-                        Ok(())
-                    }
+                    Ok(_) => Ok(()),
                     Err(e) => {
                         let error_msg = format!("Failed to uninstall {package_name}: {e:#}");
                         send_toast("Uninstall Failed".to_string(), error_msg, true, None);
@@ -358,17 +355,14 @@ impl AdbHandler {
                 }
             }
 
-            AdbCommand::RefreshDevice => {
-                let result = self.refresh_device().await;
-                match result {
-                    Ok(_) => Ok(()),
-                    Err(e) => {
-                        let error_msg = format!("Failed to refresh device: {e:#}");
-                        send_toast("Refresh Failed".to_string(), error_msg, true, None);
-                        Err(e.context("Failed to refresh device"))
-                    }
+            AdbCommand::RefreshDevice => match self.refresh_device().await {
+                Ok(_) => Ok(()),
+                Err(e) => {
+                    let error_msg = format!("Failed to refresh device: {e:#}");
+                    send_toast("Refresh Failed".to_string(), error_msg, true, None);
+                    Err(e.context("Failed to refresh device"))
                 }
-            }
+            },
         };
 
         result.context("Command execution failed")

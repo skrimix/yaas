@@ -39,20 +39,14 @@ class _DragDropOverlayState extends State<DragDropOverlay> {
 
       if (!isValid) {
         final errorMessage = isDirectory
-            ? 'Selected path is not a valid app directory'
-            : 'Selected path is not a valid APK file';
+            ? 'Dropped directory is not a valid app directory'
+            : 'Dropped file is not a valid APK file';
 
         SideloadUtils.showErrorToast(context, errorMessage);
         return;
       }
 
       SideloadUtils.installApp(path, isDirectory);
-
-      SideloadUtils.showInfoToast(
-        context,
-        'Installation Started',
-        'Installing ${isDirectory ? 'app from directory' : 'APK file'}',
-      );
     }
   }
 

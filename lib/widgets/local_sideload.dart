@@ -43,6 +43,8 @@ class _LocalSideloadState extends State<LocalSideload> {
         dialogTitle: 'Select APK file',
         type: FileType.custom,
         allowedExtensions: ['apk'],
+        // TODO: handle multiple files
+        allowMultiple: false,
       );
       path = result?.files.single.path;
     }
@@ -52,9 +54,9 @@ class _LocalSideloadState extends State<LocalSideload> {
     }
   }
 
-  void _install() {
+  bool _install() {
     final path = _pathController.text;
-    if (path.isEmpty) return;
+    if (path.isEmpty) return false;
 
     // Validate paths before proceeding
     final isValid = _isDirectory
@@ -65,12 +67,13 @@ class _LocalSideloadState extends State<LocalSideload> {
           ? 'Selected path is not a valid app directory'
           : 'Selected path is not a valid APK file';
       SideloadUtils.showErrorToast(context, errorMessage);
-      return;
+      return false;
     }
 
     SideloadUtils.installApp(path, _isDirectory);
 
     _pathController.clear();
+    return true;
   }
 
   bool _onKey(KeyEvent event) {
@@ -173,12 +176,10 @@ class _LocalSideloadState extends State<LocalSideload> {
                           ),
                         ],
                         const SizedBox(height: 16),
-                        FilledButton.icon(
-                          onPressed:
-                              _pathController.text.isEmpty ? null : _install,
-                          icon: const Icon(Icons.upload),
-                          label: Text(
-                              _isDirectory ? 'Sideload App' : 'Install APK'),
+                        _AnimatedSideloadButton(
+                          isEnabled: _pathController.text.isNotEmpty,
+                          isDirectory: _isDirectory,
+                          onPressed: _install,
                         ),
                         const SizedBox(height: 16),
                         Text(
@@ -201,6 +202,96 @@ class _LocalSideloadState extends State<LocalSideload> {
           ),
         );
       },
+    );
+  }
+}
+
+class _AnimatedSideloadButton extends StatefulWidget {
+  final bool isEnabled;
+  final bool isDirectory;
+  final bool Function() onPressed;
+
+  const _AnimatedSideloadButton({
+    required this.isEnabled,
+    required this.isDirectory,
+    required this.onPressed,
+  });
+
+  @override
+  State<_AnimatedSideloadButton> createState() =>
+      _AnimatedSideloadButtonState();
+}
+
+class _AnimatedSideloadButtonState extends State<_AnimatedSideloadButton>
+    with TickerProviderStateMixin {
+  late AnimationController _controller;
+
+  bool _showSuccess = false;
+
+  @override
+  void initState() {
+    super.initState();
+
+    _controller = AnimationController(
+      duration: const Duration(milliseconds: 300),
+      vsync: this,
+    );
+  }
+
+  @override
+  void dispose() {
+    _controller.dispose();
+    super.dispose();
+  }
+
+  void _onPressed() {
+    if (_showSuccess || !widget.isEnabled) return;
+
+    final success = widget.onPressed();
+
+    if (success) {
+      setState(() {
+        _showSuccess = true;
+      });
+
+      _controller.forward().then((_) {
+        Future.delayed(const Duration(milliseconds: 500), () {
+          if (mounted) {
+            _controller.reverse().then((_) {
+              if (mounted) {
+                setState(() {
+                  _showSuccess = false;
+                });
+              }
+            });
+          }
+        });
+      });
+    }
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    return FilledButton.icon(
+      onPressed: widget.isEnabled && !_showSuccess ? _onPressed : null,
+      icon: AnimatedSwitcher(
+        duration: const Duration(milliseconds: 200),
+        child: _showSuccess
+            ? const Icon(
+                Icons.check,
+                key: Key('success'),
+                color: Colors.white,
+              )
+            : const Icon(
+                Icons.upload,
+                key: Key('idle'),
+              ),
+      ),
+      label: Text(_showSuccess
+          ? 'Added to queue!'
+          : widget.isDirectory
+              ? 'Sideload App'
+              : 'Install APK'),
     );
   }
 }

@@ -20,7 +20,10 @@ use crate::{
     downloader::{Downloader, RcloneTransferStats},
     models::signals::{
         system::Toast,
-        task::{TaskCancelRequest, TaskParams, TaskProgress, TaskRequest, TaskStatus, TaskType},
+        task::{
+            TaskCancelRequest, TaskCreatedEvent, TaskParams, TaskProgress, TaskRequest, TaskStatus,
+            TaskType,
+        },
     },
 };
 
@@ -131,6 +134,9 @@ impl TaskManager {
         drop(tasks);
 
         info!(task_id = id, active_tasks = active_tasks_count + 1, "Task added to queue");
+
+        // Send task created event to Dart
+        TaskCreatedEvent { task_id: id, task_type, params: params.clone() }.send_signal_to_dart();
 
         tokio::spawn({
             let manager = self.clone();

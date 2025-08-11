@@ -6,6 +6,8 @@ import 'package:toastification/toastification.dart';
 import '../providers/device_state.dart';
 import '../providers/cloud_apps_state.dart';
 import '../src/bindings/bindings.dart';
+import 'animated_adb_button.dart';
+import 'animated_uninstall_dialog.dart';
 
 class ManageApps extends StatefulWidget {
   const ManageApps({super.key});
@@ -236,27 +238,7 @@ class _ManageAppsState extends State<ManageApps> {
   void _showUninstallDialog(BuildContext context, InstalledPackage app) async {
     showDialog(
       context: context,
-      builder: (context) => AlertDialog(
-        title: const Text('Uninstall App'),
-        content: Text(
-            'Are you sure you want to uninstall "${app.label}"?\n\nThis will permanently delete the app and all its data.'),
-        actions: [
-          TextButton(
-            onPressed: () => Navigator.of(context).pop(),
-            child: const Text('Cancel'),
-          ),
-          TextButton(
-            onPressed: () {
-              Navigator.of(context).pop();
-              AdbRequest(
-                      command:
-                          AdbCommandUninstallPackage(value: app.packageName))
-                  .sendSignalToRust();
-            },
-            child: const Text('Uninstall'),
-          ),
-        ],
-      ),
+      builder: (context) => AnimatedUninstallDialog(app: app),
     );
   }
 
@@ -486,20 +468,24 @@ class _ManageAppsState extends State<ManageApps> {
                 ),
                 if (_selectedCategory != AppCategory.system) ...[
                   _buildUpdateButton(context, app),
-                  IconButton(
-                    icon: const Icon(Icons.play_arrow),
+                  AnimatedAdbButton(
+                    icon: Icons.play_arrow,
                     tooltip: 'Launch',
-                    onPressed: () async {
+                    commandType: AdbCommandType.launchApp,
+                    packageName: app.packageName,
+                    onPressed: () {
                       AdbRequest(
                               command:
                                   AdbCommandLaunchApp(value: app.packageName))
                           .sendSignalToRust();
                     },
                   ),
-                  IconButton(
-                    icon: const Icon(Icons.close),
+                  AnimatedAdbButton(
+                    icon: Icons.close,
                     tooltip: 'Force Stop',
-                    onPressed: () async {
+                    commandType: AdbCommandType.forceStopApp,
+                    packageName: app.packageName,
+                    onPressed: () {
                       AdbRequest(
                               command: AdbCommandForceStopApp(
                                   value: app.packageName))

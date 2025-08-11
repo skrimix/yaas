@@ -361,15 +361,7 @@ impl AdbHandler {
             AdbCommand::RefreshDevice => {
                 let result = self.refresh_device().await;
                 match result {
-                    Ok(_) => {
-                        send_toast(
-                            "Refresh".to_string(),
-                            "Device data refreshed".to_string(),
-                            false,
-                            Some(Duration::from_secs(2)),
-                        );
-                        Ok(())
-                    }
+                    Ok(_) => Ok(()),
                     Err(e) => {
                         let error_msg = format!("Failed to refresh device: {e:#}");
                         send_toast("Refresh Failed".to_string(), error_msg, true, None);

@@ -54,6 +54,7 @@ tracing-subscriber = { version = "0.3.19", features = [
     "time",
     "env-filter",
     "tracing-log",
+    "local-time",
 ] }
 which = { version = "7.0.3", features = ["tracing"] }
 zip = { version = "4.3.0", default-features = false, features = ["deflate"] }

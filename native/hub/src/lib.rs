@@ -15,7 +15,7 @@ use tracing_appender::{
     non_blocking::WorkerGuard,
     rolling::{RollingFileAppender, Rotation},
 };
-use tracing_subscriber::fmt::format::{self, FmtSpan};
+use tracing_subscriber::fmt;
 
 #[global_allocator]
 static GLOBAL: MiMalloc = MiMalloc;
@@ -75,13 +75,15 @@ fn setup_logging() -> Result<WorkerGuard> {
     let file_appender = RollingFileAppender::builder()
         .rotation(Rotation::DAILY)
         .max_log_files(10)
+        .filename_prefix("rql")
+        .filename_suffix("log")
         .build("logs/rql_native.log")
         .context("Failed to initialize file appender")?;
     let (non_blocking, _guard) = tracing_appender::non_blocking(file_appender);
     let subscriber = tracing_subscriber::fmt::Subscriber::builder()
-        .with_span_events(FmtSpan::NEW | FmtSpan::CLOSE)
         .with_max_level(Level::DEBUG)
-        .event_format(format::Format::default().compact().with_source_location(true))
+        .with_ansi(false) // Disable ANSI colors
+        .event_format(fmt::format().pretty())
         .with_writer(non_blocking)
         .finish();
     tracing::subscriber::set_global_default(subscriber)

@@ -70,7 +70,7 @@ struct RcloneClient {
 }
 
 impl RcloneClient {
-    #[instrument(fields(sys_proxy))]
+    #[instrument(fields(sys_proxy), ret)]
     pub fn new(
         rclone_path: PathBuf,
         config_path: Option<PathBuf>,

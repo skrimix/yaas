@@ -1,3 +1,4 @@
+import 'dart:async';
 import 'package:flutter/material.dart';
 import 'package:provider/provider.dart';
 import 'package:proper_filesize/proper_filesize.dart' as filesize;
@@ -33,9 +34,11 @@ class _DownloadAppsState extends State<DownloadApps> {
   bool _showCheckboxes = false;
   bool _showOnlySelected = false;
   String? _lastSearchQuery;
+  Timer? _searchDebounceTimer;
 
   @override
   void dispose() {
+    _searchDebounceTimer?.cancel();
     _searchController.dispose();
     _scrollController.dispose();
     super.dispose();
@@ -104,6 +107,7 @@ class _DownloadAppsState extends State<DownloadApps> {
   }
 
   void _resetSearch() {
+    _searchDebounceTimer?.cancel();
     setState(() {
       _searchQuery = '';
       // _isSearching = false;
@@ -318,8 +322,12 @@ class _DownloadAppsState extends State<DownloadApps> {
                   : null,
             ),
             onChanged: (value) {
-              setState(() {
-                _searchQuery = value;
+              _searchDebounceTimer?.cancel();
+              _searchDebounceTimer =
+                  Timer(const Duration(milliseconds: 300), () {
+                setState(() {
+                  _searchQuery = value;
+                });
               });
             },
           ),

@@ -72,6 +72,7 @@ impl AdbHandler {
                     error!(error = e.as_ref() as &dyn Error, "Failed to start ADB server on init");
                     // TODO: report this to the UI
                 }
+                handle.refresh_adb_state().await;
             }
         });
         tokio::spawn(handle.clone().start_tasks(settings_stream));

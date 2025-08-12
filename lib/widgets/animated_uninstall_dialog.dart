@@ -17,7 +17,6 @@ class AnimatedUninstallDialog extends StatefulWidget {
 class _AnimatedUninstallDialogState extends State<AnimatedUninstallDialog>
     with TickerProviderStateMixin {
   late AnimationController _controller;
-  late Animation<double> _scale;
 
   bool _isUninstalling = false;
   bool _showSuccess = false;
@@ -29,9 +28,6 @@ class _AnimatedUninstallDialogState extends State<AnimatedUninstallDialog>
     _controller = AnimationController(
       duration: const Duration(milliseconds: 300),
       vsync: this,
-    );
-    _scale = Tween<double>(begin: 1.0, end: 1.2).animate(
-      CurvedAnimation(parent: _controller, curve: Curves.elasticOut),
     );
 
     AdbCommandCompletedEvent.rustSignalStream.listen((event) {
@@ -100,40 +96,37 @@ class _AnimatedUninstallDialogState extends State<AnimatedUninstallDialog>
           onPressed: _isUninstalling ? null : () => Navigator.of(context).pop(),
           child: const Text('Cancel'),
         ),
-        ScaleTransition(
-          scale: _scale,
-          child: FilledButton.icon(
-            onPressed: _isUninstalling || _showSuccess ? null : _startUninstall,
-            icon: AnimatedSwitcher(
-              duration: const Duration(milliseconds: 200),
-              child: _showSuccess
-                  ? const Icon(
-                      Icons.check,
-                      key: Key('success'),
-                      color: Colors.white,
-                    )
-                  : _isUninstalling
-                      ? const SizedBox(
-                          key: Key('loading'),
-                          width: 16,
-                          height: 16,
-                          child: CircularProgressIndicator(
-                            strokeWidth: 2,
-                            valueColor:
-                                AlwaysStoppedAnimation<Color>(Colors.white),
-                          ),
-                        )
-                      : const Icon(
-                          Icons.delete_outline,
-                          key: Key('idle'),
-                        ),
-            ),
-            label: Text(_showSuccess
-                ? 'Uninstalled!'
+        FilledButton.icon(
+          onPressed: _isUninstalling || _showSuccess ? null : _startUninstall,
+          icon: AnimatedSwitcher(
+            duration: const Duration(milliseconds: 200),
+            child: _showSuccess
+                ? const Icon(
+                    Icons.check,
+                    key: Key('success'),
+                    color: Colors.white,
+                  )
                 : _isUninstalling
-                    ? 'Uninstalling...'
-                    : 'Uninstall'),
+                    ? const SizedBox(
+                        key: Key('loading'),
+                        width: 16,
+                        height: 16,
+                        child: CircularProgressIndicator(
+                          strokeWidth: 2,
+                          valueColor:
+                              AlwaysStoppedAnimation<Color>(Colors.white),
+                        ),
+                      )
+                    : const Icon(
+                        Icons.delete_outline,
+                        key: Key('idle'),
+                      ),
           ),
+          label: Text(_showSuccess
+              ? 'Uninstalled!'
+              : _isUninstalling
+                  ? 'Uninstalling...'
+                  : 'Uninstall'),
         ),
       ],
     );

@@ -1,3 +1,5 @@
+#[cfg(target_os = "windows")]
+use std::os::windows::process::CommandExt;
 use std::{error::Error, path::PathBuf, process::Stdio};
 
 use anyhow::{Context, Result, anyhow, ensure};
@@ -85,6 +87,10 @@ impl RcloneClient {
     fn command(&self, args: &[&str]) -> Command {
         let mut command = Command::new(&self.rclone_path);
         command.kill_on_drop(true);
+
+        #[cfg(target_os = "windows")]
+        // CREATE_NO_WINDOW
+        command.creation_flags(0x08000000);
 
         if let Some(proxy) = &self.sys_proxy {
             trace!(proxy, "Using system proxy");
@@ -262,7 +268,7 @@ impl RcloneStorage {
         format!(
             "{}:{}",
             self.remote,
-            PathBuf::from(self.root_dir.trim_end_matches('/')).join(path).display()
+            PathBuf::from(self.root_dir.trim_end_matches(['/', '\\'])).join(path).display()
         )
     }
 
@@ -308,7 +314,8 @@ impl RcloneStorage {
                 None,
             )
             .await?;
-        dest_path.push(source.split('/').next_back().context("Failed to get source file name")?);
+        dest_path
+            .push(source.split(['/', '\\']).next_back().context("Failed to get source file name")?);
         Ok(dest_path)
     }
 }

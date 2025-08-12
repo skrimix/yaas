@@ -570,9 +570,19 @@ impl AdbHandler {
     }
 
     /// Checks if the ADB server is running
-    #[instrument(skip(self), level = "trace", ret)]
+    #[instrument(skip(self), level = "debug", ret)]
     async fn is_server_running(&self) -> bool {
-        timeout(Duration::from_millis(500), self.adb_host.check_host_running()).await.is_ok()
+        match timeout(Duration::from_millis(500), self.adb_host.check_host_running()).await {
+            Ok(Ok(_)) => true,
+            Ok(Err(e)) => {
+                error!(error = &e as &dyn Error, "Failed to check ADB server status");
+                false
+            }
+            Err(_) => {
+                debug!("Timed out while checking ADB server status (expected when not running)");
+                false
+            }
+        }
     }
 
     /// Gets the ADB devices

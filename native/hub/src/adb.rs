@@ -389,8 +389,9 @@ impl AdbHandler {
                 return;
             }
 
-            if let (Some(current), Some(new)) = (current_device.as_ref(), &device) {
-                if current.serial != new.serial {
+            if let (Some(current), Some(new)) = (current_device.as_ref(), &device)
+                && current.serial != new.serial
+            {
                     debug!(
                         current = %current.serial,
                         new = %new.serial,
@@ -399,7 +400,6 @@ impl AdbHandler {
                     return;
                 }
             }
-        }
 
         debug!(device = ?device.as_ref().map(|d| &d.serial), "Setting new device");
         *current_device = device.clone().map(Arc::new);
@@ -472,7 +472,7 @@ impl AdbHandler {
     async fn run_periodic_refresh(&self) {
         let refresh_interval = Duration::from_secs(60);
         let mut interval = time::interval(refresh_interval);
-        info!(interval = ?interval, "Starting periodic device refresh");
+        info!(interval = ?refresh_interval, "Starting periodic device refresh");
 
         loop {
             interval.tick().await;

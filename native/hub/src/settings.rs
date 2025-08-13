@@ -160,12 +160,12 @@ impl SettingsHandler {
             serde_json::to_string_pretty(settings).context("Failed to serialize settings")?;
 
         // Ensure parent directory exists
-        if let Some(parent) = self.settings_file_path.parent() {
-            if !parent.exists() {
+        if let Some(parent) = self.settings_file_path.parent()
+            && !parent.exists()
+        {
                 info!(path = %parent.display(), "Creating settings directory");
                 fs::create_dir_all(parent).context("Failed to create settings directory")?;
             }
-        }
 
         // TODO: Validate settings
 

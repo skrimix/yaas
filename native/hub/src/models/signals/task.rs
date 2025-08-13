@@ -62,10 +62,3 @@ pub struct TaskProgress {
     pub total_progress: f32,
     pub message: String,
 }
-
-#[derive(Serialize, Deserialize, RustSignal)]
-pub struct TaskCreatedEvent {
-    pub task_id: u64,
-    pub task_type: TaskType,
-    pub params: TaskParams,
-}

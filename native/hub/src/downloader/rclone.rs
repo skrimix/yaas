@@ -1,5 +1,3 @@
-#[cfg(target_os = "windows")]
-use std::os::windows::process::CommandExt;
 use std::{error::Error, path::PathBuf, process::Stdio};
 
 use anyhow::{Context, Result, anyhow, ensure};
@@ -89,8 +87,7 @@ impl RcloneClient {
         command.kill_on_drop(true);
 
         #[cfg(target_os = "windows")]
-        // CREATE_NO_WINDOW
-        command.creation_flags(0x08000000);
+        command.creation_flags(0x08000000); // CREATE_NO_WINDOW
 
         if let Some(proxy) = &self.sys_proxy {
             trace!(proxy, "Using system proxy");

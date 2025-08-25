@@ -1,26 +1,26 @@
 # Run the app
 run:
-    flutter run
+    rinf gen && flutter run
 
 # Run the app in release mode
 run-release:
-    flutter run --release
+    rinf gen && flutter run --release
 
 # Run the app in profile mode
 run-profile:
-    flutter run --profile
+    rinf gen && flutter run --profile
 
 # Build the app for Linux in debug mode
 build:
-    flutter build linux --debug
+    rinf gen && flutter build linux --debug
 
 # Build the app for Linux in release mode
 build-release:
-    flutter build linux --release
+    rinf gen && flutter build linux --release
 
 # Build the app for Linux in profile mode
 build-profile:
-    flutter build linux --profile
+    rinf gen && flutter build linux --profile
 
 # Run all tests
 test:

@@ -89,7 +89,7 @@ class _DownloadAppsState extends State<DownloadApps> {
           comparison = a.app.lastUpdated.compareTo(b.app.lastUpdated);
           break;
         case SortOption.size:
-          comparison = a.app.size.compareTo(b.app.size);
+          comparison = a.app.size.toBigInt().compareTo(b.app.size.toBigInt());
           break;
       }
       return _sortAscending ? comparison : -comparison;

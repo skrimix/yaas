@@ -155,7 +155,7 @@ impl Downloader {
             .clone()
             .download_file("FFA.txt".to_string(), self.download_dir.read().await.clone())
             .await
-            .context("failed to download game list file")?;
+            .context("Failed to download game list file")?;
 
         debug!(path = %path.display(), "App list file downloaded, parsing...");
         let file = File::open(&path).await.context("could not open game list file")?;

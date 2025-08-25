@@ -163,9 +163,9 @@ impl SettingsHandler {
         if let Some(parent) = self.settings_file_path.parent()
             && !parent.exists()
         {
-                info!(path = %parent.display(), "Creating settings directory");
-                fs::create_dir_all(parent).context("Failed to create settings directory")?;
-            }
+            info!(path = %parent.display(), "Creating settings directory");
+            fs::create_dir_all(parent).context("Failed to create settings directory")?;
+        }
 
         // TODO: Validate settings
 

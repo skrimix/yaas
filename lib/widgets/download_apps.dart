@@ -1,4 +1,5 @@
 import 'dart:async';
+import 'dart:math' as math;
 import 'package:flutter/material.dart';
 import 'package:provider/provider.dart';
 import 'package:proper_filesize/proper_filesize.dart' as filesize;
@@ -115,6 +116,64 @@ class _DownloadAppsState extends State<DownloadApps> {
     });
   }
 
+  int _calculateSearchScore(CloudApp app, String searchQuery, List<String> searchTerms) {
+    final fullNameLower = app.fullName.toLowerCase();
+    final packageNameLower = app.packageName.toLowerCase();
+    final queryLower = searchQuery.toLowerCase();
+    
+    int score = 0;
+    
+    // Exact full name match (highest priority)
+    if (fullNameLower == queryLower) {
+      score += 1000;
+    }
+    // Exact package name match
+    else if (packageNameLower == queryLower) {
+      score += 900;
+    }
+    // Full name starts with query
+    else if (fullNameLower.startsWith(queryLower)) {
+      score += 800;
+    }
+    // Package name starts with query
+    else if (packageNameLower.startsWith(queryLower)) {
+      score += 700;
+    }
+    // Full name contains query as whole word
+    else if (RegExp(r'\b' + RegExp.escape(queryLower) + r'\b').hasMatch(fullNameLower)) {
+      score += 600;
+    }
+    // Package name contains query as whole word
+    else if (RegExp(r'\b' + RegExp.escape(queryLower) + r'\b').hasMatch(packageNameLower)) {
+      score += 500;
+    }
+    // All search terms present in full name
+    else if (searchTerms.every((term) => fullNameLower.contains(term))) {
+      score += 400;
+      // Bonus for terms appearing as whole words
+      for (final term in searchTerms) {
+        if (RegExp(r'\b' + RegExp.escape(term) + r'\b').hasMatch(fullNameLower)) {
+          score += 50;
+        }
+      }
+    }
+    // Full name contains the complete query
+    else if (fullNameLower.contains(queryLower)) {
+      score += 300;
+    }
+    // Package name contains the complete query
+    else if (packageNameLower.contains(queryLower)) {
+      score += 200;
+    }
+    
+    // Bonus for shorter names (more specific matches)
+    if (score > 0) {
+      score += math.max(0, 100 - app.fullName.length);
+    }
+    
+    return score;
+  }
+
   List<CachedAppData> _filterAndSortApps(List<CloudApp> apps) {
     final sortedApps = _sortApps(apps);
 
@@ -126,18 +185,32 @@ class _DownloadAppsState extends State<DownloadApps> {
           .toList();
     } else if (_searchQuery.isNotEmpty) {
       final searchTerms = _searchQuery.toLowerCase().split(' ');
-      filtered = sortedApps.where((app) {
-        // Match if all search terms are present in the full name
+      final queryLower = _searchQuery.toLowerCase();
+      
+      // Filter and score matching apps
+      final matchingApps = <({CachedAppData app, int score})>[];
+      
+      for (final app in sortedApps) {
         final fullNameLower = app.app.fullName.toLowerCase();
+        final packageNameLower = app.app.packageName.toLowerCase();
+        
+        // Check if app matches search criteria
+        bool matches = false;
         if (searchTerms.every((term) => fullNameLower.contains(term))) {
-          return true;
+          matches = true;
+        } else if (packageNameLower.contains(queryLower)) {
+          matches = true;
         }
-
-        // Match if package name contains the search query
-        return app.app.packageName
-            .toLowerCase()
-            .contains(_searchQuery.toLowerCase());
-      }).toList();
+        
+        if (matches) {
+          final score = _calculateSearchScore(app.app, _searchQuery, searchTerms);
+          matchingApps.add((app: app, score: score));
+        }
+      }
+      
+      // Sort by search relevance score (highest first)
+      matchingApps.sort((a, b) => b.score.compareTo(a.score));
+      filtered = matchingApps.map((item) => item.app).toList();
     }
 
     // Reset scroll position when search query changes

@@ -10,6 +10,10 @@ run-release:
 run-profile:
     rinf gen && flutter run --profile
 
+# Generate rinf bindings
+gen:
+    rinf gen
+
 # Build the app for Linux in debug mode
 build:
     rinf gen && flutter build linux --debug

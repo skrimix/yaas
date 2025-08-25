@@ -31,7 +31,7 @@ impl Default for Settings {
     fn default() -> Self {
         Self {
             rclone_path: "rclone".to_string(),
-            rclone_remote_name: "".to_string(),
+            rclone_remote_name: "FFA-90".to_string(), // TODO: implement first time setup
             adb_path: "adb".to_string(),
             preferred_connection_type: ConnectionType::Usb,
             downloads_location: dirs::download_dir()

@@ -7,6 +7,7 @@ use forensic_adb::{AndroidStorageInput, DeviceBrief, DeviceState};
 use lazy_regex::{Lazy, Regex, lazy_regex};
 use rinf::{DartSignal, RustSignal};
 use tokio::{
+    process::Command,
     sync::{Mutex, RwLock, mpsc::UnboundedSender},
     time::{self, timeout},
 };
@@ -58,7 +59,13 @@ impl AdbHandler {
             settings_stream.next().await.expect("Settings stream closed on adb init").adb_path;
         let adb_path = if adb_path.is_empty() { None } else { Some(adb_path) };
         let handle = Arc::new(Self {
-            adb_host: forensic_adb::Host::default(),
+            adb_host: if cfg!(target_os = "windows") {
+                // This is some retarded shit, but it fails to connect on my Windows VM without this
+                // However, passing this host to `adb start-server` fails too (so we're not using `adb_host.start_server()`)
+                forensic_adb::Host { host: Some("127.0.0.1".to_string()), port: Some(5037) }
+            } else {
+                forensic_adb::Host::default()
+            },
             adb_server_mutex: Mutex::new(()),
             adb_path: RwLock::new(adb_path),
             adb_state: RwLock::new(AdbState::default()),
@@ -392,14 +399,14 @@ impl AdbHandler {
             if let (Some(current), Some(new)) = (current_device.as_ref(), &device)
                 && current.serial != new.serial
             {
-                    debug!(
-                        current = %current.serial,
-                        new = %new.serial,
-                        "Ignoring device update for different device"
-                    );
-                    return;
-                }
+                debug!(
+                    current = %current.serial,
+                    new = %new.serial,
+                    "Ignoring device update for different device"
+                );
+                return;
             }
+        }
 
         debug!(device = ?device.as_ref().map(|d| &d.serial), "Setting new device");
         *current_device = device.clone().map(Arc::new);
@@ -539,7 +546,7 @@ impl AdbHandler {
     }
 
     /// Ensures the ADB server is running, starting it if necessary
-    #[instrument(skip(self), err)]
+    #[instrument(skip(self), /* fields(adb_host = ?self.adb_host) */, err)]
     async fn ensure_server_running(&self) -> Result<()> {
         let _guard = self.adb_server_mutex.lock().await;
         if !self.is_server_running().await {
@@ -550,20 +557,54 @@ impl AdbHandler {
                 .read()
                 .await
                 .as_deref()
-                .and_then(|p| which::which(p).ok())
+                .and_then(|p| {
+                    which::which(p).ok().or_else(|| {
+                        // TODO: is this fragile?
+                        which::which(std::env::current_exe().unwrap().parent().unwrap().join("adb"))
+                            .ok()
+                    })
+                })
                 .or_else(|| {
                     warn!(
                         "Failed to resolve custom ADB path (not set or invalid), searching in PATH"
                     );
                     which::which("adb").ok()
                 })
-                .context("ADB binary not found in PATH or settings")?;
+                .context("ADB binary not found in PATH or settings")
+                .inspect_err(|e| {
+                    // FIXME: this is probably called too early?
+                    Toast::send("ADB binary not found".to_string(), format!("{e:#}"), true, None);
+                })?;
 
             info!(path = %adb_path_buf.display(), "Found ADB binary, starting server");
-            self.adb_host
-                .start_server(adb_path_buf.to_str())
-                .await
-                .context("Failed to start ADB server")?;
+            // self.adb_host
+            //     .start_server(adb_path_buf.to_str())
+            //     .await
+            //     .context("Failed to start ADB server")
+            //     .inspect_err(|e| {
+            //         Toast::send(
+            //             "Failed to start ADB server".to_string(),
+            //             format!("{e:#}"),
+            //             true,
+            //             None,
+            //         );
+            //     })?;
+            // run "adb start-server"
+            let output = timeout(Duration::from_millis(10000), {
+                let mut command = Command::new(adb_path_buf);
+                command.arg("start-server");
+                #[cfg(target_os = "windows")]
+                // CREATE_NO_WINDOW
+                command.creation_flags(0x08000000);
+                command.output()
+            })
+            .await
+            .context("Timed out while starting ADB server")?
+            .context("Failed to start ADB server")?;
+
+            if !output.status.success() {
+                bail!("Failed to start ADB server: {}", String::from_utf8_lossy(&output.stderr));
+            }
             self.refresh_adb_state().await;
             info!("ADB server started successfully");
         }
@@ -580,7 +621,7 @@ impl AdbHandler {
                 false
             }
             Err(_) => {
-                debug!("Timed out while checking ADB server status (expected when not running)");
+                debug!("Timed out while checking ADB server status (likely not running)");
                 false
             }
         }

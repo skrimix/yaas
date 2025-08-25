@@ -24,6 +24,24 @@ use crate::{
     },
 };
 
+macro_rules! acquire_permit_or_cancel {
+    ($semaphore:expr, $token:expr, $semaphore_name:literal) => {{
+        if $token.is_cancelled() {
+            warn!(concat!("Task already cancelled before ", $semaphore_name, " semaphore acquisition"));
+            return Err(anyhow!(concat!("Task cancelled before ", $semaphore_name)));
+        }
+
+        debug!(concat!("Waiting for ", $semaphore_name, " semaphore"));
+        tokio::select! {
+            permit = $semaphore.acquire() => permit,
+            _ = $token.cancelled() => {
+                warn!(concat!("Task cancelled while waiting for ", $semaphore_name, " semaphore"));
+                return Err(anyhow!(concat!("Task cancelled while waiting for ", $semaphore_name, " semaphore")));
+            }
+        }
+    }};
+}
+
 pub struct TaskManager {
     adb_semaphore: Semaphore,
     download_semaphore: Semaphore,
@@ -311,8 +329,8 @@ impl TaskManager {
 
         update_progress(TaskStatus::Waiting, 0.0, "Waiting to start download...".into());
 
-        debug!("Waiting for download semaphore");
-        let _download_permit = self.download_semaphore.acquire().await;
+        let _download_permit =
+            acquire_permit_or_cancel!(self.download_semaphore, token, "download");
         info!(
             download_permits_remaining = self.download_semaphore.available_permits(),
             "Acquired download semaphore"
@@ -388,8 +406,7 @@ impl TaskManager {
 
         update_progress(TaskStatus::Waiting, 0.5, "Waiting to start installation...".into());
 
-        debug!("Waiting for ADB semaphore");
-        let _adb_permit = self.adb_semaphore.acquire().await;
+        let _adb_permit = acquire_permit_or_cancel!(self.adb_semaphore, token, "ADB");
         info!(
             adb_permits_remaining = self.adb_semaphore.available_permits(),
             "Acquired ADB semaphore for installation"
@@ -467,8 +484,7 @@ impl TaskManager {
 
         update_progress(TaskStatus::Waiting, 0.0, "Waiting to start download...".into());
 
-        debug!("Waiting for download semaphore");
-        let _permit = self.download_semaphore.acquire().await;
+        let _permit = acquire_permit_or_cancel!(self.download_semaphore, token, "download");
         info!(
             download_permits_remaining = self.download_semaphore.available_permits(),
             "Acquired download semaphore"
@@ -537,12 +553,12 @@ impl TaskManager {
         Ok(())
     }
 
-    #[instrument(skip(self, params, update_progress, _token))]
+    #[instrument(skip(self, params, update_progress, token))]
     async fn handle_install_apk(
         &self,
         params: TaskParams,
         update_progress: &impl Fn(TaskStatus, f32, String),
-        _token: CancellationToken,
+        token: CancellationToken,
     ) -> Result<()> {
         let apk_path = params.apk_path.context("Missing apk_path parameter")?;
 
@@ -554,8 +570,7 @@ impl TaskManager {
 
         update_progress(TaskStatus::Waiting, 0.0, "Waiting to start installation...".into());
 
-        debug!("Waiting for ADB semaphore");
-        let _permit = self.adb_semaphore.acquire().await;
+        let _permit = acquire_permit_or_cancel!(self.adb_semaphore, token, "ADB");
         info!(
             adb_permits_remaining = self.adb_semaphore.available_permits(),
             "Acquired ADB semaphore for APK installation"
@@ -611,12 +626,12 @@ impl TaskManager {
         Ok(())
     }
 
-    #[instrument(skip(self, params, update_progress, _token))]
+    #[instrument(skip(self, params, update_progress, token))]
     async fn handle_install_local_app(
         &self,
         params: TaskParams,
         update_progress: &impl Fn(TaskStatus, f32, String),
-        _token: CancellationToken,
+        token: CancellationToken,
     ) -> Result<()> {
         let app_path = params.local_app_path.context("Missing local_app_path parameter")?;
 
@@ -628,8 +643,7 @@ impl TaskManager {
 
         update_progress(TaskStatus::Waiting, 0.0, "Waiting to start installation...".into());
 
-        debug!("Waiting for ADB semaphore");
-        let _permit = self.adb_semaphore.acquire().await;
+        let _permit = acquire_permit_or_cancel!(self.adb_semaphore, token, "ADB");
         info!(
             adb_permits_remaining = self.adb_semaphore.available_permits(),
             "Acquired ADB semaphore for local app installation"
@@ -689,12 +703,12 @@ impl TaskManager {
         Ok(())
     }
 
-    #[instrument(skip(self, params, update_progress, _token))]
+    #[instrument(skip(self, params, update_progress, token))]
     async fn handle_uninstall(
         &self,
         params: TaskParams,
         update_progress: &impl Fn(TaskStatus, f32, String),
-        _token: CancellationToken,
+        token: CancellationToken,
     ) -> Result<()> {
         let package_name = params.package_name.context("Missing package_name parameter")?;
 
@@ -706,8 +720,7 @@ impl TaskManager {
 
         update_progress(TaskStatus::Waiting, 0.0, "Waiting to start uninstallation...".into());
 
-        debug!("Waiting for ADB semaphore");
-        let _permit = self.adb_semaphore.acquire().await;
+        let _permit = acquire_permit_or_cancel!(self.adb_semaphore, token, "ADB");
         info!(
             adb_permits_remaining = self.adb_semaphore.available_permits(),
             "Acquired ADB semaphore for uninstallation"

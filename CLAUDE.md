@@ -43,6 +43,7 @@ Key architectural components:
 
 **Key Notes:**
 - Always run `rinf gen` before Flutter commands to generate fresh bindings
+- Always format code after completing a task (`just format` or `just format-rust` or `just format-dart`)
 - The `hub` crate name cannot be changed (required by Rinf)
 - Uses `just` as the primary build tool instead of direct Flutter/Cargo commands
 

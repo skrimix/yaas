@@ -34,4 +34,15 @@ test:
 test-all:
     cargo test -- --include-ignored
 
+# Format Rust code
+format-rust:
+    cargo +nightly fmt
 
+# Format Dart code
+format-dart:
+    dart format .
+
+# Format all code
+format:
+    just format-rust
+    just format-dart

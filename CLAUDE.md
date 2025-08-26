@@ -37,6 +37,11 @@ Key architectural components:
 - `just test-all`: Run all Rust tests including ignored ones
 - `flutter test`: Run Flutter/Dart tests
 
+**Formatting:**
+- `just format`: Format all code
+- `just format-rust`: Format Rust code
+- `just format-dart`: Format Dart code
+
 **Analysis:**
 - `flutter analyze`: Lint Dart code
 - `cargo clippy`: Lint Rust code
@@ -46,6 +51,7 @@ Key architectural components:
 - Always format code after completing a task (`just format` or `just format-rust` or `just format-dart`)
 - The `hub` crate name cannot be changed (required by Rinf)
 - Uses `just` as the primary build tool instead of direct Flutter/Cargo commands
+- Call `cargo check` directly when encountering build issues to get more detailed error messages
 
 ## Code Generation
 

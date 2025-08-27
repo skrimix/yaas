@@ -87,7 +87,7 @@ impl AdbDevice {
             space_info: SpaceInfo::default(),
             installed_packages: Vec::new(),
         };
-        Box::pin(device.refresh()).await.context("Failed to refresh device info")?;
+        device.refresh().await.context("Failed to refresh device info")?;
         Ok(device)
     }
 
@@ -454,9 +454,9 @@ impl AdbDevice {
         );
         let stat = self.inner.stat(remote_path).await.context("Stat command failed")?;
         if stat.file_mode == UnixFileStatus::Directory {
-            Box::pin(self.pull_dir(remote_path, local_path)).await?;
+            self.pull_dir(remote_path, local_path).await?;
         } else if stat.file_mode == UnixFileStatus::RegularFile {
-            Box::pin(self.pull(remote_path, local_path)).await?;
+            self.pull(remote_path, local_path).await?;
         } else {
             bail!("Unsupported file type: {:?}", stat.file_mode);
         }
@@ -468,9 +468,9 @@ impl AdbDevice {
     async fn push_any(&self, source: &Path, dest: &UnixPath) -> Result<()> {
         ensure!(source.exists(), "Source path does not exist: {}", source.display());
         if source.is_dir() {
-            Box::pin(self.push_dir(source, dest)).await?;
+            self.push_dir(source, dest).await?;
         } else if source.is_file() {
-            Box::pin(self.push(source, dest)).await?;
+            self.push(source, dest).await?;
         } else {
             bail!("Unsupported source file type: {}", source.display());
         }
@@ -604,7 +604,7 @@ impl AdbDevice {
                             format!("Line {line_num}: adb install: missing APK path")
                         })?,
                     );
-                    Box::pin(self.install_apk(&apk_path)).await.with_context(|| {
+                    self.install_apk(&apk_path).await.with_context(|| {
                         format!(
                             "Line {line_num}: adb install: failed to install APK '{}'",
                             apk_path.display()
@@ -655,7 +655,7 @@ impl AdbDevice {
                     );
                     let source = script_dir.join(adb_args[0]);
                     let dest = UnixPath::new(adb_args[1]);
-                    Box::pin(self.push_any(&source, dest)).await.with_context(|| {
+                    self.push_any(&source, dest).await.with_context(|| {
                         format!(
                             "Line {line_num}: adb push: failed to push '{}' to '{}'",
                             source.display(),
@@ -671,7 +671,7 @@ impl AdbDevice {
                     );
                     let source = UnixPath::new(adb_args[0]);
                     let dest = script_dir.join(adb_args[1]);
-                    Box::pin(self.pull_any(source, &dest)).await.with_context(|| {
+                    self.pull_any(source, &dest).await.with_context(|| {
                         format!(
                             "Line {line_num}: adb pull: failed to pull '{}' to '{}'",
                             adb_args[0], adb_args[1]
@@ -721,7 +721,8 @@ impl AdbDevice {
             .find(|e| e.file_name().to_str().is_some_and(|n| n.to_lowercase() == "install.txt"))
         {
             send_progress(&progress_sender, "Executing install script", 0.5);
-            return Box::pin(self.execute_install_script(&entry.path()))
+            return self
+                .execute_install_script(&entry.path())
                 .await
                 .context("Failed to execute install script");
         }
@@ -767,7 +768,7 @@ impl AdbDevice {
             }
             .instrument(Span::current()),
         );
-        Box::pin(self.install_apk_with_progress(apk_path, tx)).await?;
+        self.install_apk_with_progress(apk_path, tx).await?;
 
         if let Some(obb_dir) = obb_dir {
             let package_name = obb_dir
@@ -800,7 +801,7 @@ impl AdbDevice {
                 .instrument(Span::current()),
             );
 
-            Box::pin(self.push_dir_with_progress(&obb_dir, &remote_obb_path, true, tx)).await?;
+            self.push_dir_with_progress(&obb_dir, &remote_obb_path, true, tx).await?;
         }
 
         Ok(())

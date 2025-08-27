@@ -509,7 +509,7 @@ impl AdbHandler {
         // TODO: just add serial to instrument span
         debug!(serial = %device.serial, "Refreshing device data");
         let mut device_clone = (*device).clone();
-        Box::pin(device_clone.refresh()).await?;
+        device_clone.refresh().await?;
         self.set_device(Some(device_clone), true).await;
         debug!("Device data refreshed successfully");
         Ok(())
@@ -524,8 +524,7 @@ impl AdbHandler {
     ) -> Result<()> {
         let device = self.current_device().await?;
         let device_clone = (*device).clone();
-        let result =
-            Box::pin(device_clone.install_apk_with_progress(apk_path, progress_sender)).await;
+        let result = device_clone.install_apk_with_progress(apk_path, progress_sender).await;
         self.refresh_device().await?;
         result
     }
@@ -549,7 +548,7 @@ impl AdbHandler {
     ) -> Result<()> {
         let device = self.current_device().await?;
         let device_clone = (*device).clone();
-        let result = Box::pin(device_clone.sideload_app(app_path, progress_sender)).await;
+        let result = device_clone.sideload_app(app_path, progress_sender).await;
         self.refresh_device().await?;
         result
     }

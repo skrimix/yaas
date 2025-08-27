@@ -425,7 +425,7 @@ impl TaskManager {
             let adb_handler = self.adb_handler.clone();
             let app_path = app_path.clone();
             tokio::spawn(
-                async move { Box::pin(adb_handler.sideload_app(Path::new(&app_path), tx)).await }
+                async move { adb_handler.sideload_app(Path::new(&app_path), tx).await }
                     .instrument(Span::current()),
             )
         };
@@ -587,7 +587,7 @@ impl TaskManager {
             let adb_handler = self.adb_handler.clone();
             let apk_path = apk_path.clone();
             tokio::spawn(
-                async move { Box::pin(adb_handler.install_apk(Path::new(&apk_path), tx)).await }
+                async move { adb_handler.install_apk(Path::new(&apk_path), tx).await }
                     .instrument(Span::current()),
             )
         };
@@ -662,7 +662,7 @@ impl TaskManager {
             let adb_handler = self.adb_handler.clone();
             let app_path = app_path.clone();
             tokio::spawn(
-                async move { Box::pin(adb_handler.sideload_app(Path::new(&app_path), tx)).await }
+                async move { adb_handler.sideload_app(Path::new(&app_path), tx).await }
                     .instrument(Span::current()),
             )
         };

@@ -10,7 +10,7 @@ use tokio::{
 };
 use tokio_stream::{StreamExt, wrappers::WatchStream};
 use tokio_util::sync::CancellationToken;
-use tracing::{Span, debug, error, info, instrument, warn};
+use tracing::{Instrument, Span, debug, error, info, info_span, instrument, warn};
 
 use crate::models::{
     CloudApp, Settings,
@@ -89,7 +89,8 @@ impl Downloader {
 
                 panic!("Settings stream closed for Downloader");
             }
-        });
+        }.instrument(info_span!("task_handle_settings_updates")),
+        );
         handle
     }
 

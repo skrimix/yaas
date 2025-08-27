@@ -34,7 +34,7 @@ pub enum TaskStatus {
     Cancelled,
 }
 
-#[derive(Clone, Serialize, Deserialize, SignalPiece)]
+#[derive(Clone, Serialize, Deserialize, Debug, SignalPiece)]
 pub struct TaskParams {
     pub cloud_app_full_name: Option<String>,
     pub apk_path: Option<String>,

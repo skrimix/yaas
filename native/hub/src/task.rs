@@ -79,6 +79,7 @@ impl TaskManager {
         handle
     }
 
+    #[instrument(skip(self))]
     async fn receive_create_requests(self: Arc<Self>) {
         let receiver = TaskRequest::get_dart_signal_receiver();
         while let Some(request) = receiver.recv().await {
@@ -86,6 +87,7 @@ impl TaskManager {
         }
     }
 
+    #[instrument(skip(self))]
     async fn receive_cancel_requests(self: Arc<Self>) {
         let receiver = TaskCancelRequest::get_dart_signal_receiver();
         while let Some(request) = receiver.recv().await {
@@ -110,6 +112,7 @@ impl TaskManager {
         }
     }
 
+    #[instrument(skip(self), fields(task_type = %task_type))]
     async fn enqueue_task(self: Arc<Self>, task_type: TaskType, params: TaskParams) -> u64 {
         let id = self.id_counter.fetch_add(1, Ordering::Relaxed);
         let token = CancellationToken::new();

@@ -13,7 +13,7 @@ use tokio::{
 };
 use tokio_stream::{StreamExt, wrappers::WatchStream};
 use tokio_util::sync::CancellationToken;
-use tracing::{Instrument, Span, debug, error, info, instrument, trace, warn};
+use tracing::{Instrument, Span, debug, error, info, info_span, instrument, trace, warn};
 
 use crate::{
     adb::device::SideloadProgress,
@@ -72,16 +72,22 @@ impl AdbHandler {
             device: None.into(),
             cancel_token: RwLock::new(CancellationToken::new()),
         });
-        tokio::spawn({
-            let handle = handle.clone();
-            async move {
-                if let Err(e) = handle.ensure_server_running().await {
-                    error!(error = e.as_ref() as &dyn Error, "Failed to start ADB server on init");
-                    // TODO: report this to the UI
+        tokio::spawn(
+            {
+                let handle = handle.clone();
+                async move {
+                    if let Err(e) = handle.ensure_server_running().await {
+                        error!(
+                            error = e.as_ref() as &dyn Error,
+                            "Failed to start ADB server on init"
+                        );
+                        // TODO: report this to the UI
+                    }
+                    handle.refresh_adb_state().await;
                 }
-                handle.refresh_adb_state().await;
             }
-        });
+            .instrument(info_span!("task_init_adb_server")),
+        );
         tokio::spawn(handle.clone().start_tasks(settings_stream));
         handle
     }
@@ -94,29 +100,32 @@ impl AdbHandler {
     #[instrument(skip(self, settings_stream))]
     async fn start_tasks(self: Arc<AdbHandler>, mut settings_stream: WatchStream<Settings>) {
         // Handle settings updates
-        tokio::spawn({
-            let handle = self.clone();
-            async move {
-                info!("Starting to listen for settings changes");
-                while let Some(settings) = settings_stream.next().await {
-                    info!("AdbHandler received settings update");
-                    debug!(?settings, "New settings");
-                    let new_adb_path = settings.adb_path.clone();
-                    let new_adb_path =
-                        if new_adb_path.is_empty() { None } else { Some(new_adb_path) };
-                    if new_adb_path != *handle.adb_path.read().await {
-                        info!(?new_adb_path, "ADB path changed, restarting ADB");
-                        *handle.adb_path.write().await = new_adb_path;
-                        if let Err(e) = handle.clone().restart_adb().await {
-                            error!(error = e.as_ref() as &dyn Error, "Failed to restart ADB");
-                            // TODO: report this to the UI
+        tokio::spawn(
+            {
+                let handle = self.clone();
+                async move {
+                    info!("Starting to listen for settings changes");
+                    while let Some(settings) = settings_stream.next().await {
+                        info!("AdbHandler received settings update");
+                        debug!(?settings, "New settings");
+                        let new_adb_path = settings.adb_path.clone();
+                        let new_adb_path =
+                            if new_adb_path.is_empty() { None } else { Some(new_adb_path) };
+                        if new_adb_path != *handle.adb_path.read().await {
+                            info!(?new_adb_path, "ADB path changed, restarting ADB");
+                            *handle.adb_path.write().await = new_adb_path;
+                            if let Err(e) = handle.clone().restart_adb().await {
+                                error!(error = e.as_ref() as &dyn Error, "Failed to restart ADB");
+                                // TODO: report this to the UI
+                            }
                         }
                     }
-                }
 
-                panic!("Settings stream closed for AdbHandler");
+                    panic!("Settings stream closed for AdbHandler");
+                }
             }
-        });
+            .instrument(info_span!("task_handle_settings_updates")),
+        );
 
         self.start_adb_tasks().await;
     }
@@ -408,7 +417,7 @@ impl AdbHandler {
             }
         }
 
-        debug!(device = ?device.as_ref().map(|d| &d.serial), "Setting new device");
+        debug!(device = ?device.as_ref().map(|d| &d.serial), "Setting new device data");
         *current_device = device.clone().map(Arc::new);
         report_device_change(&device);
     }
@@ -431,7 +440,7 @@ impl AdbHandler {
     #[instrument(skip(self), err, ret)]
     async fn connect_device(&self) -> Result<AdbDevice> {
         // TODO: wait for device to be ready (boot_completed)
-        info!("Attempting to connect to a device");
+        info!("Attempting to connect to any device");
         let adb_host = self.adb_host.clone();
         let devices = adb_host
             .devices::<Vec<_>>()

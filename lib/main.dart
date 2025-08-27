@@ -12,12 +12,14 @@ import 'widgets/manage_apps.dart';
 import 'widgets/local_sideload.dart';
 import 'widgets/error_screen.dart';
 import 'widgets/settings_screen.dart';
+import 'widgets/logs_screen.dart';
 import 'widgets/drag_drop_overlay.dart';
 import 'providers/device_state.dart';
 import 'providers/adb_state.dart';
 import 'providers/cloud_apps_state.dart';
 import 'providers/task_state.dart';
 import 'providers/settings_state.dart';
+import 'providers/log_state.dart';
 import 'widgets/download_apps.dart';
 
 final colorScheme = ColorScheme.fromSeed(
@@ -47,6 +49,7 @@ void main() async {
         ChangeNotifierProvider(create: (_) => CloudAppsState()),
         ChangeNotifierProvider(create: (_) => TaskState()),
         ChangeNotifierProvider(create: (_) => SettingsState()),
+        ChangeNotifierProvider(create: (_) => LogState()),
       ],
       child: const RqlApp(),
     ),
@@ -181,6 +184,8 @@ class _SinglePageState extends State<SinglePage> {
         icon: Icons.settings,
         label: 'Settings',
         content: const SettingsScreen()),
+    Destination(
+        icon: Icons.terminal, label: 'Logs', content: const LogsScreen()),
     Destination(icon: Icons.info, label: 'About', content: Text('About')),
   ];
 

@@ -46,6 +46,7 @@ impl SettingsHandler {
         handler
     }
 
+    #[instrument(skip(self))]
     async fn receive_settings_requests(&self) {
         let load_receiver = LoadSettingsRequest::get_dart_signal_receiver();
         let save_receiver = SaveSettingsRequest::get_dart_signal_receiver();

@@ -37,8 +37,8 @@ class DeviceActionsCard extends StatelessWidget {
                     tooltip: 'Disable proximity sensor',
                     commandType: AdbCommandType.proximitySensorSet,
                     commandKey: 'disable',
-                    onPressed: () =>
-                        _send('disable', const AdbCommandSetProximitySensor(value: false)),
+                    onPressed: () => _send('disable',
+                        const AdbCommandSetProximitySensor(value: false)),
                   ),
                   const SizedBox(width: 8),
                   AnimatedAdbButton(
@@ -46,8 +46,8 @@ class DeviceActionsCard extends StatelessWidget {
                     tooltip: 'Enable proximity sensor',
                     commandType: AdbCommandType.proximitySensorSet,
                     commandKey: 'enable',
-                    onPressed: () =>
-                        _send('enable', const AdbCommandSetProximitySensor(value: true)),
+                    onPressed: () => _send('enable',
+                        const AdbCommandSetProximitySensor(value: true)),
                   ),
                 ],
               ),
@@ -69,8 +69,8 @@ class DeviceActionsCard extends StatelessWidget {
                     tooltip: 'Suspend Guardian',
                     commandType: AdbCommandType.guardianPausedSet,
                     commandKey: 'suspend',
-                    onPressed: () =>
-                        _send('suspend', const AdbCommandSetGuardianPaused(value: true)),
+                    onPressed: () => _send('suspend',
+                        const AdbCommandSetGuardianPaused(value: true)),
                   ),
                   const SizedBox(width: 8),
                   AnimatedAdbButton(
@@ -78,8 +78,8 @@ class DeviceActionsCard extends StatelessWidget {
                     tooltip: 'Resume Guardian',
                     commandType: AdbCommandType.guardianPausedSet,
                     commandKey: 'resume',
-                    onPressed: () =>
-                        _send('resume', const AdbCommandSetGuardianPaused(value: false)),
+                    onPressed: () => _send('resume',
+                        const AdbCommandSetGuardianPaused(value: false)),
                   ),
                 ],
               ),

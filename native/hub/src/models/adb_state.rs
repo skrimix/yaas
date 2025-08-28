@@ -4,6 +4,7 @@ use serde::Serialize;
 #[derive(Debug, Clone, Serialize, RustSignal, PartialEq)]
 pub enum AdbState {
     ServerNotRunning,
+    ServerStarting,
     NoDevices,
     DevicesAvailable(Vec<String>),
     DeviceUnauthorized,

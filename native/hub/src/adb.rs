@@ -624,6 +624,7 @@ impl AdbHandler {
         let _guard = self.adb_server_mutex.lock().await;
         if !self.is_server_running().await {
             info!("ADB server not running, attempting to start it");
+            self.set_adb_state(AdbState::ServerStarting).await;
 
             let adb_path_buf = self
                 .adb_path
@@ -710,6 +711,17 @@ impl AdbHandler {
             adb_host.devices::<Vec<_>>().await?.into_iter().map(|d| d.into()).collect();
         // debug!(count = devices.len(), "Got ADB devices");
         Ok(devices)
+    }
+
+    /// Sets the ADB state directly and notifies Dart
+    #[instrument(skip(self))]
+    async fn set_adb_state(&self, new_state: AdbState) {
+        let mut adb_state = self.adb_state.write().await;
+        if *adb_state != new_state {
+            debug!(old_state = ?*adb_state, new_state = ?new_state, "ADB state changed");
+            *adb_state = new_state.clone();
+            new_state.send_signal_to_dart();
+        }
     }
 
     /// Refreshes the ADB state based on the current device and server status

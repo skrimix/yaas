@@ -14,14 +14,6 @@ class AdbStateProvider extends ChangeNotifier {
 
   bool get isConnected => _state is AdbStateDeviceConnected;
 
-  bool get hasDevicesAvailable => _state is AdbStateDevicesAvailable;
-
-  bool get isUnauthorized => _state is AdbStateDeviceUnauthorized;
-
-  bool get isServerNotRunning => _state is AdbStateServerNotRunning;
-
-  bool get hasNoDevices => _state is AdbStateNoDevices;
-
   List<String> get availableDevices {
     if (_state is AdbStateDevicesAvailable) {
       return (_state as AdbStateDevicesAvailable).value;
@@ -46,6 +38,8 @@ class AdbStateProvider extends ChangeNotifier {
   String get statusDescription {
     if (_state is AdbStateServerNotRunning) {
       return 'ADB server not running';
+    } else if (_state is AdbStateServerStarting) {
+      return 'Starting ADB server';
     } else if (_state is AdbStateNoDevices) {
       return 'No devices found';
     } else if (_state is AdbStateDevicesAvailable) {

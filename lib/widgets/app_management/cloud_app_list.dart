@@ -205,8 +205,8 @@ class CloudAppListItem extends StatelessWidget {
                         return IconButton(
                           icon: const Icon(Icons.install_mobile),
                           tooltip: deviceState.isConnected
-                              ? 'Install on device'
-                              : 'Install on device (not connected)',
+                              ? 'Download and install on device'
+                              : 'Download and install on device (not connected)',
                           onPressed: deviceState.isConnected
                               ? () {
                                   onInstall(cachedApp.app.fullName);

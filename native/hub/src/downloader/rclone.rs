@@ -28,7 +28,7 @@ pub struct RcloneTransferStats {
     pub bytes: u64,
     pub total_bytes: u64,
     // pub elapsed_time: f64,
-    pub eta: u64,
+    pub eta: Option<u64>,
     #[serde(deserialize_with = "deserialize_speed")]
     pub speed: u64,
 }

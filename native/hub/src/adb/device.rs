@@ -12,7 +12,7 @@ use tokio::{
 use tracing::{Instrument, Span, debug, error, info, instrument, trace, warn};
 
 use crate::{
-    adb::PACKAGE_NAME_REGEX,
+    adb::{PACKAGE_NAME_REGEX, ensure_valid_package},
     models::{
         DeviceType, InstalledPackage, SPACE_INFO_COMMAND, SpaceInfo, parse_list_apps_dex,
         vendor::quest::controller::{
@@ -24,9 +24,9 @@ use crate::{
 /// Java tool used for package listing
 static LIST_APPS_DEX_BYTES: &[u8] = include_bytes!("../../assets/list_apps.dex");
 
-// TODO: this or `r#"[\"]?.+?[\"]|[^ ]+"#`? Verify that it's correct
-/// Regex to split command arguments
-static COMMAND_ARGS_REGEX: Lazy<Regex> = lazy_regex!(r#"[\"]?.+?[\"]|[^ ]+"#);
+/// Regex to split command arguments - handles quoted arguments with spaces
+/// Note: This is a simplified parser for install scripts and may not handle all edge cases
+static COMMAND_ARGS_REGEX: Lazy<Regex> = lazy_regex!(r#""[^"]*"|'[^']*'|[^\s]+"#);
 
 /// Represents a connected Android device with ADB capabilities
 #[derive(Debug, Clone)]
@@ -170,13 +170,20 @@ impl AdbDevice {
     #[instrument(skip(self), err)]
     async fn refresh_battery_info(&mut self) -> Result<()> {
         // Get device battery level
-        let device_level: u8 = self
-            .shell("dumpsys battery | grep '  level' | awk '{print $2}'")
-            .await
-            .context("Failed to get device battery level")?
-            .trim()
-            .parse()
-            .context("Failed to parse device battery level")?;
+        let battery_dump =
+            self.shell("dumpsys battery").await.context("Failed to get battery dump")?;
+
+        let device_level: u8 = battery_dump
+            .lines()
+            .find_map(|line| {
+                // Look for lines like "  level: 85"
+                if line.trim().starts_with("level:") {
+                    line.split(':').nth(1)?.trim().parse().ok()
+                } else {
+                    None
+                }
+            })
+            .context("Failed to parse device battery level from dumpsys output")?;
         trace!(level = device_level, "Parsed device battery level");
 
         // Get controller battery levels
@@ -210,6 +217,7 @@ impl AdbDevice {
     /// Launches an application on the device
     #[instrument(skip(self), err)]
     pub async fn launch(&self, package: &str) -> Result<()> {
+        ensure_valid_package(package)?;
         // First try launching with VR category
         let output = self
             .shell(&format!("monkey -p {package} -c com.oculus.intent.category.VR 1"))
@@ -240,6 +248,7 @@ impl AdbDevice {
     /// Force stops an application on the device
     #[instrument(skip(self), err)]
     pub async fn force_stop(&self, package: &str) -> Result<()> {
+        ensure_valid_package(package)?;
         self.inner.force_stop(package).await.context("Failed to force stop package")
     }
 
@@ -385,7 +394,7 @@ impl AdbDevice {
         // debug!(source = %source.display(), dest = %dest_path.display(), overwrite, "Pushing directory with progress");
         if overwrite {
             debug!(path = %dest_path.display(), "Cleaning up destination directory");
-            let output = self.shell(&format!("rm -rf {}", dest_path.display())).await?;
+            let output = self.shell(&format!("rm -rf '{}'", dest_path.display())).await?;
             debug!(output, "Cleaned up destination directory");
         }
         Box::pin(self.inner.push_dir_with_progress(source, &dest_path, 0o777, progress_sender))
@@ -502,10 +511,14 @@ impl AdbDevice {
     /// Uninstalls a package from the device
     #[instrument(skip(self), err)]
     pub async fn uninstall_package(&self, package_name: &str) -> Result<()> {
+        ensure_valid_package(package_name)?;
         match self.inner.uninstall_package(package_name).await {
             Ok(_) => Ok(()),
             Err(e) => {
-                if e.to_string().contains("DELETE_FAILED_INTERNAL_ERROR") {
+                let error_str = e.to_string();
+                debug!(error = %error_str, "Uninstall failed, checking error type");
+
+                if error_str.contains("DELETE_FAILED_INTERNAL_ERROR") {
                     // Check if package exists
                     let escaped = package_name.replace('.', "\\.");
                     let output = self
@@ -518,7 +531,7 @@ impl AdbDevice {
                     } else {
                         Err(e.into())
                     }
-                } else if e.to_string().contains("DELETE_FAILED_DEVICE_POLICY_MANAGER") {
+                } else if error_str.contains("DELETE_FAILED_DEVICE_POLICY_MANAGER") {
                     info!(
                         "Package {} is protected by device policy, trying to force uninstall",
                         package_name
@@ -579,10 +592,20 @@ impl AdbDevice {
             );
             debug!(line_num, command, "Parsed command");
 
-            let tokens: Vec<&str> = COMMAND_ARGS_REGEX
+            let tokens: Vec<String> = COMMAND_ARGS_REGEX
                 .find_iter(command)
-                .map(|m| m.as_str().trim_matches('"'))
-                .filter(|token| !token.starts_with('-'))
+                .map(|m| {
+                    let token = m.as_str();
+                    // Remove surrounding quotes but preserve the content
+                    if (token.starts_with('"') && token.ends_with('"'))
+                        || (token.starts_with('\'') && token.ends_with('\''))
+                    {
+                        token[1..token.len() - 1].to_string()
+                    } else {
+                        token.to_string()
+                    }
+                })
+                .filter(|token| !token.starts_with('-') || token == "-r") // Allow -r flag for uninstall
                 .collect();
 
             if tokens[0] == "7z" {
@@ -592,10 +615,10 @@ impl AdbDevice {
             ensure!(tokens[0] == "adb", "Line {line_num}: Unsupported command '{command}'");
 
             ensure!(tokens.len() >= 2, "Line {line_num}: ADB command missing operation");
-            let adb_command = tokens[1];
-            let adb_args = tokens[2..].to_vec();
+            let adb_command = &tokens[1];
+            let adb_args = &tokens[2..];
 
-            match adb_command {
+            match adb_command.as_str() {
                 "install" => {
                     // We only care about the APK path
                     // TODO: see if we should care about other arguments
@@ -618,7 +641,7 @@ impl AdbDevice {
                          got {}",
                         adb_args.len()
                     );
-                    let package = adb_args[0];
+                    let package = &adb_args[0];
                     self.uninstall_package(package).await.with_context(|| {
                         format!(
                             "Line {line_num}: adb uninstall: failed to uninstall package \
@@ -630,7 +653,7 @@ impl AdbDevice {
                     ensure!(!adb_args.is_empty(), "Line {line_num}: adb shell: missing command");
                     // Handle special case for 'pm uninstall'
                     if adb_args.len() == 3 && adb_args[0] == "pm" && adb_args[1] == "uninstall" {
-                        let package = adb_args[2];
+                        let package = &adb_args[2];
                         self.uninstall_package(package).await.with_context(|| {
                             format!(
                                 "Line {line_num}: adb shell: failed to uninstall package \
@@ -653,8 +676,8 @@ impl AdbDevice {
                         "Line {line_num}: adb push: wrong number of arguments: expected 2, got {}",
                         adb_args.len()
                     );
-                    let source = script_dir.join(adb_args[0]);
-                    let dest = UnixPath::new(adb_args[1]);
+                    let source = script_dir.join(&adb_args[0]);
+                    let dest = UnixPath::new(&adb_args[1]);
                     self.push_any(&source, dest).await.with_context(|| {
                         format!(
                             "Line {line_num}: adb push: failed to push '{}' to '{}'",
@@ -669,8 +692,8 @@ impl AdbDevice {
                         "Line {line_num}: adb pull: wrong number of arguments: expected 2, got {}",
                         adb_args.len()
                     );
-                    let source = UnixPath::new(adb_args[0]);
-                    let dest = script_dir.join(adb_args[1]);
+                    let source = UnixPath::new(&adb_args[0]);
+                    let dest = script_dir.join(&adb_args[1]);
                     self.pull_any(source, &dest).await.with_context(|| {
                         format!(
                             "Line {line_num}: adb pull: failed to pull '{}' to '{}'",
@@ -696,6 +719,7 @@ impl AdbDevice {
         app_dir: &Path,
         progress_sender: UnboundedSender<SideloadProgress>,
     ) -> Result<()> {
+        // TODO: add E2E test for this (smallest APK with generated OBB)
         fn send_progress(
             progress_sender: &UnboundedSender<SideloadProgress>,
             status: &str,

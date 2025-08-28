@@ -357,6 +357,7 @@ impl TaskManager {
         info!("Starting download monitoring");
         let mut download_result = None;
         let mut last_log_time = std::time::Instant::now();
+        let mut last_log_progress = 0.0;
 
         while download_result.is_none() {
             tokio::select! {
@@ -370,9 +371,9 @@ impl TaskManager {
                     // Log download progress every 10 seconds or at major milestones
                     let now = std::time::Instant::now();
                     let should_log = now.duration_since(last_log_time) > Duration::from_secs(10) ||
-                                   (0.25..0.26).contains(&step_progress) ||
+                                   ((0.25..0.26).contains(&step_progress) ||
                                    (0.5..0.51).contains(&step_progress) ||
-                                   (0.75..0.76).contains(&step_progress);
+                                   (0.75..0.76).contains(&step_progress) && last_log_progress != step_progress);
 
                     if should_log {
                         info!(
@@ -383,6 +384,7 @@ impl TaskManager {
                             "Download progress"
                         );
                         last_log_time = now;
+                        last_log_progress = step_progress;
                     }
 
                     update_progress(

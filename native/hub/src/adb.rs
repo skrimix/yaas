@@ -30,6 +30,16 @@ pub mod device;
 
 pub static PACKAGE_NAME_REGEX: Lazy<Regex> = lazy_regex!(r"^(?:[A-Za-z]{1}[\w]*\.)+[A-Za-z][\w]*$");
 
+/// Validates a package name and returns an error if invalid
+pub fn ensure_valid_package(package_name: &str) -> Result<()> {
+    ensure!(
+        PACKAGE_NAME_REGEX.is_match(package_name),
+        "Invalid package name format: '{}'",
+        package_name
+    );
+    Ok(())
+}
+
 /// Handles ADB device connections and commands
 #[derive(Debug)]
 pub struct AdbHandler {
@@ -172,6 +182,7 @@ impl AdbHandler {
     }
 
     /// Restarts the ADB handling
+    // FIXME: make sure this cannot race with `ensure_server_running`
     #[instrument(skip(self), err)]
     async fn restart_adb(self: Arc<AdbHandler>) -> Result<()> {
         info!("Restarting ADB server and tasks");
@@ -316,6 +327,7 @@ impl AdbHandler {
 
         let result = match command.clone() {
             AdbCommand::LaunchApp(package_name) => {
+                ensure_valid_package(&package_name)?;
                 let result = device.launch(&package_name).await;
                 AdbCommandCompletedEvent {
                     command_type: AdbCommandType::LaunchApp,
@@ -335,6 +347,7 @@ impl AdbHandler {
             }
 
             AdbCommand::ForceStopApp(package_name) => {
+                ensure_valid_package(&package_name)?;
                 let result = device.force_stop(&package_name).await;
                 AdbCommandCompletedEvent {
                     command_type: AdbCommandType::ForceStopApp,
@@ -354,6 +367,7 @@ impl AdbHandler {
             }
 
             AdbCommand::UninstallPackage(package_name) => {
+                ensure_valid_package(&package_name)?;
                 let result = self.uninstall_package(&package_name).await;
                 AdbCommandCompletedEvent {
                     command_type: AdbCommandType::UninstallPackage,
@@ -385,7 +399,7 @@ impl AdbHandler {
         result.context("Command execution failed")
     }
 
-    /// Updates the current device state and notifies Dart of the change    ///
+    /// Updates the current device state and notifies Dart of the change
     /// # Arguments
     /// * `device` - Optional new device state
     /// * `update_current` - Whether to update the current device if it exists
@@ -567,9 +581,11 @@ impl AdbHandler {
                 .as_deref()
                 .and_then(|p| {
                     which::which(p).ok().or_else(|| {
-                        // TODO: is this fragile?
-                        which::which(std::env::current_exe().unwrap().parent().unwrap().join("adb"))
+                        // Try to find adb relative to current executable
+                        std::env::current_exe()
                             .ok()
+                            .and_then(|exe| exe.parent().map(|p| p.to_path_buf()))
+                            .and_then(|parent| which::which(parent.join("adb")).ok())
                     })
                 })
                 .or_else(|| {

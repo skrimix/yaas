@@ -123,6 +123,12 @@ impl AdbDevice {
         Ok(())
     }
 
+    /// Returns raw `dumpsys battery` output from the device
+    #[instrument(skip(self), err)]
+    pub async fn battery_dump(&self) -> Result<String> {
+        self.shell("dumpsys battery").await.context("Failed to get battery dump")
+    }
+
     /// Executes a shell command on the device
     // TODO: Add `check_exit_code` parameter
     #[instrument(skip(self), err)]

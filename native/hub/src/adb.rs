@@ -20,12 +20,13 @@ use crate::{
     models::{
         AdbState, Settings,
         signals::{
-            adb::{command::*, device::DeviceChangedEvent},
+            adb::{command::*, device::DeviceChangedEvent, dump::BatteryDumpResponse},
             system::Toast,
         },
     },
 };
 
+pub mod battery;
 pub mod device;
 
 pub static PACKAGE_NAME_REGEX: Lazy<Regex> = lazy_regex!(r"^(?:[A-Za-z]{1}[\w]*\.)+[A-Za-z][\w]*$");
@@ -407,6 +408,20 @@ impl AdbHandler {
                 .send_signal_to_dart();
                 result.map(|_| ()).context("Failed to set guardian paused state")
             }
+
+            AdbCommand::GetBatteryDump => match device.battery_dump().await {
+                Ok(raw) => {
+                    let human = battery::humanize_battery_dump(&raw);
+                    BatteryDumpResponse { command_key: key.clone(), dump: human }
+                        .send_signal_to_dart();
+                    Ok(())
+                }
+                Err(e) => {
+                    let error_msg = format!("Failed to get battery dump: {e:#}");
+                    Toast::send("Battery Dump Failed".to_string(), error_msg, true, None);
+                    Err(e.context("Failed to get battery dump"))
+                }
+            },
         };
 
         result.context("Command execution failed")

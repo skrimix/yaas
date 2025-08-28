@@ -1,7 +1,9 @@
 import 'package:flutter/material.dart';
 import 'package:proper_filesize/proper_filesize.dart';
+import 'package:flutter/services.dart';
 import 'package:provider/provider.dart';
 import 'package:rql/src/bindings/signals/signals.dart' as signals;
+import 'package:toastification/toastification.dart';
 import '../../providers/device_state.dart';
 import '../../providers/adb_state.dart';
 import '../../providers/task_state.dart';
@@ -42,18 +44,61 @@ class StatusBar extends StatelessWidget {
     );
   }
 
-  Widget _buildBatteryStatus(DeviceState deviceState) {
+  Widget _buildBatteryStatus(BuildContext context, DeviceState deviceState) {
     return Tooltip(
       message: 'Headset: ${deviceState.batteryLevel}%\n'
           'Left Controller: ${deviceState.controllerBatteryLevel(deviceState.leftController)}%\n'
           'Right Controller: ${deviceState.controllerBatteryLevel(deviceState.rightController)}%',
-      child: Row(
-        children: [
-          const Icon(Icons.battery_full, size: 16),
-          const SizedBox(width: 2),
-          Text('${deviceState.batteryLevel}%'),
-          const SizedBox(width: 8),
-        ],
+      child: Material(
+        color: Colors.transparent,
+        child: InkWell(
+          onTap: () async {
+            final key = DateTime.now().millisecondsSinceEpoch.toString();
+            signals.AdbRequest(
+              command: const signals.AdbCommandGetBatteryDump(),
+              commandKey: key,
+            ).sendSignalToRust();
+
+            try {
+              final event = await signals.BatteryDumpResponse.rustSignalStream
+                  .firstWhere((e) => e.message.commandKey == key)
+                  .timeout(const Duration(seconds: 10));
+              // Copy to clipboard
+              Clipboard.setData(ClipboardData(text: event.message.dump));
+              if (!context.mounted) return;
+              toastification.show(
+                type: ToastificationType.success,
+                style: ToastificationStyle.flat,
+                title: const Text('Success'),
+                description: Text('Battery dump copied to clipboard'),
+                autoCloseDuration: const Duration(seconds: 3),
+                backgroundColor: Theme.of(context).colorScheme.surfaceContainer,
+                borderSide: BorderSide.none,
+                alignment: Alignment.bottomRight,
+              );
+            } catch (_) {
+              if (!context.mounted) return;
+              toastification.show(
+                type: ToastificationType.error,
+                style: ToastificationStyle.flat,
+                title: const Text('Error'),
+                description: Text('Failed to obtain battery dump'),
+                autoCloseDuration: const Duration(seconds: 3),
+                backgroundColor: Theme.of(context).colorScheme.surfaceContainer,
+                borderSide: BorderSide.none,
+                alignment: Alignment.bottomRight,
+              );
+            }
+          },
+          child: Row(
+            children: [
+              const Icon(Icons.battery_full, size: 16),
+              const SizedBox(width: 2),
+              Text('${deviceState.batteryLevel}%'),
+              const SizedBox(width: 8),
+            ],
+          ),
+        ),
       ),
     );
   }
@@ -176,7 +221,7 @@ class StatusBar extends StatelessWidget {
               _buildConnectionStatus(adbState),
               if (deviceState.isConnected) ...[
                 _buildDeviceInfo(deviceState),
-                _buildBatteryStatus(deviceState),
+                _buildBatteryStatus(context, deviceState),
                 _buildStorageStatus(deviceState),
                 _buildRefreshButton(deviceState),
               ] else ...[
@@ -272,7 +317,8 @@ class _AnimatedRefreshButtonState extends State<_AnimatedRefreshButton>
     _rotationController.repeat();
     _lastDeviceUpdate = DateTime.now();
 
-    signals.AdbRequest(command: signals.AdbCommandRefreshDevice(), commandKey: '')
+    signals.AdbRequest(
+            command: signals.AdbCommandRefreshDevice(), commandKey: '')
         .sendSignalToRust();
 
     // Fallback: stop spinning after 5 seconds

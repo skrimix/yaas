@@ -10,6 +10,7 @@ pub enum AdbCommand {
     Reboot(RebootMode),
     SetProximitySensor(bool),
     SetGuardianPaused(bool),
+    GetBatteryDump,
 }
 
 #[derive(Serialize, Deserialize, DartSignal)]

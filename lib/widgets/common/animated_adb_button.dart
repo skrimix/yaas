@@ -5,7 +5,8 @@ class AnimatedAdbButton extends StatefulWidget {
   final IconData icon;
   final String tooltip;
   final AdbCommandType commandType;
-  final String packageName;
+  // Identifier to correlate completion events (was: packageName)
+  final String commandKey;
   final VoidCallback onPressed;
   final Color? iconColor;
 
@@ -14,7 +15,7 @@ class AnimatedAdbButton extends StatefulWidget {
     required this.icon,
     required this.tooltip,
     required this.commandType,
-    required this.packageName,
+    required this.commandKey,
     required this.onPressed,
     this.iconColor,
   });
@@ -46,7 +47,7 @@ class _AnimatedAdbButtonState extends State<AnimatedAdbButton>
     AdbCommandCompletedEvent.rustSignalStream.listen((event) {
       final signal = event.message;
       if (signal.commandType == widget.commandType &&
-          signal.packageName == widget.packageName) {
+          signal.commandKey == widget.commandKey) {
         _handleCommandCompleted(signal.success);
       }
     });

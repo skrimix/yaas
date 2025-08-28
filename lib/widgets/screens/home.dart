@@ -3,6 +3,7 @@ import 'package:flutter_svg/svg.dart';
 import 'package:provider/provider.dart';
 import '../../providers/device_state.dart';
 import '../../src/bindings/bindings.dart';
+import '../device/device_actions.dart';
 
 class Home extends StatelessWidget {
   const Home({super.key});
@@ -71,9 +72,15 @@ class Home extends StatelessWidget {
                   child: Column(
                     crossAxisAlignment: CrossAxisAlignment.start,
                     children: [
-                      Text(
-                        'Device',
-                        style: Theme.of(context).textTheme.titleMedium,
+                      Row(
+                        mainAxisAlignment: MainAxisAlignment.spaceBetween,
+                        children: [
+                          Text(
+                            'Device',
+                            style: Theme.of(context).textTheme.titleMedium,
+                          ),
+                          _DeviceMenuButton(),
+                        ],
                       ),
                       Center(
                         child: Column(
@@ -150,10 +157,126 @@ class Home extends StatelessWidget {
                   ),
                 ),
               ),
-            )
+            ),
+            const SizedBox(height: 12),
+            const DeviceActionsCard(),
           ],
         );
       },
     );
+  }
+}
+
+class _DeviceMenuButton extends StatelessWidget {
+  @override
+  Widget build(BuildContext context) {
+    return PopupMenuButton<String>(
+      tooltip: 'Device actions',
+      onSelected: (value) async {
+        switch (value) {
+          case 'powerOff':
+            _confirmAndSend(
+              context,
+              title: 'Power off device',
+              message: 'Are you sure you want to power off the device?',
+              command: const AdbCommandReboot(value: RebootMode.powerOff),
+            );
+            break;
+          case 'reboot':
+            _showRebootOptions(context);
+            break;
+        }
+      },
+      itemBuilder: (context) => [
+        const PopupMenuItem(value: 'powerOff', child: Text('Power off...')),
+        const PopupMenuItem(value: 'reboot', child: Text('Reboot...')),
+      ],
+    );
+  }
+
+  void _confirmAndSend(BuildContext context,
+      {required String title,
+      required String message,
+      required AdbCommand command}) async {
+    final confirmed = await showDialog<bool>(
+      context: context,
+      builder: (context) => AlertDialog(
+        title: Text(title),
+        content: Text(message),
+        actions: [
+          TextButton(onPressed: () => Navigator.pop(context, false), child: const Text('Cancel')),
+          FilledButton(onPressed: () => Navigator.pop(context, true), child: const Text('Confirm')),
+        ],
+      ),
+    );
+    if (!context.mounted) return;
+    if (confirmed == true) {
+      AdbRequest(command: command, commandKey: '').sendSignalToRust();
+    }
+  }
+
+  void _showRebootOptions(BuildContext context) async {
+    final option = await showDialog<String>(
+      context: context,
+      builder: (context) => SimpleDialog(
+        title: const Text('Reboot options'),
+        children: [
+          SimpleDialogOption(
+            onPressed: () => Navigator.pop(context, 'normal'),
+            child: const Text('Normal'),
+          ),
+          SimpleDialogOption(
+            onPressed: () => Navigator.pop(context, 'bootloader'),
+            child: const Text('Bootloader'),
+          ),
+          SimpleDialogOption(
+            onPressed: () => Navigator.pop(context, 'recovery'),
+            child: const Text('Recovery'),
+          ),
+          SimpleDialogOption(
+            onPressed: () => Navigator.pop(context, 'fastboot'),
+            child: const Text('Fastboot'),
+          ),
+        ],
+      ),
+    );
+
+    if (!context.mounted) return;
+    if (option == null) return;
+
+    switch (option) {
+      case 'normal':
+        _confirmAndSend(
+          context,
+          title: 'Reboot device',
+          message: 'Reboot the device now?',
+          command: const AdbCommandReboot(value: RebootMode.normal),
+        );
+        break;
+      case 'bootloader':
+        _confirmAndSend(
+          context,
+          title: 'Reboot to bootloader',
+          message: 'Reboot the device to bootloader?',
+          command: const AdbCommandReboot(value: RebootMode.bootloader),
+        );
+        break;
+      case 'recovery':
+        _confirmAndSend(
+          context,
+          title: 'Reboot to recovery',
+          message: 'Reboot the device to recovery?',
+          command: const AdbCommandReboot(value: RebootMode.recovery),
+        );
+        break;
+      case 'fastboot':
+        _confirmAndSend(
+          context,
+          title: 'Reboot to fastboot',
+          message: 'Reboot the device to fastboot?',
+          command: const AdbCommandReboot(value: RebootMode.fastboot),
+        );
+        break;
+    }
   }
 }

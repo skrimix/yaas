@@ -176,6 +176,7 @@ where
     S: Subscriber + for<'lookup> tracing_subscriber::registry::LookupSpan<'lookup>,
 {
     fn on_event(&self, event: &Event<'_>, ctx: Context<'_, S>) {
+        // TODO: if possible, capture error.sources
         let mut visitor = FieldVisitor::new();
         event.record(&mut visitor);
 

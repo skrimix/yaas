@@ -308,8 +308,11 @@ impl AdbHandler {
         let receiver = AdbRequest::get_dart_signal_receiver();
         info!("Listening for ADB commands");
         while let Some(request) = receiver.recv().await {
-            info!(command = ?request.message.command, "Received ADB command");
-            if let Err(e) = self.execute_command(request.message.command).await {
+            info!(command = ?request.message.command, key = %request.message.command_key, "Received ADB command");
+            if let Err(e) = self
+                .execute_command(request.message.command_key, request.message.command)
+                .await
+            {
                 error!(error = e.as_ref() as &dyn Error, "ADB command execution failed");
             }
         }
@@ -318,7 +321,7 @@ impl AdbHandler {
 
     /// Executes a received ADB command with the given parameters
     #[instrument(skip(self))]
-    async fn execute_command(&self, command: AdbCommand) -> Result<()> {
+    async fn execute_command(&self, key: String, command: AdbCommand) -> Result<()> {
         fn send_toast(title: String, description: String, error: bool, duration: Option<Duration>) {
             Toast::send(title, description, error, duration);
         }
@@ -329,11 +332,7 @@ impl AdbHandler {
             AdbCommand::LaunchApp(package_name) => {
                 ensure_valid_package(&package_name)?;
                 let result = device.launch(&package_name).await;
-                AdbCommandCompletedEvent {
-                    command_type: AdbCommandType::LaunchApp,
-                    package_name: package_name.clone(),
-                    success: result.is_ok(),
-                }
+                AdbCommandCompletedEvent { command_type: AdbCommandType::LaunchApp, command_key: key.clone(), success: result.is_ok() }
                 .send_signal_to_dart();
 
                 match result {
@@ -349,11 +348,7 @@ impl AdbHandler {
             AdbCommand::ForceStopApp(package_name) => {
                 ensure_valid_package(&package_name)?;
                 let result = device.force_stop(&package_name).await;
-                AdbCommandCompletedEvent {
-                    command_type: AdbCommandType::ForceStopApp,
-                    package_name: package_name.clone(),
-                    success: result.is_ok(),
-                }
+                AdbCommandCompletedEvent { command_type: AdbCommandType::ForceStopApp, command_key: key.clone(), success: result.is_ok() }
                 .send_signal_to_dart();
 
                 match result {
@@ -369,11 +364,7 @@ impl AdbHandler {
             AdbCommand::UninstallPackage(package_name) => {
                 ensure_valid_package(&package_name)?;
                 let result = self.uninstall_package(&package_name).await;
-                AdbCommandCompletedEvent {
-                    command_type: AdbCommandType::UninstallPackage,
-                    package_name: package_name.clone(),
-                    success: result.is_ok(),
-                }
+                AdbCommandCompletedEvent { command_type: AdbCommandType::UninstallPackage, command_key: key.clone(), success: result.is_ok() }
                 .send_signal_to_dart();
 
                 match result {
@@ -394,6 +385,28 @@ impl AdbHandler {
                     Err(e.context("Failed to refresh device"))
                 }
             },
+
+            // Power and device actions (parameterized)
+            AdbCommand::Reboot(mode) => {
+                let result = device.reboot_with_mode(mode).await;
+                AdbCommandCompletedEvent { command_type: AdbCommandType::Reboot, command_key: key.clone(), success: result.is_ok() }
+                .send_signal_to_dart();
+                result.map(|_| ()).context("Failed to reboot device")
+            }
+
+            AdbCommand::SetProximitySensor(enabled) => {
+                let result = device.set_proximity_sensor(enabled).await;
+                AdbCommandCompletedEvent { command_type: AdbCommandType::ProximitySensorSet, command_key: key.clone(), success: result.is_ok() }
+                .send_signal_to_dart();
+                result.map(|_| ()).context("Failed to set proximity sensor")
+            }
+
+            AdbCommand::SetGuardianPaused(paused) => {
+                let result = device.set_guardian_paused(paused).await;
+                AdbCommandCompletedEvent { command_type: AdbCommandType::GuardianPausedSet, command_key: key.clone(), success: result.is_ok() }
+                .send_signal_to_dart();
+                result.map(|_| ()).context("Failed to set guardian paused state")
+            }
         };
 
         result.context("Command execution failed")

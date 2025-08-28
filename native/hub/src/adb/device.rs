@@ -15,6 +15,7 @@ use crate::{
     adb::{PACKAGE_NAME_REGEX, ensure_valid_package},
     models::{
         DeviceType, InstalledPackage, SPACE_INFO_COMMAND, SpaceInfo, parse_list_apps_dex,
+        signals::adb::command::RebootMode,
         vendor::quest::controller::{
             CONTROLLER_INFO_COMMAND, HeadsetControllersInfo, parse_dumpsys,
         },
@@ -131,6 +132,47 @@ impl AdbDevice {
             .await
             .context("Failed to execute shell command")
             .inspect(|v| trace!(output = ?v, "Shell command executed"))
+    }
+
+    /// Reboots the device with the given mode
+    ///
+    /// # Arguments
+    /// * `mode` - The mode to reboot the device in (normal, bootloader, recovery, fastboot, power off)
+    #[instrument(skip(self), err)]
+    pub async fn reboot_with_mode(&self, mode: RebootMode) -> Result<()> {
+        let cmd = match mode {
+            RebootMode::Normal => "reboot",
+            RebootMode::Bootloader => "reboot bootloader",
+            RebootMode::Recovery => "reboot recovery",
+            RebootMode::Fastboot => "reboot fastboot",
+            RebootMode::PowerOff => "reboot -p",
+        };
+        self.shell(cmd).await.map(|_| ())
+    }
+
+    /// Sets the proximity sensor state
+    ///
+    /// # Arguments
+    /// * `enabled` - Whether to enable or disable the proximity sensor
+    #[instrument(skip(self), err)]
+    pub async fn set_proximity_sensor(&self, enabled: bool) -> Result<()> {
+        // enable => automation_disable, disable => prox_close
+        let cmd = if enabled {
+            "am broadcast -a com.oculus.vrpowermanager.automation_disable ; echo -n $?"
+        } else {
+            "am broadcast -a com.oculus.vrpowermanager.prox_close ; echo -n $?"
+        };
+        self.shell(cmd).await.map(|_| ())
+    }
+
+    /// Sets the guardian paused state
+    ///
+    /// # Arguments
+    /// * `paused` - Whether to pause or resume the guardian
+    #[instrument(skip(self), err)]
+    pub async fn set_guardian_paused(&self, paused: bool) -> Result<()> {
+        let value = if paused { 1 } else { 0 };
+        self.shell(&format!("setprop debug.oculus.guardian_pause {value}")).await.map(|_| ())
     }
 
     /// Refreshes the list of installed packages on the device

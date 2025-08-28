@@ -272,7 +272,7 @@ class _AnimatedRefreshButtonState extends State<_AnimatedRefreshButton>
     _rotationController.repeat();
     _lastDeviceUpdate = DateTime.now();
 
-    signals.AdbRequest(command: signals.AdbCommandRefreshDevice())
+    signals.AdbRequest(command: signals.AdbCommandRefreshDevice(), commandKey: '')
         .sendSignalToRust();
 
     // Fallback: stop spinning after 5 seconds

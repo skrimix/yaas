@@ -33,7 +33,7 @@ class _AnimatedUninstallDialogState extends State<AnimatedUninstallDialog>
     AdbCommandCompletedEvent.rustSignalStream.listen((event) {
       final signal = event.message;
       if (signal.commandType == AdbCommandType.uninstallPackage &&
-          signal.packageName == widget.app.packageName) {
+          signal.commandKey == widget.app.packageName) {
         _handleUninstallCompleted(signal.success);
       }
     });
@@ -72,7 +72,8 @@ class _AnimatedUninstallDialogState extends State<AnimatedUninstallDialog>
     });
 
     AdbRequest(
-            command: AdbCommandUninstallPackage(value: widget.app.packageName))
+            command: AdbCommandUninstallPackage(value: widget.app.packageName),
+            commandKey: widget.app.packageName)
         .sendSignalToRust();
 
     // Fallback: stop processing after 30 seconds

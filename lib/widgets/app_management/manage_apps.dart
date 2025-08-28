@@ -472,11 +472,12 @@ class _ManageAppsState extends State<ManageApps> {
                     icon: Icons.play_arrow,
                     tooltip: 'Launch',
                     commandType: AdbCommandType.launchApp,
-                    packageName: app.packageName,
+                    commandKey: app.packageName,
                     onPressed: () {
                       AdbRequest(
                               command:
-                                  AdbCommandLaunchApp(value: app.packageName))
+                                  AdbCommandLaunchApp(value: app.packageName),
+                              commandKey: app.packageName)
                           .sendSignalToRust();
                     },
                   ),
@@ -484,11 +485,12 @@ class _ManageAppsState extends State<ManageApps> {
                     icon: Icons.close,
                     tooltip: 'Force Stop',
                     commandType: AdbCommandType.forceStopApp,
-                    packageName: app.packageName,
+                    commandKey: app.packageName,
                     onPressed: () {
                       AdbRequest(
                               command: AdbCommandForceStopApp(
-                                  value: app.packageName))
+                                  value: app.packageName),
+                              commandKey: app.packageName)
                           .sendSignalToRust();
                     },
                   ),

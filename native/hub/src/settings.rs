@@ -149,14 +149,14 @@ impl SettingsHandler {
 
         // TODO: Validate settings
 
-        debug!("Loaded application settings successfully");
+        debug!(settings = ?settings, "Loaded application settings successfully");
         Ok(settings)
     }
 
     /// Save settings to file
     #[instrument(skip(self, settings))]
     pub fn save_settings(&self, settings: &Settings) -> Result<()> {
-        info!(path = %self.settings_file_path.display(), "Saving settings to file");
+        info!(path = %self.settings_file_path.display(), settings = ?settings, "Saving settings to file");
         let settings_json =
             serde_json::to_string_pretty(settings).context("Failed to serialize settings")?;
 

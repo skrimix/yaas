@@ -31,6 +31,13 @@ class _LogsScreenState extends State<LogsScreen> {
         setState(() => _isAtBottom = isAtBottom);
       }
     });
+
+    // Scroll to bottom when opened
+    WidgetsBinding.instance.addPostFrameCallback((_) {
+      if (_scrollController.hasClients) {
+        _scrollController.jumpTo(_scrollController.position.maxScrollExtent);
+      }
+    });
   }
 
   @override
@@ -147,18 +154,18 @@ class _LogsScreenState extends State<LogsScreen> {
           mainAxisSize: MainAxisSize.min,
           children: [
             // Auto-scroll toggle
-            IconButton(
-              icon: Icon(logState.autoScroll
-                  ? Icons.vertical_align_bottom
-                  : Icons.vertical_align_center),
-              tooltip: logState.autoScroll
-                  ? 'Disable auto-scroll'
-                  : 'Enable auto-scroll',
-              onPressed: () => logState.setAutoScroll(!logState.autoScroll),
-              color: logState.autoScroll
-                  ? Theme.of(context).colorScheme.primary
-                  : null,
-            ),
+            // IconButton(
+            //   icon: Icon(logState.autoScroll
+            //       ? Icons.vertical_align_bottom
+            //       : Icons.vertical_align_center),
+            //   tooltip: logState.autoScroll
+            //       ? 'Disable auto-scroll'
+            //       : 'Enable auto-scroll',
+            //   onPressed: () => logState.setAutoScroll(!logState.autoScroll),
+            //   color: logState.autoScroll
+            //       ? Theme.of(context).colorScheme.primary
+            //       : null,
+            // ),
             // Clear logs
             IconButton(
               icon: const Icon(Icons.clear_all),

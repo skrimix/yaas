@@ -1,5 +1,5 @@
 import 'package:flutter/material.dart';
-import '../src/bindings/bindings.dart';
+import '../../src/bindings/bindings.dart';
 
 class AnimatedAdbButton extends StatefulWidget {
   final IconData icon;

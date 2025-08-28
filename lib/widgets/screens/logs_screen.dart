@@ -3,8 +3,8 @@ import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 import 'package:intl/intl.dart';
 import 'package:provider/provider.dart';
-import '../providers/log_state.dart';
-import '../src/bindings/bindings.dart';
+import '../../providers/log_state.dart';
+import '../../src/bindings/bindings.dart';
 
 class LogsScreen extends StatefulWidget {
   const LogsScreen({super.key});

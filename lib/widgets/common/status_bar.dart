@@ -2,10 +2,10 @@ import 'package:flutter/material.dart';
 import 'package:proper_filesize/proper_filesize.dart';
 import 'package:provider/provider.dart';
 import 'package:rql/src/bindings/signals/signals.dart' as signals;
-import '../providers/device_state.dart';
-import '../providers/adb_state.dart';
-import '../providers/task_state.dart';
-import 'task_list_dialog.dart';
+import '../../providers/device_state.dart';
+import '../../providers/adb_state.dart';
+import '../../providers/task_state.dart';
+import '../dialogs/task_list_dialog.dart';
 
 class StatusBar extends StatelessWidget {
   const StatusBar({super.key});

@@ -1,7 +1,7 @@
 import 'package:flutter/material.dart';
 import 'package:provider/provider.dart';
-import '../src/bindings/bindings.dart';
-import '../providers/task_state.dart';
+import '../../src/bindings/bindings.dart';
+import '../../providers/task_state.dart';
 
 class TaskListDialog extends StatefulWidget {
   final int initialTabIndex;

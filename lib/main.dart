@@ -6,21 +6,21 @@ import 'package:provider/provider.dart';
 import 'package:rinf/rinf.dart';
 import 'package:toastification/toastification.dart'; // TODO: find an alternative
 import './src/bindings/bindings.dart' as messages;
-import 'widgets/home.dart';
-import 'widgets/status_bar.dart';
-import 'widgets/manage_apps.dart';
-import 'widgets/local_sideload.dart';
-import 'widgets/error_screen.dart';
-import 'widgets/settings_screen.dart';
-import 'widgets/logs_screen.dart';
-import 'widgets/drag_drop_overlay.dart';
+import 'widgets/screens/home.dart';
+import 'widgets/common/status_bar.dart';
+import 'widgets/app_management/manage_apps.dart';
+import 'widgets/app_management/local_sideload.dart';
+import 'widgets/screens/error_screen.dart';
+import 'widgets/screens/settings_screen.dart';
+import 'widgets/screens/logs_screen.dart';
+import 'widgets/common/drag_drop_overlay.dart';
 import 'providers/device_state.dart';
 import 'providers/adb_state.dart';
 import 'providers/cloud_apps_state.dart';
 import 'providers/task_state.dart';
 import 'providers/settings_state.dart';
 import 'providers/log_state.dart';
-import 'widgets/download_apps.dart';
+import 'widgets/app_management/download_apps.dart';
 
 final colorScheme = ColorScheme.fromSeed(
   seedColor: Colors.deepPurple,

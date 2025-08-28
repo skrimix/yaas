@@ -3,9 +3,9 @@ import 'dart:io';
 import 'package:flutter/material.dart';
 import 'package:provider/provider.dart';
 import 'package:file_picker/file_picker.dart';
-import 'package:rql/src/bindings/bindings.dart';
+import '../../src/bindings/bindings.dart';
 import 'package:url_launcher/url_launcher.dart';
-import '../providers/settings_state.dart';
+import '../../providers/settings_state.dart';
 
 enum SettingTextField {
   rclonePath,

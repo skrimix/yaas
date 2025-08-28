@@ -1,8 +1,8 @@
 import 'package:flutter/material.dart';
 import 'package:flutter_svg/svg.dart';
 import 'package:provider/provider.dart';
-import '../providers/device_state.dart';
-import '../src/bindings/bindings.dart';
+import '../../providers/device_state.dart';
+import '../../src/bindings/bindings.dart';
 
 class Home extends StatelessWidget {
   const Home({super.key});

@@ -2,8 +2,8 @@ import 'dart:io';
 import 'package:flutter/material.dart';
 import 'package:provider/provider.dart';
 import 'package:desktop_drop/desktop_drop.dart';
-import '../providers/device_state.dart';
-import '../utils/sideload_utils.dart';
+import '../../providers/device_state.dart';
+import '../../utils/sideload_utils.dart';
 
 class DragDropOverlay extends StatefulWidget {
   final Widget child;

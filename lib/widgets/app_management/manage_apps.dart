@@ -3,11 +3,11 @@ import 'package:flutter/services.dart';
 import 'package:provider/provider.dart';
 import 'package:proper_filesize/proper_filesize.dart' as filesize;
 import 'package:toastification/toastification.dart';
-import '../providers/device_state.dart';
-import '../providers/cloud_apps_state.dart';
-import '../src/bindings/bindings.dart';
-import 'animated_adb_button.dart';
-import 'animated_uninstall_dialog.dart';
+import '../../providers/device_state.dart';
+import '../../providers/cloud_apps_state.dart';
+import '../../src/bindings/bindings.dart';
+import '../common/animated_adb_button.dart';
+import '../dialogs/animated_uninstall_dialog.dart';
 
 class ManageApps extends StatefulWidget {
   const ManageApps({super.key});

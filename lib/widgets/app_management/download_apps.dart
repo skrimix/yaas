@@ -4,9 +4,9 @@ import 'package:flutter/material.dart';
 import 'package:provider/provider.dart';
 import 'package:proper_filesize/proper_filesize.dart' as filesize;
 import 'package:intl/intl.dart';
-import '../providers/cloud_apps_state.dart';
-import '../src/bindings/bindings.dart';
-import '../providers/device_state.dart';
+import '../../providers/cloud_apps_state.dart';
+import '../../src/bindings/bindings.dart';
+import '../../providers/device_state.dart';
 import 'cloud_app_list.dart';
 
 enum SortOption {

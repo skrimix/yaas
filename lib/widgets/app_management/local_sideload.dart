@@ -2,8 +2,8 @@ import 'package:flutter/material.dart';
 import 'package:file_picker/file_picker.dart';
 import 'package:flutter/services.dart';
 import 'package:provider/provider.dart';
-import '../providers/device_state.dart';
-import '../utils/sideload_utils.dart';
+import '../../providers/device_state.dart';
+import '../../utils/sideload_utils.dart';
 
 class LocalSideload extends StatefulWidget {
   const LocalSideload({super.key});

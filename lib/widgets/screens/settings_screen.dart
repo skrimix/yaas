@@ -37,12 +37,14 @@ class _SettingsScreenState extends State<SettingsScreen> {
   late Settings _originalSettings;
   late Settings _currentFormSettings;
   bool _hasChanges = false;
+  SettingsState? _settingsState;
 
   @override
   void initState() {
     super.initState();
 
     final settingsState = Provider.of<SettingsState>(context, listen: false);
+    _settingsState = settingsState;
     _originalSettings = settingsState.settings;
     _currentFormSettings = _originalSettings.copyWith();
 
@@ -50,14 +52,34 @@ class _SettingsScreenState extends State<SettingsScreen> {
       _textControllers[setting] = TextEditingController();
     }
     _updateAllControllers();
+
+    // Listen for provider updates to sync defaults once loaded
+    settingsState.addListener(_onSettingsProviderUpdated);
   }
 
   @override
   void dispose() {
+    _settingsState?.removeListener(_onSettingsProviderUpdated);
     for (final controller in _textControllers.values) {
       controller.dispose();
     }
     super.dispose();
+  }
+
+  void _onSettingsProviderUpdated() {
+    final settingsState = _settingsState;
+    if (settingsState == null) return;
+
+    final newSettings = settingsState.settings;
+    // Only sync if form has no local edits to avoid stomping user input
+    if (!_hasChanges && newSettings != _originalSettings) {
+      setState(() {
+        _originalSettings = newSettings.copyWith();
+        _currentFormSettings = newSettings.copyWith();
+        _updateAllControllers();
+        _hasChanges = false;
+      });
+    }
   }
 
   void _updateSetting(SettingTextField field, String value,
@@ -201,6 +223,10 @@ class _SettingsScreenState extends State<SettingsScreen> {
 
     if (error != null) {
       return _buildErrorView(error);
+    }
+
+    if (settingsState.isLoading) {
+      return const Center(child: CircularProgressIndicator());
     }
 
     return Column(

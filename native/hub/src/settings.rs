@@ -33,7 +33,7 @@ impl SettingsHandler {
                 handler.load_default_settings().expect("Failed to load default settings")
             }
         };
-        handler.on_settings_change(settings, None);
+        handler.on_settings_change(settings, None, false);
 
         // Start receiving settings requests
         tokio::spawn({
@@ -62,7 +62,7 @@ impl SettingsHandler {
 
                     match result {
                         Ok(settings) => {
-                            handler.on_settings_change(settings.clone(), None);
+                            handler.on_settings_change(settings.clone(), None, true);
                         }
                         Err(e) => {
                             error!(error = e.as_ref() as &dyn Error, "Failed to load settings, using defaults");
@@ -72,6 +72,7 @@ impl SettingsHandler {
                             handler.on_settings_change(
                                 settings.clone(),
                                 Some(format!("Failed to load settings: {e:#}")),
+                                true,
                             );
                         }
                     }
@@ -84,7 +85,7 @@ impl SettingsHandler {
 
                     match result {
                         Ok(_) => {
-                            handler.on_settings_change(settings.clone(), None);
+                            handler.on_settings_change(settings.clone(), None, false);
                         }
                         Err(e) => {
                             error!(error = e.as_ref() as &dyn Error, "Failed to save settings");
@@ -111,20 +112,29 @@ impl SettingsHandler {
     ///
     /// * `settings` - The new settings
     /// * `error` - An optional error message for the UI
+    /// * `force_notify` - If true, always send event to Dart even if unchanged
     #[instrument(skip(self, settings, error))]
-    fn on_settings_change(&self, settings: Settings, error: Option<String>) {
+    fn on_settings_change(&self, settings: Settings, error: Option<String>, force_notify: bool) {
         trace!("on_settings_change called");
+
+        let mut changed = false;
         self.watch_tx.send_if_modified(|s| {
             if s != &settings {
                 debug!(settings = ?settings, "Active settings changed");
                 *s = settings.clone();
-                SettingsChangedEvent { settings, error }.send_signal_to_dart();
+                changed = true;
                 true
             } else {
-                trace!("Settings unchanged, not sending event");
                 false
             }
         });
+
+        if changed || force_notify {
+            debug!(changed = changed, force_notify = force_notify, "Sending settings to Dart");
+            SettingsChangedEvent { settings, error }.send_signal_to_dart();
+        } else {
+            trace!("Settings unchanged, not sending event");
+        }
     }
 
     /// Create a receiver for settings changes

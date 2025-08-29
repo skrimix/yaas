@@ -2,7 +2,7 @@ import 'package:flutter/material.dart';
 import 'package:proper_filesize/proper_filesize.dart';
 import 'package:flutter/services.dart';
 import 'package:provider/provider.dart';
-import 'package:rql/src/bindings/signals/signals.dart' as signals;
+import '../../src/bindings/signals/signals.dart' as signals;
 import 'package:toastification/toastification.dart';
 import '../../providers/device_state.dart';
 import '../../providers/adb_state.dart';

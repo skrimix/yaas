@@ -1,5 +1,5 @@
 import 'package:flutter/material.dart';
-import 'package:rql/src/bindings/bindings.dart';
+import '../src/bindings/bindings.dart';
 
 class SettingsState extends ChangeNotifier {
   Settings _settings = Settings(

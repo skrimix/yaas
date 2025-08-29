@@ -5,7 +5,7 @@ import 'package:flutter/material.dart';
 import 'package:provider/provider.dart';
 import 'package:rinf/rinf.dart';
 import 'package:toastification/toastification.dart'; // TODO: find an alternative
-import './src/bindings/bindings.dart' as messages;
+import 'src/bindings/bindings.dart' as messages;
 import 'widgets/screens/home.dart';
 import 'widgets/common/status_bar.dart';
 import 'widgets/app_management/manage_apps.dart';

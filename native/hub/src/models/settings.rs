@@ -36,12 +36,12 @@ impl Default for Settings {
             preferred_connection_type: ConnectionType::Usb,
             downloads_location: dirs::download_dir()
                 .expect("Failed to get download directory")
-                .join("RQL")
+                .join("Zyde")
                 .to_string_lossy()
                 .to_string(),
             backups_location: dirs::document_dir()
                 .expect("Failed to get document directory")
-                .join("RQL_backups")
+                .join("Zyde_backups")
                 .to_string_lossy()
                 .to_string(),
             bandwidth_limit: "".to_string(),

@@ -4,14 +4,14 @@
         {
             "type": "lldb",
             "request": "launch",
-            "program": "${workspaceFolder}/build/linux/x64/debug/bundle/rql",
+            "program": "${workspaceFolder}/build/linux/x64/debug/bundle/zyde",
             "preLaunchTask": "flutter: build linux debug",
             "name": "Rust Debug Launch"
         },
         {
             "type": "lldb",
             "request": "launch",
-            "program": "${workspaceFolder}/build/linux/x64/release/bundle/rql",
+            "program": "${workspaceFolder}/build/linux/x64/release/bundle/zyde",
             "preLaunchTask": "flutter: build linux release",
             "name": "Rust Release Launch"
         }

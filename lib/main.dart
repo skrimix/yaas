@@ -51,7 +51,7 @@ void main() async {
         ChangeNotifierProvider(create: (_) => SettingsState()),
         ChangeNotifierProvider(create: (_) => LogState()),
       ],
-      child: const RqlApp(),
+      child: const ZydeApp(),
     ),
   );
   await DesktopWindow.setMinWindowSize(const Size(800, 600));
@@ -71,7 +71,7 @@ void main() async {
   });
 
   messages.RustPanic.rustSignalStream.listen((panic) {
-    final appState = RqlApp.navigatorKey.currentContext?.read<AppState>();
+    final appState = ZydeApp.navigatorKey.currentContext?.read<AppState>();
     if (appState != null) {
       appState.setPanicMessage(panic.message.message);
       finalizeRust(); // Rust side is in an undefined state, shut it down
@@ -79,16 +79,16 @@ void main() async {
   });
 }
 
-class RqlApp extends StatefulWidget {
+class ZydeApp extends StatefulWidget {
   static final navigatorKey = GlobalKey<NavigatorState>();
 
-  const RqlApp({super.key});
+  const ZydeApp({super.key});
 
   @override
-  State<RqlApp> createState() => _RqlAppState();
+  State<ZydeApp> createState() => _ZydeAppState();
 }
 
-class _RqlAppState extends State<RqlApp> {
+class _ZydeAppState extends State<ZydeApp> {
   late final AppLifecycleListener _listener;
 
   @override
@@ -131,8 +131,8 @@ class _RqlAppState extends State<RqlApp> {
         },
       ),
       child: MaterialApp(
-        navigatorKey: RqlApp.navigatorKey,
-        title: 'RQL',
+        navigatorKey: ZydeApp.navigatorKey,
+        title: 'Zyde',
         theme: ThemeData(
           colorScheme: colorScheme,
           useMaterial3: true,

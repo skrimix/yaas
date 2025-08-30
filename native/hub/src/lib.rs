@@ -45,9 +45,9 @@ async fn main() {
     // Set working directory to the app's data directory
     let data_dir = dirs::data_dir().expect("Failed to get data directory");
     let app_dir = if cfg!(target_os = "macos") {
-        data_dir.join("com.github.skrimix.RQL")
+        data_dir.join("com.github.skrimix.zyde")
     } else {
-        data_dir.join("RQL")
+        data_dir.join("Zyde")
     };
     if !app_dir.exists() {
         std::fs::create_dir(&app_dir).expect("Failed to create app directory");
@@ -59,7 +59,7 @@ async fn main() {
         rinf::debug_print!("Failed to setup logging: {:#}", e);
     }
 
-    info!("Starting RQL backend");
+    info!("Starting Zyde backend");
 
     let settings_handler = SettingsHandler::new(app_dir.clone());
 
@@ -80,9 +80,9 @@ fn setup_logging() -> Result<WorkerGuard> {
     let file_appender = RollingFileAppender::builder()
         .rotation(Rotation::DAILY)
         .max_log_files(10)
-        .filename_prefix("rql")
+        .filename_prefix("zyde")
         .filename_suffix("log")
-        .build("logs/rql_native.log")
+        .build("logs/zyde_native.log")
         .context("Failed to initialize file appender")?;
     let (non_blocking, _guard) = tracing_appender::non_blocking(file_appender);
 

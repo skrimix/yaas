@@ -1,0 +1,23 @@
+<svg width="512" height="512" viewBox="0 0 512 512" xmlns="http://www.w3.org/2000/svg" role="img">
+  <!-- Dark background -->
+<!--   <rect width="512" height="512" fill="#0B0F14" /> -->
+
+  <!-- 45° gradient: bottom-left (cyan) → top-right (dark) -->
+  <defs>
+    <linearGradient id="ringGrad" x1="0%" y1="100%" x2="100%" y2="0%">
+      <stop offset="0%" stop-color="#673AB7"/>
+      <stop offset="100%" stop-color="#08141F"/>
+    </linearGradient>
+  </defs>
+
+  <!-- Ring -->
+  <!-- Stroke kept inside bounds: r + stroke/2 = 200 + 28 = 228 < 256 -->
+  <circle
+    cx="256" cy="256" r="200"
+    fill="none"
+    stroke="url(#ringGrad)"
+    stroke-width="80"
+    stroke-linecap="round"
+    stroke-linejoin="round"
+  />
+</svg>

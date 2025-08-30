@@ -46,3 +46,7 @@ format-dart:
 format:
     just format-rust
     just format-dart
+
+# Create app icons using app_icon.svg
+create-icons:
+    magick -background none assets/svg/app_icon.svg assets/png/app_icon.png && dart run icons_launcher:create

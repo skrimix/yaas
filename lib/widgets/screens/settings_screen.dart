@@ -1,6 +1,7 @@
 import 'dart:io';
 
 import 'package:flutter/material.dart';
+import 'package:flutter/services.dart';
 import 'package:provider/provider.dart';
 import 'package:file_picker/file_picker.dart';
 import '../../src/bindings/bindings.dart';
@@ -38,6 +39,8 @@ class _SettingsScreenState extends State<SettingsScreen> {
   late Settings _currentFormSettings;
   bool _hasChanges = false;
   SettingsState? _settingsState;
+  final ValueNotifier<bool> _isShiftPressedNotifier =
+      ValueNotifier<bool>(false);
 
   @override
   void initState() {
@@ -55,6 +58,9 @@ class _SettingsScreenState extends State<SettingsScreen> {
 
     // Listen for provider updates to sync defaults once loaded
     settingsState.addListener(_onSettingsProviderUpdated);
+
+    // Track Shift key state similar to manage_apps.dart
+    HardwareKeyboard.instance.addHandler(_handleKeyEvent);
   }
 
   @override
@@ -63,7 +69,18 @@ class _SettingsScreenState extends State<SettingsScreen> {
     for (final controller in _textControllers.values) {
       controller.dispose();
     }
+    HardwareKeyboard.instance.removeHandler(_handleKeyEvent);
+    _isShiftPressedNotifier.dispose();
     super.dispose();
+  }
+
+  bool _handleKeyEvent(KeyEvent event) {
+    final isShiftPressed = HardwareKeyboard.instance.isShiftPressed;
+    if (_isShiftPressedNotifier.value != isShiftPressed) {
+      _isShiftPressedNotifier.value = isShiftPressed;
+      setState(() {});
+    }
+    return false;
   }
 
   void _onSettingsProviderUpdated() {
@@ -139,6 +156,14 @@ class _SettingsScreenState extends State<SettingsScreen> {
       _updateAllControllers();
       _hasChanges = false;
     });
+  }
+
+  void _resetToDefaults() {
+    // Allow provider update callback to overwrite form fields with defaults
+    setState(() {
+      _hasChanges = false;
+    });
+    Provider.of<SettingsState>(context, listen: false).resetToDefaults();
   }
 
   void _saveSettings() {
@@ -279,15 +304,25 @@ class _SettingsScreenState extends State<SettingsScreen> {
         ),
         Row(
           children: [
-            SizedBox(
-              height: SettingsConstants.iconButtonSize,
-              width: SettingsConstants.iconButtonSize,
-              child: IconButton.filledTonal(
-                onPressed: _hasChanges ? _revertChanges : null,
-                iconSize: SettingsConstants.iconSize,
-                icon: const Icon(Icons.undo),
-                tooltip: 'Revert Changes',
-              ),
+            ValueListenableBuilder<bool>(
+              valueListenable: _isShiftPressedNotifier,
+              builder: (context, isShiftPressed, _) {
+                final bool enabled = isShiftPressed || _hasChanges;
+                return SizedBox(
+                  height: SettingsConstants.iconButtonSize,
+                  width: SettingsConstants.iconButtonSize,
+                  child: IconButton.filledTonal(
+                    onPressed: enabled
+                        ? (isShiftPressed ? _resetToDefaults : _revertChanges)
+                        : null,
+                    iconSize: SettingsConstants.iconSize,
+                    icon: Icon(isShiftPressed ? Icons.restart_alt : Icons.undo),
+                    tooltip: isShiftPressed
+                        ? 'Reset to Defaults'
+                        : 'Revert Changes\n(Shift+Click to reset to defaults)',
+                  ),
+                );
+              },
             ),
             const SizedBox(width: SettingsConstants.verticalSpacing),
             FilledButton.icon(

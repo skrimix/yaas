@@ -6,6 +6,9 @@ use crate::models::Settings;
 #[derive(Serialize, Deserialize, DartSignal)]
 pub struct LoadSettingsRequest {}
 
+#[derive(Serialize, Deserialize, DartSignal)]
+pub struct ResetSettingsToDefaultsRequest {}
+
 #[derive(Debug, Clone, Serialize, Deserialize, DartSignal)]
 pub struct SaveSettingsRequest {
     pub settings: Settings,

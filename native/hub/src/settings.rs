@@ -50,6 +50,7 @@ impl SettingsHandler {
     async fn receive_settings_requests(&self) {
         let load_receiver = LoadSettingsRequest::get_dart_signal_receiver();
         let save_receiver = SaveSettingsRequest::get_dart_signal_receiver();
+        let reset_receiver = ResetSettingsToDefaultsRequest::get_dart_signal_receiver();
 
         info!("Starting to listen for settings requests");
 
@@ -96,6 +97,26 @@ impl SettingsHandler {
                         }
                     }
                 },
+                Some(_) = reset_receiver.recv() => {
+                    info!("Received ResetSettingsToDefaultsRequest");
+                    let handler = self.clone();
+                    let result = handler.load_default_settings();
+
+                    match result {
+                        Ok(settings) => {
+                            // Force notify to ensure UI updates even if values match
+                            handler.on_settings_change(settings.clone(), None, true);
+                        }
+                        Err(e) => {
+                            error!(error = e.as_ref() as &dyn Error, "Failed to reset settings to defaults");
+                            handler.on_settings_change(
+                                handler.watch_tx.borrow().clone(),
+                                Some(format!("Failed to reset to defaults: {e:#}")),
+                                true,
+                            );
+                        }
+                    }
+                },
                 else => {
                     error!("All settings request channels closed");
                     break;
@@ -103,7 +124,6 @@ impl SettingsHandler {
             }
         }
         panic!("Settings request receiver loop ended");
-        // TODO: Add reset to defaults request
     }
 
     /// Handle settings change

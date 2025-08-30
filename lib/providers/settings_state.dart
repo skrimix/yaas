@@ -57,6 +57,11 @@ class SettingsState extends ChangeNotifier {
     // _setIsLoading(false);
   }
 
+  Future<void> resetToDefaults() async {
+    _setIsLoading(true);
+    ResetSettingsToDefaultsRequest().sendSignalToRust();
+  }
+
   Settings get settings => _settings;
   bool get isLoading => _isLoading;
   String? get error => _error;

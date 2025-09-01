@@ -772,7 +772,7 @@ impl AdbDevice {
         app_dir: &Path,
         progress_sender: UnboundedSender<SideloadProgress>,
     ) -> Result<()> {
-        // TODO: add E2E test for this (smallest APK with generated OBB)
+        // TODO: add a test for this (smallest APK with generated OBB)
         fn send_progress(
             progress_sender: &UnboundedSender<SideloadProgress>,
             status: &str,
@@ -924,6 +924,7 @@ impl AdbDevice {
         backups_location: &Path,
         options: &BackupOptions,
     ) -> Result<Option<PathBuf>> {
+        // TODO: add a test for this
         ensure_valid_package(package_name)?;
         ensure!(backups_location.is_dir(), "Backups location must be a directory");
 
@@ -1048,6 +1049,7 @@ impl AdbDevice {
     /// Restores a backup from the given path
     #[instrument(skip(self), err)]
     pub async fn restore_backup(&self, backup_path: &Path) -> Result<()> {
+        // TODO: add a test for this
         ensure!(backup_path.is_dir(), "Backup path is not a directory");
         ensure!(backup_path.join(".backup").exists(), "Backup marker not found (.backup)");
 

@@ -1,11 +1,15 @@
-use std::{fmt::Display, path::Path};
+use std::{
+    fmt::Display,
+    path::{Path, PathBuf},
+};
 
 use anyhow::{Context, Result, anyhow, bail, ensure};
 use derive_more::Debug;
 use forensic_adb::{Device, DirectoryTransferProgress, UnixFileStatus, UnixPath, UnixPathBuf};
 use lazy_regex::{Lazy, Regex, lazy_regex};
+use time::{OffsetDateTime, macros::format_description};
 use tokio::{
-    fs::File,
+    fs::{self, File},
     io::BufReader,
     sync::mpsc::{self, UnboundedSender},
 };
@@ -16,9 +20,10 @@ use crate::{
     models::{
         DeviceType, InstalledPackage, SPACE_INFO_COMMAND, SpaceInfo, parse_list_apps_dex,
         signals::adb::command::RebootMode,
-        vendor::quest::controller::{
-            CONTROLLER_INFO_COMMAND, HeadsetControllersInfo, parse_dumpsys,
-        },
+        vendor::quest::controller::{self, CONTROLLER_INFO_COMMAND, HeadsetControllersInfo},
+    },
+    utils::{
+        decompress_all_7z_in_dir, dir_has_any_files, first_subdirectory, remove_child_dir_if_exists,
     },
 };
 
@@ -126,11 +131,10 @@ impl AdbDevice {
     /// Returns raw `dumpsys battery` output from the device
     #[instrument(skip(self), err)]
     pub async fn battery_dump(&self) -> Result<String> {
-        self.shell("dumpsys battery").await.context("Failed to get battery dump")
+        self.shell_checked("dumpsys battery").await.context("'dumpsys battery' command failed")
     }
 
     /// Executes a shell command on the device
-    // TODO: Add `check_exit_code` parameter
     #[instrument(skip(self), err)]
     async fn shell(&self, command: &str) -> Result<String> {
         self.inner
@@ -138,6 +142,23 @@ impl AdbDevice {
             .await
             .context("Failed to execute shell command")
             .inspect(|v| trace!(output = ?v, "Shell command executed"))
+    }
+
+    /// Executes a shell command and fails if exit code is non-zero.
+    /// Appends `; echo -n $?` and parses the final line as the exit status.
+    #[instrument(skip(self), err)]
+    async fn shell_checked(&self, command: &str) -> Result<String> {
+        let shell_output = self
+            .shell(&format!("{} ; echo -n $?", command))
+            .await
+            .context(format!("Failed to execute checked shell command: {command}"))?;
+        let (output, exit_code) =
+            shell_output.rsplit_once('\n').context("Failed to extract exit code")?;
+        if exit_code != "0" {
+            error!(exit_code, output, "Shell command returned non-zero exit code");
+            bail!("Command {command} failed with exit code {exit_code}");
+        }
+        Ok(output.to_string())
     }
 
     /// Reboots the device with the given mode
@@ -153,7 +174,8 @@ impl AdbDevice {
             RebootMode::Fastboot => "reboot fastboot",
             RebootMode::PowerOff => "reboot -p",
         };
-        self.shell(cmd).await.map(|_| ())
+        self.shell_checked(cmd).await.context(format!("Failed to reboot with mode: {mode:?}"))?;
+        Ok(())
     }
 
     /// Sets the proximity sensor state
@@ -164,11 +186,14 @@ impl AdbDevice {
     pub async fn set_proximity_sensor(&self, enabled: bool) -> Result<()> {
         // enable => automation_disable, disable => prox_close
         let cmd = if enabled {
-            "am broadcast -a com.oculus.vrpowermanager.automation_disable ; echo -n $?"
+            "am broadcast -a com.oculus.vrpowermanager.automation_disable"
         } else {
-            "am broadcast -a com.oculus.vrpowermanager.prox_close ; echo -n $?"
+            "am broadcast -a com.oculus.vrpowermanager.prox_close"
         };
-        self.shell(cmd).await.map(|_| ())
+        self.shell_checked(cmd)
+            .await
+            .context(format!("Failed to set proximity sensor: {enabled}"))?;
+        Ok(())
     }
 
     /// Sets the guardian paused state
@@ -178,7 +203,10 @@ impl AdbDevice {
     #[instrument(skip(self), err)]
     pub async fn set_guardian_paused(&self, paused: bool) -> Result<()> {
         let value = if paused { 1 } else { 0 };
-        self.shell(&format!("setprop debug.oculus.guardian_pause {value}")).await.map(|_| ())
+        self.shell_checked(&format!("setprop debug.oculus.guardian_pause {value}"))
+            .await
+            .context(format!("Failed to set guardian paused: {paused}"))?;
+        Ok(())
     }
 
     /// Refreshes the list of installed packages on the device
@@ -189,25 +217,13 @@ impl AdbDevice {
             .await
             .context("Failed to push list_apps.dex")?;
 
-        let shell_output = self
-            .shell("CLASSPATH=/data/local/tmp/list_apps.dex app_process / Main ; echo -n $?")
+        let list_output = self
+            .shell_checked("CLASSPATH=/data/local/tmp/list_apps.dex app_process / Main")
             .await
             .context("Failed to execute app_process for list_apps.dex")?;
 
-        let (list_output, exit_code) =
-            shell_output.rsplit_once('\n').context("Failed to extract exit code")?;
-
-        if exit_code != "0" {
-            error!(
-                exit_code,
-                output = list_output,
-                "app_process command returned non-zero exit code"
-            );
-            return Err(anyhow!("app_process command failed with exit code {}", exit_code));
-        }
-
         let packages =
-            parse_list_apps_dex(list_output).context("Failed to parse list_apps.dex output")?;
+            parse_list_apps_dex(&list_output).context("Failed to parse list_apps.dex output")?;
 
         Span::current().record("count", packages.len());
         self.installed_packages = packages;
@@ -218,8 +234,7 @@ impl AdbDevice {
     #[instrument(skip(self), err)]
     async fn refresh_battery_info(&mut self) -> Result<()> {
         // Get device battery level
-        let battery_dump =
-            self.shell("dumpsys battery").await.context("Failed to get battery dump")?;
+        let battery_dump = self.battery_dump().await.context("Failed to get battery dump")?;
 
         let device_level: u8 = battery_dump
             .lines()
@@ -239,7 +254,7 @@ impl AdbDevice {
             .shell(CONTROLLER_INFO_COMMAND)
             .await
             .context("Failed to get controller battery level")?;
-        let controllers = parse_dumpsys(&dump_result);
+        let controllers = controller::parse_dumpsys(&dump_result);
         trace!(?controllers, "Parsed controller info");
 
         self.battery_level = device_level;
@@ -258,7 +273,8 @@ impl AdbDevice {
     /// Gets storage space information from the device
     #[instrument(skip(self), err)]
     async fn get_space_info(&self) -> Result<SpaceInfo> {
-        let output = self.shell(SPACE_INFO_COMMAND).await.context("Failed to get space info")?;
+        let output =
+            self.shell_checked(SPACE_INFO_COMMAND).await.context("Space info command failed")?;
         SpaceInfo::from_stat_output(&output)
     }
 
@@ -338,11 +354,7 @@ impl AdbDevice {
     }
 
     /// Resolves the destination path for a pull operation
-    async fn resolve_pull_dest_path(
-        &self,
-        source: &UnixPath,
-        dest: &Path,
-    ) -> Result<std::path::PathBuf> {
+    async fn resolve_pull_dest_path(&self, source: &UnixPath, dest: &Path) -> Result<PathBuf> {
         let source_name = source
             .file_name()
             .context("Source path has no file name")?
@@ -402,8 +414,9 @@ impl AdbDevice {
     /// # Arguments
     /// * `source` - Local path of the directory to push
     /// * `dest` - Destination path on the device
+    /// * `overwrite` - Whether to remove existing destination before pushing
     #[instrument(skip(self), err)]
-    pub async fn push_dir(&self, source: &Path, dest: &UnixPath) -> Result<()> {
+    pub async fn push_dir(&self, source: &Path, dest: &UnixPath, overwrite: bool) -> Result<()> {
         ensure!(
             source.is_dir(),
             "Source path does not exist or is not a directory: {}",
@@ -411,6 +424,11 @@ impl AdbDevice {
         );
 
         let dest_path = self.resolve_push_dest_path(source, dest).await?;
+        if overwrite {
+            debug!(path = %dest_path.display(), "Cleaning up destination directory");
+            let output = self.shell(&format!("rm -rf '{}'", dest_path.display())).await?;
+            debug!(output, "Cleaned up destination directory");
+        }
         info!(source = %source.display(), dest = %dest_path.display(), "Pushing directory");
         Box::pin(self.inner.push_dir(source, &dest_path, 0o777))
             .await
@@ -525,7 +543,7 @@ impl AdbDevice {
     async fn push_any(&self, source: &Path, dest: &UnixPath) -> Result<()> {
         ensure!(source.exists(), "Source path does not exist: {}", source.display());
         if source.is_dir() {
-            self.push_dir(source, dest).await?;
+            self.push_dir(source, dest, false).await?;
         } else if source.is_file() {
             self.push(source, dest).await?;
         } else {
@@ -605,23 +623,10 @@ impl AdbDevice {
             .context("Failed to read install script")?;
         let script_dir = script_path.parent().context("Failed to get script directory")?;
 
-        // TODO: should this be moved elsewhere?
         // Unpack all 7z archives if present
-        let mut dir = tokio::fs::read_dir(script_dir).await?;
-        while let Some(entry) = dir.next_entry().await? {
-            if entry.file_type().await?.is_file()
-                && entry.path().extension().and_then(|e| e.to_str()) == Some("7z")
-            {
-                let path = entry.path();
-                info!(path = %path.display(), "Decompressing 7z archive");
-                let script_dir_clone = script_dir.to_path_buf();
-                tokio::task::spawn_blocking(move || {
-                    sevenz_rust2::decompress_file(&path, script_dir_clone)
-                        .context("Error decompressing 7z archive")
-                })
-                .await??;
-            }
-        }
+        decompress_all_7z_in_dir(script_dir)
+            .await
+            .context("Failed to decompress .7z archives in install folder")?;
 
         for (line_index, line) in script_content.lines().enumerate() {
             let line_num = line_index + 1;
@@ -878,6 +883,276 @@ impl AdbDevice {
 
         Ok(())
     }
+
+    /// Returns true if a directory exists on the device
+    #[instrument(skip(self), err)]
+    async fn dir_exists(&self, path: &UnixPath) -> Result<bool> {
+        match self.inner.stat(path).await {
+            Ok(stat) => Ok(stat.file_mode == UnixFileStatus::Directory),
+            Err(e) => {
+                trace!(error = %e, path = %path.display(), "dir_exists: stat failed");
+                Ok(false)
+            }
+        }
+    }
+
+    /// Gets the first APK path reported by `pm path <package>`
+    #[instrument(skip(self), err)]
+    async fn get_apk_path(&self, package_name: &str) -> Result<String> {
+        ensure_valid_package(package_name)?;
+        let output = self
+            .shell_checked(&format!("pm path {package_name}"))
+            .await
+            .context("Failed to run 'pm path'")?;
+        for line in output.lines() {
+            if let Some(rest) = line.strip_prefix("package:") {
+                let p = rest.trim();
+                if !p.is_empty() {
+                    return Ok(p.to_string());
+                }
+            }
+        }
+        bail!("Failed to parse APK path for package '{}': {}", package_name, output);
+    }
+
+    /// Creates a backup of the given package.
+    /// Returns `Ok(Some(path))` if backup was created, `Ok(None)` if nothing to back up.
+    #[instrument(skip(self, backups_location, options), err)]
+    pub async fn backup_app(
+        &self,
+        package_name: &str,
+        backups_location: &Path,
+        options: &BackupOptions,
+    ) -> Result<Option<PathBuf>> {
+        ensure_valid_package(package_name)?;
+        ensure!(backups_location.is_dir(), "Backups location must be a directory");
+
+        info!(package = package_name, "Creating app backup");
+        let fmt = format_description!("[year]-[month]-[day]_[hour]-[minute]-[second]");
+        let now = OffsetDateTime::now_local().unwrap_or_else(|_| OffsetDateTime::now_utc());
+        let timestamp = now.format(&fmt).unwrap_or_else(|_| "0000-00-00_00-00-00".into());
+        let mut directory_name = format!("{}_{}", timestamp, package_name);
+        if let Some(suffix) = &options.name_append
+            && !suffix.is_empty()
+        {
+            directory_name.push('_');
+            directory_name.push_str(suffix);
+        }
+        let backup_path = backups_location.join(directory_name);
+        fs::create_dir_all(&backup_path).await?;
+
+        let shared_data_path = UnixPath::new("/sdcard/Android/data").join(package_name);
+        let private_data_path = UnixPath::new("/data/data").join(package_name);
+        let obb_path = UnixPath::new("/sdcard/Android/obb").join(package_name);
+
+        let shared_data_backup_path = backup_path.join("data");
+        let private_data_backup_path = backup_path.join("data_private");
+        let obb_backup_path = backup_path.join("obb");
+
+        let mut backup_empty = true;
+
+        // Backup app data
+        if options.backup_data {
+            debug!("Backing up app data");
+
+            // Clean old tmp if present
+            let tmp_root = UnixPath::new("/sdcard/backup_tmp");
+            if self.dir_exists(tmp_root).await? {
+                info!("Found old /sdcard/backup_tmp, deleting");
+                self.shell("rm -rf /sdcard/backup_tmp/").await?;
+            }
+
+            // Private data via run-as
+            // Pipe through tar because run-as has unusable permissions
+            fs::create_dir_all(&private_data_backup_path).await?;
+            let tmp_pkg = tmp_root.join(package_name);
+            let cmd = format!(
+                "mkdir -p '{tmp}'; run-as {pkg} tar -cf - -C '{priv_path}' . | tar -xvf - -C \
+                 '{tmp}'",
+                tmp = tmp_pkg.display(),
+                pkg = package_name,
+                priv_path = private_data_path.display(),
+            );
+            self.shell(&cmd).await?;
+            self.pull_dir(&tmp_pkg, &private_data_backup_path).await?;
+            let _ = self.shell("rm -rf /sdcard/backup_tmp/").await;
+
+            let private_pkg_dir = private_data_backup_path.join(package_name);
+            if private_pkg_dir.is_dir() {
+                let _ = remove_child_dir_if_exists(&private_pkg_dir, "cache").await;
+                let _ = remove_child_dir_if_exists(&private_pkg_dir, "code_cache").await;
+            }
+
+            let has_private_files = dir_has_any_files(&private_data_backup_path).await?;
+            if !has_private_files {
+                debug!("No files in pulled private data, deleting");
+                let _ = fs::remove_dir_all(&private_data_backup_path).await;
+            }
+            backup_empty &= !has_private_files;
+
+            // Shared data
+            if self.dir_exists(&shared_data_path).await? {
+                debug!("Backing up shared data");
+                fs::create_dir_all(&shared_data_backup_path).await?;
+                self.pull_dir(&shared_data_path, &shared_data_backup_path).await?;
+
+                let shared_pkg_dir = shared_data_backup_path.join(package_name);
+                if shared_pkg_dir.is_dir() {
+                    let shared_pkg_dir = shared_data_backup_path.join(package_name);
+                    let _ = remove_child_dir_if_exists(&shared_pkg_dir, "cache").await;
+                }
+
+                let has_shared_files = dir_has_any_files(&shared_data_backup_path).await?;
+                if !has_shared_files {
+                    debug!("No files in pulled shared data, deleting");
+                    let _ = fs::remove_dir_all(&shared_data_backup_path).await;
+                }
+                backup_empty &= !has_shared_files;
+            }
+        }
+
+        // Backup APK
+        if options.backup_apk {
+            debug!("Backing up APK");
+            let apk_remote = self.get_apk_path(package_name).await?;
+            self.pull(UnixPath::new(&apk_remote), &backup_path).await?;
+            backup_empty = false;
+        }
+
+        // Backup OBB
+        if options.backup_obb && self.dir_exists(&obb_path).await? {
+            debug!("Backing up OBB");
+            fs::create_dir_all(&obb_backup_path).await?;
+            self.pull_dir(&obb_path, &obb_backup_path).await?;
+
+            let has_obb_files = dir_has_any_files(&obb_backup_path).await?;
+            if !has_obb_files {
+                debug!("No files in pulled OBB, deleting");
+                let _ = fs::remove_dir_all(&obb_backup_path).await;
+            }
+            backup_empty &= !has_obb_files;
+        }
+
+        if backup_empty {
+            info!("Nothing backed up; cleaning up empty directory");
+            let _ = fs::remove_dir_all(&backup_path).await;
+            return Ok(None);
+        }
+
+        // Marker file
+        let _ = File::create(backup_path.join(".backup")).await?;
+        info!(path = %backup_path.display(), "Backup created successfully");
+        Ok(Some(backup_path))
+    }
+
+    /// Restores a backup from the given path
+    #[instrument(skip(self), err)]
+    pub async fn restore_backup(&self, backup_path: &Path) -> Result<()> {
+        ensure!(backup_path.is_dir(), "Backup path is not a directory");
+        ensure!(backup_path.join(".backup").exists(), "Backup marker not found (.backup)");
+
+        let shared_data_backup_path = backup_path.join("data");
+        let private_data_backup_path = backup_path.join("data_private");
+        let obb_backup_path = backup_path.join("obb");
+
+        let mut restored_apk = false;
+
+        // Restore APK
+        {
+            let mut apk_candidate: Option<PathBuf> = None;
+            if backup_path.is_dir() {
+                let mut rd = fs::read_dir(backup_path).await?;
+                while let Some(entry) = rd.next_entry().await? {
+                    if entry
+                        .path()
+                        .extension()
+                        .and_then(|e| e.to_str())
+                        .is_some_and(|e| e.eq_ignore_ascii_case("apk"))
+                    {
+                        apk_candidate = Some(entry.path());
+                        break;
+                    }
+                }
+            }
+            if let Some(apk) = apk_candidate {
+                info!(apk = %apk.display(), "Restoring APK");
+                self.install_apk(&apk).await?;
+                restored_apk = true;
+            } else {
+                // If there is no APK in the backup, ensure the app is already installed
+                // Try to infer the package name from any backup subfolder (private/shared/obb)
+                let mut candidate_pkg: Option<String> = None;
+                for dir in [&private_data_backup_path, &shared_data_backup_path, &obb_backup_path] {
+                    if dir.is_dir()
+                        && let Some(sub) = first_subdirectory(dir).await?
+                        && let Some(name) = sub.file_name().and_then(|n| n.to_str())
+                    {
+                        candidate_pkg = Some(name.to_string());
+                        break;
+                    }
+                }
+                if let Some(pkg) = candidate_pkg {
+                    let _ = self.get_apk_path(&pkg).await.with_context(|| {
+                        format!(
+                            "Backup does not contain an APK and package '{pkg}' is not installed"
+                        )
+                    })?;
+                } else {
+                    bail!(
+                        "Backup does not contain an APK and no package folder was found to infer \
+                         the package name"
+                    );
+                }
+            }
+        }
+
+        // Restore OBB
+        if obb_backup_path.is_dir()
+            && let Some(pkg_dir) = first_subdirectory(&obb_backup_path).await?
+        {
+            debug!("Restoring OBB");
+            let remote_parent = UnixPath::new("/sdcard/Android/obb");
+            self.push_dir(&pkg_dir, remote_parent, true).await?;
+        }
+
+        // Restore shared data
+        if shared_data_backup_path.is_dir()
+            && let Some(pkg_dir) = first_subdirectory(&shared_data_backup_path).await?
+        {
+            debug!("Restoring shared data");
+            let remote_parent = UnixPath::new("/sdcard/Android/data");
+            self.push_dir(&pkg_dir, remote_parent, true).await?;
+        }
+
+        // Restore private data
+        if private_data_backup_path.is_dir()
+            && let Some(pkg_dir) = first_subdirectory(&private_data_backup_path).await?
+        {
+            let package_name = pkg_dir
+                .file_name()
+                .and_then(|n| n.to_str())
+                .context("Failed to get private data package name")?;
+
+            debug!("Restoring private data");
+            // Push to temporary dir
+            let _ = self.shell("rm -rf /sdcard/restore_tmp/").await;
+            self.shell("mkdir -p /sdcard/restore_tmp/").await?;
+            self.push_dir(&pkg_dir, UnixPath::new("/sdcard/restore_tmp/"), false).await?;
+
+            // Pipe through tar because run-as has unusable permissions
+            let cmd = format!(
+                "tar -cf - -C '/sdcard/restore_tmp/{pkg}/' . | run-as {pkg} tar -xvf - -C \
+                 '/data/data/{pkg}/'; rm -rf /sdcard/restore_tmp/",
+                pkg = package_name
+            );
+            self.shell(&cmd).await?;
+        }
+
+        info!("Backup restored successfully");
+        // TODO: Caller can refresh package list if needed
+        let _ = restored_apk; // suppress unused var if not used soon
+        Ok(())
+    }
 }
 
 // TODO: move somewhere else?
@@ -885,4 +1160,23 @@ impl AdbDevice {
 pub struct SideloadProgress {
     pub status: String,
     pub progress: f32,
+}
+
+/// Options to control backup behavior
+#[derive(Debug, Clone, Default)]
+pub struct BackupOptions {
+    /// String to append to backup name
+    pub name_append: Option<String>,
+    /// Should backup APK
+    pub backup_apk: bool,
+    /// Should backup data (private/shared)
+    pub backup_data: bool,
+    /// Should backup OBB files
+    pub backup_obb: bool,
+}
+
+impl BackupOptions {
+    pub fn default_data_only() -> Self {
+        Self { name_append: None, backup_apk: false, backup_data: true, backup_obb: false }
+    }
 }

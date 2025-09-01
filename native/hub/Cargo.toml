@@ -52,6 +52,7 @@ tracing-subscriber = { version = "0.3.19", features = [
     "local-time",
 ] }
 which = { version = "8.0.0", features = ["tracing"] }
+time = { version = "0.3.42", features = ["formatting", "macros", "local-offset"] }
 
 [package.metadata.cargo-machete]
 ignored = ["log"]

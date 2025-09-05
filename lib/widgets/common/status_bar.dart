@@ -179,7 +179,9 @@ class StatusBar extends StatelessWidget {
                     ),
               ),
               if (hasRecentTasks || true) ...[
-                // TODO: decide how we want to show this
+                // TODO: show task error count badge
+                // TODO: show task count?
+                // TODO: add recent task clearing
                 const SizedBox(width: 8),
                 Text(
                   'View tasks',

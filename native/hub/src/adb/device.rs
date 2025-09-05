@@ -953,6 +953,7 @@ impl AdbDevice {
     pub async fn backup_app(
         &self,
         package_name: &str,
+        display_name: Option<&str>,
         backups_location: &Path,
         options: &BackupOptions,
     ) -> Result<Option<PathBuf>> {
@@ -964,12 +965,20 @@ impl AdbDevice {
         let fmt = format_description!("[year]-[month]-[day]_[hour]-[minute]-[second]");
         let now = OffsetDateTime::now_local().unwrap_or_else(|_| OffsetDateTime::now_utc());
         let timestamp = now.format(&fmt).unwrap_or_else(|_| "0000-00-00_00-00-00".into());
-        let mut directory_name = format!("{}_{}", timestamp, package_name); // TODO: use (sanitized) display name instead
+        // Build directory name: timestamp + sanitized display name (fallback to package name)
+        let display = display_name
+            .map(sanitize_filename::sanitize)
+            .filter(|s| !s.is_empty())
+            .unwrap_or_else(|| package_name.to_string());
+        let mut directory_name = format!("{}_{}", timestamp, display);
         if let Some(suffix) = &options.name_append
             && !suffix.is_empty()
         {
-            directory_name.push('_');
-            directory_name.push_str(suffix);
+            let sanitized_suffix = sanitize_filename::sanitize(suffix);
+            if !sanitized_suffix.is_empty() {
+                directory_name.push('_');
+                directory_name.push_str(&sanitized_suffix);
+            }
         }
         let backup_path = backups_location.join(directory_name);
         fs::create_dir_all(&backup_path).await?;

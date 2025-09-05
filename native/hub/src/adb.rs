@@ -623,12 +623,13 @@ impl AdbHandler {
     pub async fn backup_app(
         &self,
         package_name: &str,
+        display_name: Option<&str>,
         backups_location: &Path,
         options: &BackupOptions,
     ) -> Result<Option<std::path::PathBuf>> {
         let device = self.current_device().await?;
         let device_clone = (*device).clone();
-        device_clone.backup_app(package_name, backups_location, options).await
+        device_clone.backup_app(package_name, display_name, backups_location, options).await
     }
 
     /// Restores a backup to the currently connected device

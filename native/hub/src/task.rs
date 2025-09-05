@@ -856,8 +856,10 @@ impl TaskManager {
             backup_obb: params.backup_obb.unwrap_or(false),
         };
 
-        let maybe_created =
-            self.adb_handler.backup_app(&package_name, backups_path, &options).await?;
+        let maybe_created = self
+            .adb_handler
+            .backup_app(&package_name, params.display_name.as_deref(), backups_path, &options)
+            .await?;
 
         if maybe_created.is_none() {
             let parts = [

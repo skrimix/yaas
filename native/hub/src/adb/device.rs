@@ -316,7 +316,20 @@ impl AdbDevice {
         self.inner.force_stop(package).await.context("Failed to force stop package")
     }
 
-    /// Resolves the destination path for a push operation
+    /// Resolves the effective remote destination path for a push operation.
+    ///
+    /// Behavior:
+    /// - If `dest` exists on the device and is a directory, the source file or directory name
+    ///   is appended (push into that directory).
+    /// - If `dest` exists and is a regular file, then:
+    ///   - pushing a local file overwrites that remote file path;
+    ///   - pushing a local directory is rejected (cannot push a dir to an existing file).
+    /// - If `dest` does not exist but its parent exists, use `dest` as-is (the caller will create
+    ///   directories/files as needed during the transfer).
+    /// - If neither `dest` nor its parent exists, returns an error.
+    ///
+    /// This mirrors common `adb push` conventions and ensures we never silently place content
+    /// at an unexpected path.
     async fn resolve_push_dest_path(&self, source: &Path, dest: &UnixPath) -> Result<UnixPathBuf> {
         let source_name = source
             .file_name()
@@ -353,7 +366,20 @@ impl AdbDevice {
         }
     }
 
-    /// Resolves the destination path for a pull operation
+    /// Resolves the effective local destination path for a pull operation.
+    ///
+    /// Behavior:
+    /// - If `dest` exists locally and is a directory, append the source file/dir name and pull
+    ///   into that directory.
+    /// - If `dest` exists and is a regular file, then pulling a remote directory is rejected,
+    ///   otherwise the remote file is saved to that file path.
+    /// - If `dest` does not exist but its parent exists locally, use `dest` as-is (callers may
+    ///   create intermediate directories as needed).
+    /// - If `dest` has no existing parent directory, returns an error to avoid surprising
+    ///   filesystem writes.
+    ///
+    /// This keeps pull semantics predictable and prevents accidental directory creation outside
+    /// intended locations.
     async fn resolve_pull_dest_path(&self, source: &UnixPath, dest: &Path) -> Result<PathBuf> {
         let source_name = source
             .file_name()
@@ -515,6 +541,12 @@ impl AdbDevice {
         );
 
         let dest_path = self.resolve_pull_dest_path(source, dest).await?;
+        // Ensure the destination directory exists before pulling
+        // For directory pulls, it's convenient to create the destination path automatically.
+        // This mirrors typical `adb pull` behavior when targeting a new directory path.
+        fs::create_dir_all(&dest_path).await.with_context(|| {
+            format!("Failed to create destination directory: {}", dest_path.display())
+        })?;
         // debug!(source = %source.display(), dest = %dest_path.display(), "Pulling directory");
         Box::pin(self.inner.pull_dir(source, &dest_path)).await.context("Failed to pull directory")
     }

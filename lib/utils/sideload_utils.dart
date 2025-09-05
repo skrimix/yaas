@@ -24,6 +24,13 @@ class SideloadUtils {
     }
   }
 
+  static bool isBackupDirectory(String path) {
+    final dir = Directory(path);
+    if (!dir.existsSync()) return false;
+    final marker = File('${dir.path}${Platform.pathSeparator}.backup');
+    return marker.existsSync();
+  }
+
   static void installApp(String path, bool isDirectory) {
     (isDirectory
             ? TaskRequest(
@@ -33,6 +40,13 @@ class SideloadUtils {
                 taskType: TaskType.installApk,
                 params: TaskParams(apkPath: path)))
         .sendSignalToRust();
+  }
+
+  static void restoreBackup(String backupPath) {
+    TaskRequest(
+      taskType: TaskType.restoreBackup,
+      params: TaskParams(backupPath: backupPath),
+    ).sendSignalToRust();
   }
 
   static void showErrorToast(BuildContext context, String message) {

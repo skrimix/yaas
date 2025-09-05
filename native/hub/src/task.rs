@@ -9,18 +9,27 @@ use std::{
     time::Duration,
 };
 
-use anyhow::{Context, Result, anyhow};
+use anyhow::{Context, Result, anyhow, ensure};
 use rinf::{DartSignal, RustSignal};
-use tokio::sync::{Mutex, Semaphore, mpsc};
+use tokio::sync::{Mutex, RwLock, Semaphore, mpsc};
+use tokio_stream::{StreamExt, wrappers::WatchStream};
 use tokio_util::sync::CancellationToken;
 use tracing::{Instrument, Span, debug, error, info, instrument, warn};
 
 use crate::{
-    adb::{AdbHandler, device::SideloadProgress},
+    adb::{
+        AdbHandler,
+        device::{BackupOptions, SideloadProgress},
+    },
     downloader::{Downloader, RcloneTransferStats},
-    models::signals::{
-        system::Toast,
-        task::{TaskCancelRequest, TaskParams, TaskProgress, TaskRequest, TaskStatus, TaskType},
+    models::{
+        Settings,
+        signals::{
+            system::Toast,
+            task::{
+                TaskCancelRequest, TaskParams, TaskProgress, TaskRequest, TaskStatus, TaskType,
+            },
+        },
     },
 };
 
@@ -49,10 +58,18 @@ pub struct TaskManager {
     tasks: Mutex<HashMap<u64, (TaskType, CancellationToken)>>,
     adb_handler: Arc<AdbHandler>,
     downloader: Arc<Downloader>,
+    settings: RwLock<Settings>,
 }
 
 impl TaskManager {
-    pub fn new(adb_handler: Arc<AdbHandler>, downloader: Arc<Downloader>) -> Arc<Self> {
+    pub fn new(
+        adb_handler: Arc<AdbHandler>,
+        downloader: Arc<Downloader>,
+        mut settings_stream: WatchStream<Settings>,
+    ) -> Arc<Self> {
+        let initial_settings = futures::executor::block_on(settings_stream.next())
+            .expect("Settings stream closed on task manager init");
+
         let handle = Arc::new(Self {
             adb_semaphore: Semaphore::new(1),
             download_semaphore: Semaphore::new(1),
@@ -60,6 +77,7 @@ impl TaskManager {
             tasks: Mutex::new(HashMap::new()),
             adb_handler,
             downloader,
+            settings: RwLock::new(initial_settings),
         });
 
         tokio::spawn({
@@ -73,6 +91,17 @@ impl TaskManager {
             let handle = handle.clone();
             async move {
                 handle.receive_cancel_requests().await;
+            }
+        });
+
+        // Listen for settings updates
+        tokio::spawn({
+            let handle = handle.clone();
+            async move {
+                let mut stream = settings_stream;
+                while let Some(settings) = stream.next().await {
+                    *handle.settings.write().await = settings;
+                }
             }
         });
 
@@ -144,6 +173,16 @@ impl TaskManager {
                     debug!(task_id = id, package_name = %package_name, "Task parameters");
                 }
             }
+            TaskType::BackupApp => {
+                if let Some(package_name) = &params.package_name {
+                    debug!(task_id = id, package_name = %package_name, "Task parameters");
+                }
+            }
+            TaskType::RestoreBackup => {
+                if let Some(path) = &params.backup_path {
+                    debug!(task_id = id, backup_path = %path, "Task parameters");
+                }
+            }
         }
 
         let mut tasks = self.tasks.lock().await;
@@ -163,7 +202,7 @@ impl TaskManager {
         id
     }
 
-    #[instrument(skip(self, params, token), fields(task_id = id, task_type = %task_type))]
+    #[instrument(skip(self, token), fields(task_type = %task_type))]
     async fn process_task(
         &self,
         id: u64,
@@ -257,6 +296,14 @@ impl TaskManager {
             TaskType::Uninstall => {
                 info!(task_id = id, "Executing uninstall task");
                 self.handle_uninstall(params, &update_progress, token.clone()).await
+            }
+            TaskType::BackupApp => {
+                info!(task_id = id, "Executing backup task");
+                self.handle_backup(params, &update_progress, token.clone()).await
+            }
+            TaskType::RestoreBackup => {
+                info!(task_id = id, "Executing restore backup task");
+                self.handle_restore(params, &update_progress, token.clone()).await
             }
         };
 
@@ -744,6 +791,129 @@ impl TaskManager {
 
         Ok(())
     }
+
+    #[instrument(skip(self, params, update_progress, token))]
+    async fn handle_backup(
+        &self,
+        params: TaskParams,
+        update_progress: &impl Fn(TaskStatus, f32, String),
+        token: CancellationToken,
+    ) -> Result<()> {
+        let package_name = params.package_name.context("Missing package_name parameter")?;
+
+        info!(
+            package_name = %package_name,
+            adb_permits_available = self.adb_semaphore.available_permits(),
+            "Starting backup task"
+        );
+
+        update_progress(TaskStatus::Waiting, 0.0, "Waiting to start backup...".into());
+
+        let _permit = acquire_permit_or_cancel!(self.adb_semaphore, token, "ADB");
+        info!(
+            adb_permits_remaining = self.adb_semaphore.available_permits(),
+            "Acquired ADB semaphore for backup"
+        );
+
+        let mut progress_msg = String::from("Creating backup...");
+        if params.backup_data.unwrap_or(false)
+            || params.backup_apk.unwrap_or(false)
+            || params.backup_obb.unwrap_or(false)
+        {
+            let parts = [
+                if params.backup_data.unwrap_or(false) { Some("data") } else { None },
+                if params.backup_apk.unwrap_or(false) { Some("apk") } else { None },
+                if params.backup_obb.unwrap_or(false) { Some("obb") } else { None },
+            ]
+            .into_iter()
+            .flatten()
+            .collect::<Vec<_>>()
+            .join(", ");
+            progress_msg = format!("Creating backup ({parts})...");
+        }
+        update_progress(TaskStatus::Running, 0.0, progress_msg);
+
+        let backups_dir = {
+            let s = self.settings.read().await;
+            s.backups_location.clone()
+        };
+
+        let backups_path = Path::new(&backups_dir);
+        info!(path = %backups_path.display(), "Using backups location");
+
+        // Build options from params
+        ensure!(
+            params.backup_apk.unwrap_or(false)
+                || params.backup_data.unwrap_or(false)
+                || params.backup_obb.unwrap_or(false),
+            "No parts selected to backup"
+        );
+
+        let options = BackupOptions {
+            name_append: params.backup_name_append.clone(),
+            backup_apk: params.backup_apk.unwrap_or(false),
+            backup_data: params.backup_data.unwrap_or(false),
+            backup_obb: params.backup_obb.unwrap_or(false),
+        };
+
+        let maybe_created =
+            self.adb_handler.backup_app(&package_name, backups_path, &options).await?;
+
+        if maybe_created.is_none() {
+            let parts = [
+                if params.backup_data.unwrap_or(false) { Some("data") } else { None },
+                if params.backup_apk.unwrap_or(false) { Some("apk") } else { None },
+                if params.backup_obb.unwrap_or(false) { Some("obb") } else { None },
+            ]
+            .into_iter()
+            .flatten()
+            .collect::<Vec<_>>()
+            .join(", ");
+            return Err(anyhow!("Nothing to back up for this app (selected parts: {})", parts));
+        }
+
+        info!(
+            adb_permits_released = self.adb_semaphore.available_permits() + 1,
+            "Backup completed, releasing ADB semaphore"
+        );
+
+        Ok(())
+    }
+
+    #[instrument(skip(self, params, update_progress, token))]
+    async fn handle_restore(
+        &self,
+        params: TaskParams,
+        update_progress: &impl Fn(TaskStatus, f32, String),
+        token: CancellationToken,
+    ) -> Result<()> {
+        let backup_path = params.backup_path.context("Missing backup_path parameter")?;
+
+        info!(
+            backup_path = %backup_path,
+            adb_permits_available = self.adb_semaphore.available_permits(),
+            "Starting restore task"
+        );
+
+        update_progress(TaskStatus::Waiting, 0.0, "Waiting to start restore...".into());
+
+        let _permit = acquire_permit_or_cancel!(self.adb_semaphore, token, "ADB");
+        info!(
+            adb_permits_remaining = self.adb_semaphore.available_permits(),
+            "Acquired ADB semaphore for restore"
+        );
+
+        update_progress(TaskStatus::Running, 0.0, "Restoring backup...".into());
+
+        self.adb_handler.restore_backup(Path::new(&backup_path)).await?;
+
+        info!(
+            adb_permits_released = self.adb_semaphore.available_permits() + 1,
+            "Restore completed, releasing ADB semaphore"
+        );
+
+        Ok(())
+    }
 }
 
 fn send_progress(
@@ -768,7 +938,7 @@ fn send_progress(
                 progress = total_progress,
                 message = %message,
                 "Sending progress signal to Dart"
-            );
+            ); // FIXME: doesn't show up on logs screen?
         }
         TaskStatus::Running => {
             // Only log running status at major milestones to avoid log spam
@@ -808,7 +978,25 @@ fn get_task_name(task_type: TaskType, params: &TaskParams) -> Result<String> {
                 .to_string()
         }
         TaskType::Uninstall => {
-            params.package_name.as_ref().context("Missing package_name parameter")?.clone()
+            if let Some(name) = &params.display_name {
+                name.clone()
+            } else {
+                params.package_name.as_ref().context("Missing package_name parameter")?.clone()
+            }
+        }
+        TaskType::BackupApp => {
+            if let Some(name) = &params.display_name {
+                name.clone()
+            } else {
+                params.package_name.as_ref().context("Missing package_name parameter")?.clone()
+            }
+        }
+        TaskType::RestoreBackup => {
+            Path::new(&params.backup_path.as_ref().context("Missing backup_path parameter")?)
+                .file_name()
+                .unwrap_or_default()
+                .to_string_lossy()
+                .to_string()
         }
     })
 }

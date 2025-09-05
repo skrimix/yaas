@@ -949,7 +949,7 @@ impl AdbDevice {
 
     /// Creates a backup of the given package.
     /// Returns `Ok(Some(path))` if backup was created, `Ok(None)` if nothing to back up.
-    #[instrument(skip(self, backups_location, options), err)]
+    #[instrument(skip(self), err)]
     pub async fn backup_app(
         &self,
         package_name: &str,
@@ -964,7 +964,7 @@ impl AdbDevice {
         let fmt = format_description!("[year]-[month]-[day]_[hour]-[minute]-[second]");
         let now = OffsetDateTime::now_local().unwrap_or_else(|_| OffsetDateTime::now_utc());
         let timestamp = now.format(&fmt).unwrap_or_else(|_| "0000-00-00_00-00-00".into());
-        let mut directory_name = format!("{}_{}", timestamp, package_name);
+        let mut directory_name = format!("{}_{}", timestamp, package_name); // TODO: use (sanitized) display name instead
         if let Some(suffix) = &options.name_append
             && !suffix.is_empty()
         {
@@ -997,6 +997,7 @@ impl AdbDevice {
 
             // Private data via run-as
             // Pipe through tar because run-as has unusable permissions
+            debug!("Trying to backup private data");
             fs::create_dir_all(&private_data_backup_path).await?;
             let tmp_pkg = tmp_root.join(package_name);
             let cmd = format!(
@@ -1006,7 +1007,10 @@ impl AdbDevice {
                 pkg = package_name,
                 priv_path = private_data_path.display(),
             );
-            self.shell(&cmd).await?;
+            let cmd_output = self.shell(&cmd).await?;
+            if !cmd_output.is_empty() {
+                debug!("Command output: {}", cmd_output);
+            }
             self.pull_dir(&tmp_pkg, &private_data_backup_path).await?;
             let _ = self.shell("rm -rf /sdcard/backup_tmp/").await;
 
@@ -1041,6 +1045,8 @@ impl AdbDevice {
                     let _ = fs::remove_dir_all(&shared_data_backup_path).await;
                 }
                 backup_empty &= !has_shared_files;
+            } else {
+                debug!("No shared data directory found, skipping");
             }
         }
 
@@ -1053,17 +1059,21 @@ impl AdbDevice {
         }
 
         // Backup OBB
-        if options.backup_obb && self.dir_exists(&obb_path).await? {
-            debug!("Backing up OBB");
-            fs::create_dir_all(&obb_backup_path).await?;
-            self.pull_dir(&obb_path, &obb_backup_path).await?;
+        if options.backup_obb {
+            if self.dir_exists(&obb_path).await? {
+                debug!("Backing up OBB");
+                fs::create_dir_all(&obb_backup_path).await?;
+                self.pull_dir(&obb_path, &obb_backup_path).await?;
 
-            let has_obb_files = dir_has_any_files(&obb_backup_path).await?;
-            if !has_obb_files {
-                debug!("No files in pulled OBB, deleting");
-                let _ = fs::remove_dir_all(&obb_backup_path).await;
+                let has_obb_files = dir_has_any_files(&obb_backup_path).await?;
+                if !has_obb_files {
+                    debug!("No files in pulled OBB, deleting");
+                    let _ = fs::remove_dir_all(&obb_backup_path).await;
+                }
+                backup_empty &= !has_obb_files;
+            } else {
+                debug!("No OBB directory found, skipping");
             }
-            backup_empty &= !has_obb_files;
         }
 
         if backup_empty {

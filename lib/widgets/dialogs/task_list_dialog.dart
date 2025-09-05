@@ -57,6 +57,10 @@ class _TaskListDialogState extends State<TaskListDialog>
         return 'Install Local App';
       case TaskType.uninstall:
         return 'Uninstall';
+      case TaskType.backupApp:
+        return 'Backup App';
+      case TaskType.restoreBackup:
+        return 'Restore Backup';
     }
   }
 

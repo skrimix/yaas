@@ -65,7 +65,11 @@ async fn main() {
 
     let adb_handler = AdbHandler::new(WatchStream::new(settings_handler.subscribe())).await;
     let downloader = Downloader::new(WatchStream::new(settings_handler.subscribe())).await;
-    let _task_manager = TaskManager::new(adb_handler.clone(), downloader.clone());
+    let _task_manager = TaskManager::new(
+        adb_handler.clone(),
+        downloader.clone(),
+        WatchStream::new(settings_handler.subscribe()),
+    );
 
     // Log-related requests from Flutter
     SignalLayer::start_request_handler(app_dir.join("logs"));
@@ -96,6 +100,7 @@ fn setup_logging() -> Result<WorkerGuard> {
             tracing_subscriber::fmt::layer()
                 .with_ansi(false)
                 .with_writer(non_blocking)
+                // .with_span_events(FmtSpan::NEW | FmtSpan::CLOSE)
                 .event_format(fmt::format().pretty()),
         )
         .with(tracing_subscriber::filter::LevelFilter::DEBUG);

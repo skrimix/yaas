@@ -31,22 +31,29 @@ class _DragDropOverlayState extends State<DragDropOverlay> {
     for (final file in files) {
       final path = file.path;
       final isDirectory = FileSystemEntity.isDirectorySync(path);
+      final isBackup = isDirectory && SideloadUtils.isBackupDirectory(path);
 
       // Validate paths before proceeding
-      final isValid = isDirectory
-          ? SideloadUtils.isDirectoryValid(path)
-          : SideloadUtils.isValidApkFile(path);
+      final isValid = isBackup
+          ? true
+          : isDirectory
+              ? SideloadUtils.isDirectoryValid(path)
+              : SideloadUtils.isValidApkFile(path);
 
       if (!isValid) {
         final errorMessage = isDirectory
-            ? 'Dropped directory is not a valid app directory'
+            ? 'Dropped directory is not a valid app directory or backup folder'
             : 'Dropped file is not a valid APK file';
 
         SideloadUtils.showErrorToast(context, errorMessage);
         return;
       }
 
-      SideloadUtils.installApp(path, isDirectory);
+      if (isBackup) {
+        SideloadUtils.restoreBackup(path);
+      } else {
+        SideloadUtils.installApp(path, isDirectory);
+      }
     }
   }
 
@@ -95,7 +102,7 @@ class _DragDropOverlayState extends State<DragDropOverlay> {
                             const SizedBox(height: 16),
                             Text(
                               deviceState.isConnected
-                                  ? 'Drop to Install'
+                                  ? 'Drop to Install / Restore'
                                   : 'No Device Connected',
                               style: Theme.of(context)
                                   .textTheme

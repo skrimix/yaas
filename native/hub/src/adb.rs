@@ -16,7 +16,7 @@ use tokio_util::sync::CancellationToken;
 use tracing::{Instrument, Span, debug, error, info, info_span, instrument, trace, warn};
 
 use crate::{
-    adb::device::SideloadProgress,
+    adb::device::{BackupOptions, SideloadProgress},
     models::{
         AdbState, Settings,
         signals::{
@@ -614,6 +614,29 @@ impl AdbHandler {
         let device = self.current_device().await?;
         let device_clone = (*device).clone();
         let result = device_clone.sideload_app(app_path, progress_sender).await;
+        self.refresh_device().await?;
+        result
+    }
+
+    /// Creates a backup of an app on the currently connected device
+    #[instrument(skip(self))]
+    pub async fn backup_app(
+        &self,
+        package_name: &str,
+        backups_location: &Path,
+        options: &BackupOptions,
+    ) -> Result<Option<std::path::PathBuf>> {
+        let device = self.current_device().await?;
+        let device_clone = (*device).clone();
+        device_clone.backup_app(package_name, backups_location, options).await
+    }
+
+    /// Restores a backup to the currently connected device
+    #[instrument(skip(self))]
+    pub async fn restore_backup(&self, backup_path: &Path) -> Result<()> {
+        let device = self.current_device().await?;
+        let device_clone = (*device).clone();
+        let result = device_clone.restore_backup(backup_path).await;
         self.refresh_device().await?;
         result
     }

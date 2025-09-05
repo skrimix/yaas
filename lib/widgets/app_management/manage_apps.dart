@@ -8,6 +8,7 @@ import '../../providers/cloud_apps_state.dart';
 import '../../src/bindings/bindings.dart';
 import '../common/animated_adb_button.dart';
 import '../dialogs/animated_uninstall_dialog.dart';
+import '../dialogs/backup_options_dialog.dart';
 
 class ManageApps extends StatefulWidget {
   const ManageApps({super.key});
@@ -493,6 +494,19 @@ class _ManageAppsState extends State<ManageApps> {
                               commandKey: app.packageName)
                           .sendSignalToRust();
                     },
+                  ),
+                  Tooltip(
+                    message: 'Backup App',
+                    child: IconButton(
+                      icon: const Icon(Icons.archive_outlined),
+                      tooltip: 'Backup',
+                      onPressed: () {
+                        showDialog(
+                          context: context,
+                          builder: (context) => BackupOptionsDialog(app: app),
+                        );
+                      },
+                    ),
                   ),
                   IconButton(
                     icon: const Icon(Icons.delete_outline),

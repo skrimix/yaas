@@ -11,6 +11,8 @@ pub enum TaskType {
     InstallApk,
     InstallLocalApp,
     Uninstall,
+    BackupApp,
+    RestoreBackup,
 }
 
 impl Display for TaskType {
@@ -21,6 +23,8 @@ impl Display for TaskType {
             TaskType::InstallApk => write!(f, "Install APK"),
             TaskType::InstallLocalApp => write!(f, "Install Local App"),
             TaskType::Uninstall => write!(f, "Uninstall"),
+            TaskType::BackupApp => write!(f, "Backup App"),
+            TaskType::RestoreBackup => write!(f, "Restore Backup"),
         }
     }
 }
@@ -34,12 +38,22 @@ pub enum TaskStatus {
     Cancelled,
 }
 
+// TODO: make enum?
 #[derive(Clone, Serialize, Deserialize, Debug, SignalPiece)]
 pub struct TaskParams {
     pub cloud_app_full_name: Option<String>,
     pub apk_path: Option<String>,
     pub local_app_path: Option<String>,
     pub package_name: Option<String>,
+    /// Path to a backup directory (contains a `.backup` marker)
+    pub backup_path: Option<String>,
+    /// Backup options
+    pub backup_apk: Option<bool>,
+    pub backup_data: Option<bool>,
+    pub backup_obb: Option<bool>,
+    pub backup_name_append: Option<String>,
+    /// Human-friendly name to use for task name (e.g. app label)
+    pub display_name: Option<String>,
 }
 
 #[derive(Serialize, Deserialize, DartSignal)]

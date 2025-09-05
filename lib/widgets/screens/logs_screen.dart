@@ -1060,6 +1060,14 @@ class _LogsScreenState extends State<LogsScreen> {
       return '<$spanName return: ${log.fields!['return']!}>';
     }
 
+    // Handle error events specially
+    if (log.message.isEmpty && log.fields?.containsKey('error') == true) {
+      final spanName = log.spanTrace?.spans.isNotEmpty == true
+          ? '${log.spanTrace!.spans.last.target}::${log.spanTrace!.spans.last.name}'
+          : 'unknown';
+      return '<$spanName error: ${log.fields!['error']!}>';
+    }
+
     // Handle span events using structured kind
     switch (log.kind) {
       case LogKind.spanNew:

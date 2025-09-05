@@ -1,6 +1,7 @@
 use std::{
     collections::BTreeMap,
     path::PathBuf,
+    sync::atomic::{AtomicU64, Ordering},
     time::{Duration, SystemTime, UNIX_EPOCH},
 };
 
@@ -20,12 +21,17 @@ use crate::models::signals::logging::{
 /// Cached span field information stored in span extensions
 #[derive(Clone, Debug)]
 struct CachedSpanFields {
+    /// Stable ID assigned by this layer
+    id: String,
+    /// Parameters captured from the span fields
     parameters: BTreeMap<String, String>,
 }
 
 /// A custom tracing layer that forwards log events to Flutter via Rinf signals
 pub struct SignalLayer {
     sender: Sender<LogEntry>,
+    /// Counter for assigning stable span IDs
+    span_id_counter: AtomicU64,
 }
 
 impl SignalLayer {
@@ -37,7 +43,7 @@ impl SignalLayer {
     pub fn new() -> (Self, Receiver<LogEntry>) {
         // Use bounded channel with capacity of 1000 entries
         let (sender, receiver) = mpsc::channel(1000);
-        let layer = Self { sender };
+        let layer = Self { sender, span_id_counter: AtomicU64::new(1) };
         (layer, receiver)
     }
 
@@ -120,13 +126,20 @@ impl SignalLayer {
                     let target = span.metadata().target().to_string();
 
                     // Get cached parameters
-                    let parameters = span
-                        .extensions()
-                        .get::<CachedSpanFields>()
-                        .map(|cached| cached.parameters.clone())
-                        .filter(|params| !params.is_empty());
+                    let (id, parameters) =
+                        if let Some(cached) = span.extensions().get::<CachedSpanFields>() {
+                            let params = if cached.parameters.is_empty() {
+                                None
+                            } else {
+                                Some(cached.parameters.clone())
+                            };
+                            (cached.id.clone(), params)
+                        } else {
+                            // Fallback if extensions missing
+                            (format!("{:?}", span.id()), None)
+                        };
 
-                    spans.push(SpanInfo { name, target, parameters });
+                    spans.push(SpanInfo { id, name, target, parameters });
                 }
 
                 if !spans.is_empty() { Some(SpanTrace { spans }) } else { None }
@@ -154,14 +167,20 @@ impl SignalLayer {
                 let name = span.name().to_string();
                 let target = span.metadata().target().to_string();
 
-                // Get cached parameters
-                let parameters = span
-                    .extensions()
-                    .get::<CachedSpanFields>()
-                    .map(|cached| cached.parameters.clone())
-                    .filter(|params| !params.is_empty());
+                // Get cached id + parameters
+                let (id, parameters) =
+                    if let Some(cached) = span.extensions().get::<CachedSpanFields>() {
+                        let params = if cached.parameters.is_empty() {
+                            None
+                        } else {
+                            Some(cached.parameters.clone())
+                        };
+                        (cached.id.clone(), params)
+                    } else {
+                        (format!("{:?}", span.id()), None)
+                    };
 
-                spans.push(SpanInfo { name, target, parameters });
+                spans.push(SpanInfo { id, name, target, parameters });
             }
 
             if !spans.is_empty() { Some(SpanTrace { spans }) } else { None }
@@ -220,10 +239,12 @@ where
             let mut visitor = FieldVisitor::new();
             attrs.record(&mut visitor);
 
-            if !visitor.fields.is_empty() {
-                let cached_fields = CachedSpanFields { parameters: visitor.fields.clone() };
-                span.extensions_mut().insert(cached_fields);
-            }
+            // Assign a stable ID and cache fields for this span
+            let next_id = self.span_id_counter.fetch_add(1, Ordering::Relaxed);
+            let span_id_str = format!("{:016x}", next_id);
+            let cached_fields =
+                CachedSpanFields { id: span_id_str, parameters: visitor.fields.clone() };
+            span.extensions_mut().insert(cached_fields);
 
             let mut fields = BTreeMap::new();
             if let (Some(file), Some(line)) = (attrs.metadata().file(), attrs.metadata().line()) {

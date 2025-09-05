@@ -121,7 +121,7 @@ class _LogsScreenState extends State<LogsScreen> {
       builder: (context, logState, child) {
         return Tooltip(
           message:
-              'Search logs by level, message, or target. Examples: "error", "info", "adb", "connect"',
+              'Search logs by level, message, target, or span id. Examples: "error", "info", "adb", "connect", "13"',
           child: TextField(
             controller: _searchController,
             decoration: InputDecoration(
@@ -552,7 +552,7 @@ class _LogsScreenState extends State<LogsScreen> {
       builder: (context) => AlertDialog(
         title: Text('Log Entry - ${log.levelString}'),
         content: SizedBox(
-          width: double.maxFinite,
+          width: 800,
           child: SingleChildScrollView(
             child: Column(
               crossAxisAlignment: CrossAxisAlignment.start,
@@ -647,9 +647,10 @@ class _LogsScreenState extends State<LogsScreen> {
                         .map((e) => '${e.key}=${e.value}')
                         .join(' ');
                     buffer.writeln(
-                        '  ${isLast ? '└─' : '├─'} $spanName with $params');
+                        '  ${isLast ? '└─' : '├─'} $spanName [id: ${span.id}] with $params');
                   } else {
-                    buffer.writeln('  ${isLast ? '└─' : '├─'} $spanName');
+                    buffer.writeln(
+                        '  ${isLast ? '└─' : '├─'} $spanName [id: ${span.id}]');
                   }
                 }
               }
@@ -836,16 +837,24 @@ class _LogsScreenState extends State<LogsScreen> {
     return Column(
       crossAxisAlignment: CrossAxisAlignment.start,
       children: [
-        // Function name with return value if applicable
+        // Top row: function name (and "returned" marker) with span ID + filter button on the right
         if (hasReturnValue) ...[
-          SelectableText(
-            '$functionName returned:',
-            style: TextStyle(
-              fontFamily: 'monospace',
-              fontSize: 12,
-              color: Theme.of(context).colorScheme.onSurface,
-              fontWeight: FontWeight.w600,
-            ),
+          Row(
+            crossAxisAlignment: CrossAxisAlignment.start,
+            children: [
+              Expanded(
+                child: SelectableText(
+                  '$functionName returned:',
+                  style: TextStyle(
+                    fontFamily: 'monospace',
+                    fontSize: 12,
+                    color: Theme.of(context).colorScheme.onSurface,
+                    fontWeight: FontWeight.w600,
+                  ),
+                ),
+              ),
+              _buildSpanIdActions(span.id),
+            ],
           ),
           const SizedBox(height: 4),
           Padding(
@@ -877,15 +886,23 @@ class _LogsScreenState extends State<LogsScreen> {
             ),
           ),
         ] else ...[
-          // Regular function name
-          SelectableText(
-            functionName,
-            style: TextStyle(
-              fontFamily: 'monospace',
-              fontSize: 12,
-              color: Theme.of(context).colorScheme.onSurface,
-              fontWeight: isLast ? FontWeight.w600 : FontWeight.w500,
-            ),
+          // Regular function name with trailing span ID + filter button
+          Row(
+            crossAxisAlignment: CrossAxisAlignment.start,
+            children: [
+              Expanded(
+                child: SelectableText(
+                  functionName,
+                  style: TextStyle(
+                    fontFamily: 'monospace',
+                    fontSize: 12,
+                    color: Theme.of(context).colorScheme.onSurface,
+                    fontWeight: isLast ? FontWeight.w600 : FontWeight.w500,
+                  ),
+                ),
+              ),
+              _buildSpanIdActions(span.id),
+            ],
           ),
         ],
         if (span.parameters?.isNotEmpty == true) ...[
@@ -1086,5 +1103,68 @@ class _LogsScreenState extends State<LogsScreen> {
 
   String _formatTimestampDetailed(DateTime timestamp) {
     return DateFormat('yyyy-MM-dd HH:mm:ss.SSS').format(timestamp);
+  }
+
+  // Small span ID label + filter button used in details view
+  Widget _buildSpanIdActions(String spanId) {
+    final displayId = _shortenSpanId(spanId);
+    return Row(
+      mainAxisSize: MainAxisSize.min,
+      children: [
+        Tooltip(
+          message: 'Span ID',
+          child: Container(
+            padding: const EdgeInsets.symmetric(horizontal: 6, vertical: 2),
+            decoration: BoxDecoration(
+              color: Theme.of(context)
+                  .colorScheme
+                  .surfaceContainerHigh
+                  .withValues(alpha: 0.4),
+              borderRadius: BorderRadius.circular(4),
+              border: Border.all(
+                color: Theme.of(context)
+                    .colorScheme
+                    .outline
+                    .withValues(alpha: 0.2),
+              ),
+            ),
+            child: SelectableText(
+              displayId,
+              style: TextStyle(
+                fontFamily: 'monospace',
+                fontSize: 10,
+                color: Theme.of(context).colorScheme.outline,
+              ),
+            ),
+          ),
+        ),
+        const SizedBox(width: 6),
+        Tooltip(
+          message: 'Filter logs by this span ID',
+          child: IconButton(
+            icon: const Icon(Icons.filter_alt),
+            visualDensity: VisualDensity.compact,
+            onPressed: () {
+              // Set the search field to the span id and apply filter
+              final logState = context.read<LogState>();
+              _searchController.text = spanId;
+              logState.setSearchQuery(spanId);
+              // Close the dialog to show filtered results immediately
+              Navigator.of(context).pop();
+            },
+          ),
+        ),
+      ],
+    );
+  }
+
+  // Truncate span ID label to last 8 chars if first 8 are zeroes
+  String _shortenSpanId(String id) {
+    if (id.length >= 8 && id.substring(0, 8) == '00000000') {
+      // Return the last 8 characters
+      final start = id.length >= 8 ? id.length - 8 : 0;
+      return id.substring(start);
+    }
+    return id;
   }
 }

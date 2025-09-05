@@ -71,10 +71,11 @@ class LogInfo {
       }
     }
 
-    // Search in span trace parameters
+    // Search in span trace metadata and parameters (including span ID)
     if (spanTrace != null) {
       for (final span in spanTrace!.spans) {
-        if (span.name.toLowerCase().contains(lowerQuery) ||
+        if (span.id.toLowerCase().contains(lowerQuery) ||
+            span.name.toLowerCase().contains(lowerQuery) ||
             span.target.toLowerCase().contains(lowerQuery)) {
           return true;
         }

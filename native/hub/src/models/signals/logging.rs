@@ -46,6 +46,8 @@ impl From<LogLevel> for Level {
 
 #[derive(Clone, Debug, Serialize, Deserialize, SignalPiece)]
 pub struct SpanInfo {
+    /// Stable identifier assigned by the backend for this span instance
+    pub id: String,
     pub name: String,
     pub target: String,
     pub parameters: Option<BTreeMap<String, String>>,

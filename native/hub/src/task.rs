@@ -263,12 +263,6 @@ impl TaskManager {
 
         update_progress(TaskStatus::Waiting, 0.0, "Starting...".into());
 
-        info!(
-            task_id = id,
-            task_name = %task_name,
-            "Task entering execution phase"
-        );
-
         Toast::send(
             task_name.clone(),
             format!("{task_type}: starting"),

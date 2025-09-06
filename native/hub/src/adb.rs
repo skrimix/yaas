@@ -33,11 +33,7 @@ pub static PACKAGE_NAME_REGEX: Lazy<Regex> = lazy_regex!(r"^(?:[A-Za-z]{1}[\w]*\
 
 /// Validates a package name and returns an error if invalid
 pub fn ensure_valid_package(package_name: &str) -> Result<()> {
-    ensure!(
-        PACKAGE_NAME_REGEX.is_match(package_name),
-        "Invalid package name format: '{}'",
-        package_name
-    );
+    ensure!(PACKAGE_NAME_REGEX.is_match(package_name), "Invalid package name: '{}'", package_name);
     Ok(())
 }
 

@@ -156,7 +156,7 @@ impl AdbDevice {
             shell_output.rsplit_once('\n').context("Failed to extract exit code")?;
         if exit_code != "0" {
             error!(exit_code, output, "Shell command returned non-zero exit code");
-            bail!("Command {command} failed with exit code {exit_code}");
+            bail!("Command {command} failed with exit code {exit_code}. Output: {output}");
         }
         Ok(output.to_string())
     }
@@ -454,8 +454,7 @@ impl AdbDevice {
         let dest_path = self.resolve_push_dest_path(source, dest).await?;
         if overwrite {
             debug!(path = %dest_path.display(), "Cleaning up destination directory");
-            let output = self.shell(&format!("rm -rf '{}'", dest_path.display())).await?;
-            debug!(output, "Cleaned up destination directory");
+            self.shell(&format!("rm -rf '{}'", dest_path.display())).await?;
         }
         info!(source = %source.display(), dest = %dest_path.display(), "Pushing directory");
         Box::pin(self.inner.push_dir(source, &dest_path, 0o777))
@@ -488,8 +487,7 @@ impl AdbDevice {
         // debug!(source = %source.display(), dest = %dest_path.display(), overwrite, "Pushing directory with progress");
         if overwrite {
             debug!(path = %dest_path.display(), "Cleaning up destination directory");
-            let output = self.shell(&format!("rm -rf '{}'", dest_path.display())).await?;
-            debug!(output, "Cleaned up destination directory");
+            self.shell(&format!("rm -rf '{}'", dest_path.display())).await?;
         }
         Box::pin(self.inner.push_dir_with_progress(source, &dest_path, 0o777, progress_sender))
             .await
@@ -924,13 +922,13 @@ impl AdbDevice {
         match self.inner.stat(path).await {
             Ok(stat) => Ok(stat.file_mode == UnixFileStatus::Directory),
             Err(e) => {
-                trace!(error = %e, path = %path.display(), "dir_exists: stat failed");
+                trace!(error = %e, path = %path.display(), "stat failed");
                 Ok(false)
             }
         }
     }
 
-    /// Gets the first APK path reported by `pm path <package>`
+    /// Gets APK path reported by `pm path <package>`
     #[instrument(skip(self), err)]
     async fn get_apk_path(&self, package_name: &str) -> Result<String> {
         ensure_valid_package(package_name)?;
@@ -960,6 +958,11 @@ impl AdbDevice {
         options: &BackupOptions,
     ) -> Result<Option<PathBuf>> {
         // TODO: add a test for this
+
+        // TODO: Restrict recursive deletions to the backup directory
+        // Take backup_path as an argument to the macro
+        // macro_rules! delete_dir {
+
         ensure_valid_package(package_name)?;
         ensure!(backups_location.is_dir(), "Backups location must be a directory");
 
@@ -1010,7 +1013,7 @@ impl AdbDevice {
             }
 
             // Private data via run-as
-            // Pipe through tar because run-as has unusable permissions
+            // Pipe through tar because run-as has weird permissions
             debug!("Trying to backup private data");
             fs::create_dir_all(&private_data_backup_path).await?;
             let tmp_pkg = tmp_root.join(package_name);
@@ -1049,7 +1052,6 @@ impl AdbDevice {
 
                 let shared_pkg_dir = shared_data_backup_path.join(package_name);
                 if shared_pkg_dir.is_dir() {
-                    let shared_pkg_dir = shared_data_backup_path.join(package_name);
                     let _ = remove_child_dir_if_exists(&shared_pkg_dir, "cache").await;
                 }
 
@@ -1113,12 +1115,11 @@ impl AdbDevice {
         let private_data_backup_path = backup_path.join("data_private");
         let obb_backup_path = backup_path.join("obb");
 
-        let mut restored_apk = false;
-
         // Restore APK
         {
             let mut apk_candidate: Option<PathBuf> = None;
             if backup_path.is_dir() {
+                // TODO: use glob
                 let mut rd = fs::read_dir(backup_path).await?;
                 while let Some(entry) = rd.next_entry().await? {
                     if entry
@@ -1132,11 +1133,7 @@ impl AdbDevice {
                     }
                 }
             }
-            if let Some(apk) = apk_candidate {
-                info!(apk = %apk.display(), "Restoring APK");
-                self.install_apk(&apk).await?;
-                restored_apk = true;
-            } else {
+            if apk_candidate.is_none() {
                 // If there is no APK in the backup, ensure the app is already installed
                 // Try to infer the package name from any backup subfolder (private/shared/obb)
                 let mut candidate_pkg: Option<String> = None;
@@ -1144,6 +1141,7 @@ impl AdbDevice {
                     if dir.is_dir()
                         && let Some(sub) = first_subdirectory(dir).await?
                         && let Some(name) = sub.file_name().and_then(|n| n.to_str())
+                        && PACKAGE_NAME_REGEX.is_match(name)
                     {
                         candidate_pkg = Some(name.to_string());
                         break;
@@ -1161,11 +1159,16 @@ impl AdbDevice {
                          the package name"
                     );
                 }
+            } else {
+                let apk = apk_candidate.unwrap();
+                info!(apk = %apk.display(), "Restoring APK");
+                self.install_apk(&apk).await?;
             }
         }
 
         // Restore OBB
         if obb_backup_path.is_dir()
+            // TODO: here and below, ensure there's a single valid directory
             && let Some(pkg_dir) = first_subdirectory(&obb_backup_path).await?
         {
             debug!("Restoring OBB");
@@ -1197,7 +1200,7 @@ impl AdbDevice {
             self.shell("mkdir -p /sdcard/restore_tmp/").await?;
             self.push_dir(&pkg_dir, UnixPath::new("/sdcard/restore_tmp/"), false).await?;
 
-            // Pipe through tar because run-as has unusable permissions
+            // Pipe through tar because run-as has weird permissions
             let cmd = format!(
                 "tar -cf - -C '/sdcard/restore_tmp/{pkg}/' . | run-as {pkg} tar -xvf - -C \
                  '/data/data/{pkg}/'; rm -rf /sdcard/restore_tmp/",
@@ -1207,8 +1210,6 @@ impl AdbDevice {
         }
 
         info!("Backup restored successfully");
-        // TODO: Caller can refresh package list if needed
-        let _ = restored_apk; // suppress unused var if not used soon
         Ok(())
     }
 }
@@ -1231,10 +1232,4 @@ pub struct BackupOptions {
     pub backup_data: bool,
     /// Should backup OBB files
     pub backup_obb: bool,
-}
-
-impl BackupOptions {
-    pub fn default_data_only() -> Self {
-        Self { name_append: None, backup_apk: false, backup_data: true, backup_obb: false }
-    }
 }

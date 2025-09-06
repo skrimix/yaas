@@ -23,7 +23,7 @@ class _LogsScreenState extends State<LogsScreen> {
   void initState() {
     super.initState();
 
-    // Detect if user scrolled up (disables auto-scroll until scrolled to bottom)
+    // Disable auto-scroll automatically when scrolling up
     _scrollController.addListener(() {
       final isAtBottom = _scrollController.offset >=
           _scrollController.position.maxScrollExtent - 100;
@@ -66,7 +66,7 @@ class _LogsScreenState extends State<LogsScreen> {
       // Only auto-scroll when user is at bottom
       WidgetsBinding.instance.addPostFrameCallback((_) {
         if (_scrollController.hasClients) {
-          // Note: animating here breaks _isAtBottom detection on high-rate events
+          // Note: there was an attempt to animate here, but it broke _isAtBottom detection on high-rate events
           _scrollController.jumpTo(_scrollController.position.maxScrollExtent);
         }
       });
@@ -78,11 +78,8 @@ class _LogsScreenState extends State<LogsScreen> {
     return Scaffold(
       body: Column(
         children: [
-          // Header with controls
           _buildHeader(),
-          // Log viewer
           Expanded(child: _buildLogViewer()),
-          // Footer with status
           _buildFooter(),
         ],
       ),
@@ -102,7 +99,7 @@ class _LogsScreenState extends State<LogsScreen> {
       ),
       child: Column(
         children: [
-          // Top row: search and controls
+          // Top row
           Row(
             children: [
               Expanded(child: _buildSearchField()),
@@ -111,7 +108,7 @@ class _LogsScreenState extends State<LogsScreen> {
             ],
           ),
           const SizedBox(height: 8),
-          // Bottom row: filter chips
+          // Bottom row
           _buildFilterChips(),
         ],
       ),
@@ -294,7 +291,7 @@ class _LogsScreenState extends State<LogsScreen> {
                           : Theme.of(context).colorScheme.outline,
                     ),
                     const SizedBox(width: 4),
-                    // TODO: add a setting for not recording span events
+                    // TODO: add a setting for not recording span events?
                     Text(
                       'SPANS',
                       style: TextStyle(
@@ -566,7 +563,6 @@ class _LogsScreenState extends State<LogsScreen> {
                 _buildDetailRow('Target', log.target),
                 _buildDetailRow('Message', log.message),
 
-                // Show location information as a normal property
                 if (log.fields?.containsKey('location') == true)
                   _buildDetailRow('Location', log.fields!['location']!),
 
@@ -1015,7 +1011,7 @@ class _LogsScreenState extends State<LogsScreen> {
           buffer.writeln('  $key: $value');
         });
       }
-      buffer.writeln(); // Add empty line between entries
+      buffer.writeln();
     }
 
     Clipboard.setData(ClipboardData(text: buffer.toString()));
@@ -1151,7 +1147,7 @@ class _LogsScreenState extends State<LogsScreen> {
               final logState = context.read<LogState>();
               _searchController.text = spanId;
               logState.setSearchQuery(spanId);
-              // Close the dialog to show filtered results immediately
+
               Navigator.of(context).pop();
             },
           ),
@@ -1163,7 +1159,6 @@ class _LogsScreenState extends State<LogsScreen> {
   // Truncate span ID label to last 8 chars if first 8 are zeroes
   String _shortenSpanId(String id) {
     if (id.length >= 8 && id.substring(0, 8) == '00000000') {
-      // Return the last 8 characters
       final start = id.length >= 8 ? id.length - 8 : 0;
       return id.substring(start);
     }

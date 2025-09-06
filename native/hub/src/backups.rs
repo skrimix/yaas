@@ -37,81 +37,88 @@ impl BackupsHandler {
                     info!(dir = %settings.backups_location, "Backups location updated");
                     *handler.backups_dir.write().await = PathBuf::from(settings.backups_location);
                 }
+                panic!("Settings stream closed for BackupsHandler");
             });
         }
 
-        // Start request receivers
+        // Start signal receivers
         {
             let handler = handler.clone();
-            tokio::spawn(async move { handler.receive_list_requests().await });
-        }
-        {
-            let handler = handler.clone();
-            tokio::spawn(async move { handler.receive_delete_requests().await });
-        }
-
-        {
-            let handler = handler.clone();
-            tokio::spawn(async move { handler.receive_get_dir_requests().await });
+            tokio::spawn(async move { handler.receive_signals().await });
         }
 
         handler
     }
 
     #[instrument(skip(self))]
-    async fn receive_list_requests(self: Arc<Self>) {
-        let receiver = GetBackupsRequest::get_dart_signal_receiver();
-        while let Some(_signal) = receiver.recv().await {
-            debug!("Received GetBackupsRequest");
-            match self.list_backups().await {
-                Ok(mut entries) => {
-                    // Newest first
-                    entries.sort_by(|a, b| b.timestamp.cmp(&a.timestamp));
-                    GetBackupsResponse { entries, error: None }.send_signal_to_dart();
+    async fn receive_signals(self: Arc<Self>) {
+        let list_receiver = GetBackupsRequest::get_dart_signal_receiver();
+        let delete_receiver = DeleteBackupRequest::get_dart_signal_receiver();
+        let get_dir_receiver = GetBackupsDirectoryRequest::get_dart_signal_receiver();
+
+        loop {
+            tokio::select! {
+                // Handle list backup requests
+                signal = list_receiver.recv() => {
+                    if let Some(_signal) = signal {
+                        debug!("Received GetBackupsRequest");
+                        match self.list_backups().await {
+                            Ok(mut entries) => {
+                                // Newest first
+                                entries.sort_by(|a, b| b.timestamp.cmp(&a.timestamp));
+                                GetBackupsResponse { entries, error: None }.send_signal_to_dart();
+                            }
+                            Err(e) => {
+                                error!(error = %format!("{e:#}"), "Failed to list backups");
+                                GetBackupsResponse { entries: vec![], error: Some(format!("{e:#}")) }
+                                    .send_signal_to_dart();
+                            }
+                        }
+                    } else {
+                        error!("GetBackupsRequest receiver ended");
+                        break;
+                    }
                 }
-                Err(e) => {
-                    error!(error = %format!("{e:#}"), "Failed to list backups");
-                    GetBackupsResponse { entries: vec![], error: Some(format!("{e:#}")) }
-                        .send_signal_to_dart();
+
+                // Handle delete backup requests
+                request = delete_receiver.recv() => {
+                    if let Some(request) = request {
+                        let path = request.message.path.clone();
+                        debug!(%path, "Received DeleteBackupRequest");
+                        let result = self.delete_backup(Path::new(&path)).await;
+                        match result {
+                            Ok(()) => {
+                                info!(%path, "Deleted backup successfully");
+                                DeleteBackupResponse { path, error: None }.send_signal_to_dart();
+                                BackupsChanged {}.send_signal_to_dart();
+                            }
+                            Err(e) => {
+                                error!(%path, error = %format!("{e:#}"), "Failed to delete backup");
+                                DeleteBackupResponse { path, error: Some(format!("{e:#}")) }
+                                    .send_signal_to_dart();
+                            }
+                        }
+                    } else {
+                        error!("DeleteBackupRequest receiver ended");
+                        break;
+                    }
+                }
+
+                // Handle get directory requests
+                _request = get_dir_receiver.recv() => {
+                    if let Some(_request) = _request {
+                        let dir = self.backups_dir.read().await.clone();
+                        debug!(dir = %dir.display(), "Sending backups directory path");
+                        GetBackupsDirectoryResponse { path: dir.to_string_lossy().into_owned() }
+                            .send_signal_to_dart();
+                    } else {
+                        error!("GetBackupsDirectoryRequest receiver ended");
+                        break;
+                    }
                 }
             }
         }
-        panic!("GetBackupsRequest receiver loop ended");
-    }
-
-    #[instrument(skip(self))]
-    async fn receive_delete_requests(self: Arc<Self>) {
-        let receiver = DeleteBackupRequest::get_dart_signal_receiver();
-        while let Some(request) = receiver.recv().await {
-            let path = request.message.path.clone();
-            debug!(%path, "Received DeleteBackupRequest");
-            let result = self.delete_backup(Path::new(&path)).await;
-            match result {
-                Ok(()) => {
-                    info!(%path, "Deleted backup successfully");
-                    DeleteBackupResponse { path, error: None }.send_signal_to_dart();
-                    BackupsChanged {}.send_signal_to_dart();
-                }
-                Err(e) => {
-                    error!(%path, error = %format!("{e:#}"), "Failed to delete backup");
-                    DeleteBackupResponse { path, error: Some(format!("{e:#}")) }
-                        .send_signal_to_dart();
-                }
-            }
-        }
-        panic!("DeleteBackupRequest receiver loop ended");
-    }
-
-    #[instrument(skip(self))]
-    async fn receive_get_dir_requests(self: Arc<Self>) {
-        let receiver = GetBackupsDirectoryRequest::get_dart_signal_receiver();
-        while let Some(_request) = receiver.recv().await {
-            let dir = self.backups_dir.read().await.clone();
-            debug!(dir = %dir.display(), "Sending backups directory path");
-            GetBackupsDirectoryResponse { path: dir.to_string_lossy().into_owned() }
-                .send_signal_to_dart();
-        }
-        panic!("GetBackupsDirectoryRequest receiver loop ended");
+        panic!("BackupsHandler signal receiver loop ended");
     }
 
     #[instrument(skip(self), err)]
@@ -126,6 +133,7 @@ impl BackupsHandler {
         );
 
         let mut entries = Vec::new();
+        // TODO: use glob
         let mut rd = fs::read_dir(dir_path).await?;
         while let Some(item) = rd.next_entry().await? {
             let path = item.path();

@@ -24,8 +24,8 @@ static GLOBAL: MiMalloc = MiMalloc;
 rinf::write_interface!();
 
 pub mod adb;
-pub mod downloader;
 pub mod backups;
+pub mod downloader;
 pub mod logging;
 pub mod models;
 pub mod settings;
@@ -73,7 +73,8 @@ async fn main() {
     );
 
     // Backups-related requests
-    let _backups_handler = backups::BackupsHandler::start(WatchStream::new(settings_handler.subscribe()));
+    let _backups_handler =
+        backups::BackupsHandler::start(WatchStream::new(settings_handler.subscribe()));
 
     // Log-related requests from Flutter
     SignalLayer::start_request_handler(app_dir.join("logs"));

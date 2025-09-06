@@ -25,8 +25,8 @@ use crate::{
     models::{
         Settings,
         signals::{
-            system::Toast,
             backups::BackupsChanged,
+            system::Toast,
             task::{
                 TaskCancelRequest, TaskParams, TaskProgress, TaskRequest, TaskStatus, TaskType,
             },
@@ -315,10 +315,6 @@ impl TaskManager {
                 );
                 update_progress(TaskStatus::Completed, 1.0, "Done".into());
                 Toast::send(task_name, format!("{task_type}: completed"), false, None);
-                if matches!(task_type, TaskType::BackupApp) {
-                    debug!("Emitting BackupsChanged after backup completion");
-                    BackupsChanged {}.send_signal_to_dart();
-                }
             }
             Err(e) => {
                 if token.is_cancelled() {
@@ -800,6 +796,12 @@ impl TaskManager {
     ) -> Result<()> {
         let package_name = params.package_name.context("Missing package_name parameter")?;
 
+        let backup_apk = params.backup_apk.unwrap_or(false);
+        let backup_data = params.backup_data.unwrap_or(false);
+        let backup_obb = params.backup_obb.unwrap_or(false);
+
+        ensure!(backup_apk || backup_data || backup_obb, "No parts selected to backup");
+
         info!(
             package_name = %package_name,
             adb_permits_available = self.adb_semaphore.available_permits(),
@@ -814,23 +816,17 @@ impl TaskManager {
             "Acquired ADB semaphore for backup"
         );
 
-        let mut progress_msg = String::from("Creating backup...");
-        if params.backup_data.unwrap_or(false)
-            || params.backup_apk.unwrap_or(false)
-            || params.backup_obb.unwrap_or(false)
-        {
-            let parts = [
-                if params.backup_data.unwrap_or(false) { Some("data") } else { None },
-                if params.backup_apk.unwrap_or(false) { Some("apk") } else { None },
-                if params.backup_obb.unwrap_or(false) { Some("obb") } else { None },
-            ]
-            .into_iter()
-            .flatten()
-            .collect::<Vec<_>>()
-            .join(", ");
-            progress_msg = format!("Creating backup ({parts})...");
-        }
-        update_progress(TaskStatus::Running, 0.0, progress_msg);
+        let parts = [
+            if backup_data { Some("data") } else { None },
+            if backup_apk { Some("apk") } else { None },
+            if backup_obb { Some("obb") } else { None },
+        ]
+        .into_iter()
+        .flatten()
+        .collect::<Vec<_>>()
+        .join(", ");
+
+        update_progress(TaskStatus::Running, 0.0, format!("Creating backup ({parts})..."));
 
         let backups_dir = {
             let s = self.settings.read().await;
@@ -841,18 +837,11 @@ impl TaskManager {
         info!(path = %backups_path.display(), "Using backups location");
 
         // Build options from params
-        ensure!(
-            params.backup_apk.unwrap_or(false)
-                || params.backup_data.unwrap_or(false)
-                || params.backup_obb.unwrap_or(false),
-            "No parts selected to backup"
-        );
-
         let options = BackupOptions {
             name_append: params.backup_name_append.clone(),
-            backup_apk: params.backup_apk.unwrap_or(false),
-            backup_data: params.backup_data.unwrap_or(false),
-            backup_obb: params.backup_obb.unwrap_or(false),
+            backup_apk,
+            backup_data,
+            backup_obb,
         };
 
         let maybe_created = self
@@ -860,23 +849,18 @@ impl TaskManager {
             .backup_app(&package_name, params.display_name.as_deref(), backups_path, &options)
             .await?;
 
-        if maybe_created.is_none() {
-            let parts = [
-                if params.backup_data.unwrap_or(false) { Some("data") } else { None },
-                if params.backup_apk.unwrap_or(false) { Some("apk") } else { None },
-                if params.backup_obb.unwrap_or(false) { Some("obb") } else { None },
-            ]
-            .into_iter()
-            .flatten()
-            .collect::<Vec<_>>()
-            .join(", ");
-            return Err(anyhow!("Nothing to back up for this app (selected parts: {})", parts));
-        }
+        ensure!(
+            maybe_created.is_some(),
+            "Nothing to back up for this app (selected parts: {})",
+            parts
+        );
 
         info!(
             adb_permits_released = self.adb_semaphore.available_permits() + 1,
             "Backup completed, releasing ADB semaphore"
         );
+
+        BackupsChanged {}.send_signal_to_dart();
 
         Ok(())
     }

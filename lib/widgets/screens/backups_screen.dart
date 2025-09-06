@@ -68,12 +68,16 @@ class _BackupsScreenState extends State<BackupsScreen> {
                           ? const Center(child: Text('No backups found.'))
                           : ListView.separated(
                               itemCount: _entries.length,
-                              separatorBuilder: (_, __) => const Divider(height: 1),
+                              separatorBuilder: (_, __) =>
+                                  const Divider(height: 1),
                               itemBuilder: (context, index) => _BackupTile(
                                 entry: _entries[index],
-                                onRestore: () => SideloadUtils.restoreBackup(_entries[index].path),
-                                onOpenFolder: () => _openFolder(_entries[index].path),
-                                onDelete: () => _confirmAndDelete(_entries[index]),
+                                onRestore: () => SideloadUtils.restoreBackup(
+                                    _entries[index].path),
+                                onOpenFolder: () =>
+                                    _openFolder(_entries[index].path),
+                                onDelete: () =>
+                                    _confirmAndDelete(_entries[index]),
                               ),
                             ),
             ),
@@ -183,9 +187,10 @@ class _BackupTile extends StatelessWidget {
     final tsStr = dt == null
         ? 'Unknown time'
         : '${dt.year.toString().padLeft(4, '0')}-${dt.month.toString().padLeft(2, '0')}-${dt.day.toString().padLeft(2, '0')} '
-          '${dt.hour.toString().padLeft(2, '0')}:${dt.minute.toString().padLeft(2, '0')}:${dt.second.toString().padLeft(2, '0')}';
+            '${dt.hour.toString().padLeft(2, '0')}:${dt.minute.toString().padLeft(2, '0')}:${dt.second.toString().padLeft(2, '0')}';
 
-    final sizeStr = filesize.FileSize.fromBytes(entry.totalSize.toInt()).toString(
+    final sizeStr =
+        filesize.FileSize.fromBytes(entry.totalSize.toInt()).toString(
       unit: filesize.Unit.auto(
         size: entry.totalSize.toInt(),
         baseType: filesize.BaseType.metric,
@@ -203,8 +208,6 @@ class _BackupTile extends StatelessWidget {
     return '$sizeStr • $tsStr • $partsStr';
   }
 }
-
-// Intentionally left no banner; Settings manages backups path & folder.
 
 extension on _BackupsScreenState {
   Future<void> _confirmAndDelete(BackupEntry entry) async {
@@ -244,7 +247,9 @@ extension on _BackupsScreenState {
 
 extension _BackupsRoot on _BackupsScreenState {
   void _openBackupsRoot() {
-    GetBackupsDirectoryResponse.rustSignalStream.take(1).listen((response) async {
+    GetBackupsDirectoryResponse.rustSignalStream
+        .take(1)
+        .listen((response) async {
       final path = response.message.path;
       await _openFolder(path);
     });

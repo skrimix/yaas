@@ -45,6 +45,7 @@ pub async fn dir_has_any_files(dir: &Path) -> Result<bool> {
     if !dir.exists() || !dir.is_dir() {
         return Ok(false);
     }
+    // TODO: use glob
     let mut stack = vec![dir.to_path_buf()];
     while let Some(path) = stack.pop() {
         let mut rd = match fs::read_dir(&path).await {
@@ -78,6 +79,7 @@ pub async fn decompress_all_7z_in_dir(dir: &Path) -> Result<()> {
     if !dir.is_dir() {
         return Ok(());
     }
+    // TODO: use glob
     let mut rd = fs::read_dir(dir).await?;
     while let Some(entry) = rd.next_entry().await? {
         if entry.file_type().await?.is_file()

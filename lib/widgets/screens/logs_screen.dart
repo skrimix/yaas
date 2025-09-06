@@ -47,6 +47,8 @@ class _LogsScreenState extends State<LogsScreen> {
     if (_logState == null) {
       _logState = context.read<LogState>();
       _logState!.addListener(_onLogStateChanged);
+      // Keep the search field in sync with the persisted filter state
+      _searchController.text = _logState!.searchQuery;
     }
   }
 

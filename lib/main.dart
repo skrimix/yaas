@@ -21,21 +21,12 @@ import 'providers/task_state.dart';
 import 'providers/settings_state.dart';
 import 'providers/log_state.dart';
 import 'widgets/app_management/download_apps.dart';
+import 'providers/app_state.dart';
 
 final colorScheme = ColorScheme.fromSeed(
   seedColor: Colors.deepPurple,
   brightness: Brightness.dark,
 );
-
-class AppState extends ChangeNotifier {
-  String? _panicMessage;
-  String? get panicMessage => _panicMessage;
-
-  void setPanicMessage(String message) {
-    _panicMessage = message;
-    notifyListeners();
-  }
-}
 
 void main() async {
   await initializeRust(messages.assignRustSignal);

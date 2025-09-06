@@ -4,6 +4,7 @@ import 'package:flutter/services.dart';
 import 'package:provider/provider.dart';
 import '../../providers/device_state.dart';
 import '../../utils/sideload_utils.dart';
+import '../../providers/app_state.dart';
 
 class LocalSideload extends StatefulWidget {
   const LocalSideload({super.key});
@@ -15,6 +16,8 @@ class LocalSideload extends StatefulWidget {
 class _LocalSideloadState extends State<LocalSideload> {
   final _pathController = TextEditingController();
   bool _isDirectory = false;
+  AppState? _appState;
+  bool _initialized = false;
 
   @override
   void initState() {
@@ -22,7 +25,22 @@ class _LocalSideloadState extends State<LocalSideload> {
     ServicesBinding.instance.keyboard.addHandler(_onKey);
     _pathController.addListener(() {
       setState(() {});
+      final appState = _appState;
+      if (appState != null) {
+        appState.setSideloadLastPath(_pathController.text);
+      }
     });
+  }
+
+  @override
+  void didChangeDependencies() {
+    super.didChangeDependencies();
+    _appState = context.read<AppState>();
+    if (!_initialized && _appState != null) {
+      _isDirectory = _appState!.sideloadIsDirectory;
+      _pathController.text = _appState!.sideloadLastPath;
+      _initialized = true;
+    }
   }
 
   @override
@@ -51,6 +69,7 @@ class _LocalSideloadState extends State<LocalSideload> {
 
     if (path != null) {
       _pathController.text = path;
+      _appState?.setSideloadLastPath(path);
     }
   }
 
@@ -137,6 +156,8 @@ class _LocalSideloadState extends State<LocalSideload> {
                               _isDirectory = selection.first;
                               _pathController.clear();
                             });
+                            _appState?.setSideloadIsDirectory(_isDirectory);
+                            _appState?.setSideloadLastPath('');
                           },
                         ),
                         const SizedBox(height: 24),

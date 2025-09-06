@@ -5,6 +5,7 @@ import 'package:provider/provider.dart';
 import 'package:proper_filesize/proper_filesize.dart' as filesize;
 import 'package:intl/intl.dart';
 import '../../providers/cloud_apps_state.dart';
+import '../../providers/app_state.dart';
 import '../../src/bindings/bindings.dart';
 import '../../providers/device_state.dart';
 import 'cloud_app_list.dart';
@@ -36,6 +37,7 @@ class _DownloadAppsState extends State<DownloadApps> {
   bool _showOnlySelected = false;
   String? _lastSearchQuery;
   Timer? _searchDebounceTimer;
+  bool _initialized = false;
 
   @override
   void dispose() {
@@ -114,6 +116,7 @@ class _DownloadAppsState extends State<DownloadApps> {
       // _isSearching = false;
       _searchController.clear();
     });
+    context.read<AppState>().setDownloadSearchQuery('');
   }
 
   int _calculateSearchScore(
@@ -234,6 +237,7 @@ class _DownloadAppsState extends State<DownloadApps> {
         _resetSearch();
       }
     });
+    context.read<AppState>().setDownloadShowOnlySelected(_showOnlySelected);
   }
 
   void _toggleSelection(String fullName) {
@@ -248,6 +252,10 @@ class _DownloadAppsState extends State<DownloadApps> {
         _selectedFullNames.add(fullName);
       }
     });
+    final appState = context.read<AppState>();
+    appState.setDownloadSelectedFullNames(_selectedFullNames);
+    appState.setDownloadShowCheckboxes(_showCheckboxes);
+    appState.setDownloadShowOnlySelected(_showOnlySelected);
   }
 
   void _toggleCheckboxVisibility() {
@@ -257,6 +265,7 @@ class _DownloadAppsState extends State<DownloadApps> {
         _clearSelection();
       }
     });
+    context.read<AppState>().setDownloadShowCheckboxes(_showCheckboxes);
   }
 
   void _clearSelection() {
@@ -265,6 +274,10 @@ class _DownloadAppsState extends State<DownloadApps> {
       _showCheckboxes = false;
       _showOnlySelected = false;
     });
+    final appState = context.read<AppState>();
+    appState.setDownloadSelectedFullNames(_selectedFullNames);
+    appState.setDownloadShowCheckboxes(false);
+    appState.setDownloadShowOnlySelected(false);
   }
 
   void _install(String appFullName) {
@@ -370,6 +383,13 @@ class _DownloadAppsState extends State<DownloadApps> {
           _sortAscending = value.$2;
           _resetScroll();
         });
+        // Persist sort state
+        final sortKey = switch (_sortOption) {
+          SortOption.name => 'name',
+          SortOption.date => 'date',
+          SortOption.size => 'size',
+        };
+        context.read<AppState>().setDownloadSort(sortKey, _sortAscending);
       },
     );
   }
@@ -406,6 +426,8 @@ class _DownloadAppsState extends State<DownloadApps> {
                 setState(() {
                   _searchQuery = value;
                 });
+                // Persist search query
+                context.read<AppState>().setDownloadSearchQuery(value);
               });
             },
           ),
@@ -427,6 +449,52 @@ class _DownloadAppsState extends State<DownloadApps> {
   @override
   void initState() {
     super.initState();
+    // Persist scroll offset while scrolling
+    _scrollController.addListener(() {
+      if (_scrollController.hasClients) {
+        context
+            .read<AppState>()
+            .setDownloadScrollOffset(_scrollController.position.pixels);
+      }
+    });
+  }
+
+  @override
+  void didChangeDependencies() {
+    super.didChangeDependencies();
+    if (_initialized) return;
+    final appState = context.read<AppState>();
+
+    // Restore search query
+    _searchQuery = appState.downloadSearchQuery;
+    _searchController.text = _searchQuery;
+
+    // Restore sort state
+    final key = appState.downloadSortKey;
+    _sortOption = switch (key) {
+      'date' => SortOption.date,
+      'size' => SortOption.size,
+      _ => SortOption.name,
+    };
+    _sortAscending = appState.downloadSortAscending;
+
+    // Restore selection / view prefs
+    _showCheckboxes = appState.downloadShowCheckboxes;
+    _showOnlySelected = appState.downloadShowOnlySelected;
+    _selectedFullNames
+      ..clear()
+      ..addAll(appState.downloadSelectedFullNames);
+
+    // Restore scroll position after layout
+    final target = appState.downloadScrollOffset;
+    WidgetsBinding.instance.addPostFrameCallback((_) {
+      if (_scrollController.hasClients) {
+        final max = _scrollController.position.maxScrollExtent;
+        _scrollController.jumpTo(target.clamp(0.0, max));
+      }
+    });
+
+    _initialized = true;
   }
 
   Widget _buildFilterButton() {

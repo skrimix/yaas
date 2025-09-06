@@ -5,6 +5,7 @@ import 'package:proper_filesize/proper_filesize.dart' as filesize;
 import 'package:toastification/toastification.dart';
 import '../../providers/device_state.dart';
 import '../../providers/cloud_apps_state.dart';
+import '../../providers/app_state.dart';
 import '../../src/bindings/bindings.dart';
 import '../common/animated_adb_button.dart';
 import '../dialogs/animated_uninstall_dialog.dart';
@@ -50,17 +51,71 @@ class _ManageAppsState extends State<ManageApps> {
   List<InstalledPackage>? _cachedOtherApps;
   List<InstalledPackage>? _cachedSystemApps;
   List<InstalledPackage>? _installedPackages;
+  bool _initialized = false;
+  final Map<AppCategory, ScrollController> _scrollControllers = {
+    for (final c in AppCategory.values) c: ScrollController(),
+  };
+  final Map<AppCategory, VoidCallback> _scrollListeners = {};
+
+  VoidCallback _makeScrollListener(
+      AppCategory category, ScrollController controller) {
+    return () {
+      if (controller.hasClients) {
+        final idx = AppCategory.values.indexOf(category);
+        context
+            .read<AppState>()
+            .setManageScrollOffset(idx, controller.position.pixels);
+      }
+    };
+  }
 
   @override
   void initState() {
     super.initState();
     HardwareKeyboard.instance.addHandler(_handleKeyEvent);
+    // Persist scroll positions per category
+    for (final entry in _scrollControllers.entries) {
+      final category = entry.key;
+      final controller = entry.value;
+      final listener = _makeScrollListener(category, controller);
+      controller.addListener(listener);
+      _scrollListeners[category] = listener;
+    }
+  }
+
+  @override
+  void didChangeDependencies() {
+    super.didChangeDependencies();
+    if (_initialized) return;
+    final appState = context.read<AppState>();
+    final idx = appState.manageAppsCategoryIndex;
+    if (idx >= 0 && idx < AppCategory.values.length) {
+      _selectedCategory = AppCategory.values[idx];
+    }
+    // Restore scroll offset for current category after layout
+    WidgetsBinding.instance.addPostFrameCallback((_) {
+      final controller = _scrollControllers[_selectedCategory]!;
+      if (controller.hasClients) {
+        final target = appState.getManageScrollOffset(idx);
+        final max = controller.position.maxScrollExtent;
+        controller.jumpTo(target.clamp(0.0, max));
+      }
+    });
+    _initialized = true;
   }
 
   @override
   void dispose() {
     HardwareKeyboard.instance.removeHandler(_handleKeyEvent);
     _isShiftPressedNotifier.dispose();
+    for (final c in AppCategory.values) {
+      final controller = _scrollControllers[c]!;
+      final listener = _scrollListeners[c];
+      if (listener != null) {
+        controller.removeListener(listener);
+      }
+      controller.dispose();
+    }
     super.dispose();
   }
 
@@ -429,6 +484,7 @@ class _ManageAppsState extends State<ManageApps> {
     }
 
     return ListView.builder(
+      controller: _scrollControllers[_selectedCategory],
       padding: _listPadding,
       itemCount: apps.length,
       itemBuilder: (context, index) {
@@ -572,6 +628,19 @@ class _ManageAppsState extends State<ManageApps> {
                     onSelectionChanged: (Set<AppCategory> newSelection) {
                       setState(() {
                         _selectedCategory = newSelection.first;
+                      });
+                      // Persist selected category
+                      final idx = AppCategory.values.indexOf(_selectedCategory);
+                      final appState = context.read<AppState>();
+                      appState.setManageAppsCategoryIndex(idx);
+                      // Restore saved scroll for the newly selected category
+                      WidgetsBinding.instance.addPostFrameCallback((_) {
+                        final controller = _scrollControllers[_selectedCategory]!;
+                        if (controller.hasClients) {
+                          final target = appState.getManageScrollOffset(idx);
+                          final max = controller.position.maxScrollExtent;
+                          controller.jumpTo(target.clamp(0.0, max));
+                        }
                       });
                     },
                     style: ButtonStyle(

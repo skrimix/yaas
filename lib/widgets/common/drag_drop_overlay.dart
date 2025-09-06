@@ -116,7 +116,7 @@ class _DragDropOverlayState extends State<DragDropOverlay> {
                             const SizedBox(height: 8),
                             Text(
                               deviceState.isConnected
-                                  ? 'Drop APK file or app directory to sideload'
+                                  ? 'Drop APK file/app directory to sideload, or backup folder to restore'
                                   : 'Connect a device to enable drag and drop installation',
                               style: Theme.of(context).textTheme.bodyLarge,
                             ),

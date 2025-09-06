@@ -13,6 +13,7 @@ import 'widgets/app_management/local_sideload.dart';
 import 'widgets/screens/error_screen.dart';
 import 'widgets/screens/settings_screen.dart';
 import 'widgets/screens/logs_screen.dart';
+import 'widgets/screens/backups_screen.dart';
 import 'widgets/common/drag_drop_overlay.dart';
 import 'providers/device_state.dart';
 import 'providers/adb_state.dart';
@@ -171,6 +172,10 @@ class _SinglePageState extends State<SinglePage> {
         icon: Icons.arrow_circle_down,
         label: 'Sideload',
         content: const LocalSideload()),
+    Destination(
+        icon: Icons.backup_outlined,
+        label: 'Backups',
+        content: const BackupsScreen()),
     Destination(
         icon: Icons.settings,
         label: 'Settings',

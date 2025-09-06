@@ -25,6 +25,7 @@ class SettingsConstants {
   static const double iconSize = 16.0;
 }
 
+// TODO: validate paths on input change
 class SettingsScreen extends StatefulWidget {
   const SettingsScreen({super.key});
 

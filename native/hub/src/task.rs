@@ -26,6 +26,7 @@ use crate::{
         Settings,
         signals::{
             system::Toast,
+            backups::BackupsChanged,
             task::{
                 TaskCancelRequest, TaskParams, TaskProgress, TaskRequest, TaskStatus, TaskType,
             },
@@ -314,6 +315,10 @@ impl TaskManager {
                 );
                 update_progress(TaskStatus::Completed, 1.0, "Done".into());
                 Toast::send(task_name, format!("{task_type}: completed"), false, None);
+                if matches!(task_type, TaskType::BackupApp) {
+                    debug!("Emitting BackupsChanged after backup completion");
+                    BackupsChanged {}.send_signal_to_dart();
+                }
             }
             Err(e) => {
                 if token.is_cancelled() {

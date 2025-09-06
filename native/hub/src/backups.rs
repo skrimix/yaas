@@ -178,6 +178,8 @@ impl BackupsHandler {
                 // Convert to unix millis using chrono-less approach
                 // Use time crate would be nicer, but avoid extra deps here
                 // Fallback to file mtime if conversion fails
+                // TODO: use time crate
+                // TODO: log errors
                 timestamp = datetime_to_unix_millis(y, m, d, h, min, s).unwrap_or(0);
             }
         }

@@ -330,6 +330,7 @@ impl AdbDevice {
     ///
     /// This mirrors common `adb push` conventions and ensures we never silently place content
     /// at an unexpected path.
+    #[instrument(level = "debug", ret, err)]
     async fn resolve_push_dest_path(&self, source: &Path, dest: &UnixPath) -> Result<UnixPathBuf> {
         let source_name = source
             .file_name()
@@ -380,6 +381,7 @@ impl AdbDevice {
     ///
     /// This keeps pull semantics predictable and prevents accidental directory creation outside
     /// intended locations.
+    #[instrument(level = "debug", ret, err)]
     async fn resolve_pull_dest_path(&self, source: &UnixPath, dest: &Path) -> Result<PathBuf> {
         let source_name = source
             .file_name()
@@ -981,15 +983,18 @@ impl AdbDevice {
             }
         }
         let backup_path = backups_location.join(directory_name);
+        debug!(path = %backup_path.display(), "Creating backup directory");
         fs::create_dir_all(&backup_path).await?;
 
         let shared_data_path = UnixPath::new("/sdcard/Android/data").join(package_name);
         let private_data_path = UnixPath::new("/data/data").join(package_name);
         let obb_path = UnixPath::new("/sdcard/Android/obb").join(package_name);
+        debug!(shared_data_path = %shared_data_path.display(), private_data_path = %private_data_path.display(), obb_path = %obb_path.display(), "Built source paths");
 
         let shared_data_backup_path = backup_path.join("data");
         let private_data_backup_path = backup_path.join("data_private");
         let obb_backup_path = backup_path.join("obb");
+        debug!(shared_data_backup_path = %shared_data_backup_path.display(), private_data_backup_path = %private_data_backup_path.display(), obb_backup_path = %obb_backup_path.display(), "Built backup paths");
 
         let mut backup_empty = true;
 

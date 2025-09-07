@@ -1119,18 +1119,11 @@ impl AdbDevice {
         {
             let mut apk_candidate: Option<PathBuf> = None;
             if backup_path.is_dir() {
-                // TODO: use glob
-                let mut rd = fs::read_dir(backup_path).await?;
-                while let Some(entry) = rd.next_entry().await? {
-                    if entry
-                        .path()
-                        .extension()
-                        .and_then(|e| e.to_str())
-                        .is_some_and(|e| e.eq_ignore_ascii_case("apk"))
-                    {
-                        apk_candidate = Some(entry.path());
-                        break;
-                    }
+                let pattern = backup_path.join("*.apk").to_string_lossy().to_string();
+                if let Ok(paths) = glob::glob(&pattern)
+                    && let Some(path) = paths.flatten().next()
+                {
+                    apk_candidate = Some(path);
                 }
             }
             if apk_candidate.is_none() {

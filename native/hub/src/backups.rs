@@ -5,6 +5,7 @@ use std::{
 };
 
 use anyhow::{Context, Result, ensure};
+use glob::glob;
 use rinf::{DartSignal, RustSignal};
 use tokio::fs;
 use tokio_stream::{StreamExt, wrappers::WatchStream};
@@ -133,21 +134,20 @@ impl BackupsHandler {
         );
 
         let mut entries = Vec::new();
-        // TODO: use glob
-        let mut rd = fs::read_dir(dir_path).await?;
-        while let Some(item) = rd.next_entry().await? {
-            let path = item.path();
-            if !item.file_type().await?.is_dir() {
-                continue;
-            }
-            let marker = path.join(".backup");
-            if !marker.exists() {
-                debug!(path = %path.display(), "Skipping directory without .backup marker");
-                continue;
-            }
-            trace!(path = %path.display(), "Found backup candidate");
-            if let Some(entry) = self.build_entry(&path).await? {
-                entries.push(entry);
+        let pattern = dir_path.join("*").join(".backup").to_string_lossy().to_string();
+        for item in glob(&pattern).context("Invalid glob pattern for backups scan")? {
+            match item {
+                Ok(marker_path) => {
+                    if let Some(dir) = marker_path.parent() {
+                        trace!(path = %dir.display(), "Found backup candidate");
+                        if let Some(entry) = self.build_entry(dir).await? {
+                            entries.push(entry);
+                        }
+                    }
+                }
+                Err(e) => {
+                    debug!(error = %e, "Glob match error while scanning backups");
+                }
             }
         }
         debug!(count = entries.len(), "Finished scanning backups");

@@ -4,6 +4,7 @@ use std::{
 };
 
 use anyhow::{Context, Result};
+use glob::glob;
 use sysproxy::Sysproxy;
 use tokio::fs;
 use tracing::{debug, error, instrument};
@@ -45,20 +46,10 @@ pub async fn dir_has_any_files(dir: &Path) -> Result<bool> {
     if !dir.exists() || !dir.is_dir() {
         return Ok(false);
     }
-    // TODO: use glob
-    let mut stack = vec![dir.to_path_buf()];
-    while let Some(path) = stack.pop() {
-        let mut rd = match fs::read_dir(&path).await {
-            Ok(rd) => rd,
-            Err(_) => continue,
-        };
-        while let Some(entry) = rd.next_entry().await? {
-            let file_type = entry.file_type().await?;
-            if file_type.is_file() {
-                return Ok(true);
-            } else if file_type.is_dir() {
-                stack.push(entry.path());
-            }
+    let pattern = dir.join("**/*").to_string_lossy().to_string();
+    for path in (glob(&pattern).context("Invalid glob pattern for dir_has_any_files")?).flatten() {
+        if path.is_file() {
+            return Ok(true);
         }
     }
     Ok(false)
@@ -79,17 +70,11 @@ pub async fn decompress_all_7z_in_dir(dir: &Path) -> Result<()> {
     if !dir.is_dir() {
         return Ok(());
     }
-    // TODO: use glob
-    let mut rd = fs::read_dir(dir).await?;
-    while let Some(entry) = rd.next_entry().await? {
-        if entry.file_type().await?.is_file()
-            && entry
-                .path()
-                .extension()
-                .and_then(|e| e.to_str())
-                .is_some_and(|e| e.eq_ignore_ascii_case("7z"))
-        {
-            let path = entry.path();
+    let pattern = dir.join("*.7z").to_string_lossy().to_string();
+    for path in
+        (glob(&pattern).context("Invalid glob pattern for decompress_all_7z_in_dir")?).flatten()
+    {
+        if path.is_file() {
             debug!(path = %path.display(), "Decompressing 7z archive");
             let dir_clone = dir.to_path_buf();
             tokio::task::spawn_blocking(move || {

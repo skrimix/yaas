@@ -64,6 +64,14 @@
   },
   "statusAdb": "ADB Status: {status}",
   "@statusAdb": {"placeholders": {"status": {"type": "String", "example": "Connected"}}},
+  "statusAdbServerNotRunning": "ADB server not running",
+  "statusAdbServerStarting": "Starting ADB server",
+  "statusAdbNoDevices": "No devices found",
+  "statusAdbDevicesAvailable": "Devices available ({count})",
+  "@statusAdbDevicesAvailable": {"placeholders": {"count": {"type": "int"}}},
+  "statusAdbConnected": "Connected",
+  "statusAdbDeviceUnauthorized": "Device unauthorized",
+  "statusAdbUnknown": "Unknown",
   "statusDeviceInfo": "Device: {name}\nSerial: {serial}",
   "@statusDeviceInfo": {
     "placeholders": {
@@ -305,7 +313,6 @@
   "@logsOpenNotSupported": {"placeholders": {"path": {"type": "String"}}},
   "logsOpenFailed": "Unable to open logs directory (copied to clipboard): {path}",
   "@logsOpenFailed": {"placeholders": {"path": {"type": "String"}}},
-  "unknownLabel": "unknown",
   "createdWord": "created",
   "closedWord": "closed",
   "noMessage": "no message",

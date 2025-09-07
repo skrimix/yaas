@@ -145,6 +145,29 @@ class AppLocalizationsRu extends AppLocalizations {
   }
 
   @override
+  String get statusAdbServerNotRunning => 'ADB сервер не запущен';
+
+  @override
+  String get statusAdbServerStarting => 'Запуск ADB сервера';
+
+  @override
+  String get statusAdbNoDevices => 'Нет найденных устройств';
+
+  @override
+  String statusAdbDevicesAvailable(int count) {
+    return 'Доступны устройства ($count)';
+  }
+
+  @override
+  String get statusAdbConnected => 'Подключено';
+
+  @override
+  String get statusAdbDeviceUnauthorized => 'Устройство не авторизовано';
+
+  @override
+  String get statusAdbUnknown => 'Неизвестно';
+
+  @override
   String statusDeviceInfo(String name, String serial) {
     return 'Устройство: $name\nСерийный номер: $serial';
   }
@@ -794,9 +817,6 @@ class AppLocalizationsRu extends AppLocalizations {
   String logsOpenFailed(String path) {
     return 'Не удалось открыть папку логов (скопировано): $path';
   }
-
-  @override
-  String get unknownLabel => 'неизвестно';
 
   @override
   String get createdWord => 'создан';

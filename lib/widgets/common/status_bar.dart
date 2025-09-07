@@ -19,7 +19,7 @@ class StatusBar extends StatelessWidget {
     AppLocalizations l10n,
   ) {
     return Tooltip(
-      message: l10n.statusAdb(adbState.statusDescription),
+      message: l10n.statusAdb(adbState.statusDescription(context)),
       child: Row(
         children: [
           Container(
@@ -42,8 +42,8 @@ class StatusBar extends StatelessWidget {
     AppLocalizations l10n,
   ) {
     return Tooltip(
-      message:
-          l10n.statusDeviceInfo(deviceState.deviceName, deviceState.deviceSerial),
+      message: l10n.statusDeviceInfo(
+          deviceState.deviceName, deviceState.deviceSerial),
       child: Row(
         children: [
           Text(deviceState.deviceName),

@@ -48,6 +48,14 @@
   "@couldNotOpenUrl": {"placeholders": {"url": {"type": "String"}}},
   "statusAdb": "Статус ADB: {status}",
   "@statusAdb": {"placeholders": {"status": {"type": "String"}}},
+  "statusAdbServerNotRunning": "ADB сервер не запущен",
+  "statusAdbServerStarting": "Запуск ADB сервера",
+  "statusAdbNoDevices": "Нет найденных устройств",
+  "statusAdbDevicesAvailable": "Доступны устройства ({count})",
+  "@statusAdbDevicesAvailable": {"placeholders": {"count": {"type": "int"}}},
+  "statusAdbConnected": "Подключено",
+  "statusAdbDeviceUnauthorized": "Устройство не авторизовано",
+  "statusAdbUnknown": "Неизвестно",
   "statusDeviceInfo": "Устройство: {name}\nСерийный номер: {serial}",
   "@statusDeviceInfo": {
     "placeholders": {
@@ -287,7 +295,6 @@
   "@logsOpenNotSupported": {"placeholders": {"path": {"type": "String"}}},
   "logsOpenFailed": "Не удалось открыть папку логов (скопировано): {path}",
   "@logsOpenFailed": {"placeholders": {"path": {"type": "String"}}},
-  "unknownLabel": "неизвестно",
   "createdWord": "создан",
   "closedWord": "закрыт",
   "noMessage": "нет сообщения",

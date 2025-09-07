@@ -350,6 +350,48 @@ abstract class AppLocalizations {
   /// **'ADB Status: {status}'**
   String statusAdb(String status);
 
+  /// No description provided for @statusAdbServerNotRunning.
+  ///
+  /// In en, this message translates to:
+  /// **'ADB server not running'**
+  String get statusAdbServerNotRunning;
+
+  /// No description provided for @statusAdbServerStarting.
+  ///
+  /// In en, this message translates to:
+  /// **'Starting ADB server'**
+  String get statusAdbServerStarting;
+
+  /// No description provided for @statusAdbNoDevices.
+  ///
+  /// In en, this message translates to:
+  /// **'No devices found'**
+  String get statusAdbNoDevices;
+
+  /// No description provided for @statusAdbDevicesAvailable.
+  ///
+  /// In en, this message translates to:
+  /// **'Devices available ({count})'**
+  String statusAdbDevicesAvailable(int count);
+
+  /// No description provided for @statusAdbConnected.
+  ///
+  /// In en, this message translates to:
+  /// **'Connected'**
+  String get statusAdbConnected;
+
+  /// No description provided for @statusAdbDeviceUnauthorized.
+  ///
+  /// In en, this message translates to:
+  /// **'Device unauthorized'**
+  String get statusAdbDeviceUnauthorized;
+
+  /// No description provided for @statusAdbUnknown.
+  ///
+  /// In en, this message translates to:
+  /// **'Unknown'**
+  String get statusAdbUnknown;
+
   /// No description provided for @statusDeviceInfo.
   ///
   /// In en, this message translates to:
@@ -1555,12 +1597,6 @@ abstract class AppLocalizations {
   /// In en, this message translates to:
   /// **'Unable to open logs directory (copied to clipboard): {path}'**
   String logsOpenFailed(String path);
-
-  /// No description provided for @unknownLabel.
-  ///
-  /// In en, this message translates to:
-  /// **'unknown'**
-  String get unknownLabel;
 
   /// No description provided for @createdWord.
   ///

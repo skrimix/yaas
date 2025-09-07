@@ -1,5 +1,6 @@
 import 'package:flutter/material.dart';
 import '../src/bindings/bindings.dart';
+import '../src/l10n/app_localizations.dart';
 
 class AdbStateProvider extends ChangeNotifier {
   AdbState _state = const AdbStateServerNotRunning();
@@ -35,21 +36,22 @@ class AdbStateProvider extends ChangeNotifier {
   }
 
   /// Gets a user-friendly description of the current ADB state
-  String get statusDescription {
+  String statusDescription(BuildContext context) {
+    final l10n = AppLocalizations.of(context);
     if (_state is AdbStateServerNotRunning) {
-      return 'ADB server not running';
+      return l10n.statusAdbServerNotRunning;
     } else if (_state is AdbStateServerStarting) {
-      return 'Starting ADB server';
+      return l10n.statusAdbServerStarting;
     } else if (_state is AdbStateNoDevices) {
-      return 'No devices found';
+      return l10n.statusAdbNoDevices;
     } else if (_state is AdbStateDevicesAvailable) {
       final devices = (_state as AdbStateDevicesAvailable).value;
-      return 'Devices available (${devices.length})';
+      return l10n.statusAdbDevicesAvailable(devices.length);
     } else if (_state is AdbStateDeviceUnauthorized) {
-      return 'Device unauthorized';
+      return l10n.statusAdbDeviceUnauthorized;
     } else if (_state is AdbStateDeviceConnected) {
-      return 'Connected';
+      return l10n.statusAdbConnected;
     }
-    return 'Unknown';
+    return l10n.statusAdbUnknown;
   }
 }

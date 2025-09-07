@@ -145,6 +145,29 @@ class AppLocalizationsEn extends AppLocalizations {
   }
 
   @override
+  String get statusAdbServerNotRunning => 'ADB server not running';
+
+  @override
+  String get statusAdbServerStarting => 'Starting ADB server';
+
+  @override
+  String get statusAdbNoDevices => 'No devices found';
+
+  @override
+  String statusAdbDevicesAvailable(int count) {
+    return 'Devices available ($count)';
+  }
+
+  @override
+  String get statusAdbConnected => 'Connected';
+
+  @override
+  String get statusAdbDeviceUnauthorized => 'Device unauthorized';
+
+  @override
+  String get statusAdbUnknown => 'Unknown';
+
+  @override
   String statusDeviceInfo(String name, String serial) {
     return 'Device: $name\nSerial: $serial';
   }
@@ -788,9 +811,6 @@ class AppLocalizationsEn extends AppLocalizations {
   String logsOpenFailed(String path) {
     return 'Unable to open logs directory (copied to clipboard): $path';
   }
-
-  @override
-  String get unknownLabel => 'unknown';
 
   @override
   String get createdWord => 'created';

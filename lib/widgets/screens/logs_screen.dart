@@ -1080,7 +1080,7 @@ class _LogsScreenState extends State<LogsScreen> {
       // Get span name from span trace (last span is the current one)
       final spanName = log.spanTrace?.spans.isNotEmpty == true
           ? '${log.spanTrace!.spans.last.target}::${log.spanTrace!.spans.last.name}'
-          : l10n.unknownLabel;
+          : 'unknown';
       return '<$spanName returned: ${log.fields!['return']!}>';
     }
 
@@ -1088,7 +1088,7 @@ class _LogsScreenState extends State<LogsScreen> {
     if (log.message.isEmpty && log.fields?.containsKey('error') == true) {
       final spanName = log.spanTrace?.spans.isNotEmpty == true
           ? '${log.spanTrace!.spans.last.target}::${log.spanTrace!.spans.last.name}'
-          : l10n.unknownLabel;
+          : 'unknown';
       return '<$spanName ${l10n.errorWord}: ${log.fields!['error']!}>';
     }
 

@@ -3,21 +3,25 @@ import 'package:flutter_svg/svg.dart';
 import 'package:provider/provider.dart';
 import '../../providers/device_state.dart';
 import '../../src/bindings/bindings.dart';
+import '../../src/l10n/app_localizations.dart';
 import '../device/device_actions.dart';
 
 class Home extends StatelessWidget {
   const Home({super.key});
 
-  Widget _buildDeviceStatus({
+  Widget _buildDeviceStatus(BuildContext context, {
     required String title,
     String? status,
     required int batteryLevel,
     required Widget icon,
     bool isDimmed = false,
+    AppLocalizations? l10n,
   }) {
     return Tooltip(
       message:
-          '$title\n${status != null ? 'Status: $status\n' : ''}Battery: $batteryLevel%',
+          '$title\n'
+          '${status != null ? '${(l10n ?? AppLocalizations.of(context)).statusLabel}: $status\n' : ''}'
+          '${(l10n ?? AppLocalizations.of(context)).batteryLabel}: $batteryLevel%',
       child: Opacity(
         opacity: isDimmed ? 0.5 : 1.0,
         child: Column(
@@ -52,11 +56,12 @@ class Home extends StatelessWidget {
   Widget build(BuildContext context) {
     return Consumer<DeviceState>(
       builder: (context, deviceState, _) {
+        final l10n = AppLocalizations.of(context);
         if (!deviceState.isConnected) {
-          return const Center(
+          return Center(
             child: Text(
-              'No device connected',
-              style: TextStyle(fontSize: 18),
+              l10n.noDeviceConnected,
+              style: const TextStyle(fontSize: 18),
             ),
           );
         }
@@ -76,7 +81,7 @@ class Home extends StatelessWidget {
                         mainAxisAlignment: MainAxisAlignment.spaceBetween,
                         children: [
                           Text(
-                            'Device',
+                            l10n.deviceTitle,
                             style: Theme.of(context).textTheme.titleMedium,
                           ),
                           _DeviceMenuButton(),
@@ -115,7 +120,8 @@ class Home extends StatelessWidget {
                               mainAxisAlignment: MainAxisAlignment.center,
                               children: [
                                 _buildDeviceStatus(
-                                  title: 'Left Controller',
+                                  context,
+                                  title: l10n.leftController,
                                   status: deviceState.controllerStatusString(
                                       deviceState.leftController),
                                   batteryLevel:
@@ -126,17 +132,21 @@ class Home extends StatelessWidget {
                                   isDimmed:
                                       deviceState.leftController?.status !=
                                           ControllerStatus.active,
+                                  l10n: l10n,
                                 ),
                                 const SizedBox(width: 12),
                                 _buildDeviceStatus(
-                                  title: 'Headset',
+                                  context,
+                                  title: l10n.headset,
                                   batteryLevel: deviceState.batteryLevel,
                                   icon: SvgPicture.asset(
                                       'assets/svg/headset.svg'),
+                                  l10n: l10n,
                                 ),
                                 const SizedBox(width: 12),
                                 _buildDeviceStatus(
-                                  title: 'Right Controller',
+                                  context,
+                                  title: l10n.rightController,
                                   status: deviceState.controllerStatusString(
                                       deviceState.rightController),
                                   batteryLevel:
@@ -147,6 +157,7 @@ class Home extends StatelessWidget {
                                   isDimmed:
                                       deviceState.rightController?.status !=
                                           ControllerStatus.active,
+                                  l10n: l10n,
                                 ),
                               ],
                             )
@@ -170,15 +181,16 @@ class Home extends StatelessWidget {
 class _DeviceMenuButton extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
+    final l10n = AppLocalizations.of(context);
     return PopupMenuButton<String>(
-      tooltip: 'Device actions',
+      tooltip: l10n.deviceActionsTooltip,
       onSelected: (value) async {
         switch (value) {
           case 'powerOff':
             _confirmAndSend(
               context,
-              title: 'Power off device',
-              message: 'Are you sure you want to power off the device?',
+              title: l10n.powerOffDevice,
+              message: l10n.powerOffConfirm,
               command: const AdbCommandReboot(value: RebootMode.powerOff),
             );
             break;
@@ -188,8 +200,8 @@ class _DeviceMenuButton extends StatelessWidget {
         }
       },
       itemBuilder: (context) => [
-        const PopupMenuItem(value: 'powerOff', child: Text('Power off...')),
-        const PopupMenuItem(value: 'reboot', child: Text('Reboot...')),
+        PopupMenuItem(value: 'powerOff', child: Text(l10n.powerOffMenu)),
+        PopupMenuItem(value: 'reboot', child: Text(l10n.rebootMenu)),
       ],
     );
   }
@@ -206,10 +218,10 @@ class _DeviceMenuButton extends StatelessWidget {
         actions: [
           TextButton(
               onPressed: () => Navigator.pop(context, false),
-              child: const Text('Cancel')),
+              child: Text(AppLocalizations.of(context).commonCancel)),
           FilledButton(
               onPressed: () => Navigator.pop(context, true),
-              child: const Text('Confirm')),
+              child: Text(AppLocalizations.of(context).commonConfirm)),
         ],
       ),
     );
@@ -223,23 +235,23 @@ class _DeviceMenuButton extends StatelessWidget {
     final option = await showDialog<String>(
       context: context,
       builder: (context) => SimpleDialog(
-        title: const Text('Reboot options'),
+        title: Text(AppLocalizations.of(context).rebootOptions),
         children: [
           SimpleDialogOption(
             onPressed: () => Navigator.pop(context, 'normal'),
-            child: const Text('Normal'),
+            child: Text(AppLocalizations.of(context).rebootNormal),
           ),
           SimpleDialogOption(
             onPressed: () => Navigator.pop(context, 'bootloader'),
-            child: const Text('Bootloader'),
+            child: Text(AppLocalizations.of(context).rebootBootloader),
           ),
           SimpleDialogOption(
             onPressed: () => Navigator.pop(context, 'recovery'),
-            child: const Text('Recovery'),
+            child: Text(AppLocalizations.of(context).rebootRecovery),
           ),
           SimpleDialogOption(
             onPressed: () => Navigator.pop(context, 'fastboot'),
-            child: const Text('Fastboot'),
+            child: Text(AppLocalizations.of(context).rebootFastboot),
           ),
         ],
       ),
@@ -252,32 +264,32 @@ class _DeviceMenuButton extends StatelessWidget {
       case 'normal':
         _confirmAndSend(
           context,
-          title: 'Reboot device',
-          message: 'Reboot the device now?',
+          title: AppLocalizations.of(context).rebootDevice,
+          message: AppLocalizations.of(context).rebootNowConfirm,
           command: const AdbCommandReboot(value: RebootMode.normal),
         );
         break;
       case 'bootloader':
         _confirmAndSend(
           context,
-          title: 'Reboot to bootloader',
-          message: 'Reboot the device to bootloader?',
+          title: AppLocalizations.of(context).rebootToBootloader,
+          message: AppLocalizations.of(context).rebootToBootloaderConfirm,
           command: const AdbCommandReboot(value: RebootMode.bootloader),
         );
         break;
       case 'recovery':
         _confirmAndSend(
           context,
-          title: 'Reboot to recovery',
-          message: 'Reboot the device to recovery?',
+          title: AppLocalizations.of(context).rebootToRecovery,
+          message: AppLocalizations.of(context).rebootToRecoveryConfirm,
           command: const AdbCommandReboot(value: RebootMode.recovery),
         );
         break;
       case 'fastboot':
         _confirmAndSend(
           context,
-          title: 'Reboot to fastboot',
-          message: 'Reboot the device to fastboot?',
+          title: AppLocalizations.of(context).rebootToFastboot,
+          message: AppLocalizations.of(context).rebootToFastbootConfirm,
           command: const AdbCommandReboot(value: RebootMode.fastboot),
         );
         break;

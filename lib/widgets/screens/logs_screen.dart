@@ -5,6 +5,7 @@ import 'package:intl/intl.dart';
 import 'package:provider/provider.dart';
 import '../../providers/log_state.dart';
 import '../../src/bindings/bindings.dart';
+import '../../src/l10n/app_localizations.dart';
 
 class LogsScreen extends StatefulWidget {
   const LogsScreen({super.key});
@@ -118,13 +119,13 @@ class _LogsScreenState extends State<LogsScreen> {
   Widget _buildSearchField() {
     return Consumer<LogState>(
       builder: (context, logState, child) {
+        final l10n = AppLocalizations.of(context);
         return Tooltip(
-          message:
-              'Search logs by level, message, target, or span id. Examples: "error", "info", "adb", "connect", "13"',
+          message: l10n.logsSearchTooltip,
           child: TextField(
             controller: _searchController,
             decoration: InputDecoration(
-              hintText: 'Search logs...',
+              hintText: l10n.logsSearchHint,
               prefixIcon: const Icon(Icons.search),
               suffixIcon: _searchController.text.isNotEmpty
                   ? IconButton(
@@ -149,6 +150,7 @@ class _LogsScreenState extends State<LogsScreen> {
   Widget _buildControlButtons() {
     return Consumer<LogState>(
       builder: (context, logState, child) {
+        final l10n = AppLocalizations.of(context);
         return Row(
           mainAxisSize: MainAxisSize.min,
           children: [
@@ -168,7 +170,7 @@ class _LogsScreenState extends State<LogsScreen> {
             // Clear logs
             IconButton(
               icon: const Icon(Icons.clear_all),
-              tooltip: 'Clear current logs',
+              tooltip: l10n.clearCurrentLogs,
               onPressed: () => _showClearLogsDialog(context),
             ),
             // More options
@@ -176,33 +178,33 @@ class _LogsScreenState extends State<LogsScreen> {
               itemBuilder: (context) => [
                 // Export logs
                 PopupMenuItem(
-                  child: const Row(
+                  child: Row(
                     children: [
-                      Icon(Icons.file_copy, size: 16),
-                      SizedBox(width: 8),
-                      Text('Export logs'),
+                      const Icon(Icons.file_copy, size: 16),
+                      const SizedBox(width: 8),
+                      Text(l10n.exportLogs),
                     ],
                   ),
                   onTap: () => _exportLogs(logState),
                 ),
                 // Open logs directory
                 PopupMenuItem(
-                  child: const Row(
+                  child: Row(
                     children: [
-                      Icon(Icons.folder_open, size: 16),
-                      SizedBox(width: 8),
-                      Text('Open logs directory'),
+                      const Icon(Icons.folder_open, size: 16),
+                      const SizedBox(width: 8),
+                      Text(l10n.openLogsDirectory),
                     ],
                   ),
                   onTap: () => _openLogsDirectory(),
                 ),
                 // Clear filters
                 PopupMenuItem(
-                  child: const Row(
+                  child: Row(
                     children: [
-                      Icon(Icons.filter_alt_off, size: 16),
-                      SizedBox(width: 8),
-                      Text('Clear filters'),
+                      const Icon(Icons.filter_alt_off, size: 16),
+                      const SizedBox(width: 8),
+                      Text(l10n.clearFilters),
                     ],
                   ),
                   onTap: () {
@@ -221,6 +223,7 @@ class _LogsScreenState extends State<LogsScreen> {
   Widget _buildFilterChips() {
     return Consumer<LogState>(
       builder: (context, logState, child) {
+        final l10n = AppLocalizations.of(context);
         return Wrap(
           spacing: 8,
           runSpacing: 4,
@@ -277,8 +280,7 @@ class _LogsScreenState extends State<LogsScreen> {
             ),
             // Span events toggle
             Tooltip(
-              message:
-                  'Show/hide span creation and destruction events. Spans track execution flow.',
+              message: l10n.logsSpanEventsTooltip,
               child: FilterChip(
                 label: Row(
                   mainAxisSize: MainAxisSize.min,
@@ -293,7 +295,7 @@ class _LogsScreenState extends State<LogsScreen> {
                     const SizedBox(width: 4),
                     // TODO: add a setting for not recording span events?
                     Text(
-                      'SPANS',
+                      l10n.spansLabel,
                       style: TextStyle(
                         fontSize: 12,
                         fontWeight: logState.showSpanEvents
@@ -344,6 +346,7 @@ class _LogsScreenState extends State<LogsScreen> {
     return Consumer<LogState>(
       builder: (context, logState, child) {
         final logs = logState.logs;
+        final l10n = AppLocalizations.of(context);
 
         if (logs.isEmpty) {
           return Center(
@@ -357,14 +360,14 @@ class _LogsScreenState extends State<LogsScreen> {
                 ),
                 const SizedBox(height: 16),
                 Text(
-                  'No logs to display',
+                  l10n.noLogsToDisplay,
                   style: Theme.of(context).textTheme.titleMedium?.copyWith(
                         color: Theme.of(context).colorScheme.outline,
                       ),
                 ),
                 const SizedBox(height: 8),
                 Text(
-                  'Log messages will appear here as they are generated',
+                  l10n.logsAppearHere,
                   style: Theme.of(context).textTheme.bodyMedium?.copyWith(
                         color: Theme.of(context).colorScheme.outline,
                       ),
@@ -390,7 +393,8 @@ class _LogsScreenState extends State<LogsScreen> {
   Widget _buildLogEntry(LogInfo log, int index) {
     final isEvenRow = index.isEven;
     final displayMessage = _getDisplayMessage(log);
-    final isSpecialMessage = displayMessage == '<no message>' ||
+    final l10n = AppLocalizations.of(context);
+    final isSpecialMessage = displayMessage == '<${l10n.noMessage}>' ||
         (displayMessage.startsWith('<') && displayMessage.endsWith('>'));
 
     return Material(
@@ -619,6 +623,7 @@ class _LogsScreenState extends State<LogsScreen> {
         actions: [
           TextButton(
             onPressed: () {
+              final l10n = AppLocalizations.of(context);
               final formattedTimestamp =
                   _formatTimestampDetailed(log.timestamp);
               final buffer = StringBuffer();
@@ -634,7 +639,7 @@ class _LogsScreenState extends State<LogsScreen> {
 
               // Include span trace with proper formatting
               if (log.spanTrace?.spans.isNotEmpty == true) {
-                buffer.writeln('Span Trace:');
+                buffer.writeln(l10n.spanTrace);
                 for (int i = 0; i < log.spanTrace!.spans.length; i++) {
                   final span = log.spanTrace!.spans[i];
                   final isLast = i == log.spanTrace!.spans.length - 1;
@@ -670,14 +675,14 @@ class _LogsScreenState extends State<LogsScreen> {
               Navigator.of(context).pop();
 
               ScaffoldMessenger.of(context).showSnackBar(
-                const SnackBar(content: Text('Log entry copied to clipboard')),
+                SnackBar(content: Text(l10n.logEntryCopied)),
               );
             },
-            child: const Text('Copy'),
+            child: Text(AppLocalizations.of(context).commonCopy),
           ),
           TextButton(
             onPressed: () => Navigator.of(context).pop(),
-            child: const Text('Close'),
+            child: Text(AppLocalizations.of(context).commonClose),
           ),
         ],
       ),
@@ -710,6 +715,7 @@ class _LogsScreenState extends State<LogsScreen> {
 
   Widget _buildSpanTraceSection(SpanTrace spanTrace, LogInfo log) {
     final spans = spanTrace.spans;
+    final l10n = AppLocalizations.of(context);
 
     return Container(
       padding: const EdgeInsets.all(12),
@@ -735,7 +741,7 @@ class _LogsScreenState extends State<LogsScreen> {
               ),
               const SizedBox(width: 8),
               Text(
-                'Span Trace:',
+                l10n.spanTrace,
                 style: TextStyle(
                   fontWeight: FontWeight.w600,
                   fontSize: 13,
@@ -831,6 +837,7 @@ class _LogsScreenState extends State<LogsScreen> {
   Widget _buildStructuredSpanContent(SpanInfo span, bool isLast, LogInfo log) {
     final functionName = '${span.target}::${span.name}';
     final hasReturnValue = isLast && log.fields?.containsKey('return') == true;
+    final l10n = AppLocalizations.of(context);
 
     return Column(
       crossAxisAlignment: CrossAxisAlignment.start,
@@ -944,7 +951,7 @@ class _LogsScreenState extends State<LogsScreen> {
                       const SizedBox(width: 6),
                       Expanded(
                         child: SelectableText(
-                          paramValue.isEmpty ? '(empty)' : paramValue,
+                          paramValue.isEmpty ? l10n.emptyValue : paramValue,
                           style: TextStyle(
                             fontFamily: 'monospace',
                             fontSize: 11,
@@ -972,28 +979,30 @@ class _LogsScreenState extends State<LogsScreen> {
   void _showClearLogsDialog(BuildContext context) {
     showDialog(
       context: context,
-      builder: (context) => AlertDialog(
-        title: const Text('Clear Logs'),
-        content: const Text(
-            'This will clear all current session logs. This action cannot be undone.'),
-        actions: [
-          TextButton(
-            onPressed: () => Navigator.of(context).pop(),
-            child: const Text('Cancel'),
-          ),
-          FilledButton(
-            onPressed: () {
-              final logState = context.read<LogState>();
-              logState.clearCurrentLogs();
-              logState.clearFilters();
-              logState.clearSearch();
-              _searchController.clear();
-              Navigator.of(context).pop();
-            },
-            child: const Text('Clear'),
-          ),
-        ],
-      ),
+      builder: (context) {
+        final l10n = AppLocalizations.of(context);
+        return AlertDialog(
+          title: Text(l10n.clearLogsTitle),
+          content: Text(l10n.clearLogsMessage),
+          actions: [
+            TextButton(
+              onPressed: () => Navigator.of(context).pop(),
+              child: Text(l10n.commonCancel),
+            ),
+            FilledButton(
+              onPressed: () {
+                final logState = context.read<LogState>();
+                logState.clearCurrentLogs();
+                logState.clearFilters();
+                logState.clearSearch();
+                _searchController.clear();
+                Navigator.of(context).pop();
+              },
+              child: Text(l10n.commonClear),
+            ),
+          ],
+        );
+      },
     );
   }
 
@@ -1016,8 +1025,9 @@ class _LogsScreenState extends State<LogsScreen> {
 
     Clipboard.setData(ClipboardData(text: buffer.toString()));
 
+    final l10n = AppLocalizations.of(context);
     ScaffoldMessenger.of(context).showSnackBar(
-      SnackBar(content: Text('${logs.length} logs copied to clipboard')),
+      SnackBar(content: Text(l10n.logsCopied(logs.length))),
     );
   }
 
@@ -1037,11 +1047,10 @@ class _LogsScreenState extends State<LogsScreen> {
           // Unsupported platform - copy to clipboard
           if (mounted) {
             Clipboard.setData(ClipboardData(text: logsPath));
+            final l10n = AppLocalizations.of(context);
             ScaffoldMessenger.of(context).showSnackBar(
               SnackBar(
-                content: Text(
-                  'Platform not supported. Logs directory path copied to clipboard: $logsPath',
-                ),
+                content: Text(l10n.logsOpenNotSupported(logsPath)),
               ),
             );
           }
@@ -1050,11 +1059,10 @@ class _LogsScreenState extends State<LogsScreen> {
       } catch (e) {
         if (mounted) {
           Clipboard.setData(ClipboardData(text: logsPath));
+          final l10n = AppLocalizations.of(context);
           ScaffoldMessenger.of(context).showSnackBar(
             SnackBar(
-              content: Text(
-                'Unable to open logs directory (copied to clipboard): $logsPath',
-              ),
+              content: Text(l10n.logsOpenFailed(logsPath)),
             ),
           );
         }
@@ -1066,32 +1074,33 @@ class _LogsScreenState extends State<LogsScreen> {
   }
 
   String _getDisplayMessage(LogInfo log) {
+    final l10n = AppLocalizations.of(context);
     // Handle return events specially
     if (log.message.isEmpty && log.fields?.containsKey('return') == true) {
       // Get span name from span trace (last span is the current one)
       final spanName = log.spanTrace?.spans.isNotEmpty == true
           ? '${log.spanTrace!.spans.last.target}::${log.spanTrace!.spans.last.name}'
-          : 'unknown';
-      return '<$spanName return: ${log.fields!['return']!}>';
+          : l10n.unknownLabel;
+      return '<$spanName returned: ${log.fields!['return']!}>';
     }
 
     // Handle error events specially
     if (log.message.isEmpty && log.fields?.containsKey('error') == true) {
       final spanName = log.spanTrace?.spans.isNotEmpty == true
           ? '${log.spanTrace!.spans.last.target}::${log.spanTrace!.spans.last.name}'
-          : 'unknown';
-      return '<$spanName error: ${log.fields!['error']!}>';
+          : l10n.unknownLabel;
+      return '<$spanName ${l10n.errorWord}: ${log.fields!['error']!}>';
     }
 
     // Handle span events using structured kind
     switch (log.kind) {
       case LogKind.spanNew:
-        return '<${log.message.substring(10)} created>';
+        return '<${log.message.substring(10)} ${l10n.createdWord}>';
       case LogKind.spanClose:
-        return '<${log.message.substring(12)} closed>';
+        return '<${log.message.substring(12)} ${l10n.closedWord}>';
       case LogKind.event:
         // Default handling for events
-        return log.message.isEmpty ? '<no message>' : log.message;
+        return log.message.isEmpty ? '<${l10n.noMessage}>' : log.message;
     }
   }
 
@@ -1105,12 +1114,13 @@ class _LogsScreenState extends State<LogsScreen> {
 
   // Small span ID label + filter button used in details view
   Widget _buildSpanIdActions(String spanId) {
+    final l10n = AppLocalizations.of(context);
     final displayId = _shortenSpanId(spanId);
     return Row(
       mainAxisSize: MainAxisSize.min,
       children: [
         Tooltip(
-          message: 'Span ID',
+          message: l10n.spanId,
           child: Container(
             padding: const EdgeInsets.symmetric(horizontal: 6, vertical: 2),
             decoration: BoxDecoration(
@@ -1138,7 +1148,7 @@ class _LogsScreenState extends State<LogsScreen> {
         ),
         const SizedBox(width: 6),
         Tooltip(
-          message: 'Filter logs by this span ID',
+          message: l10n.filterBySpanId,
           child: IconButton(
             icon: const Icon(Icons.filter_alt),
             visualDensity: VisualDensity.compact,

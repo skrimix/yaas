@@ -7,6 +7,7 @@ import 'package:file_picker/file_picker.dart';
 import '../../src/bindings/bindings.dart';
 import 'package:url_launcher/url_launcher.dart';
 import '../../providers/settings_state.dart';
+import '../../src/l10n/app_localizations.dart';
 
 enum SettingTextField {
   rclonePath,
@@ -193,26 +194,28 @@ class _SettingsScreenState extends State<SettingsScreen> {
   }
 
   Future<String?> _pickFile(String currentValue, String label) async {
+    final l10n = AppLocalizations.of(context);
     String? initialDirectory;
     if (currentValue.isNotEmpty && File(currentValue).existsSync()) {
       initialDirectory = currentValue;
     }
 
     final result = await FilePicker.platform.pickFiles(
-      dialogTitle: 'Select $label',
+      dialogTitle: l10n.selectLabel(label),
       initialDirectory: initialDirectory,
     );
     return result?.files.single.path;
   }
 
   Future<String?> _pickDirectory(String currentValue, String label) async {
+    final l10n = AppLocalizations.of(context);
     String? initialDirectory;
     if (currentValue.isNotEmpty && Directory(currentValue).existsSync()) {
       initialDirectory = currentValue;
     }
 
     return FilePicker.platform.getDirectoryPath(
-      dialogTitle: 'Select $label Directory',
+      dialogTitle: l10n.selectLabelDirectory(label),
       initialDirectory: initialDirectory,
     );
   }
@@ -221,34 +224,40 @@ class _SettingsScreenState extends State<SettingsScreen> {
     final uri = Uri.parse(url);
     if (!await launchUrl(uri)) {
       if (mounted) {
+        final l10n = AppLocalizations.of(context);
         ScaffoldMessenger.of(context).showSnackBar(
           SnackBar(
-            content: Text('Could not open $url'),
+            content: Text(l10n.couldNotOpenUrl(url)),
           ),
         );
       }
     }
   }
 
-  String _formatCleanupPolicy(DownloadCleanupPolicy policy) => switch (policy) {
-        DownloadCleanupPolicy.deleteAfterInstall => 'Remove after installation',
-        DownloadCleanupPolicy.keepOneVersion => 'Keep latest version only',
-        DownloadCleanupPolicy.keepTwoVersions => 'Keep last two versions',
-        DownloadCleanupPolicy.keepAllVersions => 'Keep all versions',
+  String _formatCleanupPolicy(
+          AppLocalizations l10n, DownloadCleanupPolicy policy) =>
+      switch (policy) {
+        DownloadCleanupPolicy.deleteAfterInstall =>
+          l10n.settingsCleanupDeleteAfterInstall,
+        DownloadCleanupPolicy.keepOneVersion => l10n.settingsCleanupKeepOneVersion,
+        DownloadCleanupPolicy.keepTwoVersions => l10n.settingsCleanupKeepTwoVersions,
+        DownloadCleanupPolicy.keepAllVersions => l10n.settingsCleanupKeepAllVersions,
       };
 
-  String _formatConnectionType(ConnectionType type) => switch (type) {
-        ConnectionType.usb => 'USB',
-        ConnectionType.wireless => 'Wireless',
+  String _formatConnectionType(AppLocalizations l10n, ConnectionType type) =>
+      switch (type) {
+        ConnectionType.usb => l10n.settingsConnectionUsb,
+        ConnectionType.wireless => l10n.settingsConnectionWireless,
       };
 
   @override
   Widget build(BuildContext context) {
     final settingsState = Provider.of<SettingsState>(context);
+    final l10n = AppLocalizations.of(context);
     final error = settingsState.error;
 
     if (error != null) {
-      return _buildErrorView(error);
+      return _buildErrorView(l10n, error);
     }
 
     if (settingsState.isLoading) {
@@ -264,14 +273,14 @@ class _SettingsScreenState extends State<SettingsScreen> {
             SettingsConstants.padding,
             SettingsConstants.verticalSpacing,
           ),
-          child: _buildHeader(),
+          child: _buildHeader(l10n),
         ),
         Expanded(
           child: SingleChildScrollView(
             padding: const EdgeInsets.all(SettingsConstants.padding),
             child: Column(
               crossAxisAlignment: CrossAxisAlignment.start,
-              children: _buildSettingsSections(),
+              children: _buildSettingsSections(l10n, settingsState),
             ),
           ),
         ),
@@ -279,13 +288,13 @@ class _SettingsScreenState extends State<SettingsScreen> {
     );
   }
 
-  Widget _buildErrorView(String error) {
+  Widget _buildErrorView(AppLocalizations l10n, String error) {
     return Center(
       child: Column(
         mainAxisSize: MainAxisSize.min,
         children: [
           Text(
-            'Error loading settings',
+            l10n.settingsErrorLoading,
             style: Theme.of(context).textTheme.titleLarge,
           ),
           const SizedBox(height: SettingsConstants.verticalSpacing),
@@ -295,12 +304,12 @@ class _SettingsScreenState extends State<SettingsScreen> {
     );
   }
 
-  Widget _buildHeader() {
+  Widget _buildHeader(AppLocalizations l10n) {
     return Row(
       mainAxisAlignment: MainAxisAlignment.spaceBetween,
       children: [
         Text(
-          'Settings',
+          l10n.settingsTitle,
           style: Theme.of(context).textTheme.headlineMedium,
         ),
         Row(
@@ -319,8 +328,8 @@ class _SettingsScreenState extends State<SettingsScreen> {
                     iconSize: SettingsConstants.iconSize,
                     icon: Icon(isShiftPressed ? Icons.restart_alt : Icons.undo),
                     tooltip: isShiftPressed
-                        ? 'Reset to Defaults'
-                        : 'Revert Changes\n(Shift+Click to reset to defaults)',
+                        ? l10n.settingsResetToDefaults
+                        : l10n.settingsRevertChangesTooltip,
                   ),
                 );
               },
@@ -329,7 +338,7 @@ class _SettingsScreenState extends State<SettingsScreen> {
             FilledButton.icon(
               onPressed: _hasChanges ? _saveSettings : null,
               icon: const Icon(Icons.save),
-              label: const Text('Save Changes'),
+              label: Text(l10n.settingsSaveChanges),
             ),
           ],
         ),
@@ -337,20 +346,42 @@ class _SettingsScreenState extends State<SettingsScreen> {
     );
   }
 
-  List<Widget> _buildSettingsSections() {
+  List<Widget> _buildSettingsSections(AppLocalizations l10n, SettingsState settingsState) {
     return [
       _buildSection(
-        title: 'Storage',
+        title: l10n.settingsSectionGeneral,
+        children: [
+          _buildDropdownSetting<String>(
+            label: l10n.settingsLanguage,
+            value: settingsState.settings.localeCode.isEmpty
+                ? 'system'
+                : settingsState.settings.localeCode,
+            items: [
+              DropdownMenuItem(value: 'system', child: Text(l10n.settingsSystemDefault)),
+              DropdownMenuItem(value: 'en', child: Text(l10n.languageEnglish)),
+              DropdownMenuItem(value: 'ru', child: Text(l10n.languageRussian)),
+            ],
+            onChanged: (code) {
+              if (code != null) {
+                settingsState.setLocaleCode(code);
+              }
+            },
+          ),
+        ],
+      ),
+      const SizedBox(height: SettingsConstants.sectionSpacing),
+      _buildSection(
+        title: l10n.settingsSectionStorage,
         children: [
           _buildPathSetting(
             field: SettingTextField.downloadsLocation,
-            label: 'Downloads Location',
+            label: l10n.settingsDownloadsLocation,
             isDirectory: true,
             currentValue: _currentFormSettings.downloadsLocation,
           ),
           _buildPathSetting(
             field: SettingTextField.backupsLocation,
-            label: 'Backups Location',
+            label: l10n.settingsBackupsLocation,
             isDirectory: true,
             currentValue: _currentFormSettings.backupsLocation,
           ),
@@ -358,21 +389,21 @@ class _SettingsScreenState extends State<SettingsScreen> {
       ),
       const SizedBox(height: SettingsConstants.sectionSpacing),
       _buildSection(
-        title: 'ADB',
+        title: l10n.settingsSectionAdb,
         children: [
           _buildPathSetting(
             field: SettingTextField.adbPath,
-            label: 'ADB Path',
+            label: l10n.settingsAdbPath,
             isDirectory: false,
             currentValue: _currentFormSettings.adbPath,
           ),
           _buildDropdownSetting<ConnectionType>(
-            label: 'Preferred Connection Type',
+            label: l10n.settingsPreferredConnection,
             value: _currentFormSettings.preferredConnectionType,
             items: ConnectionType.values.map((type) {
               return DropdownMenuItem(
                 value: type,
-                child: Text(_formatConnectionType(type)),
+                child: Text(_formatConnectionType(l10n, type)),
               );
             }).toList(),
             onChanged: (value) {
@@ -387,28 +418,28 @@ class _SettingsScreenState extends State<SettingsScreen> {
       ),
       const SizedBox(height: SettingsConstants.sectionSpacing),
       _buildSection(
-        title: 'Downloader',
+        title: l10n.settingsSectionDownloader,
         children: [
           _buildPathSetting(
             field: SettingTextField.rclonePath,
-            label: 'Rclone Path',
+            label: l10n.settingsRclonePath,
             isDirectory: false,
             currentValue: _currentFormSettings.rclonePath,
           ),
           _buildTextSetting(
             field: SettingTextField.rcloneRemoteName,
-            label: 'Rclone Remote Name',
+            label: l10n.settingsRcloneRemoteName,
           ),
           _buildTextSetting(
             field: SettingTextField.bandwidthLimit,
-            label: 'Bandwidth Limit',
+            label: l10n.settingsBandwidthLimit,
             // helperText:
             //     'Value in KiB/s or with B|K|M|G|T|P suffix (empty for no limit)',
             helper: InkWell(
               onTap: () =>
                   _launchURL('https://rclone.org/docs/#bwlimit-bandwidth-spec'),
               child: Text(
-                'Value in KiB/s or with B|K|M|G|T|P suffix or more (click for documentation)',
+                l10n.settingsBandwidthHelper,
                 style: Theme.of(context).textTheme.bodySmall?.copyWith(
                       color: Theme.of(context).hintColor,
                     ),
@@ -416,12 +447,12 @@ class _SettingsScreenState extends State<SettingsScreen> {
             ),
           ),
           _buildDropdownSetting<DownloadCleanupPolicy>(
-            label: 'Downloads Cleanup',
+            label: l10n.settingsDownloadsCleanup,
             value: _currentFormSettings.cleanupPolicy,
             items: DownloadCleanupPolicy.values.map((policy) {
               return DropdownMenuItem(
                 value: policy,
-                child: Text(_formatCleanupPolicy(policy)),
+                child: Text(_formatCleanupPolicy(l10n, policy)),
               );
             }).toList(),
             onChanged: (value) {
@@ -464,13 +495,14 @@ class _SettingsScreenState extends State<SettingsScreen> {
     required bool isDirectory,
     required String currentValue,
   }) {
+    final l10n = AppLocalizations.of(context);
     return _buildTextSetting(
       field: field,
       label: label,
       trailing: IconButton.filledTonal(
         icon: const Icon(Icons.folder_open),
         onPressed: () => _pickPath(field, isDirectory, currentValue, label),
-        tooltip: 'Browse',
+        tooltip: l10n.settingsBrowse,
       ),
     );
   }

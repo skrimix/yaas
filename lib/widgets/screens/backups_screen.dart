@@ -5,6 +5,7 @@ import 'package:flutter/material.dart';
 import '../../src/bindings/bindings.dart';
 import 'package:proper_filesize/proper_filesize.dart' as filesize;
 import '../../utils/sideload_utils.dart';
+import '../../src/l10n/app_localizations.dart';
 
 class BackupsScreen extends StatefulWidget {
   const BackupsScreen({super.key});
@@ -42,17 +43,17 @@ class _BackupsScreenState extends State<BackupsScreen> {
               child: Row(
                 children: [
                   Text(
-                    'Backups',
+                    AppLocalizations.of(context).backupsTitle,
                     style: Theme.of(context).textTheme.titleLarge,
                   ),
                   const Spacer(),
                   IconButton(
-                    tooltip: 'Open Backups Folder',
+                    tooltip: AppLocalizations.of(context).openBackupsFolder,
                     onPressed: _openBackupsRoot,
                     icon: const Icon(Icons.folder_open),
                   ),
                   IconButton(
-                    tooltip: 'Refresh',
+                    tooltip: AppLocalizations.of(context).refresh,
                     onPressed: _refresh,
                     icon: const Icon(Icons.refresh),
                   ),
@@ -65,7 +66,7 @@ class _BackupsScreenState extends State<BackupsScreen> {
                   : _error != null
                       ? Center(child: Text(_error!))
                       : _entries.isEmpty
-                          ? const Center(child: Text('No backups found.'))
+                          ? Center(child: Text(AppLocalizations.of(context).noBackupsFound))
                           : ListView.separated(
                               itemCount: _entries.length,
                               separatorBuilder: (_, __) =>
@@ -114,10 +115,11 @@ class _BackupsScreenState extends State<BackupsScreen> {
         await Process.run('explorer', [folderPath]);
       } else {
         if (mounted) {
+          final l10n = AppLocalizations.of(context);
           SideloadUtils.showInfoToast(
             context,
-            'Unsupported platform',
-            'Folder path copied to clipboard',
+            l10n.unsupportedPlatform,
+            l10n.folderPathCopied,
           );
         }
       }
@@ -125,7 +127,7 @@ class _BackupsScreenState extends State<BackupsScreen> {
       if (mounted) {
         SideloadUtils.showErrorToast(
           context,
-          'Unable to open folder: $folderPath',
+          AppLocalizations.of(context).unableToOpenFolder(folderPath),
         );
       }
     }
@@ -147,7 +149,8 @@ class _BackupTile extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    final subtitle = _buildSubtitle(entry);
+    final l10n = AppLocalizations.of(context);
+    final subtitle = _buildSubtitle(context, entry, l10n);
     return ListTile(
       leading: const Icon(Icons.archive_outlined),
       title: Text(entry.name),
@@ -159,13 +162,13 @@ class _BackupTile extends StatelessWidget {
           crossAxisAlignment: CrossAxisAlignment.center,
           children: [
             IconButton(
-              tooltip: 'Delete',
+              tooltip: l10n.delete,
               icon: const Icon(Icons.delete_outline),
               onPressed: onDelete,
             ),
             const SizedBox(width: 8),
             IconButton(
-              tooltip: 'Open Folder',
+              tooltip: l10n.openFolderTooltip,
               icon: const Icon(Icons.folder_open),
               onPressed: onOpenFolder,
             ),
@@ -173,7 +176,7 @@ class _BackupTile extends StatelessWidget {
             FilledButton.icon(
               onPressed: onRestore,
               icon: const Icon(Icons.restore),
-              label: const Text('Restore'),
+              label: Text(l10n.restore),
             ),
           ],
         ),
@@ -181,13 +184,13 @@ class _BackupTile extends StatelessWidget {
     );
   }
 
-  String _buildSubtitle(BackupEntry entry) {
+  String _buildSubtitle(BuildContext context, BackupEntry entry, AppLocalizations l10n) {
     final tsMillis = entry.timestamp.toInt();
     final dt = tsMillis == 0
         ? null
         : DateTime.fromMillisecondsSinceEpoch(tsMillis, isUtc: true).toLocal();
     final tsStr = dt == null
-        ? 'Unknown time'
+        ? l10n.unknownTime
         : '${dt.year.toString().padLeft(4, '0')}-${dt.month.toString().padLeft(2, '0')}-${dt.day.toString().padLeft(2, '0')} '
             '${dt.hour.toString().padLeft(2, '0')}:${dt.minute.toString().padLeft(2, '0')}:${dt.second.toString().padLeft(2, '0')}';
 
@@ -201,11 +204,11 @@ class _BackupTile extends StatelessWidget {
     );
 
     final parts = <String>[];
-    if (entry.hasApk) parts.add('APK');
-    if (entry.hasPrivateData) parts.add('Private');
-    if (entry.hasSharedData) parts.add('Shared');
-    if (entry.hasObb) parts.add('OBB');
-    final partsStr = parts.isEmpty ? 'No parts detected' : parts.join(', ');
+    if (entry.hasApk) parts.add(l10n.partAPK);
+    if (entry.hasPrivateData) parts.add(l10n.partPrivate);
+    if (entry.hasSharedData) parts.add(l10n.partShared);
+    if (entry.hasObb) parts.add(l10n.partOBB);
+    final partsStr = parts.isEmpty ? l10n.noPartsDetected : parts.join(', ');
 
     return '$tsStr • $partsStr • $sizeStr';
   }
@@ -216,16 +219,16 @@ extension on _BackupsScreenState {
     final confirmed = await showDialog<bool>(
       context: context,
       builder: (context) => AlertDialog(
-        title: const Text('Delete Backup'),
-        content: Text('Are you sure you want to delete "${entry.name}"?'),
+        title: Text(AppLocalizations.of(context).deleteBackupTitle),
+        content: Text(AppLocalizations.of(context).deleteBackupConfirm(entry.name)),
         actions: [
           TextButton(
             onPressed: () => Navigator.of(context).pop(false),
-            child: const Text('Cancel'),
+            child: Text(AppLocalizations.of(context).commonCancel),
           ),
           FilledButton(
             onPressed: () => Navigator.of(context).pop(true),
-            child: const Text('Delete'),
+            child: Text(AppLocalizations.of(context).delete),
           ),
         ],
       ),
@@ -239,7 +242,8 @@ extension on _BackupsScreenState {
       if (msg.error != null) {
         SideloadUtils.showErrorToast(context, msg.error!);
       } else {
-        SideloadUtils.showInfoToast(context, 'Backup deleted', entry.name);
+        SideloadUtils.showInfoToast(
+            context, AppLocalizations.of(context).backupDeletedTitle, entry.name);
         _loadBackups();
       }
     });

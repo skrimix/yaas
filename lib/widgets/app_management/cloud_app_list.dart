@@ -4,6 +4,7 @@ import 'package:provider/provider.dart';
 import 'package:toastification/toastification.dart';
 import '../../providers/device_state.dart';
 import '../../src/bindings/bindings.dart';
+import '../../src/l10n/app_localizations.dart';
 
 class CachedAppData {
   final CloudApp app;
@@ -45,11 +46,13 @@ class CloudAppList extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
+    final l10n = AppLocalizations.of(context);
     if (apps.isEmpty) {
       return Center(
         child: Padding(
           padding: EdgeInsets.all(16.0),
-          child: Text(isSearching ? 'No apps found' : 'No apps available'),
+          child:
+              Text(isSearching ? l10n.noAppsFound : l10n.noAppsAvailable),
         ),
       );
     }
@@ -109,7 +112,7 @@ class CloudAppListItem extends StatelessWidget {
     toastification.show(
       type: ToastificationType.success,
       style: ToastificationStyle.flat,
-      title: Text('Copied to clipboard'),
+      title: Text(AppLocalizations.of(context).copiedToClipboard),
       description: Text(text),
       autoCloseDuration: const Duration(seconds: 2),
       backgroundColor: Theme.of(context).colorScheme.surfaceContainer,
@@ -122,6 +125,7 @@ class CloudAppListItem extends StatelessWidget {
   Widget build(BuildContext context) {
     final theme = Theme.of(context);
     final textTheme = theme.textTheme;
+    final l10n = AppLocalizations.of(context);
 
     return Card(
       margin: const EdgeInsets.symmetric(horizontal: 16, vertical: 2),
@@ -129,13 +133,13 @@ class CloudAppListItem extends StatelessWidget {
         child: MenuAnchor(
           menuChildren: [
             MenuItemButton(
-              child: const Text('Copy full name'),
+              child: Text(l10n.copyFullName),
               onPressed: () {
                 _copyToClipboard(context, cachedApp.app.fullName);
               },
             ),
             MenuItemButton(
-              child: const Text('Copy package name'),
+              child: Text(l10n.copyPackageName),
               onPressed: () {
                 _copyToClipboard(context, cachedApp.app.packageName);
               },
@@ -180,7 +184,8 @@ class CloudAppListItem extends StatelessWidget {
                       ),
                     ),
                     Text(
-                      'Size: ${cachedApp.formattedSize} • Last Updated: ${cachedApp.formattedDate}',
+                      l10n.sizeAndDate(
+                          cachedApp.formattedSize, cachedApp.formattedDate),
                       style: textTheme.bodySmall?.copyWith(
                         color:
                             textTheme.bodySmall?.color?.withValues(alpha: 0.6),
@@ -194,7 +199,7 @@ class CloudAppListItem extends StatelessWidget {
                   children: [
                     IconButton(
                       icon: const Icon(Icons.download),
-                      tooltip: 'Download to computer',
+                      tooltip: l10n.downloadToComputer,
                       onPressed: () {
                         onDownload(cachedApp.app.fullName);
                       },
@@ -205,8 +210,8 @@ class CloudAppListItem extends StatelessWidget {
                         return IconButton(
                           icon: const Icon(Icons.install_mobile),
                           tooltip: deviceState.isConnected
-                              ? 'Download and install on device'
-                              : 'Download and install on device (not connected)',
+                              ? l10n.downloadAndInstall
+                              : l10n.downloadAndInstallNotConnected,
                           onPressed: deviceState.isConnected
                               ? () {
                                   onInstall(cachedApp.app.fullName);

@@ -4,6 +4,7 @@ import 'package:provider/provider.dart';
 import 'package:desktop_drop/desktop_drop.dart';
 import '../../providers/device_state.dart';
 import '../../utils/sideload_utils.dart';
+import '../../src/l10n/app_localizations.dart';
 
 class DragDropOverlay extends StatefulWidget {
   final Widget child;
@@ -24,7 +25,8 @@ class _DragDropOverlayState extends State<DragDropOverlay> {
     if (files.isEmpty) return;
 
     if (!isDeviceConnected) {
-      SideloadUtils.showErrorToast(context, 'Connect a device to install apps');
+      SideloadUtils.showErrorToast(
+          context, AppLocalizations.of(context).connectDeviceToInstall);
       return;
     }
 
@@ -41,9 +43,10 @@ class _DragDropOverlayState extends State<DragDropOverlay> {
               : SideloadUtils.isValidApkFile(path);
 
       if (!isValid) {
+        final l10n = AppLocalizations.of(context);
         final errorMessage = isDirectory
-            ? 'Dropped directory is not a valid app directory or backup folder'
-            : 'Dropped file is not a valid APK file';
+            ? l10n.dragDropInvalidDir
+            : l10n.dragDropInvalidFile;
 
         SideloadUtils.showErrorToast(context, errorMessage);
         return;
@@ -61,6 +64,7 @@ class _DragDropOverlayState extends State<DragDropOverlay> {
   Widget build(BuildContext context) {
     return Consumer<DeviceState>(
       builder: (context, deviceState, _) {
+        final l10n = AppLocalizations.of(context);
         return Stack(
           children: [
             widget.child,
@@ -102,8 +106,8 @@ class _DragDropOverlayState extends State<DragDropOverlay> {
                             const SizedBox(height: 16),
                             Text(
                               deviceState.isConnected
-                                  ? 'Drop to Install / Restore'
-                                  : 'No Device Connected',
+                                  ? l10n.dragDropDropToInstall
+                                  : l10n.dragDropNoDevice,
                               style: Theme.of(context)
                                   .textTheme
                                   .headlineMedium
@@ -116,8 +120,8 @@ class _DragDropOverlayState extends State<DragDropOverlay> {
                             const SizedBox(height: 8),
                             Text(
                               deviceState.isConnected
-                                  ? 'Drop APK file/app directory to sideload, or backup folder to restore'
-                                  : 'Connect a device to enable drag and drop installation',
+                                  ? l10n.dragDropHintConnected
+                                  : l10n.dragDropHintDisconnected,
                               style: Theme.of(context).textTheme.bodyLarge,
                             ),
                           ],

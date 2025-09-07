@@ -1,5 +1,6 @@
 import 'package:flutter/material.dart';
 import '../../src/bindings/bindings.dart';
+import '../../src/l10n/app_localizations.dart';
 
 class BackupOptionsDialog extends StatefulWidget {
   final InstalledPackage app;
@@ -43,41 +44,42 @@ class _BackupOptionsDialogState extends State<BackupOptionsDialog> {
 
   @override
   Widget build(BuildContext context) {
+    final l10n = AppLocalizations.of(context);
     return AlertDialog(
-      title: const Text('Backup Options'),
+      title: Text(l10n.backupOptionsTitle),
       content: Column(
         mainAxisSize: MainAxisSize.min,
         crossAxisAlignment: CrossAxisAlignment.start,
         children: [
-          const Text('Select parts to back up:'),
+          Text(l10n.backupSelectParts),
           const SizedBox(height: 8),
           CheckboxListTile(
             value: _backupData,
             onChanged: (v) => setState(() => _backupData = v ?? true),
-            title: const Text('App data'),
+            title: Text(l10n.backupAppData),
             dense: true,
             controlAffinity: ListTileControlAffinity.leading,
           ),
           CheckboxListTile(
             value: _backupApk,
             onChanged: (v) => setState(() => _backupApk = v ?? false),
-            title: const Text('APK'),
+            title: Text(l10n.backupApk),
             dense: true,
             controlAffinity: ListTileControlAffinity.leading,
           ),
           CheckboxListTile(
             value: _backupObb,
             onChanged: (v) => setState(() => _backupObb = v ?? false),
-            title: const Text('OBB files'),
+            title: Text(l10n.backupObbFiles),
             dense: true,
             controlAffinity: ListTileControlAffinity.leading,
           ),
           const SizedBox(height: 8),
           TextField(
             controller: _suffixController,
-            decoration: const InputDecoration(
-              labelText: 'Name suffix (optional)',
-              hintText: 'e.g. pre-update',
+            decoration: InputDecoration(
+              labelText: l10n.backupNameSuffix,
+              hintText: l10n.backupNameSuffixHint,
             ),
           ),
         ],
@@ -85,12 +87,12 @@ class _BackupOptionsDialogState extends State<BackupOptionsDialog> {
       actions: [
         TextButton(
           onPressed: () => Navigator.of(context).pop(),
-          child: const Text('Cancel'),
+          child: Text(l10n.commonCancel),
         ),
         FilledButton(
           onPressed:
               _backupApk || _backupData || _backupObb ? _startBackup : null,
-          child: const Text('Start Backup'),
+          child: Text(l10n.startBackup),
         ),
       ],
     );

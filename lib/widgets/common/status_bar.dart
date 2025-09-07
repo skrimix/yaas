@@ -6,15 +6,20 @@ import '../../src/bindings/signals/signals.dart' as signals;
 import 'package:toastification/toastification.dart';
 import '../../providers/device_state.dart';
 import '../../providers/adb_state.dart';
+import '../../src/l10n/app_localizations.dart';
 import '../../providers/task_state.dart';
 import '../dialogs/task_list_dialog.dart';
 
 class StatusBar extends StatelessWidget {
   const StatusBar({super.key});
 
-  Widget _buildConnectionStatus(AdbStateProvider adbState) {
+  Widget _buildConnectionStatus(
+    BuildContext context,
+    AdbStateProvider adbState,
+    AppLocalizations l10n,
+  ) {
     return Tooltip(
-      message: 'ADB Status: ${adbState.statusDescription}',
+      message: l10n.statusAdb(adbState.statusDescription),
       child: Row(
         children: [
           Container(
@@ -31,10 +36,14 @@ class StatusBar extends StatelessWidget {
     );
   }
 
-  Widget _buildDeviceInfo(DeviceState deviceState) {
+  Widget _buildDeviceInfo(
+    BuildContext context,
+    DeviceState deviceState,
+    AppLocalizations l10n,
+  ) {
     return Tooltip(
       message:
-          'Device: ${deviceState.deviceName}\nSerial: ${deviceState.deviceSerial}',
+          l10n.statusDeviceInfo(deviceState.deviceName, deviceState.deviceSerial),
       child: Row(
         children: [
           Text(deviceState.deviceName),
@@ -44,11 +53,15 @@ class StatusBar extends StatelessWidget {
     );
   }
 
-  Widget _buildBatteryStatus(BuildContext context, DeviceState deviceState) {
+  Widget _buildBatteryStatus(
+    BuildContext context,
+    DeviceState deviceState,
+    AppLocalizations l10n,
+  ) {
     return Tooltip(
-      message: 'Headset: ${deviceState.batteryLevel}%\n'
-          'Left Controller: ${deviceState.controllerBatteryLevel(deviceState.leftController)}%\n'
-          'Right Controller: ${deviceState.controllerBatteryLevel(deviceState.rightController)}%',
+      message: '${l10n.headset}: ${deviceState.batteryLevel}%\n'
+          '${l10n.leftController}: ${deviceState.controllerBatteryLevel(deviceState.leftController)}%\n'
+          '${l10n.rightController}: ${deviceState.controllerBatteryLevel(deviceState.rightController)}%',
       child: Material(
         color: Colors.transparent,
         child: InkWell(
@@ -69,8 +82,8 @@ class StatusBar extends StatelessWidget {
               toastification.show(
                 type: ToastificationType.success,
                 style: ToastificationStyle.flat,
-                title: const Text('Success'),
-                description: Text('Battery state dump copied to clipboard'),
+                title: Text(l10n.commonSuccess),
+                description: Text(l10n.batteryDumpCopied),
                 autoCloseDuration: const Duration(seconds: 3),
                 backgroundColor: Theme.of(context).colorScheme.surfaceContainer,
                 borderSide: BorderSide.none,
@@ -81,8 +94,8 @@ class StatusBar extends StatelessWidget {
               toastification.show(
                 type: ToastificationType.error,
                 style: ToastificationStyle.flat,
-                title: const Text('Error'),
-                description: Text('Failed to obtain battery state dump'),
+                title: Text(l10n.commonError),
+                description: Text(l10n.batteryDumpFailed),
                 autoCloseDuration: const Duration(seconds: 3),
                 backgroundColor: Theme.of(context).colorScheme.surfaceContainer,
                 borderSide: BorderSide.none,
@@ -103,7 +116,11 @@ class StatusBar extends StatelessWidget {
     );
   }
 
-  Widget _buildStorageStatus(DeviceState deviceState) {
+  Widget _buildStorageStatus(
+    BuildContext context,
+    DeviceState deviceState,
+    AppLocalizations l10n,
+  ) {
     if (deviceState.spaceInfo == null) {
       return const SizedBox.shrink();
     }
@@ -121,7 +138,7 @@ class StatusBar extends StatelessWidget {
     );
 
     return Tooltip(
-      message: '$available free of $total',
+      message: l10n.storageTooltip(available, total),
       child: Row(
         children: [
           const Icon(Icons.sd_card, size: 16),
@@ -133,11 +150,15 @@ class StatusBar extends StatelessWidget {
     );
   }
 
-  Widget _buildRefreshButton(DeviceState deviceState) {
-    return _AnimatedRefreshButton(deviceState: deviceState);
+  Widget _buildRefreshButton(DeviceState deviceState, AppLocalizations l10n) {
+    return _AnimatedRefreshButton(deviceState: deviceState, l10n: l10n);
   }
 
-  Widget _buildTaskStatus(BuildContext context, TaskState taskState) {
+  Widget _buildTaskStatus(
+    BuildContext context,
+    TaskState taskState,
+    AppLocalizations l10n,
+  ) {
     final activeTasks = taskState.activeTasks;
     final recentTasks = taskState.recentTasks;
     final hasActiveTasks = activeTasks.isNotEmpty;
@@ -167,9 +188,7 @@ class StatusBar extends StatelessWidget {
                 ),
               ),
               const SizedBox(width: 8),
-              Text(
-                '${activeTasks.length} active task${activeTasks.length > 1 ? 's' : ''}',
-              ),
+              Text(l10n.activeTasks(activeTasks.length)),
             ] else ...[
               Icon(
                 hasRecentTasks ? Icons.task_alt : Icons.check_circle_outline,
@@ -184,7 +203,7 @@ class StatusBar extends StatelessWidget {
                 // TODO: add recent task clearing
                 const SizedBox(width: 8),
                 Text(
-                  'View tasks',
+                  l10n.viewTasks,
                   style: TextStyle(
                     color: Theme.of(context).colorScheme.onSurface,
                   ),
@@ -201,6 +220,7 @@ class StatusBar extends StatelessWidget {
   Widget build(BuildContext context) {
     return Consumer2<DeviceState, AdbStateProvider>(
       builder: (context, deviceState, adbState, _) {
+        final l10n = AppLocalizations.of(context);
         return Container(
           height: 24,
           padding: const EdgeInsets.symmetric(horizontal: 8),
@@ -220,21 +240,21 @@ class StatusBar extends StatelessWidget {
           child: Row(
             children: [
               // Left side
-              _buildConnectionStatus(adbState),
+              _buildConnectionStatus(context, adbState, l10n),
               if (deviceState.isConnected) ...[
-                _buildDeviceInfo(deviceState),
-                _buildBatteryStatus(context, deviceState),
-                _buildStorageStatus(deviceState),
-                _buildRefreshButton(deviceState),
+                _buildDeviceInfo(context, deviceState, l10n),
+                _buildBatteryStatus(context, deviceState, l10n),
+                _buildStorageStatus(context, deviceState, l10n),
+                _buildRefreshButton(deviceState, l10n),
               ] else ...[
                 const SizedBox(width: 8),
-                Text('No device connected'),
+                Text(l10n.noDeviceConnected),
               ],
               // Right side
               const Spacer(),
               Consumer<TaskState>(
                 builder: (context, taskState, _) =>
-                    _buildTaskStatus(context, taskState),
+                    _buildTaskStatus(context, taskState, l10n),
               ),
             ],
           ),
@@ -246,8 +266,9 @@ class StatusBar extends StatelessWidget {
 
 class _AnimatedRefreshButton extends StatefulWidget {
   final DeviceState deviceState;
+  final AppLocalizations l10n;
 
-  const _AnimatedRefreshButton({required this.deviceState});
+  const _AnimatedRefreshButton({required this.deviceState, required this.l10n});
 
   @override
   State<_AnimatedRefreshButton> createState() => _AnimatedRefreshButtonState();
@@ -367,7 +388,7 @@ class _AnimatedRefreshButtonState extends State<_AnimatedRefreshButton>
   @override
   Widget build(BuildContext context) {
     return Tooltip(
-      message: 'Refresh all data',
+      message: widget.l10n.refreshAllData,
       child: SizedBox(
         width: 23,
         height: 23,

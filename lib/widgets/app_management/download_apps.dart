@@ -4,6 +4,7 @@ import 'package:flutter/material.dart';
 import 'package:provider/provider.dart';
 import 'package:proper_filesize/proper_filesize.dart' as filesize;
 import 'package:intl/intl.dart';
+import '../../src/l10n/app_localizations.dart';
 import '../../providers/cloud_apps_state.dart';
 import '../../providers/app_state.dart';
 import '../../src/bindings/bindings.dart';
@@ -295,14 +296,15 @@ class _DownloadAppsState extends State<DownloadApps> {
   }
 
   Widget _buildSortButton() {
+    final l10n = AppLocalizations.of(context);
     return PopupMenuButton<(SortOption, bool)>(
-      tooltip: 'Sort',
+      tooltip: l10n.sortBy,
       icon: const Icon(Icons.sort),
       initialValue: (_sortOption, _sortAscending),
       itemBuilder: (context) => [
-        const PopupMenuItem(
+        PopupMenuItem(
           enabled: false,
-          child: Text('Sort by'),
+          child: Text(l10n.sortBy),
         ),
         PopupMenuItem(
           value: (SortOption.name, true),
@@ -312,7 +314,7 @@ class _DownloadAppsState extends State<DownloadApps> {
                   ? Icons.radio_button_checked
                   : Icons.radio_button_unchecked),
               const SizedBox(width: 8),
-              const Text('Name (A to Z)'),
+              Text(l10n.sortNameAsc),
             ],
           ),
         ),
@@ -324,7 +326,7 @@ class _DownloadAppsState extends State<DownloadApps> {
                   ? Icons.radio_button_checked
                   : Icons.radio_button_unchecked),
               const SizedBox(width: 8),
-              const Text('Name (Z to A)'),
+              Text(l10n.sortNameDesc),
             ],
           ),
         ),
@@ -336,7 +338,7 @@ class _DownloadAppsState extends State<DownloadApps> {
                   ? Icons.radio_button_checked
                   : Icons.radio_button_unchecked),
               const SizedBox(width: 8),
-              const Text('Date (Oldest first)'),
+              Text(l10n.sortDateOldest),
             ],
           ),
         ),
@@ -348,7 +350,7 @@ class _DownloadAppsState extends State<DownloadApps> {
                   ? Icons.radio_button_checked
                   : Icons.radio_button_unchecked),
               const SizedBox(width: 8),
-              const Text('Date (Newest first)'),
+              Text(l10n.sortDateNewest),
             ],
           ),
         ),
@@ -360,7 +362,7 @@ class _DownloadAppsState extends State<DownloadApps> {
                   ? Icons.radio_button_checked
                   : Icons.radio_button_unchecked),
               const SizedBox(width: 8),
-              const Text('Size (Smallest first)'),
+              Text(l10n.sortSizeSmallest),
             ],
           ),
         ),
@@ -372,7 +374,7 @@ class _DownloadAppsState extends State<DownloadApps> {
                   ? Icons.radio_button_checked
                   : Icons.radio_button_unchecked),
               const SizedBox(width: 8),
-              const Text('Size (Largest first)'),
+              Text(l10n.sortSizeLargest),
             ],
           ),
         ),
@@ -405,7 +407,7 @@ class _DownloadAppsState extends State<DownloadApps> {
             controller: _searchController,
             // autofocus: true,
             decoration: InputDecoration(
-              hintText: 'Search apps...',
+              hintText: AppLocalizations.of(context).searchAppsHint,
               contentPadding:
                   const EdgeInsets.symmetric(horizontal: 8, vertical: 8),
               border: const OutlineInputBorder(),
@@ -415,7 +417,7 @@ class _DownloadAppsState extends State<DownloadApps> {
                       onPressed: () {
                         _resetSearch();
                       },
-                      tooltip: 'Clear search',
+                      tooltip: AppLocalizations.of(context).clearSearch,
                     )
                   : null,
             ),
@@ -437,7 +439,7 @@ class _DownloadAppsState extends State<DownloadApps> {
 
     return IconButton(
       icon: const Icon(Icons.search),
-      tooltip: 'Search',
+      tooltip: AppLocalizations.of(context).search,
       onPressed: () {
         setState(() {
           // _isSearching = true;
@@ -499,6 +501,7 @@ class _DownloadAppsState extends State<DownloadApps> {
 
   Widget _buildFilterButton() {
     final hasSelections = _selectedFullNames.isNotEmpty;
+    final l10n = AppLocalizations.of(context);
 
     return IconButton(
       icon: Icon(
@@ -506,10 +509,10 @@ class _DownloadAppsState extends State<DownloadApps> {
         color: _showOnlySelected ? Theme.of(context).colorScheme.primary : null,
       ),
       tooltip: _showOnlySelected
-          ? 'Show all items'
+          ? l10n.showAllItems
           : hasSelections
-              ? 'Show only selected items'
-              : 'Filter (no items selected)',
+              ? l10n.showOnlySelectedItems
+              : l10n.filterNoItems,
       onPressed: hasSelections ? _toggleShowOnlySelected : null,
     );
   }
@@ -523,6 +526,7 @@ class _DownloadAppsState extends State<DownloadApps> {
     final totalSize =
         selectedApps.fold<int>(0, (sum, app) => sum + app.app.size.toInt());
     final formattedTotalSize = _formatSize(totalSize);
+    final l10n = AppLocalizations.of(context);
 
     return Container(
       padding: const EdgeInsets.all(16.0),
@@ -533,7 +537,7 @@ class _DownloadAppsState extends State<DownloadApps> {
       child: Row(
         children: [
           Text(
-            '${selectedApps.length} selected • $formattedTotalSize total', // TODO:  warn if total size is too large
+            l10n.selectedSummary(selectedApps.length, formattedTotalSize),
             style: Theme.of(context).textTheme.titleMedium,
           ),
           const Spacer(),
@@ -545,7 +549,7 @@ class _DownloadAppsState extends State<DownloadApps> {
               _clearSelection();
             },
             icon: const Icon(Icons.download),
-            label: const Text('Download Selected'),
+            label: Text(l10n.downloadSelected),
           ),
           const SizedBox(width: 8),
           Consumer<DeviceState>(
@@ -560,7 +564,7 @@ class _DownloadAppsState extends State<DownloadApps> {
                       }
                     : null,
                 icon: const Icon(Icons.install_mobile),
-                label: const Text('Install Selected'),
+                label: Text(l10n.installSelected),
               );
             },
           ),
@@ -568,7 +572,7 @@ class _DownloadAppsState extends State<DownloadApps> {
           IconButton(
             onPressed: _clearSelection,
             icon: const Icon(Icons.close),
-            tooltip: 'Clear selection',
+            tooltip: l10n.clearSelection,
           ),
         ],
       ),
@@ -579,6 +583,7 @@ class _DownloadAppsState extends State<DownloadApps> {
   Widget build(BuildContext context) {
     return Consumer<CloudAppsState>(
       builder: (context, cloudAppsState, _) {
+        final l10n = AppLocalizations.of(context);
         if (cloudAppsState.isLoading) {
           return const Center(
             child: CircularProgressIndicator(),
@@ -591,7 +596,7 @@ class _DownloadAppsState extends State<DownloadApps> {
               mainAxisSize: MainAxisSize.min,
               children: [
                 Text(
-                  'Error loading apps',
+                  l10n.errorLoadingApps,
                   style: Theme.of(context).textTheme.titleLarge,
                 ),
                 const SizedBox(height: 8),
@@ -600,7 +605,7 @@ class _DownloadAppsState extends State<DownloadApps> {
                 FilledButton.icon(
                   onPressed: () => cloudAppsState.refresh(),
                   icon: const Icon(Icons.refresh),
-                  label: const Text('Retry'),
+                  label: Text(l10n.retry),
                 ),
               ],
             ),
@@ -618,7 +623,7 @@ class _DownloadAppsState extends State<DownloadApps> {
                   child: Row(
                     children: [
                       Text(
-                        'Available Apps',
+                        l10n.availableApps,
                         style: Theme.of(context).textTheme.titleLarge,
                       ),
                       const Spacer(),
@@ -628,13 +633,13 @@ class _DownloadAppsState extends State<DownloadApps> {
                         icon: Icon(_showCheckboxes
                             ? Icons.check_box
                             : Icons.check_box_outline_blank),
-                        tooltip: 'Multi-select',
+                        tooltip: l10n.multiSelect,
                         onPressed: _toggleCheckboxVisibility,
                       ),
                       _buildSortButton(),
                       IconButton(
                         icon: const Icon(Icons.refresh),
-                        tooltip: 'Refresh',
+                        tooltip: l10n.refresh,
                         onPressed: () => cloudAppsState.refresh(),
                       ),
                     ],
@@ -652,7 +657,7 @@ class _DownloadAppsState extends State<DownloadApps> {
                         ),
                         const SizedBox(width: 8),
                         Text(
-                          'Showing selected items only',
+                          l10n.showingSelectedOnly,
                           style: Theme.of(context)
                               .textTheme
                               .bodyMedium

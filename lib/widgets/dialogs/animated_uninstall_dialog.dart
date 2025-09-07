@@ -1,5 +1,6 @@
 import 'package:flutter/material.dart';
 import '../../src/bindings/bindings.dart';
+import '../../src/l10n/app_localizations.dart';
 
 class AnimatedUninstallDialog extends StatefulWidget {
   final InstalledPackage app;
@@ -88,14 +89,14 @@ class _AnimatedUninstallDialogState extends State<AnimatedUninstallDialog>
 
   @override
   Widget build(BuildContext context) {
+    final l10n = AppLocalizations.of(context);
     return AlertDialog(
-      title: const Text('Uninstall App'),
-      content: Text(
-          'Are you sure you want to uninstall "${widget.app.label}"?\n\nThis will permanently delete the app and all its data.'),
+      title: Text(l10n.uninstallAppTitle),
+      content: Text(l10n.uninstallConfirmMessage(widget.app.label)),
       actions: [
         TextButton(
           onPressed: _isUninstalling ? null : () => Navigator.of(context).pop(),
-          child: const Text('Cancel'),
+          child: Text(l10n.commonCancel),
         ),
         FilledButton.icon(
           onPressed: _isUninstalling || _showSuccess ? null : _startUninstall,
@@ -124,10 +125,10 @@ class _AnimatedUninstallDialogState extends State<AnimatedUninstallDialog>
                       ),
           ),
           label: Text(_showSuccess
-              ? 'Uninstalled!'
+              ? l10n.uninstalledDone
               : _isUninstalling
-                  ? 'Uninstalling...'
-                  : 'Uninstall'),
+                  ? l10n.uninstalling
+                  : l10n.taskTypeUninstall),
         ),
       ],
     );

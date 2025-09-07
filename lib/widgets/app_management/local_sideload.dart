@@ -5,6 +5,7 @@ import 'package:provider/provider.dart';
 import '../../providers/device_state.dart';
 import '../../utils/sideload_utils.dart';
 import '../../providers/app_state.dart';
+import '../../src/l10n/app_localizations.dart';
 
 class LocalSideload extends StatefulWidget {
   const LocalSideload({super.key});
@@ -53,12 +54,13 @@ class _LocalSideloadState extends State<LocalSideload> {
   Future<void> _pickPath() async {
     // TODO: remember last path
     String? path;
+    final l10n = AppLocalizations.of(context);
     if (_isDirectory) {
       path = await FilePicker.platform
-          .getDirectoryPath(dialogTitle: 'Select app directory');
+          .getDirectoryPath(dialogTitle: l10n.selectAppDirectoryTitle);
     } else {
       final result = await FilePicker.platform.pickFiles(
-        dialogTitle: 'Select APK file',
+        dialogTitle: l10n.selectApkFileTitle,
         type: FileType.custom,
         allowedExtensions: ['apk'],
         // TODO: handle multiple files
@@ -77,14 +79,15 @@ class _LocalSideloadState extends State<LocalSideload> {
     final path = _pathController.text;
     if (path.isEmpty) return false;
 
+    final l10n = AppLocalizations.of(context);
     // Validate paths before proceeding
     final isValid = _isDirectory
         ? SideloadUtils.isDirectoryValid(path)
         : SideloadUtils.isValidApkFile(path);
     if (!isValid) {
       final errorMessage = _isDirectory
-          ? 'Selected path is not a valid app directory'
-          : 'Selected path is not a valid APK file';
+          ? l10n.selectedInvalidDir
+          : l10n.selectedInvalidApk;
       SideloadUtils.showErrorToast(context, errorMessage);
       return false;
     }
@@ -110,11 +113,12 @@ class _LocalSideloadState extends State<LocalSideload> {
   Widget build(BuildContext context) {
     return Consumer<DeviceState>(
       builder: (context, deviceState, _) {
+        final l10n = AppLocalizations.of(context);
         if (!deviceState.isConnected) {
-          return const Center(
+          return Center(
             child: Text(
-              'No device connected',
-              style: TextStyle(fontSize: 18),
+              l10n.noDeviceConnected,
+              style: const TextStyle(fontSize: 18),
             ),
           );
         }
@@ -132,22 +136,22 @@ class _LocalSideloadState extends State<LocalSideload> {
                       crossAxisAlignment: CrossAxisAlignment.stretch,
                       children: [
                         Text(
-                          'Sideload',
+                          l10n.navSideload,
                           style: Theme.of(context).textTheme.headlineMedium,
                           textAlign: TextAlign.center,
                         ),
                         const SizedBox(height: 24),
                         SegmentedButton<bool>(
-                          segments: const [
+                          segments: [
                             ButtonSegment(
                               value: false,
-                              label: Text('Single APK'),
-                              icon: Icon(Icons.file_present),
+                              label: Text(l10n.singleApk),
+                              icon: const Icon(Icons.file_present),
                             ),
                             ButtonSegment(
                               value: true,
-                              label: Text('App Directory'),
-                              icon: Icon(Icons.folder),
+                              label: Text(l10n.appDirectory),
+                              icon: const Icon(Icons.folder),
                             ),
                           ],
                           selected: {_isDirectory},
@@ -168,11 +172,11 @@ class _LocalSideloadState extends State<LocalSideload> {
                                 controller: _pathController,
                                 decoration: InputDecoration(
                                   labelText: _isDirectory
-                                      ? 'App Directory Path'
-                                      : 'APK File Path',
+                                      ? l10n.appDirectoryPath
+                                      : l10n.apkFilePath,
                                   hintText: _isDirectory
-                                      ? 'Select or enter app directory path'
-                                      : 'Select or enter APK file path',
+                                      ? l10n.pathHintDirectory
+                                      : l10n.pathHintApk,
                                   border: const OutlineInputBorder(),
                                 ),
                               ),
@@ -181,14 +185,14 @@ class _LocalSideloadState extends State<LocalSideload> {
                             IconButton.filledTonal(
                               onPressed: _pickPath,
                               icon: const Icon(Icons.folder_open),
-                              tooltip: 'Browse',
+                              tooltip: l10n.settingsBrowse,
                             ),
                           ],
                         ),
                         if (_isDirectory) ...[
                           const SizedBox(height: 16),
                           Text(
-                            'The directory should contain an APK file and optionally an OBB data directory, or install.txt file.',
+                            l10n.directoryRequirements,
                             style:
                                 Theme.of(context).textTheme.bodySmall?.copyWith(
                                       fontStyle: FontStyle.italic,
@@ -204,7 +208,7 @@ class _LocalSideloadState extends State<LocalSideload> {
                         ),
                         const SizedBox(height: 16),
                         Text(
-                          'Pro tip: You can also drag and drop APK files or app directories anywhere in the app to install them.',
+                          l10n.proTipDragDrop,
                           style: Theme.of(context)
                               .textTheme
                               .bodySmall
@@ -293,6 +297,7 @@ class _AnimatedSideloadButtonState extends State<_AnimatedSideloadButton>
 
   @override
   Widget build(BuildContext context) {
+    final l10n = AppLocalizations.of(context);
     return FilledButton.icon(
       onPressed: widget.isEnabled && !_showSuccess ? _onPressed : null,
       icon: AnimatedSwitcher(
@@ -309,10 +314,10 @@ class _AnimatedSideloadButtonState extends State<_AnimatedSideloadButton>
               ),
       ),
       label: Text(_showSuccess
-          ? 'Added to queue!'
+          ? l10n.addedToQueue
           : widget.isDirectory
-              ? 'Sideload App'
-              : 'Install APK'),
+              ? l10n.sideloadApp
+              : l10n.installApk),
     );
   }
 }

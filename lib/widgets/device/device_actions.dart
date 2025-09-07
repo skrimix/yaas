@@ -1,5 +1,6 @@
 import 'package:flutter/material.dart';
 import '../../src/bindings/bindings.dart';
+import '../../src/l10n/app_localizations.dart';
 import '../common/animated_adb_button.dart';
 
 class DeviceActionsCard extends StatelessWidget {
@@ -11,6 +12,7 @@ class DeviceActionsCard extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
+    final l10n = AppLocalizations.of(context);
     return SizedBox(
       width: 350,
       child: Card(
@@ -19,7 +21,7 @@ class DeviceActionsCard extends StatelessWidget {
           child: Column(
             crossAxisAlignment: CrossAxisAlignment.start,
             children: [
-              Text('Device Actions',
+              Text(l10n.deviceActions,
                   style: Theme.of(context).textTheme.titleMedium),
               const SizedBox(height: 12),
 
@@ -29,12 +31,12 @@ class DeviceActionsCard extends StatelessWidget {
                   const Icon(Icons.sensors),
                   const SizedBox(width: 8),
                   Expanded(
-                    child: Text('Proximity Sensor',
+                    child: Text(l10n.deviceProximitySensor,
                         style: Theme.of(context).textTheme.titleSmall),
                   ),
                   AnimatedAdbButton(
                     icon: Icons.sensors_off,
-                    tooltip: 'Disable proximity sensor',
+                    tooltip: l10n.disableProximitySensor,
                     commandType: AdbCommandType.proximitySensorSet,
                     commandKey: 'disable',
                     onPressed: () => _send('disable',
@@ -43,7 +45,7 @@ class DeviceActionsCard extends StatelessWidget {
                   const SizedBox(width: 8),
                   AnimatedAdbButton(
                     icon: Icons.sensors,
-                    tooltip: 'Enable proximity sensor',
+                    tooltip: l10n.enableProximitySensor,
                     commandType: AdbCommandType.proximitySensorSet,
                     commandKey: 'enable',
                     onPressed: () => _send('enable',
@@ -61,12 +63,12 @@ class DeviceActionsCard extends StatelessWidget {
                   const Icon(Icons.security),
                   const SizedBox(width: 8),
                   Expanded(
-                    child: Text('Guardian',
+                    child: Text(l10n.deviceGuardian,
                         style: Theme.of(context).textTheme.titleSmall),
                   ),
                   AnimatedAdbButton(
                     icon: Icons.pause_circle_filled,
-                    tooltip: 'Suspend Guardian',
+                    tooltip: l10n.guardianSuspend,
                     commandType: AdbCommandType.guardianPausedSet,
                     commandKey: 'suspend',
                     onPressed: () => _send('suspend',
@@ -75,7 +77,7 @@ class DeviceActionsCard extends StatelessWidget {
                   const SizedBox(width: 8),
                   AnimatedAdbButton(
                     icon: Icons.play_circle_fill,
-                    tooltip: 'Resume Guardian',
+                    tooltip: l10n.guardianResume,
                     commandType: AdbCommandType.guardianPausedSet,
                     commandKey: 'resume',
                     onPressed: () => _send('resume',

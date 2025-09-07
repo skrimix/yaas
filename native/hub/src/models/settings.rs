@@ -25,6 +25,8 @@ pub struct Settings {
     pub backups_location: String, // TODO: implement
     pub bandwidth_limit: String,
     pub cleanup_policy: DownloadCleanupPolicy, // TODO: implement
+    #[serde(default)]
+    pub locale_code: String,
 }
 
 impl Default for Settings {
@@ -46,6 +48,7 @@ impl Default for Settings {
                 .to_string(),
             bandwidth_limit: "".to_string(),
             cleanup_policy: DownloadCleanupPolicy::DeleteAfterInstall,
+            locale_code: "system".to_string(),
         }
     }
 }

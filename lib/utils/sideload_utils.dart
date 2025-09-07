@@ -2,6 +2,7 @@ import 'dart:io';
 import 'package:flutter/material.dart';
 import 'package:toastification/toastification.dart';
 import '../src/bindings/bindings.dart';
+import '../src/l10n/app_localizations.dart';
 
 class SideloadUtils {
   static bool isValidApkFile(String path) {
@@ -53,7 +54,7 @@ class SideloadUtils {
     toastification.show(
       type: ToastificationType.error,
       style: ToastificationStyle.flat,
-      title: const Text('Error'),
+      title: Text(AppLocalizations.of(context).commonError),
       description: Text(message),
       autoCloseDuration: const Duration(seconds: 3),
       backgroundColor: Theme.of(context).colorScheme.surfaceContainer,

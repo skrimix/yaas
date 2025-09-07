@@ -2,6 +2,7 @@ import 'package:flutter/material.dart';
 import 'package:provider/provider.dart';
 import '../../src/bindings/bindings.dart';
 import '../../providers/task_state.dart';
+import '../../src/l10n/app_localizations.dart';
 
 class TaskListDialog extends StatefulWidget {
   final int initialTabIndex;
@@ -46,36 +47,38 @@ class _TaskListDialogState extends State<TaskListDialog>
   }
 
   String _getTaskTypeString(TaskType type) {
+    final l10n = AppLocalizations.of(context);
     switch (type) {
       case TaskType.download:
-        return 'Download';
+        return l10n.taskTypeDownload;
       case TaskType.downloadInstall:
-        return 'Download & Install';
+        return l10n.taskTypeDownloadInstall;
       case TaskType.installApk:
-        return 'Install APK';
+        return l10n.taskTypeInstallApk;
       case TaskType.installLocalApp:
-        return 'Install Local App';
+        return l10n.taskTypeInstallLocalApp;
       case TaskType.uninstall:
-        return 'Uninstall';
+        return l10n.taskTypeUninstall;
       case TaskType.backupApp:
-        return 'Backup App';
+        return l10n.taskTypeBackupApp;
       case TaskType.restoreBackup:
-        return 'Restore Backup';
+        return l10n.taskTypeRestoreBackup;
     }
   }
 
   String _getStatusString(TaskStatus status) {
+    final l10n = AppLocalizations.of(context);
     switch (status) {
       case TaskStatus.waiting:
-        return 'Waiting';
+        return l10n.taskStatusWaiting;
       case TaskStatus.running:
-        return 'Running';
+        return l10n.taskStatusRunning;
       case TaskStatus.completed:
-        return 'Completed';
+        return l10n.taskStatusCompleted;
       case TaskStatus.failed:
-        return 'Failed';
+        return l10n.taskStatusFailed;
       case TaskStatus.cancelled:
-        return 'Cancelled';
+        return l10n.taskStatusCancelled;
     }
   }
 
@@ -129,7 +132,8 @@ class _TaskListDialogState extends State<TaskListDialog>
   }
 
   Widget _buildTaskItem(BuildContext context, TaskInfo task) {
-    final taskName = task.taskName ?? "Unknown";
+    final l10n = AppLocalizations.of(context);
+    final taskName = task.taskName ?? l10n.taskUnknown;
 
     return ListTile(
       title: Row(
@@ -229,7 +233,7 @@ class _TaskListDialogState extends State<TaskListDialog>
                 IconButton(
                   visualDensity: VisualDensity.compact,
                   icon: const Icon(Icons.close),
-                  tooltip: 'Cancel Task',
+                  tooltip: l10n.cancelTask,
                   onPressed: () {
                     TaskCancelRequest(
                             taskId: Uint64.fromBigInt(BigInt.from(task.taskId)))
@@ -253,8 +257,8 @@ class _TaskListDialogState extends State<TaskListDialog>
             children: [
               Row(
                 children: [
-                  const Text(
-                    'Tasks',
+                  Text(
+                    AppLocalizations.of(context).tasksTitle,
                     style: TextStyle(
                       fontSize: 20,
                       fontWeight: FontWeight.bold,
@@ -270,6 +274,7 @@ class _TaskListDialogState extends State<TaskListDialog>
               Expanded(
                 child: Consumer<TaskState>(
                   builder: (context, taskState, child) {
+                    final l10n = AppLocalizations.of(context);
                     _handleTaskStateChange(taskState);
                     final activeCount = taskState.activeTasks.length;
                     final recentCount = taskState.recentTasks.length;
@@ -278,8 +283,8 @@ class _TaskListDialogState extends State<TaskListDialog>
                         TabBar(
                           controller: _tabController,
                           tabs: [
-                            _buildTab(context, 'Active', activeCount),
-                            _buildTab(context, 'Recent', recentCount),
+                            _buildTab(context, l10n.tasksTabActive, activeCount),
+                            _buildTab(context, l10n.tasksTabRecent, recentCount),
                           ],
                         ),
                         Expanded(
@@ -288,12 +293,12 @@ class _TaskListDialogState extends State<TaskListDialog>
                             children: [
                               _TaskList(
                                 tasks: taskState.activeTasks,
-                                emptyMessage: 'No active tasks',
+                                emptyMessage: l10n.tasksEmptyActive,
                                 itemBuilder: _buildTaskItem,
                               ),
                               _TaskList(
                                 tasks: taskState.recentTasks,
-                                emptyMessage: 'No recent tasks',
+                                emptyMessage: l10n.tasksEmptyRecent,
                                 itemBuilder: _buildTaskItem,
                               ),
                             ],

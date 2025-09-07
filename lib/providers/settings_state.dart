@@ -2,6 +2,7 @@ import 'package:flutter/material.dart';
 import '../src/bindings/bindings.dart';
 
 class SettingsState extends ChangeNotifier {
+
   Settings _settings = Settings(
     rclonePath: '',
     rcloneRemoteName: '',
@@ -11,6 +12,7 @@ class SettingsState extends ChangeNotifier {
     backupsLocation: '',
     bandwidthLimit: '',
     cleanupPolicy: DownloadCleanupPolicy.deleteAfterInstall,
+    localeCode: 'system',
   );
 
   bool _isLoading = false;
@@ -65,4 +67,16 @@ class SettingsState extends ChangeNotifier {
   Settings get settings => _settings;
   bool get isLoading => _isLoading;
   String? get error => _error;
+  Locale? get locale {
+    final code = _settings.localeCode;
+    if (code == 'system' || code.isEmpty) return null;
+    return Locale(code);
+  }
+
+  Future<void> setLocaleCode(String code) async {
+    _settings = _settings.copyWith(localeCode: code);
+    notifyListeners();
+    // Persist immediately via Rust settings handler
+    SaveSettingsRequest(settings: _settings).sendSignalToRust();
+  }
 }

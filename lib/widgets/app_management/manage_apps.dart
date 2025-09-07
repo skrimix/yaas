@@ -1,4 +1,5 @@
 import 'package:flutter/material.dart';
+import '../../src/l10n/app_localizations.dart';
 import 'package:flutter/services.dart';
 import 'package:provider/provider.dart';
 import 'package:proper_filesize/proper_filesize.dart' as filesize;
@@ -187,11 +188,12 @@ class _ManageAppsState extends State<ManageApps> {
   }
 
   void _copyToClipboard(String text, bool showText) {
+    final l10n = AppLocalizations.of(context);
     Clipboard.setData(ClipboardData(text: text));
     toastification.show(
       type: ToastificationType.success,
       style: ToastificationStyle.flat,
-      title: Text('Copied to clipboard'),
+      title: Text(l10n.copiedToClipboard),
       description: showText ? Text(text) : null,
       autoCloseDuration: const Duration(seconds: 2),
       backgroundColor: Theme.of(context).colorScheme.surfaceContainer,
@@ -203,7 +205,7 @@ class _ManageAppsState extends State<ManageApps> {
   Widget _buildCopyableText(String text, bool showTooltip) {
     return showTooltip
         ? Tooltip(
-            message: 'Click to copy',
+            message: AppLocalizations.of(context).clickToCopy,
             waitDuration: const Duration(milliseconds: 300),
             child: MouseRegion(
                 cursor: SystemMouseCursors.click,
@@ -221,18 +223,18 @@ class _ManageAppsState extends State<ManageApps> {
   }
 
   String _formatAppDetails(InstalledPackage app) {
-    return 'App Name: ${app.label}\n'
-        'Package Name: ${app.packageName}\n'
-        'Version: ${app.versionName}\n'
-        'Version Code: ${app.versionCode}\n'
-        'Is VR: ${app.vr ? 'Yes' : 'No'}\n'
-        'Is Launchable: ${app.launchable ? 'Yes' : 'No'}\n'
-        'Is System: ${app.system ? 'Yes' : 'No'}\n'
-        'Storage Usage:\n'
-        'App: ${_formatSize(app.size.app.toInt())}\n'
-        'Data: ${_formatSize(app.size.data.toInt())}\n'
-        'Cache: ${_formatSize(app.size.cache.toInt())}\n'
-        'Total: ${_formatAppSize(app.size)}';
+    final l10n = AppLocalizations.of(context);
+    return '${l10n.detailsPackageName} ${app.packageName}\n'
+        '${l10n.detailsVersion} ${app.versionName}\n'
+        '${l10n.detailsVersionCode} ${app.versionCode}\n'
+        '${l10n.detailsIsVr} ${app.vr ? l10n.commonYes : l10n.commonNo}\n'
+        '${l10n.detailsIsLaunchable} ${app.launchable ? l10n.commonYes : l10n.commonNo}\n'
+        '${l10n.detailsIsSystem} ${app.system ? l10n.commonYes : l10n.commonNo}\n'
+        '${l10n.detailsStorageUsage}\n'
+        '${l10n.detailsApp} ${_formatSize(app.size.app.toInt())}\n'
+        '${l10n.detailsData} ${_formatSize(app.size.data.toInt())}\n'
+        '${l10n.detailsCache} ${_formatSize(app.size.cache.toInt())}\n'
+        '${l10n.detailsTotal} ${_formatAppSize(app.size)}';
   }
 
   Widget _buildDetailsRow(String label, String value, bool copyable) {
@@ -255,24 +257,31 @@ class _ManageAppsState extends State<ManageApps> {
           mainAxisSize: MainAxisSize.min,
           crossAxisAlignment: CrossAxisAlignment.start,
           children: [
-            _buildDetailsRow('Package Name:', app.packageName, true),
-            _buildDetailsRow('Version:', app.versionName, true),
-            _buildDetailsRow('Version Code:', app.versionCode.toString(), true),
-            _buildDetailsRow('Is VR:', app.vr ? 'Yes' : 'No', false),
-            _buildDetailsRow(
-                'Is Launchable:', app.launchable ? 'Yes' : 'No', false),
-            _buildDetailsRow('Is System:', app.system ? 'Yes' : 'No', false),
+            ...() {
+              final l10n = AppLocalizations.of(context);
+              return [
+                _buildDetailsRow(l10n.detailsPackageName, app.packageName, true),
+                _buildDetailsRow(l10n.detailsVersion, app.versionName, true),
+                _buildDetailsRow(l10n.detailsVersionCode, app.versionCode.toString(), true),
+                _buildDetailsRow(l10n.detailsIsVr, app.vr ? l10n.commonYes : l10n.commonNo, false),
+                _buildDetailsRow(l10n.detailsIsLaunchable, app.launchable ? l10n.commonYes : l10n.commonNo, false),
+                _buildDetailsRow(l10n.detailsIsSystem, app.system ? l10n.commonYes : l10n.commonNo, false),
+              ];
+            }(),
             const SizedBox(height: 16),
-            const Text('Storage Usage:',
-                style: TextStyle(fontWeight: FontWeight.bold)),
+            Text(AppLocalizations.of(context).detailsStorageUsage,
+                style: const TextStyle(fontWeight: FontWeight.bold)),
             const SizedBox(height: 4),
-            _buildDetailsRow('App:', _formatSize(app.size.app.toInt()), false),
-            _buildDetailsRow(
-                'Data:', _formatSize(app.size.data.toInt()), false),
-            _buildDetailsRow(
-                'Cache:', _formatSize(app.size.cache.toInt()), false),
+            ...() {
+              final l10n = AppLocalizations.of(context);
+              return [
+                _buildDetailsRow(l10n.detailsApp, _formatSize(app.size.app.toInt()), false),
+                _buildDetailsRow(l10n.detailsData, _formatSize(app.size.data.toInt()), false),
+                _buildDetailsRow(l10n.detailsCache, _formatSize(app.size.cache.toInt()), false),
+              ];
+            }(),
             const Divider(height: 4),
-            _buildDetailsRow('Total:', _formatAppSize(app.size), false),
+            _buildDetailsRow(AppLocalizations.of(context).detailsTotal, _formatAppSize(app.size), false),
           ],
         ),
         actions: [
@@ -280,11 +289,11 @@ class _ManageAppsState extends State<ManageApps> {
             onPressed: () => {
               _copyToClipboard(_formatAppDetails(app), false),
             },
-            child: const Text('Copy'),
+            child: Text(AppLocalizations.of(context).commonCopy),
           ),
           TextButton(
             onPressed: () => Navigator.of(context).pop(),
-            child: const Text('Close'),
+            child: Text(AppLocalizations.of(context).commonClose),
           ),
         ],
       ),
@@ -314,13 +323,14 @@ class _ManageAppsState extends State<ManageApps> {
     showDialog(
       context: context,
       builder: (context) => AlertDialog(
-        title: const Text('Available Versions'),
+        title: Text(AppLocalizations.of(context).availableVersions),
         content: SizedBox(
           width: 500,
           height: 300,
           child: ValueListenableBuilder<bool>(
               valueListenable: _isShiftPressedNotifier,
               builder: (context, isShiftPressed, _) {
+                final l10n = AppLocalizations.of(context);
                 return ListView.builder(
                   itemCount: matchingCloudApps.length,
                   itemBuilder: (context, index) {
@@ -334,13 +344,12 @@ class _ManageAppsState extends State<ManageApps> {
 
                     String tooltipText;
                     if (isNewer) {
-                      tooltipText = 'Install newer version';
+                      tooltipText = l10n.installNewerVersion;
                     } else if (isSameVersion) {
-                      tooltipText = isShiftPressed
-                          ? 'Reinstall this version'
-                          : 'Hold Shift to reinstall this version';
+                      tooltipText =
+                          isShiftPressed ? l10n.reinstallThisVersion : l10n.holdShiftToReinstall;
                     } else {
-                      tooltipText = 'Cannot downgrade to older version';
+                      tooltipText = l10n.cannotDowngrade;
                     }
 
                     return ListTile(
@@ -352,10 +361,10 @@ class _ManageAppsState extends State<ManageApps> {
                               '${app.versionName} (${app.versionCode}) → v${cloudApp.versionCode}'),
                           Text(
                             isNewer
-                                ? 'Newer version'
+                                ? l10n.newerVersion
                                 : isSameVersion
-                                    ? 'Same version'
-                                    : 'Older version',
+                                    ? l10n.sameVersion
+                                    : l10n.olderVersion,
                             style: TextStyle(
                               color: isNewer
                                   ? Colors.green
@@ -376,7 +385,7 @@ class _ManageAppsState extends State<ManageApps> {
                                   _installCloudApp(cloudApp.fullName);
                                 }
                               : null,
-                          child: Text(isNewer ? 'Update' : 'Install'),
+                          child: Text(isNewer ? l10n.update : l10n.install),
                         ),
                       ),
                     );
@@ -387,7 +396,7 @@ class _ManageAppsState extends State<ManageApps> {
         actions: [
           TextButton(
             onPressed: () => Navigator.of(context).pop(),
-            child: const Text('Cancel'),
+            child: Text(AppLocalizations.of(context).commonCancel),
           ),
         ],
       ),
@@ -404,10 +413,11 @@ class _ManageAppsState extends State<ManageApps> {
   Widget _buildUpdateButton(BuildContext context, InstalledPackage app) {
     return Consumer<CloudAppsState>(
       builder: (context, cloudAppsState, _) {
+        final l10n = AppLocalizations.of(context);
         if (cloudAppsState.apps.isEmpty) {
           return IconButton(
             icon: const Icon(Icons.update),
-            tooltip: 'Check for updates',
+            tooltip: l10n.checkForUpdates,
             onPressed: null,
           );
         }
@@ -418,7 +428,7 @@ class _ManageAppsState extends State<ManageApps> {
         if (matchingCloudApps.isEmpty) {
           return IconButton(
             icon: const Icon(Icons.update),
-            tooltip: 'No matching app found in cloud repository',
+            tooltip: l10n.noMatchingCloudApp,
             onPressed: null,
           );
         }
@@ -435,6 +445,7 @@ class _ManageAppsState extends State<ManageApps> {
         return ValueListenableBuilder<bool>(
             valueListenable: _isShiftPressedNotifier,
             builder: (context, isShiftPressed, _) {
+              final l10n = AppLocalizations.of(context);
               if (matchingCloudApps.length == 1) {
                 // Single match
                 return IconButton(
@@ -443,10 +454,10 @@ class _ManageAppsState extends State<ManageApps> {
                     color: hasNewerVersion ? Colors.green : null,
                   ),
                   tooltip: hasNewerVersion
-                      ? 'Update from ${app.versionCode} to ${newestCloudApp.versionCode}'
+                      ? l10n.updateFromTo('${app.versionCode}', '${newestCloudApp.versionCode}')
                       : isShiftPressed
-                          ? 'Reinstall current version'
-                          : 'Already on latest version (hold Shift to allow reinstall)',
+                          ? l10n.reinstallThisVersion
+                          : l10n.holdShiftToReinstall,
                   onPressed: hasNewerVersion || isShiftPressed
                       ? () => _installCloudApp(newestCloudApp.fullName)
                       : null,
@@ -461,8 +472,8 @@ class _ManageAppsState extends State<ManageApps> {
                         : null,
                   ),
                   tooltip: hasNewerVersion || isShiftPressed
-                      ? 'Multiple versions available (click to select)'
-                      : 'No newer versions available (hold Shift to allow reinstall)',
+                      ? l10n.availableVersions
+                      : l10n.holdShiftToReinstall,
                   onPressed: hasNewerVersion || isShiftPressed
                       ? () => _showUpdateDialog(context, app, matchingCloudApps)
                       : null,
@@ -475,10 +486,11 @@ class _ManageAppsState extends State<ManageApps> {
 
   Widget _buildAppList(List<InstalledPackage> apps) {
     if (apps.isEmpty) {
-      return const Center(
+      final l10n = AppLocalizations.of(context);
+      return Center(
         child: Padding(
-          padding: EdgeInsets.all(16.0),
-          child: Text('No apps in this category'),
+          padding: const EdgeInsets.all(16.0),
+          child: Text(l10n.noAppsInCategory),
         ),
       );
     }
@@ -493,6 +505,7 @@ class _ManageAppsState extends State<ManageApps> {
         final theme = Theme.of(context);
         final textTheme = theme.textTheme;
 
+        final l10n = AppLocalizations.of(context);
         return Card(
           margin: const EdgeInsets.symmetric(horizontal: 16, vertical: 2),
           child: ListTile(
@@ -520,14 +533,14 @@ class _ManageAppsState extends State<ManageApps> {
               children: [
                 IconButton(
                   icon: const Icon(Icons.info_outline),
-                  tooltip: 'App Details',
+                  tooltip: l10n.appDetails,
                   onPressed: () => _showAppDetailsDialog(context, app),
                 ),
                 if (_selectedCategory != AppCategory.system) ...[
                   _buildUpdateButton(context, app),
                   AnimatedAdbButton(
                     icon: Icons.play_arrow,
-                    tooltip: 'Launch',
+                    tooltip: l10n.launch,
                     commandType: AdbCommandType.launchApp,
                     commandKey: app.packageName,
                     onPressed: () {
@@ -540,7 +553,7 @@ class _ManageAppsState extends State<ManageApps> {
                   ),
                   AnimatedAdbButton(
                     icon: Icons.close,
-                    tooltip: 'Force Stop',
+                    tooltip: l10n.forceStop,
                     commandType: AdbCommandType.forceStopApp,
                     commandKey: app.packageName,
                     onPressed: () {
@@ -552,10 +565,10 @@ class _ManageAppsState extends State<ManageApps> {
                     },
                   ),
                   Tooltip(
-                    message: 'Backup App',
+                    message: l10n.backupApp,
                     child: IconButton(
                       icon: const Icon(Icons.archive_outlined),
-                      tooltip: 'Backup',
+                      tooltip: l10n.backup,
                       onPressed: () {
                         showDialog(
                           context: context,
@@ -566,7 +579,7 @@ class _ManageAppsState extends State<ManageApps> {
                   ),
                   IconButton(
                     icon: const Icon(Icons.delete_outline),
-                    tooltip: 'Uninstall',
+                    tooltip: l10n.uninstall,
                     onPressed: () => _showUninstallDialog(context, app),
                   ),
                 ],
@@ -582,11 +595,12 @@ class _ManageAppsState extends State<ManageApps> {
   Widget build(BuildContext context) {
     return Consumer<DeviceState>(
       builder: (context, deviceState, _) {
+        final l10n = AppLocalizations.of(context);
         if (!deviceState.isConnected) {
-          return const Center(
+          return Center(
             child: Text(
-              'No device connected',
-              style: TextStyle(fontSize: 18),
+              l10n.noDeviceConnected,
+              style: const TextStyle(fontSize: 18),
             ),
           );
         }
@@ -611,17 +625,18 @@ class _ManageAppsState extends State<ManageApps> {
                     segments: [
                       ButtonSegment(
                         value: AppCategory.vr,
-                        label: Text('VR Apps (${_cachedVrApps?.length ?? 0})'),
+                        label: Text(l10n
+                            .segmentVrApps(_cachedVrApps?.length ?? 0)),
                       ),
                       ButtonSegment(
                         value: AppCategory.other,
-                        label: Text(
-                            'Other Apps (${_cachedOtherApps?.length ?? 0})'),
+                        label: Text(l10n
+                            .segmentOtherApps(_cachedOtherApps?.length ?? 0)),
                       ),
                       ButtonSegment(
                         value: AppCategory.system,
-                        label: Text(
-                            'System & Hidden Apps (${_cachedSystemApps?.length ?? 0})'),
+                        label: Text(l10n
+                            .segmentSystemApps(_cachedSystemApps?.length ?? 0)),
                       ),
                     ],
                     selected: {_selectedCategory},

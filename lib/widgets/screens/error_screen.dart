@@ -1,6 +1,7 @@
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 import 'package:toastification/toastification.dart';
+import '../../src/l10n/app_localizations.dart';
 
 class ErrorScreen extends StatelessWidget {
   final String message;
@@ -9,6 +10,7 @@ class ErrorScreen extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
+    final l10n = AppLocalizations.of(context);
     return Scaffold(
       backgroundColor: Theme.of(context).colorScheme.surfaceContainer,
       body: SafeArea(
@@ -27,7 +29,7 @@ class ErrorScreen extends StatelessWidget {
                   ),
                   const SizedBox(height: 12),
                   Text(
-                    'Fatal Error',
+                    l10n.fatalErrorTitle,
                     style: Theme.of(context).textTheme.headlineMedium,
                   ),
                   const SizedBox(height: 12),
@@ -60,7 +62,7 @@ class ErrorScreen extends StatelessWidget {
                           SystemNavigator.pop();
                         },
                         icon: const Icon(Icons.close),
-                        label: const Text('Exit Application'),
+                        label: Text(l10n.exitApplication),
                       ),
                       const SizedBox(width: 16),
                       OutlinedButton.icon(
@@ -68,14 +70,13 @@ class ErrorScreen extends StatelessWidget {
                           Clipboard.setData(ClipboardData(text: message));
                           toastification.show(
                             type: ToastificationType.success,
-                            title:
-                                const Text('Error message copied to clipboard'),
+                            title: Text(l10n.errorCopied),
                             borderSide: BorderSide.none,
                             autoCloseDuration: const Duration(seconds: 3),
                           );
                         },
                         icon: const Icon(Icons.copy),
-                        label: const Text('Copy Error'),
+                        label: Text(l10n.copyError),
                       ),
                     ],
                   ),

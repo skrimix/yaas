@@ -3,6 +3,8 @@ import 'dart:ui';
 import 'package:desktop_window/desktop_window.dart';
 import 'package:flutter/material.dart';
 import 'package:provider/provider.dart';
+import 'package:flutter_localizations/flutter_localizations.dart';
+import 'src/l10n/app_localizations.dart';
 import 'package:rinf/rinf.dart';
 import 'package:toastification/toastification.dart'; // TODO: find an alternative
 import 'src/bindings/bindings.dart' as messages;
@@ -124,7 +126,15 @@ class _ZydeAppState extends State<ZydeApp> {
       ),
       child: MaterialApp(
         navigatorKey: ZydeApp.navigatorKey,
-        title: 'Zyde',
+        onGenerateTitle: (context) => AppLocalizations.of(context).appTitle,
+        locale: context.watch<SettingsState>().locale,
+        localizationsDelegates: const [
+          AppLocalizations.delegate,
+          GlobalMaterialLocalizations.delegate,
+          GlobalWidgetsLocalizations.delegate,
+          GlobalCupertinoLocalizations.delegate,
+        ],
+        supportedLocales: AppLocalizations.supportedLocales,
         theme: ThemeData(
           colorScheme: colorScheme,
           useMaterial3: true,
@@ -163,32 +173,37 @@ class SinglePage extends StatefulWidget {
 }
 
 class _SinglePageState extends State<SinglePage> {
-  final _destinations = [
-    Destination(icon: Icons.home, label: 'Home', content: const Home()),
-    Destination(icon: Icons.apps, label: 'Manage', content: const ManageApps()),
-    Destination(
-        icon: Icons.get_app, label: 'Download', content: const DownloadApps()),
-    Destination(
-        icon: Icons.arrow_circle_down,
-        label: 'Sideload',
-        content: const LocalSideload()),
-    Destination(
-        icon: Icons.backup_outlined,
-        label: 'Backups',
-        content: const BackupsScreen()),
-    Destination(
-        icon: Icons.settings,
-        label: 'Settings',
-        content: const SettingsScreen()),
-    Destination(
-        icon: Icons.terminal, label: 'Logs', content: const LogsScreen()),
-    Destination(icon: Icons.info, label: 'About', content: Text('About')),
-  ];
-
   var pageIndex = 0;
 
   @override
   Widget build(BuildContext context) {
+    final l10n = AppLocalizations.of(context);
+    final destinations = [
+      Destination(icon: Icons.home, label: l10n.navHome, content: const Home()),
+      Destination(
+          icon: Icons.apps,
+          label: l10n.navManage,
+          content: const ManageApps()),
+      Destination(
+          icon: Icons.get_app,
+          label: l10n.navDownload,
+          content: const DownloadApps()),
+      Destination(
+          icon: Icons.arrow_circle_down,
+          label: l10n.navSideload,
+          content: const LocalSideload()),
+      Destination(
+          icon: Icons.backup_outlined,
+          label: l10n.navBackups,
+          content: const BackupsScreen()),
+      Destination(
+          icon: Icons.settings,
+          label: l10n.navSettings,
+          content: const SettingsScreen()),
+      Destination(
+          icon: Icons.terminal, label: l10n.navLogs, content: const LogsScreen()),
+      Destination(icon: Icons.info, label: l10n.navAbout, content: Text(l10n.navAbout)),
+    ];
     return Scaffold(
         body: Row(
       children: [
@@ -196,7 +211,7 @@ class _SinglePageState extends State<SinglePage> {
             child: NavigationRail(
           backgroundColor: Theme.of(context).colorScheme.surfaceContainerLow,
           labelType: NavigationRailLabelType.selected,
-          destinations: _buildNavDestinations(),
+          destinations: _buildNavDestinations(destinations),
           selectedIndex: pageIndex,
           onDestinationSelected: (index) => setState(() => pageIndex = index),
         )),
@@ -208,7 +223,7 @@ class _SinglePageState extends State<SinglePage> {
                   duration: const Duration(milliseconds: 100),
                   child: SizedBox.expand(
                     key: ValueKey(pageIndex),
-                    child: _destinations[pageIndex].content,
+                    child: destinations[pageIndex].content,
                   ),
                 ),
               ),
@@ -220,8 +235,9 @@ class _SinglePageState extends State<SinglePage> {
     ));
   }
 
-  List<NavigationRailDestination> _buildNavDestinations() {
-    return _destinations
+  List<NavigationRailDestination> _buildNavDestinations(
+      List<Destination> destinations) {
+    return destinations
         .map((destination) => destination.navigationDestination)
         .toList();
   }

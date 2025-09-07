@@ -635,7 +635,8 @@ class _ManageAppsState extends State<ManageApps> {
                       appState.setManageAppsCategoryIndex(idx);
                       // Restore saved scroll for the newly selected category
                       WidgetsBinding.instance.addPostFrameCallback((_) {
-                        final controller = _scrollControllers[_selectedCategory]!;
+                        final controller =
+                            _scrollControllers[_selectedCategory]!;
                         if (controller.hasClients) {
                           final target = appState.getManageScrollOffset(idx);
                           final max = controller.position.maxScrollExtent;

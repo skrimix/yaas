@@ -159,15 +159,17 @@ class _BackupTile extends StatelessWidget {
           crossAxisAlignment: CrossAxisAlignment.center,
           children: [
             IconButton(
-              tooltip: 'Open Folder',
-              icon: const Icon(Icons.folder_open),
-              onPressed: onOpenFolder,
-            ),
-            IconButton(
               tooltip: 'Delete',
               icon: const Icon(Icons.delete_outline),
               onPressed: onDelete,
             ),
+            const SizedBox(width: 8),
+            IconButton(
+              tooltip: 'Open Folder',
+              icon: const Icon(Icons.folder_open),
+              onPressed: onOpenFolder,
+            ),
+            const SizedBox(width: 8),
             FilledButton.icon(
               onPressed: onRestore,
               icon: const Icon(Icons.restore),
@@ -205,7 +207,7 @@ class _BackupTile extends StatelessWidget {
     if (entry.hasObb) parts.add('OBB');
     final partsStr = parts.isEmpty ? 'No parts detected' : parts.join(', ');
 
-    return '$sizeStr • $tsStr • $partsStr';
+    return '$tsStr • $partsStr • $sizeStr';
   }
 }
 

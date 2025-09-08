@@ -28,7 +28,7 @@ mimalloc = "0.1.43"
 rinf = { version = "8.7.2", features = ["show-backtrace"] }
 serde = { version = "1.0.217", features = ["derive"] }
 serde_json = { version = "1.0.135", features = ["preserve_order"] }
-sevenz-rust2 = "0.17.1"
+sevenz-rust2 = "0.18.0"
 sysproxy = { git = "https://github.com/zzzgydi/sysproxy-rs" }
 test-log = { version = "0.2.16", features = ["trace"] }
 tokio = { version = "1.42.0", features = [
@@ -55,7 +55,7 @@ which = { version = "8.0.0", features = ["tracing"] }
 time = { version = "0.3.42", features = ["formatting", "macros", "local-offset"] }
 sanitize-filename = "0.6.0"
 glob = "0.3.3"
-reqwest = { version = "0.12.23", features = ["json", "rustls-tls"] }
+reqwest = { version = "0.12.23", default-features = false, features = ["json", "rustls-tls"] }
 
 [package.metadata.cargo-machete]
 ignored = ["log"]

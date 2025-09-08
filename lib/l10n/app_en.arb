@@ -37,7 +37,7 @@
   "settingsNoRemotesFound": "No remotes found",
   "settingsFailedToLoadRemotes": "Failed to list remotes",
   "settingsBandwidthLimit": "Bandwidth Limit",
-  "settingsBandwidthHelper": "Value in KiB/s or with B|K|M|G|T|P suffix or more (click for documentation)",
+  "settingsBandwidthHelper": "(Not implemented) Value in KiB/s or with B|K|M|G|T|P suffix or more (click for documentation)",
   "settingsDownloadsCleanup": "Downloads Cleanup",
   "settingsCleanupDeleteAfterInstall": "Remove after installation",
   "settingsCleanupKeepOneVersion": "Keep latest version only",

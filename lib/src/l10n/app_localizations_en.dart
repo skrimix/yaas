@@ -116,7 +116,7 @@ class AppLocalizationsEn extends AppLocalizations {
 
   @override
   String get settingsBandwidthHelper =>
-      'Value in KiB/s or with B|K|M|G|T|P suffix or more (click for documentation)';
+      '(Not implemented) Value in KiB/s or with B|K|M|G|T|P suffix or more (click for documentation)';
 
   @override
   String get settingsDownloadsCleanup => 'Downloads Cleanup';

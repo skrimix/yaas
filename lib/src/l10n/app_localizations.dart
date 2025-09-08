@@ -650,6 +650,12 @@ abstract class AppLocalizations {
   /// **'Total:'**
   String get detailsTotal;
 
+  /// No description provided for @detailsRating.
+  ///
+  /// In en, this message translates to:
+  /// **'Rating:'**
+  String get detailsRating;
+
   /// No description provided for @commonCopy.
   ///
   /// In en, this message translates to:
@@ -973,6 +979,12 @@ abstract class AppLocalizations {
   /// In en, this message translates to:
   /// **'Available Apps'**
   String get availableApps;
+
+  /// No description provided for @underConstruction.
+  ///
+  /// In en, this message translates to:
+  /// **'Under construction'**
+  String get underConstruction;
 
   /// No description provided for @multiSelect.
   ///

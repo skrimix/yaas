@@ -1,7 +1,7 @@
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
-import 'package:toastification/toastification.dart';
 import '../../src/l10n/app_localizations.dart';
+import '../../utils/utils.dart';
 
 class ErrorScreen extends StatelessWidget {
   final String message;
@@ -67,13 +67,8 @@ class ErrorScreen extends StatelessWidget {
                       const SizedBox(width: 16),
                       OutlinedButton.icon(
                         onPressed: () {
-                          Clipboard.setData(ClipboardData(text: message));
-                          toastification.show(
-                            type: ToastificationType.success,
-                            title: Text(l10n.errorCopied),
-                            borderSide: BorderSide.none,
-                            autoCloseDuration: const Duration(seconds: 3),
-                          );
+                          copyToClipboard(context, message,
+                              autoCloseDuration: const Duration(seconds: 3));
                         },
                         icon: const Icon(Icons.copy),
                         label: Text(l10n.copyError),

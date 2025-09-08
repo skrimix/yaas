@@ -9,7 +9,8 @@ import '../device/device_actions.dart';
 class Home extends StatelessWidget {
   const Home({super.key});
 
-  Widget _buildDeviceStatus(BuildContext context, {
+  Widget _buildDeviceStatus(
+    BuildContext context, {
     required String title,
     String? status,
     required int batteryLevel,
@@ -18,8 +19,7 @@ class Home extends StatelessWidget {
     AppLocalizations? l10n,
   }) {
     return Tooltip(
-      message:
-          '$title\n'
+      message: '$title\n'
           '${status != null ? '${(l10n ?? AppLocalizations.of(context)).statusLabel}: $status\n' : ''}'
           '${(l10n ?? AppLocalizations.of(context)).batteryLabel}: $batteryLevel%',
       child: Opacity(

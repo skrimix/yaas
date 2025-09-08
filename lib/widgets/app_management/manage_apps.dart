@@ -3,11 +3,11 @@ import '../../src/l10n/app_localizations.dart';
 import 'package:flutter/services.dart';
 import 'package:provider/provider.dart';
 import 'package:proper_filesize/proper_filesize.dart' as filesize;
-import 'package:toastification/toastification.dart';
 import '../../providers/device_state.dart';
 import '../../providers/cloud_apps_state.dart';
 import '../../providers/app_state.dart';
 import '../../src/bindings/bindings.dart';
+import '../../utils/utils.dart';
 import '../common/animated_adb_button.dart';
 import '../dialogs/animated_uninstall_dialog.dart';
 import '../dialogs/backup_options_dialog.dart';
@@ -187,21 +187,6 @@ class _ManageAppsState extends State<ManageApps> {
     return _formatSize(totalBytes);
   }
 
-  void _copyToClipboard(String text, bool showText) {
-    final l10n = AppLocalizations.of(context);
-    Clipboard.setData(ClipboardData(text: text));
-    toastification.show(
-      type: ToastificationType.success,
-      style: ToastificationStyle.flat,
-      title: Text(l10n.copiedToClipboard),
-      description: showText ? Text(text) : null,
-      autoCloseDuration: const Duration(seconds: 2),
-      backgroundColor: Theme.of(context).colorScheme.surfaceContainer,
-      borderSide: BorderSide.none,
-      alignment: Alignment.bottomRight,
-    );
-  }
-
   Widget _buildCopyableText(String text, bool showTooltip) {
     return showTooltip
         ? Tooltip(
@@ -211,13 +196,13 @@ class _ManageAppsState extends State<ManageApps> {
                 cursor: SystemMouseCursors.click,
                 child: GestureDetector(
                   onTap: () => {
-                    _copyToClipboard(text, true),
+                    copyToClipboard(context, text, description: text),
                   },
                   child: Text(text),
                 )),
           )
         : InkWell(
-            onTap: () => _copyToClipboard(text, true),
+            onTap: () => copyToClipboard(context, text, description: text),
             child: Text(text),
           );
   }
@@ -260,12 +245,17 @@ class _ManageAppsState extends State<ManageApps> {
             ...() {
               final l10n = AppLocalizations.of(context);
               return [
-                _buildDetailsRow(l10n.detailsPackageName, app.packageName, true),
+                _buildDetailsRow(
+                    l10n.detailsPackageName, app.packageName, true),
                 _buildDetailsRow(l10n.detailsVersion, app.versionName, true),
-                _buildDetailsRow(l10n.detailsVersionCode, app.versionCode.toString(), true),
-                _buildDetailsRow(l10n.detailsIsVr, app.vr ? l10n.commonYes : l10n.commonNo, false),
-                _buildDetailsRow(l10n.detailsIsLaunchable, app.launchable ? l10n.commonYes : l10n.commonNo, false),
-                _buildDetailsRow(l10n.detailsIsSystem, app.system ? l10n.commonYes : l10n.commonNo, false),
+                _buildDetailsRow(
+                    l10n.detailsVersionCode, app.versionCode.toString(), true),
+                _buildDetailsRow(l10n.detailsIsVr,
+                    app.vr ? l10n.commonYes : l10n.commonNo, false),
+                _buildDetailsRow(l10n.detailsIsLaunchable,
+                    app.launchable ? l10n.commonYes : l10n.commonNo, false),
+                _buildDetailsRow(l10n.detailsIsSystem,
+                    app.system ? l10n.commonYes : l10n.commonNo, false),
               ];
             }(),
             const SizedBox(height: 16),
@@ -275,19 +265,23 @@ class _ManageAppsState extends State<ManageApps> {
             ...() {
               final l10n = AppLocalizations.of(context);
               return [
-                _buildDetailsRow(l10n.detailsApp, _formatSize(app.size.app.toInt()), false),
-                _buildDetailsRow(l10n.detailsData, _formatSize(app.size.data.toInt()), false),
-                _buildDetailsRow(l10n.detailsCache, _formatSize(app.size.cache.toInt()), false),
+                _buildDetailsRow(
+                    l10n.detailsApp, _formatSize(app.size.app.toInt()), false),
+                _buildDetailsRow(l10n.detailsData,
+                    _formatSize(app.size.data.toInt()), false),
+                _buildDetailsRow(l10n.detailsCache,
+                    _formatSize(app.size.cache.toInt()), false),
               ];
             }(),
             const Divider(height: 4),
-            _buildDetailsRow(AppLocalizations.of(context).detailsTotal, _formatAppSize(app.size), false),
+            _buildDetailsRow(AppLocalizations.of(context).detailsTotal,
+                _formatAppSize(app.size), false),
           ],
         ),
         actions: [
           TextButton(
             onPressed: () => {
-              _copyToClipboard(_formatAppDetails(app), false),
+              copyToClipboard(context, _formatAppDetails(app)),
             },
             child: Text(AppLocalizations.of(context).commonCopy),
           ),
@@ -346,8 +340,9 @@ class _ManageAppsState extends State<ManageApps> {
                     if (isNewer) {
                       tooltipText = l10n.installNewerVersion;
                     } else if (isSameVersion) {
-                      tooltipText =
-                          isShiftPressed ? l10n.reinstallThisVersion : l10n.holdShiftToReinstall;
+                      tooltipText = isShiftPressed
+                          ? l10n.reinstallThisVersion
+                          : l10n.holdShiftToReinstall;
                     } else {
                       tooltipText = l10n.cannotDowngrade;
                     }
@@ -454,7 +449,8 @@ class _ManageAppsState extends State<ManageApps> {
                     color: hasNewerVersion ? Colors.green : null,
                   ),
                   tooltip: hasNewerVersion
-                      ? l10n.updateFromTo('${app.versionCode}', '${newestCloudApp.versionCode}')
+                      ? l10n.updateFromTo(
+                          '${app.versionCode}', '${newestCloudApp.versionCode}')
                       : isShiftPressed
                           ? l10n.reinstallThisVersion
                           : l10n.holdShiftToReinstall,
@@ -625,8 +621,8 @@ class _ManageAppsState extends State<ManageApps> {
                     segments: [
                       ButtonSegment(
                         value: AppCategory.vr,
-                        label: Text(l10n
-                            .segmentVrApps(_cachedVrApps?.length ?? 0)),
+                        label: Text(
+                            l10n.segmentVrApps(_cachedVrApps?.length ?? 0)),
                       ),
                       ButtonSegment(
                         value: AppCategory.other,

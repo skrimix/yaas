@@ -66,7 +66,9 @@ class _BackupsScreenState extends State<BackupsScreen> {
                   : _error != null
                       ? Center(child: Text(_error!))
                       : _entries.isEmpty
-                          ? Center(child: Text(AppLocalizations.of(context).noBackupsFound))
+                          ? Center(
+                              child: Text(
+                                  AppLocalizations.of(context).noBackupsFound))
                           : ListView.separated(
                               itemCount: _entries.length,
                               separatorBuilder: (_, __) =>
@@ -184,7 +186,8 @@ class _BackupTile extends StatelessWidget {
     );
   }
 
-  String _buildSubtitle(BuildContext context, BackupEntry entry, AppLocalizations l10n) {
+  String _buildSubtitle(
+      BuildContext context, BackupEntry entry, AppLocalizations l10n) {
     final tsMillis = entry.timestamp.toInt();
     final dt = tsMillis == 0
         ? null
@@ -220,7 +223,8 @@ extension on _BackupsScreenState {
       context: context,
       builder: (context) => AlertDialog(
         title: Text(AppLocalizations.of(context).deleteBackupTitle),
-        content: Text(AppLocalizations.of(context).deleteBackupConfirm(entry.name)),
+        content:
+            Text(AppLocalizations.of(context).deleteBackupConfirm(entry.name)),
         actions: [
           TextButton(
             onPressed: () => Navigator.of(context).pop(false),
@@ -242,8 +246,8 @@ extension on _BackupsScreenState {
       if (msg.error != null) {
         SideloadUtils.showErrorToast(context, msg.error!);
       } else {
-        SideloadUtils.showInfoToast(
-            context, AppLocalizations.of(context).backupDeletedTitle, entry.name);
+        SideloadUtils.showInfoToast(context,
+            AppLocalizations.of(context).backupDeletedTitle, entry.name);
         _loadBackups();
       }
     });

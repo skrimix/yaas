@@ -312,6 +312,9 @@ class AppLocalizationsEn extends AppLocalizations {
   String get detailsTotal => 'Total:';
 
   @override
+  String get detailsRating => 'Rating:';
+
+  @override
   String get commonCopy => 'Copy';
 
   @override
@@ -485,6 +488,9 @@ class AppLocalizationsEn extends AppLocalizations {
 
   @override
   String get availableApps => 'Available Apps';
+
+  @override
+  String get underConstruction => 'Under construction';
 
   @override
   String get multiSelect => 'Multi-select';

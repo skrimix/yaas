@@ -13,9 +13,10 @@ use tokio_util::sync::CancellationToken;
 use tracing::{Instrument, Span, debug, error, info, info_span, instrument, warn};
 
 use crate::models::{
-    CloudApp, Settings,
+    AppApiResponse, CloudApp, Settings,
     signals::download::{
-        CloudAppsChangedEvent, GetRcloneRemotesRequest, LoadCloudAppsRequest, RcloneRemotesChanged,
+        AppDetailsResponse, CloudAppsChangedEvent, GetAppDetailsRequest, GetRcloneRemotesRequest,
+        LoadCloudAppsRequest, RcloneRemotesChanged,
     },
 };
 
@@ -137,6 +138,7 @@ impl Downloader {
     pub async fn receive_commands(&self) {
         let load_cloud_apps_receiver = LoadCloudAppsRequest::get_dart_signal_receiver();
         let get_rclone_remotes_receiver = GetRcloneRemotesRequest::get_dart_signal_receiver();
+        let get_app_details_receiver = GetAppDetailsRequest::get_dart_signal_receiver();
         loop {
             tokio::select! {
                 request = load_cloud_apps_receiver.recv() => {
@@ -164,6 +166,36 @@ impl Downloader {
                         }
                     } else {
                         panic!("GetRcloneRemotesRequest receiver closed");
+                    }
+                }
+                request = get_app_details_receiver.recv() => {
+                    if let Some(request) = request {
+                        let package_name = request.message.package_name;
+                        info!(%package_name, "Received GetAppDetailsRequest");
+                        tokio::spawn(async move {
+                            match fetch_app_details(package_name.clone()).await {
+                                Ok(Some(api)) => {
+                                    AppDetailsResponse {
+                                        package_name,
+                                        display_name: api.display_name,
+                                        description: api.description,
+                                        rating_average: api.quality_rating_aggregate,
+                                        rating_count: api.rating_count,
+                                        not_found: false,
+                                        error: None,
+                                    }.send_signal_to_dart();
+                                }
+                                Ok(None) => {
+                                    AppDetailsResponse::default_not_found(package_name).send_signal_to_dart();
+                                }
+                                Err(e) => {
+                                    error!(error = e.as_ref() as &dyn Error, "Failed to fetch app details");
+                                    AppDetailsResponse::default_error(package_name, format!("Failed to fetch app details: {:#}", e)).send_signal_to_dart();
+                                }
+                            }
+                        });
+                    } else {
+                        panic!("GetAppDetailsRequest receiver closed");
                     }
                 }
             }
@@ -256,4 +288,21 @@ impl Downloader {
 
         Ok(dst_dir.display().to_string())
     }
+}
+
+#[instrument(err)]
+async fn fetch_app_details(package_name: String) -> Result<Option<AppApiResponse>> {
+    let url = format!("https://qloader.5698452.xyz/api/v1/oculusgames/{}", package_name);
+    debug!(%url, "Fetching app details from QLoader API");
+
+    let client = reqwest::Client::builder().user_agent("YAAS/1.0)").build()?;
+
+    let resp = client.get(&url).send().await?;
+    if resp.status() == reqwest::StatusCode::NOT_FOUND {
+        return Ok(None);
+    }
+    resp.error_for_status_ref()?;
+
+    let api: AppApiResponse = resp.json().await?;
+    Ok(Some(api))
 }

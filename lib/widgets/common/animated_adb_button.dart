@@ -1,4 +1,7 @@
+import 'dart:async';
+
 import 'package:flutter/material.dart';
+import 'package:rinf/rinf.dart';
 import '../../src/bindings/bindings.dart';
 
 class AnimatedAdbButton extends StatefulWidget {
@@ -26,6 +29,7 @@ class AnimatedAdbButton extends StatefulWidget {
 
 class _AnimatedAdbButtonState extends State<AnimatedAdbButton>
     with TickerProviderStateMixin {
+  StreamSubscription<RustSignalPack<AdbCommandCompletedEvent>>? _sub;
   late AnimationController _controller;
   late Animation<double> _scale;
 
@@ -44,7 +48,7 @@ class _AnimatedAdbButtonState extends State<AnimatedAdbButton>
       CurvedAnimation(parent: _controller, curve: Curves.elasticOut),
     );
 
-    AdbCommandCompletedEvent.rustSignalStream.listen((event) {
+    _sub = AdbCommandCompletedEvent.rustSignalStream.listen((event) {
       final signal = event.message;
       if (signal.commandType == widget.commandType &&
           signal.commandKey == widget.commandKey) {
@@ -56,6 +60,7 @@ class _AnimatedAdbButtonState extends State<AnimatedAdbButton>
   @override
   void dispose() {
     _controller.dispose();
+    _sub?.cancel();
     super.dispose();
   }
 

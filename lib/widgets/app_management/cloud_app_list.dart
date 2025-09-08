@@ -1,10 +1,10 @@
 import 'package:flutter/material.dart';
-import 'package:flutter/services.dart';
 import 'package:provider/provider.dart';
-import 'package:toastification/toastification.dart';
 import '../../providers/device_state.dart';
 import '../../src/bindings/bindings.dart';
 import '../../src/l10n/app_localizations.dart';
+import '../../utils/utils.dart';
+import 'cloud_app_details_dialog.dart';
 
 class CachedAppData {
   final CloudApp app;
@@ -51,8 +51,7 @@ class CloudAppList extends StatelessWidget {
       return Center(
         child: Padding(
           padding: EdgeInsets.all(16.0),
-          child:
-              Text(isSearching ? l10n.noAppsFound : l10n.noAppsAvailable),
+          child: Text(isSearching ? l10n.noAppsFound : l10n.noAppsAvailable),
         ),
       );
     }
@@ -107,20 +106,6 @@ class CloudAppListItem extends StatelessWidget {
   final Function(String) onDownload;
   final Function(String) onInstall;
 
-  void _copyToClipboard(BuildContext context, String text) {
-    Clipboard.setData(ClipboardData(text: text));
-    toastification.show(
-      type: ToastificationType.success,
-      style: ToastificationStyle.flat,
-      title: Text(AppLocalizations.of(context).copiedToClipboard),
-      description: Text(text),
-      autoCloseDuration: const Duration(seconds: 2),
-      backgroundColor: Theme.of(context).colorScheme.surfaceContainer,
-      borderSide: BorderSide.none,
-      alignment: Alignment.bottomRight,
-    );
-  }
-
   @override
   Widget build(BuildContext context) {
     final theme = Theme.of(context);
@@ -135,13 +120,15 @@ class CloudAppListItem extends StatelessWidget {
             MenuItemButton(
               child: Text(l10n.copyFullName),
               onPressed: () {
-                _copyToClipboard(context, cachedApp.app.fullName);
+                copyToClipboard(context, cachedApp.app.fullName,
+                    description: cachedApp.app.fullName);
               },
             ),
             MenuItemButton(
               child: Text(l10n.copyPackageName),
               onPressed: () {
-                _copyToClipboard(context, cachedApp.app.packageName);
+                copyToClipboard(context, cachedApp.app.packageName,
+                    description: cachedApp.app.packageName);
               },
             ),
           ],
@@ -197,6 +184,21 @@ class CloudAppListItem extends StatelessWidget {
                 trailing: Row(
                   mainAxisSize: MainAxisSize.min,
                   children: [
+                    IconButton(
+                      icon: const Icon(Icons.info_outline),
+                      tooltip: l10n.appDetails,
+                      onPressed: () {
+                        showDialog(
+                          context: context,
+                          builder: (context) => CloudAppDetailsDialog(
+                            cachedApp: cachedApp,
+                            onDownload: onDownload,
+                            onInstall: onInstall,
+                          ),
+                        );
+                      },
+                    ),
+                    const SizedBox(width: 8),
                     IconButton(
                       icon: const Icon(Icons.download),
                       tooltip: l10n.downloadToComputer,

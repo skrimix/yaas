@@ -8,6 +8,7 @@ import '../../providers/device_state.dart';
 import '../../providers/adb_state.dart';
 import '../../src/l10n/app_localizations.dart';
 import '../../providers/task_state.dart';
+import '../../utils/utils.dart';
 import '../dialogs/task_list_dialog.dart';
 
 class StatusBar extends StatelessWidget {
@@ -77,18 +78,13 @@ class StatusBar extends StatelessWidget {
                   .firstWhere((e) => e.message.commandKey == key)
                   .timeout(const Duration(seconds: 10));
               // Copy to clipboard
-              Clipboard.setData(ClipboardData(text: event.message.dump));
-              if (!context.mounted) return;
-              toastification.show(
-                type: ToastificationType.success,
-                style: ToastificationStyle.flat,
-                title: Text(l10n.commonSuccess),
-                description: Text(l10n.batteryDumpCopied),
-                autoCloseDuration: const Duration(seconds: 3),
-                backgroundColor: Theme.of(context).colorScheme.surfaceContainer,
-                borderSide: BorderSide.none,
-                alignment: Alignment.bottomRight,
-              );
+              if (context.mounted) {
+                copyToClipboard(context, event.message.dump,
+                    title: l10n.commonSuccess,
+                    description: l10n.batteryDumpCopied);
+              } else {
+                Clipboard.setData(ClipboardData(text: event.message.dump));
+              }
             } catch (_) {
               if (!context.mounted) return;
               toastification.show(

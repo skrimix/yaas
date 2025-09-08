@@ -283,8 +283,10 @@ class _TaskListDialogState extends State<TaskListDialog>
                         TabBar(
                           controller: _tabController,
                           tabs: [
-                            _buildTab(context, l10n.tasksTabActive, activeCount),
-                            _buildTab(context, l10n.tasksTabRecent, recentCount),
+                            _buildTab(
+                                context, l10n.tasksTabActive, activeCount),
+                            _buildTab(
+                                context, l10n.tasksTabRecent, recentCount),
                           ],
                         ),
                         Expanded(

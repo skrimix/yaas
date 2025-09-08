@@ -85,9 +85,8 @@ class _LocalSideloadState extends State<LocalSideload> {
         ? SideloadUtils.isDirectoryValid(path)
         : SideloadUtils.isValidApkFile(path);
     if (!isValid) {
-      final errorMessage = _isDirectory
-          ? l10n.selectedInvalidDir
-          : l10n.selectedInvalidApk;
+      final errorMessage =
+          _isDirectory ? l10n.selectedInvalidDir : l10n.selectedInvalidApk;
       SideloadUtils.showErrorToast(context, errorMessage);
       return false;
     }

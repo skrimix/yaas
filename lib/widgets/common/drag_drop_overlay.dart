@@ -44,9 +44,8 @@ class _DragDropOverlayState extends State<DragDropOverlay> {
 
       if (!isValid) {
         final l10n = AppLocalizations.of(context);
-        final errorMessage = isDirectory
-            ? l10n.dragDropInvalidDir
-            : l10n.dragDropInvalidFile;
+        final errorMessage =
+            isDirectory ? l10n.dragDropInvalidDir : l10n.dragDropInvalidFile;
 
         SideloadUtils.showErrorToast(context, errorMessage);
         return;

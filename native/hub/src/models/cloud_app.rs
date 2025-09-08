@@ -57,3 +57,15 @@ impl<'de> Deserialize<'de> for CloudApp {
         })
     }
 }
+
+#[derive(serde::Deserialize, Debug)]
+pub struct AppApiResponse {
+    #[serde(default)]
+    pub display_name: Option<String>,
+    #[serde(default)]
+    pub description: Option<String>,
+    #[serde(default)]
+    pub quality_rating_aggregate: Option<f32>,
+    #[serde(default)]
+    pub rating_count: Option<u32>,
+}

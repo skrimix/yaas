@@ -316,6 +316,9 @@ class AppLocalizationsRu extends AppLocalizations {
   String get detailsTotal => 'Итого:';
 
   @override
+  String get detailsRating => 'Рейтинг:';
+
+  @override
   String get commonCopy => 'Копировать';
 
   @override
@@ -490,6 +493,9 @@ class AppLocalizationsRu extends AppLocalizations {
 
   @override
   String get availableApps => 'Доступные приложения';
+
+  @override
+  String get underConstruction => 'В разработке';
 
   @override
   String get multiSelect => 'Множественный выбор';

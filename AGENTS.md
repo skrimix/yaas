@@ -2,7 +2,7 @@
 
 ## Project Overview
 
-Zyde is a Flutter application with Rust backend integration using the Rinf framework. It's a cross-platform desktop application for managing Android devices via ADB, with features for app management, sideloading, and cloud app downloads.
+YAAS is a Flutter application with Rust backend integration using the Rinf framework. It's a cross-platform desktop application for managing Android devices via ADB, with features for app management, sideloading, and cloud app downloads.
 
 ## Architecture
 

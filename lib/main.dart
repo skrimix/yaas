@@ -45,7 +45,7 @@ void main() async {
         ChangeNotifierProvider(create: (_) => SettingsState()),
         ChangeNotifierProvider(create: (_) => LogState()),
       ],
-      child: const ZydeApp(),
+      child: const YAASApp(),
     ),
   );
   await DesktopWindow.setMinWindowSize(const Size(800, 600));
@@ -65,7 +65,7 @@ void main() async {
   });
 
   messages.RustPanic.rustSignalStream.listen((panic) {
-    final appState = ZydeApp.navigatorKey.currentContext?.read<AppState>();
+    final appState = YAASApp.navigatorKey.currentContext?.read<AppState>();
     if (appState != null) {
       appState.setPanicMessage(panic.message.message);
       finalizeRust(); // Rust side is in an undefined state, shut it down
@@ -73,16 +73,16 @@ void main() async {
   });
 }
 
-class ZydeApp extends StatefulWidget {
+class YAASApp extends StatefulWidget {
   static final navigatorKey = GlobalKey<NavigatorState>();
 
-  const ZydeApp({super.key});
+  const YAASApp({super.key});
 
   @override
-  State<ZydeApp> createState() => _ZydeAppState();
+  State<YAASApp> createState() => _YAASAppState();
 }
 
-class _ZydeAppState extends State<ZydeApp> {
+class _YAASAppState extends State<YAASApp> {
   late final AppLifecycleListener _listener;
 
   @override
@@ -125,7 +125,7 @@ class _ZydeAppState extends State<ZydeApp> {
         },
       ),
       child: MaterialApp(
-        navigatorKey: ZydeApp.navigatorKey,
+        navigatorKey: YAASApp.navigatorKey,
         onGenerateTitle: (context) => AppLocalizations.of(context).appTitle,
         locale: context.watch<SettingsState>().locale,
         localizationsDelegates: const [
@@ -181,9 +181,7 @@ class _SinglePageState extends State<SinglePage> {
     final destinations = [
       Destination(icon: Icons.home, label: l10n.navHome, content: const Home()),
       Destination(
-          icon: Icons.apps,
-          label: l10n.navManage,
-          content: const ManageApps()),
+          icon: Icons.apps, label: l10n.navManage, content: const ManageApps()),
       Destination(
           icon: Icons.get_app,
           label: l10n.navDownload,
@@ -201,8 +199,11 @@ class _SinglePageState extends State<SinglePage> {
           label: l10n.navSettings,
           content: const SettingsScreen()),
       Destination(
-          icon: Icons.terminal, label: l10n.navLogs, content: const LogsScreen()),
-      Destination(icon: Icons.info, label: l10n.navAbout, content: Text(l10n.navAbout)),
+          icon: Icons.terminal,
+          label: l10n.navLogs,
+          content: const LogsScreen()),
+      Destination(
+          icon: Icons.info, label: l10n.navAbout, content: Text(l10n.navAbout)),
     ];
     return Scaffold(
         body: Row(

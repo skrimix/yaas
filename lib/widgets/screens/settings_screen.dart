@@ -233,24 +233,24 @@ class _SettingsScreenState extends State<SettingsScreen> {
     }
   }
 
-  String _formatCleanupPolicy(
-          AppLocalizations l10n, DownloadCleanupPolicy policy) =>
-      switch (policy) {
-        DownloadCleanupPolicy.deleteAfterInstall =>
-          l10n.settingsCleanupDeleteAfterInstall,
-        DownloadCleanupPolicy.keepOneVersion =>
-          l10n.settingsCleanupKeepOneVersion,
-        DownloadCleanupPolicy.keepTwoVersions =>
-          l10n.settingsCleanupKeepTwoVersions,
-        DownloadCleanupPolicy.keepAllVersions =>
-          l10n.settingsCleanupKeepAllVersions,
-      };
+  // String _formatCleanupPolicy(
+  //         AppLocalizations l10n, DownloadCleanupPolicy policy) =>
+  //     switch (policy) {
+  //       DownloadCleanupPolicy.deleteAfterInstall =>
+  //         l10n.settingsCleanupDeleteAfterInstall,
+  //       DownloadCleanupPolicy.keepOneVersion =>
+  //         l10n.settingsCleanupKeepOneVersion,
+  //       DownloadCleanupPolicy.keepTwoVersions =>
+  //         l10n.settingsCleanupKeepTwoVersions,
+  //       DownloadCleanupPolicy.keepAllVersions =>
+  //         l10n.settingsCleanupKeepAllVersions,
+  //     };
 
-  String _formatConnectionType(AppLocalizations l10n, ConnectionType type) =>
-      switch (type) {
-        ConnectionType.usb => l10n.settingsConnectionUsb,
-        ConnectionType.wireless => l10n.settingsConnectionWireless,
-      };
+  // String _formatConnectionType(AppLocalizations l10n, ConnectionType type) =>
+  //     switch (type) {
+  //       ConnectionType.usb => l10n.settingsConnectionUsb,
+  //       ConnectionType.wireless => l10n.settingsConnectionWireless,
+  //     };
 
   @override
   Widget build(BuildContext context) {
@@ -401,22 +401,30 @@ class _SettingsScreenState extends State<SettingsScreen> {
             isDirectory: false,
             currentValue: _currentFormSettings.adbPath,
           ),
-          _buildDropdownSetting<ConnectionType>(
+          // TODO: implement
+          // _buildDropdownSetting<ConnectionType>(
+          //   label: l10n.settingsPreferredConnection,
+          //   value: _currentFormSettings.preferredConnectionType,
+          //   items: ConnectionType.values.map((type) {
+          //     return DropdownMenuItem(
+          //       value: type,
+          //       child: Text(_formatConnectionType(l10n, type)),
+          //     );
+          //   }).toList(),
+          //   onChanged: (value) {
+          //     if (value != null) {
+          //       setState(() => _currentFormSettings = _currentFormSettings
+          //           .copyWith(preferredConnectionType: value));
+          //       _checkForChanges();
+          //     }
+          //   },
+          // ),
+          _buildDropdownSetting<ConnectionType?>(
             label: l10n.settingsPreferredConnection,
-            value: _currentFormSettings.preferredConnectionType,
-            items: ConnectionType.values.map((type) {
-              return DropdownMenuItem(
-                value: type,
-                child: Text(_formatConnectionType(l10n, type)),
-              );
-            }).toList(),
-            onChanged: (value) {
-              if (value != null) {
-                setState(() => _currentFormSettings = _currentFormSettings
-                    .copyWith(preferredConnectionType: value));
-                _checkForChanges();
-              }
-            },
+            value: null,
+            items: [],
+            onChanged: null,
+            disabledHint: const Text('Not implemented'),
           ),
         ],
       ),
@@ -433,6 +441,7 @@ class _SettingsScreenState extends State<SettingsScreen> {
           _buildRcloneRemoteSelector(l10n),
           _buildTextSetting(
             field: SettingTextField.bandwidthLimit,
+            enabled: false,
             label: l10n.settingsBandwidthLimit,
             // helperText:
             //     'Value in KiB/s or with B|K|M|G|T|P suffix (empty for no limit)',
@@ -447,22 +456,30 @@ class _SettingsScreenState extends State<SettingsScreen> {
               ),
             ),
           ),
-          _buildDropdownSetting<DownloadCleanupPolicy>(
+          // TODO: implement
+          // _buildDropdownSetting<DownloadCleanupPolicy>(
+          //   label: l10n.settingsDownloadsCleanup,
+          //   value: _currentFormSettings.cleanupPolicy,
+          //   items: DownloadCleanupPolicy.values.map((policy) {
+          //     return DropdownMenuItem(
+          //       value: policy,
+          //       child: Text(_formatCleanupPolicy(l10n, policy)),
+          //     );
+          //   }).toList(),
+          //   onChanged: (value) {
+          //     if (value != null) {
+          //       setState(() => _currentFormSettings =
+          //           _currentFormSettings.copyWith(cleanupPolicy: value));
+          //       _checkForChanges();
+          //     }
+          //   },
+          // ),
+          _buildDropdownSetting<DownloadCleanupPolicy?>(
             label: l10n.settingsDownloadsCleanup,
-            value: _currentFormSettings.cleanupPolicy,
-            items: DownloadCleanupPolicy.values.map((policy) {
-              return DropdownMenuItem(
-                value: policy,
-                child: Text(_formatCleanupPolicy(l10n, policy)),
-              );
-            }).toList(),
-            onChanged: (value) {
-              if (value != null) {
-                setState(() => _currentFormSettings =
-                    _currentFormSettings.copyWith(cleanupPolicy: value));
-                _checkForChanges();
-              }
-            },
+            value: null,
+            items: [],
+            onChanged: null,
+            disabledHint: const Text('Not implemented'),
           ),
         ],
       ),
@@ -514,6 +531,7 @@ class _SettingsScreenState extends State<SettingsScreen> {
     Widget? trailing,
     String? helperText,
     Widget? helper,
+    bool enabled = true,
   }) {
     final controller = _textControllers[field];
 
@@ -524,6 +542,7 @@ class _SettingsScreenState extends State<SettingsScreen> {
         children: [
           Expanded(
             child: TextField(
+              enabled: enabled,
               controller: controller,
               decoration: InputDecoration(
                 labelText: label,
@@ -547,12 +566,14 @@ class _SettingsScreenState extends State<SettingsScreen> {
     required String label,
     required T value,
     required List<DropdownMenuItem<T>> items,
-    required ValueChanged<T?> onChanged,
+    required ValueChanged<T?>? onChanged,
+    Widget? disabledHint,
   }) {
     return Padding(
       padding: const EdgeInsets.symmetric(
           vertical: SettingsConstants.verticalSpacing),
       child: DropdownButtonFormField<T>(
+        disabledHint: disabledHint,
         value: value,
         items: items,
         onChanged: onChanged,

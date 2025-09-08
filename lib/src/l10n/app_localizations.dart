@@ -431,7 +431,7 @@ abstract class AppLocalizations {
   /// No description provided for @activeTasks.
   ///
   /// In en, this message translates to:
-  /// **'{count, plural, one {# active task} other {# active tasks}}'**
+  /// **'{count, plural, one {{count} active task} other {{count} active tasks}}'**
   String activeTasks(int count);
 
   /// No description provided for @viewTasks.

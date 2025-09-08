@@ -194,8 +194,8 @@ class AppLocalizationsEn extends AppLocalizations {
     String _temp0 = intl.Intl.pluralLogic(
       count,
       locale: localeName,
-      other: '# active tasks',
-      one: '# active task',
+      other: '$count active tasks',
+      one: '$count active task',
     );
     return '$_temp0';
   }

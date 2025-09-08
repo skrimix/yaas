@@ -90,7 +90,7 @@
       "total": {"type": "String", "example": "64 GB"}
     }
   },
-  "activeTasks": "{count, plural, one {# active task} other {# active tasks}}",
+  "activeTasks": "{count, plural, one {{count} active task} other {{count} active tasks}}",
   "@activeTasks": {"placeholders": {"count": {"type": "int"}}},
   "viewTasks": "View tasks",
   "refreshAllData": "Refresh all data",

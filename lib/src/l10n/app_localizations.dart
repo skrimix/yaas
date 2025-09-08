@@ -272,11 +272,35 @@ abstract class AppLocalizations {
   /// **'Rclone Path'**
   String get settingsRclonePath;
 
-  /// No description provided for @settingsRcloneRemoteName.
+  /// No description provided for @settingsRcloneRemote.
   ///
   /// In en, this message translates to:
-  /// **'Rclone Remote Name'**
-  String get settingsRcloneRemoteName;
+  /// **'Rclone Remote'**
+  String get settingsRcloneRemote;
+
+  /// No description provided for @settingsCustomRemoteName.
+  ///
+  /// In en, this message translates to:
+  /// **'Custom Remote Name'**
+  String get settingsCustomRemoteName;
+
+  /// No description provided for @settingsCustomInput.
+  ///
+  /// In en, this message translates to:
+  /// **'[Custom]'**
+  String get settingsCustomInput;
+
+  /// No description provided for @settingsNoRemotesFound.
+  ///
+  /// In en, this message translates to:
+  /// **'No remotes found'**
+  String get settingsNoRemotesFound;
+
+  /// No description provided for @settingsFailedToLoadRemotes.
+  ///
+  /// In en, this message translates to:
+  /// **'Failed to list remotes'**
+  String get settingsFailedToLoadRemotes;
 
   /// No description provided for @settingsBandwidthLimit.
   ///

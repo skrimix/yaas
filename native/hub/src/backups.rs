@@ -76,8 +76,7 @@ impl BackupsHandler {
                             }
                         }
                     } else {
-                        error!("GetBackupsRequest receiver ended");
-                        break;
+                        panic!("GetBackupsRequest receiver ended");
                     }
                 }
 
@@ -100,8 +99,7 @@ impl BackupsHandler {
                             }
                         }
                     } else {
-                        error!("DeleteBackupRequest receiver ended");
-                        break;
+                        panic!("DeleteBackupRequest receiver ended");
                     }
                 }
 
@@ -113,13 +111,11 @@ impl BackupsHandler {
                         GetBackupsDirectoryResponse { path: dir.to_string_lossy().into_owned() }
                             .send_signal_to_dart();
                     } else {
-                        error!("GetBackupsDirectoryRequest receiver ended");
-                        break;
+                        panic!("GetBackupsDirectoryRequest receiver ended");
                     }
                 }
             }
         }
-        panic!("BackupsHandler signal receiver loop ended");
     }
 
     #[instrument(skip(self), err)]

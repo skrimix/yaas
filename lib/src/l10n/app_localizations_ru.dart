@@ -97,7 +97,19 @@ class AppLocalizationsRu extends AppLocalizations {
   String get settingsRclonePath => 'Путь к Rclone';
 
   @override
-  String get settingsRcloneRemoteName => 'Имя Rclone remote';
+  String get settingsRcloneRemote => 'Rclone хранилище';
+
+  @override
+  String get settingsCustomRemoteName => 'Другое имя хранилища';
+
+  @override
+  String get settingsCustomInput => '[Другое]';
+
+  @override
+  String get settingsNoRemotesFound => 'Хранилища не найдены';
+
+  @override
+  String get settingsFailedToLoadRemotes => 'Не удалось перечислить хранилища';
 
   @override
   String get settingsBandwidthLimit => 'Ограничение скорости';
@@ -672,7 +684,7 @@ class AppLocalizationsRu extends AppLocalizations {
 
   @override
   String get proTipDragDrop =>
-      'Лайфхак: можно перетащить APK или папку приложения в любое место приложения для установки.';
+      'Подсказка: можно перетащить APK или папку приложения в любое место приложения для установки.';
 
   @override
   String get addedToQueue => 'Добавлено в очередь!';

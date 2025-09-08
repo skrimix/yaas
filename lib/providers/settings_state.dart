@@ -2,7 +2,6 @@ import 'package:flutter/material.dart';
 import '../src/bindings/bindings.dart';
 
 class SettingsState extends ChangeNotifier {
-
   Settings _settings = Settings(
     rclonePath: '',
     rcloneRemoteName: '',
@@ -17,6 +16,10 @@ class SettingsState extends ChangeNotifier {
 
   bool _isLoading = false;
   String? _error;
+
+  List<String> _rcloneRemotes = const [];
+  bool _isRemotesLoading = true;
+  String? _remotesError;
 
   SettingsState() {
     _registerSignalHandlers();
@@ -41,6 +44,16 @@ class SettingsState extends ChangeNotifier {
     SettingsSavedEvent.rustSignalStream.listen((event) {
       _error = event.message.error; // TODO: Show a toast if there is an error
       _setIsLoading(false);
+    });
+
+    RcloneRemotesChanged.rustSignalStream.listen((event) {
+      final msg = event.message;
+      _rcloneRemotes = List.unmodifiable(msg.remotes.toSet().toList());
+      _remotesError = msg.error;
+      _isRemotesLoading = false;
+      // Keep current remote as custom if not in list
+      // (UI will treat as custom when not found)
+      notifyListeners();
     });
   }
 
@@ -67,6 +80,9 @@ class SettingsState extends ChangeNotifier {
   Settings get settings => _settings;
   bool get isLoading => _isLoading;
   String? get error => _error;
+  List<String> get rcloneRemotes => _rcloneRemotes;
+  bool get isRemotesLoading => _isRemotesLoading;
+  String? get remotesError => _remotesError;
   Locale? get locale {
     final code = _settings.localeCode;
     if (code == 'system' || code.isEmpty) return null;
@@ -78,5 +94,12 @@ class SettingsState extends ChangeNotifier {
     notifyListeners();
     // Persist immediately via Rust settings handler
     SaveSettingsRequest(settings: _settings).sendSignalToRust();
+  }
+
+  Future<void> refreshRcloneRemotes() async {
+    _isRemotesLoading = true;
+    _remotesError = null;
+    notifyListeners();
+    GetRcloneRemotesRequest().sendSignalToRust();
   }
 }

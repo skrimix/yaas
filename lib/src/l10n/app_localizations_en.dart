@@ -97,7 +97,19 @@ class AppLocalizationsEn extends AppLocalizations {
   String get settingsRclonePath => 'Rclone Path';
 
   @override
-  String get settingsRcloneRemoteName => 'Rclone Remote Name';
+  String get settingsRcloneRemote => 'Rclone Remote';
+
+  @override
+  String get settingsCustomRemoteName => 'Custom Remote Name';
+
+  @override
+  String get settingsCustomInput => '[Custom]';
+
+  @override
+  String get settingsNoRemotesFound => 'No remotes found';
+
+  @override
+  String get settingsFailedToLoadRemotes => 'Failed to list remotes';
 
   @override
   String get settingsBandwidthLimit => 'Bandwidth Limit';

@@ -43,6 +43,7 @@ class _SettingsScreenState extends State<SettingsScreen> {
   SettingsState? _settingsState;
   final ValueNotifier<bool> _isShiftPressedNotifier =
       ValueNotifier<bool>(false);
+  bool _rcloneRemoteCustom = false;
 
   @override
   void initState() {
@@ -58,10 +59,8 @@ class _SettingsScreenState extends State<SettingsScreen> {
     }
     _updateAllControllers();
 
-    // Listen for provider updates to sync defaults once loaded
     settingsState.addListener(_onSettingsProviderUpdated);
 
-    // Track Shift key state similar to manage_apps.dart
     HardwareKeyboard.instance.addHandler(_handleKeyEvent);
   }
 
@@ -239,9 +238,12 @@ class _SettingsScreenState extends State<SettingsScreen> {
       switch (policy) {
         DownloadCleanupPolicy.deleteAfterInstall =>
           l10n.settingsCleanupDeleteAfterInstall,
-        DownloadCleanupPolicy.keepOneVersion => l10n.settingsCleanupKeepOneVersion,
-        DownloadCleanupPolicy.keepTwoVersions => l10n.settingsCleanupKeepTwoVersions,
-        DownloadCleanupPolicy.keepAllVersions => l10n.settingsCleanupKeepAllVersions,
+        DownloadCleanupPolicy.keepOneVersion =>
+          l10n.settingsCleanupKeepOneVersion,
+        DownloadCleanupPolicy.keepTwoVersions =>
+          l10n.settingsCleanupKeepTwoVersions,
+        DownloadCleanupPolicy.keepAllVersions =>
+          l10n.settingsCleanupKeepAllVersions,
       };
 
   String _formatConnectionType(AppLocalizations l10n, ConnectionType type) =>
@@ -346,7 +348,8 @@ class _SettingsScreenState extends State<SettingsScreen> {
     );
   }
 
-  List<Widget> _buildSettingsSections(AppLocalizations l10n, SettingsState settingsState) {
+  List<Widget> _buildSettingsSections(
+      AppLocalizations l10n, SettingsState settingsState) {
     return [
       _buildSection(
         title: l10n.settingsSectionGeneral,
@@ -357,7 +360,8 @@ class _SettingsScreenState extends State<SettingsScreen> {
                 ? 'system'
                 : settingsState.settings.localeCode,
             items: [
-              DropdownMenuItem(value: 'system', child: Text(l10n.settingsSystemDefault)),
+              DropdownMenuItem(
+                  value: 'system', child: Text(l10n.settingsSystemDefault)),
               DropdownMenuItem(value: 'en', child: Text(l10n.languageEnglish)),
               DropdownMenuItem(value: 'ru', child: Text(l10n.languageRussian)),
             ],
@@ -426,10 +430,7 @@ class _SettingsScreenState extends State<SettingsScreen> {
             isDirectory: false,
             currentValue: _currentFormSettings.rclonePath,
           ),
-          _buildTextSetting(
-            field: SettingTextField.rcloneRemoteName,
-            label: l10n.settingsRcloneRemoteName,
-          ),
+          _buildRcloneRemoteSelector(l10n),
           _buildTextSetting(
             field: SettingTextField.bandwidthLimit,
             label: l10n.settingsBandwidthLimit,
@@ -560,6 +561,139 @@ class _SettingsScreenState extends State<SettingsScreen> {
           border: const OutlineInputBorder(),
         ),
       ),
+    );
+  }
+
+  Widget _buildRcloneRemoteSelector(AppLocalizations l10n) {
+    final settingsState = _settingsState!;
+    final remotes = settingsState.rcloneRemotes;
+    const customValue = '__custom__';
+
+    final currentRemote = _currentFormSettings.rcloneRemoteName;
+    final isCurrentInList = remotes.contains(currentRemote);
+    final shouldUseCustom = _rcloneRemoteCustom ||
+        settingsState.isRemotesLoading ||
+        remotes.isEmpty ||
+        !isCurrentInList;
+    final dropdownValue = shouldUseCustom ? customValue : currentRemote;
+
+    final l10n = AppLocalizations.of(context);
+    final items = <DropdownMenuItem<String>>[
+      ...remotes.map((r) => DropdownMenuItem(value: r, child: Text(r))),
+      DropdownMenuItem(
+          value: customValue, child: Text(l10n.settingsCustomInput)),
+    ];
+
+    return Padding(
+      padding: const EdgeInsets.symmetric(
+          vertical: SettingsConstants.verticalSpacing),
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          // Status (error/warning) above the selector
+          if (settingsState.remotesError != null)
+            Padding(
+              padding: const EdgeInsets.only(bottom: 8),
+              child: _statusText(
+                icon: Icons.error_outline,
+                color: Theme.of(context).colorScheme.error,
+                text:
+                    '${l10n.settingsFailedToLoadRemotes}: ${settingsState.remotesError ?? ''}',
+              ),
+            )
+          else if (!settingsState.isRemotesLoading && remotes.isEmpty)
+            Padding(
+              padding: const EdgeInsets.only(bottom: 8),
+              child: _statusText(
+                icon: Icons.warning_amber_rounded,
+                color: Colors.amber,
+                text: l10n.settingsNoRemotesFound,
+              ),
+            ),
+          Row(
+            children: [
+              Expanded(
+                child: DropdownButtonFormField<String>(
+                  value: dropdownValue,
+                  items: items,
+                  onChanged: (value) {
+                    if (value == null) return;
+                    if (value == customValue) {
+                      // Switch to custom mode, keep existing text
+                      setState(() {
+                        _rcloneRemoteCustom = true;
+                      });
+                    } else {
+                      setState(() {
+                        _rcloneRemoteCustom = false;
+                      });
+                      _updateSetting(SettingTextField.rcloneRemoteName, value,
+                          updateController: true);
+                    }
+                  },
+                  decoration: InputDecoration(
+                    labelText: l10n.settingsRcloneRemote,
+                    border: const OutlineInputBorder(),
+                  ),
+                ),
+              ),
+              const SizedBox(width: SettingsConstants.verticalSpacing),
+              SizedBox(
+                height: SettingsConstants.iconButtonSize,
+                width: SettingsConstants.iconButtonSize,
+                child: settingsState.isRemotesLoading
+                    ? const Center(
+                        child: SizedBox(
+                          width: 18,
+                          height: 18,
+                          child: CircularProgressIndicator(strokeWidth: 2),
+                        ),
+                      )
+                    : IconButton.filledTonal(
+                        onPressed: () {
+                          settingsState.refreshRcloneRemotes();
+                        },
+                        iconSize: SettingsConstants.iconSize,
+                        tooltip: l10n.refresh,
+                        icon: const Icon(Icons.refresh),
+                      ),
+              ),
+            ],
+          ),
+          if (dropdownValue == customValue)
+            Padding(
+              padding:
+                  const EdgeInsets.only(top: SettingsConstants.verticalSpacing),
+              child: TextField(
+                controller: _textControllers[SettingTextField.rcloneRemoteName],
+                decoration: InputDecoration(
+                  labelText: l10n.settingsCustomRemoteName,
+                  border: const OutlineInputBorder(),
+                ),
+                onChanged: (value) =>
+                    _updateSetting(SettingTextField.rcloneRemoteName, value),
+              ),
+            ),
+        ],
+      ),
+    );
+  }
+
+  Widget _statusText(
+      {required IconData icon, required Color color, required String text}) {
+    return Row(
+      children: [
+        Icon(icon, color: color, size: 18),
+        const SizedBox(width: 6),
+        Flexible(
+          child: Text(
+            text,
+            style: TextStyle(
+                color: color, fontSize: 12, fontWeight: FontWeight.w600),
+            overflow: TextOverflow.ellipsis,
+          ),
+        ),
+      ],
     );
   }
 }

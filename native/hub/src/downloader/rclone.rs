@@ -123,6 +123,13 @@ impl RcloneClient {
         }
     }
 
+    pub async fn remotes(&self) -> Result<Vec<String>> {
+        let output = self.run_to_string(&["listremotes"]).await?;
+        let remotes: Vec<String> =
+            output.lines().map(|line| line.trim().trim_end_matches(':').to_string()).collect();
+        Ok(remotes)
+    }
+
     #[instrument(skip(self), ret, err)]
     pub async fn size(&self, path: &str) -> Result<RcloneSizeOutput> {
         let output = self.run_to_string(&["size", "--fast-list", "--json", path]).await?;
@@ -314,5 +321,10 @@ impl RcloneStorage {
         dest_path
             .push(source.split(['/', '\\']).next_back().context("Failed to get source file name")?);
         Ok(dest_path)
+    }
+
+    #[instrument(skip(self), ret, err)]
+    pub async fn remotes(&self) -> Result<Vec<String>> {
+        self.client.remotes().await
     }
 }

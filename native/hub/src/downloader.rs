@@ -14,7 +14,9 @@ use tracing::{Instrument, Span, debug, error, info, info_span, instrument, warn}
 
 use crate::models::{
     CloudApp, Settings,
-    signals::download::{CloudAppsChangedEvent, LoadCloudAppsRequest},
+    signals::download::{
+        CloudAppsChangedEvent, GetRcloneRemotesRequest, LoadCloudAppsRequest, RcloneRemotesChanged,
+    },
 };
 
 mod rclone;
@@ -75,6 +77,20 @@ impl Downloader {
 
                         *handle.storage.write().await = new_storage;
 
+                        match handle.storage.read().await.remotes().await {
+                            Ok(remotes) => {
+                                RcloneRemotesChanged { remotes, error: None }.send_signal_to_dart();
+                            }
+                            Err(e) => {
+                                error!(error = e.as_ref() as &dyn std::error::Error, "Failed to get rclone remotes after reload");
+                                RcloneRemotesChanged {
+                                    remotes: Vec::new(),
+                                    error: Some(format!("Failed to get rclone remotes: {:#}", e)),
+                                }
+                                .send_signal_to_dart();
+                            }
+                        }
+
                         // Refresh app list
                         handle.load_app_list(true, new_token).await; // FIXME: this should set the UI to loading state
                     }
@@ -91,21 +107,67 @@ impl Downloader {
             }
         }.instrument(info_span!("task_handle_settings_updates")),
         );
+
+        // On init, send rclone remotes list
+        tokio::spawn({
+            let handle = handle.clone();
+            async move {
+                match handle.storage.read().await.remotes().await {
+                    Ok(remotes) => {
+                        RcloneRemotesChanged { remotes, error: None }.send_signal_to_dart();
+                    }
+                    Err(e) => {
+                        error!(
+                            error = e.as_ref() as &dyn std::error::Error,
+                            "Failed to get rclone remotes on init"
+                        );
+                        RcloneRemotesChanged {
+                            remotes: Vec::new(),
+                            error: Some(format!("Failed to get rclone remotes: {:#}", e)),
+                        }
+                        .send_signal_to_dart();
+                    }
+                }
+            }
+        });
         handle
     }
 
     #[instrument(skip(self))]
     pub async fn receive_commands(&self) {
-        let receiver = LoadCloudAppsRequest::get_dart_signal_receiver();
-        info!("Listening for LoadCloudAppsRequest");
-        while let Some(request) = receiver.recv().await {
-            info!(refresh = request.message.refresh, "Received LoadCloudAppsRequest");
-            let token = self.current_load_token.read().await.clone();
-            self.load_app_list(request.message.refresh, token).await;
-            // TODO: add timeout
+        let load_cloud_apps_receiver = LoadCloudAppsRequest::get_dart_signal_receiver();
+        let get_rclone_remotes_receiver = GetRcloneRemotesRequest::get_dart_signal_receiver();
+        loop {
+            tokio::select! {
+                request = load_cloud_apps_receiver.recv() => {
+                    if let Some(request) = request {
+                        info!(refresh = request.message.refresh, "Received LoadCloudAppsRequest");
+                        let token = self.current_load_token.read().await.clone();
+                        self.load_app_list(request.message.refresh, token).await;
+                        // TODO: add timeout
+                    } else {
+                        panic!("LoadCloudAppsRequest receiver closed");
+                    }
+                }
+                request = get_rclone_remotes_receiver.recv() => {
+                    if request.is_some() {
+                        info!("Received GetRcloneRemotesRequest");
+                        let remotes = self.storage.read().await.remotes().await;
+                        match remotes {
+                            Ok(remotes) => {
+                                RcloneRemotesChanged { remotes, error: None }.send_signal_to_dart();
+                            }
+                            Err(e) => {
+                                error!(error = e.as_ref() as &dyn Error, "Failed to get rclone remotes");
+                                RcloneRemotesChanged { remotes: Vec::new(), error: Some(format!("Failed to get rclone remotes: {:#}", e)) }.send_signal_to_dart();
+                            }
+                        }
+                    } else {
+                        panic!("GetRcloneRemotesRequest receiver closed");
+                    }
+                }
+            }
         }
-
-        panic!("LoadCloudAppsRequest receiver closed");
     }
 
     #[instrument(skip(self, cancellation_token))]

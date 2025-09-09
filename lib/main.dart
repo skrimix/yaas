@@ -4,6 +4,7 @@ import 'package:desktop_window/desktop_window.dart';
 import 'package:flutter/material.dart';
 import 'package:provider/provider.dart';
 import 'package:flutter_localizations/flutter_localizations.dart';
+import 'package:video_player_media_kit/video_player_media_kit.dart';
 import 'src/l10n/app_localizations.dart';
 import 'package:rinf/rinf.dart';
 import 'package:toastification/toastification.dart'; // TODO: find an alternative
@@ -33,6 +34,12 @@ final colorScheme = ColorScheme.fromSeed(
 
 void main() async {
   await initializeRust(messages.assignRustSignal);
+
+  VideoPlayerMediaKit.ensureInitialized(
+    macOS: true,
+    windows: true,
+    linux: true,
+  );
 
   runApp(
     MultiProvider(

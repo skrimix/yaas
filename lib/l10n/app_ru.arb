@@ -213,6 +213,14 @@
 
   "delete": "Удалить",
   "restore": "Восстановить",
+  "mute": "Выключить звук",
+  "unmute": "Включить звук",
+  "close": "Закрыть",
+  "pause": "Пауза",
+  
+  "checkingTrailerAvailability": "Проверка доступности трейлера...",
+  "trailerAvailable": "Трейлер доступен",
+  "noTrailer": "Трейлер не доступен",
 
   "backupsTitle": "Резервные копии",
   "openBackupsFolder": "Открыть папку резервных копий",

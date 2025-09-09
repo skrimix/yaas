@@ -584,6 +584,27 @@ class AppLocalizationsEn extends AppLocalizations {
   String get restore => 'Restore';
 
   @override
+  String get mute => 'Mute';
+
+  @override
+  String get unmute => 'Unmute';
+
+  @override
+  String get close => 'Close';
+
+  @override
+  String get pause => 'Pause';
+
+  @override
+  String get checkingTrailerAvailability => 'Checking trailer availability...';
+
+  @override
+  String get trailerAvailable => 'Trailer available';
+
+  @override
+  String get noTrailer => 'No trailer';
+
+  @override
   String get backupsTitle => 'Backups';
 
   @override

@@ -6,7 +6,7 @@ use anyhow::{Context, Result};
 use downloader::Downloader;
 use logging::SignalLayer;
 use mimalloc::MiMalloc;
-use models::signals::system::RustPanic;
+use models::signals::system::{RustPanic, MediaConfigChanged};
 use rinf::RustSignal;
 use settings::SettingsHandler;
 use task::TaskManager;
@@ -63,6 +63,18 @@ async fn main() {
     info!("Starting YAAS backend");
 
     let settings_handler = SettingsHandler::new(app_dir.clone());
+
+    // Prepare media cache directory and send media configuration to Flutter
+    let media_cache_dir = app_dir.join("media_cache");
+    if let Err(e) = std::fs::create_dir_all(&media_cache_dir) {
+        rinf::debug_print!("Failed to create media cache directory: {:#}", e);
+    }
+    let media_base_url = "https://webdav.5698452.xyz/media/".to_string();
+    MediaConfigChanged {
+        media_base_url,
+        cache_dir: media_cache_dir.display().to_string(),
+    }
+    .send_signal_to_dart();
 
     let adb_handler = AdbHandler::new(WatchStream::new(settings_handler.subscribe())).await;
     let downloader = Downloader::new(WatchStream::new(settings_handler.subscribe())).await;

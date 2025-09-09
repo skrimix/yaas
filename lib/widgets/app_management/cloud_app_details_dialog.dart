@@ -1,12 +1,18 @@
 import 'dart:async';
+import 'dart:io';
 
 import 'package:flutter/material.dart';
 import 'package:provider/provider.dart';
+import 'package:cached_network_image/cached_network_image.dart';
+import 'package:video_player/video_player.dart';
+import 'package:flutter_cache_manager/flutter_cache_manager.dart';
+import 'package:http/http.dart' as http;
 
 import '../../src/bindings/bindings.dart';
 import 'package:rinf/rinf.dart';
 import '../../src/l10n/app_localizations.dart';
 import '../../providers/device_state.dart';
+import '../../providers/cloud_apps_state.dart';
 import '../../utils/utils.dart';
 import 'cloud_app_list.dart';
 
@@ -96,20 +102,11 @@ class _CloudAppDetailsDialogState extends State<CloudAppDetailsDialog> {
             : Row(
                 crossAxisAlignment: CrossAxisAlignment.start,
                 children: [
-                  // Left: Media placeholder
-                  Tooltip(
-                    message: l10n.underConstruction,
-                    child: Container(
-                      width: 450,
-                      height: 270,
-                      decoration: BoxDecoration(
-                        color: theme.colorScheme.surfaceContainerHighest,
-                        borderRadius: BorderRadius.circular(8),
-                      ),
-                      child: const Center(
-                        child: Icon(Icons.ondemand_video, size: 48),
-                      ),
-                    ),
+                  // Left: Thumbnail + hover overlay + trailer player
+                  _CloudAppMedia(
+                    packageName: widget.cachedApp.app.packageName,
+                    width: 450,
+                    height: 270,
                   ),
                   const SizedBox(width: 16),
                   // Right: Details + description
@@ -254,5 +251,348 @@ class _CloudAppDetailsDialogState extends State<CloudAppDetailsDialog> {
       }
     }
     return buf.toString();
+  }
+}
+
+class _CloudAppMedia extends StatefulWidget {
+  const _CloudAppMedia({
+    required this.packageName,
+    required this.width,
+    required this.height,
+  });
+
+  final String packageName;
+  final double width;
+  final double height;
+
+  @override
+  State<_CloudAppMedia> createState() => _CloudAppMediaState();
+}
+
+class _CloudAppMediaState extends State<_CloudAppMedia> {
+  bool _hovered = false;
+  bool _playing = false;
+  bool _initializingVideo = false;
+  VideoPlayerController? _controller;
+  CacheManager? _cacheManager;
+  String? _cacheDirPath;
+  bool _checkingTrailer = false;
+  bool _trailerAvailable = false;
+  bool _muted = true;
+  String? _checkedUrl;
+
+  @override
+  void initState() {
+    super.initState();
+    // Cache manager initialized when Rust provides cache path via provider
+  }
+
+  void _ensureCacheManager(String path) {
+    if (_cacheDirPath == path && _cacheManager != null) return;
+    final cacheDir = Directory(path);
+    final cacheInfoFile = File('$path${Platform.pathSeparator}cache_info.json');
+    if (!cacheDir.existsSync()) {
+      cacheDir.createSync(recursive: true);
+    }
+    _cacheDirPath = path;
+    _cacheManager = CacheManager(
+      Config(
+        'app_media_cache',
+        stalePeriod: const Duration(days: 30),
+        maxNrOfCacheObjects: 200,
+        repo: JsonCacheInfoRepository.withFile(cacheInfoFile),
+        fileSystem: IOFileSystem(path),
+      ),
+    );
+  }
+
+  Future<void> _startVideo(String url) async {
+    if (_initializingVideo) return;
+    setState(() {
+      _initializingVideo = true;
+    });
+    final controller = VideoPlayerController.networkUrl(Uri.parse(url));
+    try {
+      await controller.initialize();
+      await controller.setVolume(_muted ? 0.0 : 1.0);
+      await controller.play();
+      if (!mounted) return;
+      setState(() {
+        _controller = controller;
+        _playing = true;
+      });
+    } catch (_) {
+      // On failure, revert to thumbnail state.
+      await controller.dispose();
+      if (!mounted) return;
+      setState(() {
+        _controller = null;
+        _playing = false;
+      });
+    } finally {
+      if (mounted) {
+        setState(() {
+          _initializingVideo = false;
+        });
+      }
+    }
+  }
+
+  Future<void> _stopVideo() async {
+    final c = _controller;
+    if (c != null) {
+      // await c.pause();
+      await c.dispose();
+    }
+    if (!mounted) return;
+    setState(() {
+      _controller = null;
+      _playing = false;
+    });
+  }
+
+  @override
+  void dispose() {
+    _controller?.dispose();
+    super.dispose();
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    final l10n = AppLocalizations.of(context);
+    final media = context.watch<CloudAppsState>();
+    final thumbUrl = media.thumbnailUrlFor(widget.packageName);
+    final trailerUrl = media.trailerUrlFor(widget.packageName);
+
+    final borderRadius = BorderRadius.circular(8);
+
+    final cachePath = media.mediaCacheDir;
+    final canLoadMedia = cachePath != null;
+    if (canLoadMedia) {
+      _ensureCacheManager(cachePath);
+    }
+    if (_checkedUrl != trailerUrl && !_checkingTrailer) {
+      _checkTrailerAvailability(trailerUrl);
+    }
+
+    Widget child;
+    if (_playing && _controller != null && _controller!.value.isInitialized) {
+      child = ClipRRect(
+        borderRadius: borderRadius,
+        child: Stack(
+          children: [
+            Positioned.fill(
+              child: FittedBox(
+                fit: BoxFit.cover,
+                child: SizedBox(
+                  width: _controller!.value.size.width,
+                  height: _controller!.value.size.height,
+                  child: VideoPlayer(_controller!),
+                ),
+              ),
+            ),
+            // Controls overlay: Pause/Play, Sound, Close
+            Positioned(
+              top: 8,
+              right: 8,
+              child: Container(
+                decoration: BoxDecoration(
+                  color: Colors.black.withValues(alpha: 0.5),
+                  borderRadius: BorderRadius.circular(8),
+                ),
+                child: Row(
+                  mainAxisSize: MainAxisSize.min,
+                  children: [
+                    IconButton(
+                      tooltip: l10n.pause,
+                      icon: Icon(
+                        _controller!.value.isPlaying
+                            ? Icons.pause
+                            : Icons.play_arrow,
+                      ),
+                      color: Colors.white,
+                      onPressed: () async {
+                        if (_controller!.value.isPlaying) {
+                          await _controller!.pause();
+                        } else {
+                          await _controller!.play();
+                        }
+                        if (mounted) setState(() {});
+                      },
+                    ),
+                    IconButton(
+                      tooltip: _muted ? l10n.unmute : l10n.mute,
+                      icon: Icon(_muted ? Icons.volume_off : Icons.volume_up),
+                      color: Colors.white,
+                      onPressed: () async {
+                        _muted = !_muted;
+                        await _controller!.setVolume(_muted ? 0.0 : 1.0);
+                        if (mounted) setState(() {});
+                      },
+                    ),
+                    IconButton(
+                      tooltip: l10n.close,
+                      icon: const Icon(Icons.close),
+                      color: Colors.white,
+                      onPressed: _stopVideo,
+                    ),
+                  ],
+                ),
+              ),
+            ),
+          ],
+        ),
+      );
+    } else {
+      // Thumbnail with hover overlay
+      child = MouseRegion(
+        onEnter: (_) => setState(() => _hovered = true),
+        onExit: (_) => setState(() => _hovered = false),
+        child: GestureDetector(
+          onTap: (!_trailerAvailable || _initializingVideo)
+              ? null
+              : () {
+                  _startVideo(trailerUrl);
+                },
+          child: ClipRRect(
+            borderRadius: borderRadius,
+            child: Stack(
+              fit: StackFit.expand,
+              children: [
+                CachedNetworkImage(
+                  imageUrl: thumbUrl,
+                  cacheManager: _cacheManager,
+                  fit: BoxFit.cover,
+                  placeholder: (context, url) =>
+                      _mediaPlaceholder(context, loading: true),
+                  errorWidget: (context, url, error) =>
+                      _mediaPlaceholder(context),
+                ),
+                // Small availability indicator badge
+                Positioned(
+                  left: 8,
+                  top: 8,
+                  child: Tooltip(
+                    message: _checkingTrailer
+                        ? l10n.checkingTrailerAvailability
+                        : (_trailerAvailable
+                            ? l10n.trailerAvailable
+                            : l10n.noTrailer),
+                    child: DecoratedBox(
+                      decoration: BoxDecoration(
+                        color: Colors.black.withValues(alpha: 0.5),
+                        borderRadius: BorderRadius.circular(14),
+                      ),
+                      child: Padding(
+                        padding: const EdgeInsets.all(6.0),
+                        child: _checkingTrailer
+                            ? const SizedBox(
+                                width: 21,
+                                height: 21,
+                                child: CircularProgressIndicator(
+                                  strokeWidth: 2,
+                                  valueColor: AlwaysStoppedAnimation<Color>(
+                                      Colors.white),
+                                ),
+                              )
+                            : Icon(
+                                _trailerAvailable
+                                    ? Icons.play_circle_outline
+                                    : Icons.videocam_off,
+                                color: Colors.white,
+                                size: 24,
+                              ),
+                      ),
+                    ),
+                  ),
+                ),
+                // Loading indicator when starting video
+                if (_initializingVideo)
+                  Positioned.fill(
+                    child: Container(
+                      color: Colors.black.withValues(alpha: 0.25),
+                      child: const Center(
+                        child: CircularProgressIndicator(strokeWidth: 2),
+                      ),
+                    ),
+                  ),
+                AnimatedOpacity(
+                  opacity: _hovered && _trailerAvailable ? 1.0 : 0.0,
+                  duration: const Duration(milliseconds: 150),
+                  child: IgnorePointer(
+                    ignoring: !(_hovered && _trailerAvailable),
+                    child: Container(
+                      color: Colors.black.withValues(alpha: 0.45),
+                      child: Center(
+                        child: Column(
+                          mainAxisSize: MainAxisSize.min,
+                          children: const [
+                            Icon(
+                              Icons.play_circle_fill,
+                              size: 64,
+                              color: Colors.white,
+                            ),
+                          ],
+                        ),
+                      ),
+                    ),
+                  ),
+                ),
+              ],
+            ),
+          ),
+        ),
+      );
+    }
+
+    return Container(
+      width: widget.width,
+      height: widget.height,
+      decoration: BoxDecoration(
+        color: Theme.of(context).colorScheme.surfaceContainerHighest,
+        borderRadius: borderRadius,
+      ),
+      clipBehavior: Clip.antiAlias,
+      child: child,
+    );
+  }
+
+  Future<bool> _urlExists(String url) async {
+    try {
+      final uri = Uri.parse(url);
+      final head = await http.head(uri);
+      if (head.statusCode == 200) return true;
+      if (head.statusCode == 405 || head.statusCode == 501) {
+        final get = await http.get(uri, headers: const {'range': 'bytes=0-0'});
+        return get.statusCode == 200 || get.statusCode == 206;
+      }
+      return false;
+    } catch (_) {
+      return false;
+    }
+  }
+
+  Future<void> _checkTrailerAvailability(String trailerUrl) async {
+    if (_checkingTrailer) return;
+    setState(() => _checkingTrailer = true);
+    final available = await _urlExists(trailerUrl);
+    if (!mounted) return;
+    setState(() {
+      _trailerAvailable = available;
+      _checkingTrailer = false;
+      _checkedUrl = trailerUrl;
+    });
+  }
+
+  Widget _mediaPlaceholder(BuildContext context, {bool loading = false}) {
+    final color = Theme.of(context).colorScheme.surfaceContainerHighest;
+    return Container(
+      color: color,
+      child: Center(
+        child: loading
+            ? const CircularProgressIndicator(strokeWidth: 2)
+            : const Icon(Icons.folder_off_outlined, size: 48),
+      ),
+    );
   }
 }

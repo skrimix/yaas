@@ -589,6 +589,27 @@ class AppLocalizationsRu extends AppLocalizations {
   String get restore => 'Восстановить';
 
   @override
+  String get mute => 'Выключить звук';
+
+  @override
+  String get unmute => 'Включить звук';
+
+  @override
+  String get close => 'Закрыть';
+
+  @override
+  String get pause => 'Пауза';
+
+  @override
+  String get checkingTrailerAvailability => 'Проверка доступности трейлера...';
+
+  @override
+  String get trailerAvailable => 'Трейлер доступен';
+
+  @override
+  String get noTrailer => 'Трейлер не доступен';
+
+  @override
   String get backupsTitle => 'Резервные копии';
 
   @override

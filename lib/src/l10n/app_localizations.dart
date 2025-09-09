@@ -1166,6 +1166,48 @@ abstract class AppLocalizations {
   /// **'Restore'**
   String get restore;
 
+  /// No description provided for @mute.
+  ///
+  /// In en, this message translates to:
+  /// **'Mute'**
+  String get mute;
+
+  /// No description provided for @unmute.
+  ///
+  /// In en, this message translates to:
+  /// **'Unmute'**
+  String get unmute;
+
+  /// No description provided for @close.
+  ///
+  /// In en, this message translates to:
+  /// **'Close'**
+  String get close;
+
+  /// No description provided for @pause.
+  ///
+  /// In en, this message translates to:
+  /// **'Pause'**
+  String get pause;
+
+  /// No description provided for @checkingTrailerAvailability.
+  ///
+  /// In en, this message translates to:
+  /// **'Checking trailer availability...'**
+  String get checkingTrailerAvailability;
+
+  /// No description provided for @trailerAvailable.
+  ///
+  /// In en, this message translates to:
+  /// **'Trailer available'**
+  String get trailerAvailable;
+
+  /// No description provided for @noTrailer.
+  ///
+  /// In en, this message translates to:
+  /// **'No trailer'**
+  String get noTrailer;
+
   /// No description provided for @backupsTitle.
   ///
   /// In en, this message translates to:

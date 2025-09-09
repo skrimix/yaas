@@ -49,6 +49,16 @@ dependencies:
   desktop_drop: ^0.6.0
   url_launcher: ^6.3.1
   icons_launcher: ^3.0.2
+  video_player: ^2.10.0
+  video_player_media_kit: ^1.0.6
+
+  media_kit_libs_macos_video: any
+  media_kit_libs_windows_video: any
+  media_kit_libs_linux: any
+  cached_network_image: ^3.4.1
+  flutter_cache_manager: ^3.3.2
+  path_provider: ^2.1.5
+  http: ^1.2.2
 
 dev_dependencies:
   flutter_test:

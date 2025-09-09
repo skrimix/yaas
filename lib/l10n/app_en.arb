@@ -231,6 +231,14 @@
 
   "delete": "Delete",
   "restore": "Restore",
+  "mute": "Mute",
+  "unmute": "Unmute",
+  "close": "Close",
+  "pause": "Pause",
+
+  "checkingTrailerAvailability": "Checking trailer availability...",
+  "trailerAvailable": "Trailer available",
+  "noTrailer": "No trailer",
 
   "backupsTitle": "Backups",
   "openBackupsFolder": "Open Backups Folder",

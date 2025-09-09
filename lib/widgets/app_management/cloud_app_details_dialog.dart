@@ -516,6 +516,7 @@ class _CloudAppMediaState extends State<_CloudAppMedia> {
                       ),
                     ),
                   ),
+                // FIXME: this should disappear after click (when video is loading)
                 AnimatedOpacity(
                   opacity: _hovered && _trailerAvailable ? 1.0 : 0.0,
                   duration: const Duration(milliseconds: 150),

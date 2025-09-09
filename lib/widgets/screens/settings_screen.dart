@@ -575,7 +575,7 @@ class _SettingsScreenState extends State<SettingsScreen> {
           vertical: SettingsConstants.verticalSpacing),
       child: DropdownButtonFormField<T>(
         disabledHint: disabledHint,
-        value: value,
+        initialValue: value,
         items: items,
         onChanged: onChanged,
         decoration: InputDecoration(
@@ -636,7 +636,7 @@ class _SettingsScreenState extends State<SettingsScreen> {
             children: [
               Expanded(
                 child: DropdownButtonFormField<String>(
-                  value: dropdownValue,
+                  initialValue: dropdownValue,
                   items: items,
                   onChanged: (value) {
                     if (value == null) return;

@@ -500,6 +500,7 @@ checksum = "3f9eec918d3f24069decb9af1554cad7c880e2da24a9afd88aca000531ab82c1"
 [[package]]
 name = "forensic-adb"
 version = "0.7.0"
+source = "git+https://github.com/skrimix/forensic-adb#8492a0e8a6aa51be3e0467312503274e1939b047"
 dependencies = [
  "async-stream",
  "bstr",

@@ -57,11 +57,9 @@ jobs:
 
       - name: Install Linux dependencies
         if: matrix.target == 'linux'
-        uses: awalsh128/cache-apt-pkgs-action@9f7a885e33ff6f8166b600e3e74a981ec11b92c3
-        with:
-          packages: ninja-build libgtk-3-dev libasound2-dev libmpv-dev
-          version: 1
-          execute_install_scripts: true
+        run: |
+          apt update -y
+          apt install -y ninja-build libgtk-3-dev libasound2-dev libmpv-dev
 
       - name: Install rinf_cli from crates.io
         uses: baptiste0928/cargo-install@v3

@@ -134,6 +134,27 @@ impl Downloader {
         handle
     }
 
+    /// Returns the cached CloudApp (if any) that matches the given full name
+    pub async fn get_app_by_full_name(&self, full_name: &str) -> Option<CloudApp> {
+        let cache = self.cloud_apps.lock().await;
+        cache.iter().find(|a| a.full_name == full_name).cloned()
+    }
+
+    /// Returns all cached CloudApps for a given package name
+    pub async fn get_apps_by_package(&self, package_name: &str) -> Vec<CloudApp> {
+        let cache = self.cloud_apps.lock().await;
+        cache
+            .iter()
+            .filter(|a| a.package_name == package_name)
+            .cloned()
+            .collect()
+    }
+
+    /// Returns the current downloads directory
+    pub async fn get_download_dir(&self) -> PathBuf {
+        self.download_dir.read().await.clone()
+    }
+
     #[instrument(skip(self))]
     pub async fn receive_commands(&self) {
         let load_cloud_apps_receiver = LoadCloudAppsRequest::get_dart_signal_receiver();

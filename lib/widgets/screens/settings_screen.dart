@@ -233,18 +233,18 @@ class _SettingsScreenState extends State<SettingsScreen> {
     }
   }
 
-  // String _formatCleanupPolicy(
-  //         AppLocalizations l10n, DownloadCleanupPolicy policy) =>
-  //     switch (policy) {
-  //       DownloadCleanupPolicy.deleteAfterInstall =>
-  //         l10n.settingsCleanupDeleteAfterInstall,
-  //       DownloadCleanupPolicy.keepOneVersion =>
-  //         l10n.settingsCleanupKeepOneVersion,
-  //       DownloadCleanupPolicy.keepTwoVersions =>
-  //         l10n.settingsCleanupKeepTwoVersions,
-  //       DownloadCleanupPolicy.keepAllVersions =>
-  //         l10n.settingsCleanupKeepAllVersions,
-  //     };
+  String _formatCleanupPolicy(
+          AppLocalizations l10n, DownloadCleanupPolicy policy) =>
+      switch (policy) {
+        DownloadCleanupPolicy.deleteAfterInstall =>
+          l10n.settingsCleanupDeleteAfterInstall,
+        DownloadCleanupPolicy.keepOneVersion =>
+          l10n.settingsCleanupKeepOneVersion,
+        DownloadCleanupPolicy.keepTwoVersions =>
+          l10n.settingsCleanupKeepTwoVersions,
+        DownloadCleanupPolicy.keepAllVersions =>
+          l10n.settingsCleanupKeepAllVersions,
+      };
 
   // String _formatConnectionType(AppLocalizations l10n, ConnectionType type) =>
   //     switch (type) {
@@ -457,30 +457,22 @@ class _SettingsScreenState extends State<SettingsScreen> {
               ),
             ),
           ),
-          // TODO: implement
-          // _buildDropdownSetting<DownloadCleanupPolicy>(
-          //   label: l10n.settingsDownloadsCleanup,
-          //   value: _currentFormSettings.cleanupPolicy,
-          //   items: DownloadCleanupPolicy.values.map((policy) {
-          //     return DropdownMenuItem(
-          //       value: policy,
-          //       child: Text(_formatCleanupPolicy(l10n, policy)),
-          //     );
-          //   }).toList(),
-          //   onChanged: (value) {
-          //     if (value != null) {
-          //       setState(() => _currentFormSettings =
-          //           _currentFormSettings.copyWith(cleanupPolicy: value));
-          //       _checkForChanges();
-          //     }
-          //   },
-          // ),
-          _buildDropdownSetting<DownloadCleanupPolicy?>(
+          _buildDropdownSetting<DownloadCleanupPolicy>(
             label: l10n.settingsDownloadsCleanup,
-            value: null,
-            items: [],
-            onChanged: null,
-            disabledHint: const Text('Not implemented'),
+            value: _currentFormSettings.cleanupPolicy,
+            items: DownloadCleanupPolicy.values.map((policy) {
+              return DropdownMenuItem(
+                value: policy,
+                child: Text(_formatCleanupPolicy(l10n, policy)),
+              );
+            }).toList(),
+            onChanged: (value) {
+              if (value != null) {
+                setState(() => _currentFormSettings =
+                    _currentFormSettings.copyWith(cleanupPolicy: value));
+                _checkForChanges();
+              }
+            },
           ),
         ],
       ),

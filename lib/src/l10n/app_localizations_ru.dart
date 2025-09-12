@@ -250,6 +250,70 @@ class AppLocalizationsRu extends AppLocalizations {
   String get commonError => 'Ошибка';
 
   @override
+  String get diagnosticsTitle => 'Диагностика подключения';
+
+  @override
+  String get diagnosticsLegendTitle => 'Статусы';
+
+  @override
+  String get diagnosticsLegendOk => 'ОК';
+
+  @override
+  String get diagnosticsLegendWarning => 'Внимание';
+
+  @override
+  String get diagnosticsLegendError => 'Не работает';
+
+  @override
+  String get diagnosticsAdbServer => 'Сервер ADB';
+
+  @override
+  String get diagnosticsDevices => 'Устройства';
+
+  @override
+  String get diagnosticsAuthorization => 'Авторизация';
+
+  @override
+  String get diagnosticsActiveDevice => 'Активное устройство';
+
+  @override
+  String get diagnosticsAdbPath => 'Путь к ADB';
+
+  @override
+  String get diagnosticsServerNotRunningDesc =>
+      'Сервер ADB не запущен. Убедитесь, что ADB установлен и доступен в PATH, либо укажите путь к ADB в настройках.';
+
+  @override
+  String get diagnosticsServerStartingDesc => 'Запуск сервера ADB...';
+
+  @override
+  String get diagnosticsNoDevicesDesc =>
+      'Устройства не обнаружены. Подключите устройство по USB или включите беспроводную отладку.';
+
+  @override
+  String diagnosticsDevicesAvailableDesc(int count) {
+    return 'Обнаружено устройств ($count)';
+  }
+
+  @override
+  String get diagnosticsUnauthorizedDesc =>
+      'Устройство не авторизовано. Подтвердите RSA-ключ на устройстве.';
+
+  @override
+  String get diagnosticsConnectedDesc => 'Устройство подключено и готово.';
+
+  @override
+  String get diagnosticsUnknownDesc => 'Неизвестное состояние.';
+
+  @override
+  String diagnosticsConfiguredPath(String path) {
+    return 'Указанный путь: $path';
+  }
+
+  @override
+  String get diagnosticsUsingSystemPath => 'Используется системный PATH';
+
+  @override
   String get commonYes => 'Да';
 
   @override

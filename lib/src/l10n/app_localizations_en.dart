@@ -246,6 +246,70 @@ class AppLocalizationsEn extends AppLocalizations {
   String get commonError => 'Error';
 
   @override
+  String get diagnosticsTitle => 'Connection Diagnostics';
+
+  @override
+  String get diagnosticsLegendTitle => 'Status colors';
+
+  @override
+  String get diagnosticsLegendOk => 'OK';
+
+  @override
+  String get diagnosticsLegendWarning => 'Attention';
+
+  @override
+  String get diagnosticsLegendError => 'Not working';
+
+  @override
+  String get diagnosticsAdbServer => 'ADB server';
+
+  @override
+  String get diagnosticsDevices => 'Devices';
+
+  @override
+  String get diagnosticsAuthorization => 'Authorization';
+
+  @override
+  String get diagnosticsActiveDevice => 'Active device';
+
+  @override
+  String get diagnosticsAdbPath => 'ADB path';
+
+  @override
+  String get diagnosticsServerNotRunningDesc =>
+      'ADB server is not running. Ensure ADB is installed and accessible in PATH or set the ADB path in Settings.';
+
+  @override
+  String get diagnosticsServerStartingDesc => 'ADB server is starting...';
+
+  @override
+  String get diagnosticsNoDevicesDesc =>
+      'No devices detected. Connect a device via USB or enable wireless debugging.';
+
+  @override
+  String diagnosticsDevicesAvailableDesc(int count) {
+    return 'Devices detected ($count)';
+  }
+
+  @override
+  String get diagnosticsUnauthorizedDesc =>
+      'Device is unauthorized. Confirm the RSA prompt on the device.';
+
+  @override
+  String get diagnosticsConnectedDesc => 'Device connected and ready.';
+
+  @override
+  String get diagnosticsUnknownDesc => 'Unknown state.';
+
+  @override
+  String diagnosticsConfiguredPath(String path) {
+    return 'Configured path: $path';
+  }
+
+  @override
+  String get diagnosticsUsingSystemPath => 'Using system PATH';
+
+  @override
   String get commonYes => 'Yes';
 
   @override

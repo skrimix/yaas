@@ -88,9 +88,38 @@ State flows from Rust backend to Flutter frontend via Rinf signals.
 - Commits: Imperative, concise, scoped when helpful. Examples:
   - "Fix ADB server launch on Windows"
   - "Sort apps by relevance when searching"
-- PRs: Include description, linked issues, before/after screenshots for UI, and platforms tested.
+- PRs: Include description, linked issues.
   - Ensure `just format` and `flutter analyze` pass.
   - Run `just gen` locally; do not commit build artifacts. Commit generated bindings only if reviewed as source of truth.
+
+### Commit Message Style (from recent history)
+- One-line subject, imperative mood, no trailing period.
+- Capitalize the first word; keep nouns lower-case unless proper (e.g., ADB, YAAS).
+- Favor ultra-concise phrasing; avoid "feat:", "fix:", or long explanations.
+- If touching multiple tiny things, separate with commas; `+` is acceptable to join paired additions.
+- Prefer empty body; only add a body when necessary.
+
+Examples:
+- "Add thumbnail + trailer player"
+- "Add a hint for unimplemented setting"
+- "Fix task count"
+- "Upgrade sevenz-rust2, disable native tls"
+- "Add app details, format code, small refactor"
+- "Disable unimplemented settings"
+- "Add rclone remote selector"
+
+### Branches, Commits, and PRs (Codex CLI defaults)
+- Branch naming: create branches with `codex/<concise-slug>`.
+- Default commit subject (when none provided): follow the style above; keep it short and imperative.
+- Commit description/body: minimize; prefer none unless essential.
+- Pull Requests: write a structured summary modeled after Codex CLI change summaries. Include:
+  - Summary of changes: 3–6 concise bullets of what and why.
+  - Areas/files touched: key paths or modules.
+  - Validation: how it was verified (tests, builds, manual checks).
+  - Notes/Follow-ups: limitations, risks, or next steps.
+  - Labels: include `codex-cli`.
+- Keep PRs focused; ensure formatting and analysis pass before opening.
+- Create draft PRs by default.
 
 ## Security & Configuration Tips
 - Do not commit secrets or user data.

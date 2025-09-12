@@ -66,7 +66,7 @@ class _DownloadsScreenState extends State<DownloadsScreen> {
                   const Spacer(),
                   IconButton(
                     tooltip: l10n.deleteAllDownloads,
-                    onPressed: _deleteAllDownloads,
+                    onPressed: _confirmDeleteAllDownloads,
                     icon: const Icon(Icons.delete_sweep),
                   ),
                   IconButton(
@@ -157,6 +157,29 @@ class _DownloadsScreenState extends State<DownloadsScreen> {
       }
     });
     DeleteAllDownloadsRequest().sendSignalToRust();
+  }
+
+  Future<void> _confirmDeleteAllDownloads() async {
+    final confirmed = await showDialog<bool>(
+      context: context,
+      builder: (context) => AlertDialog(
+        title: Text(AppLocalizations.of(context).deleteAllDownloadsTitle),
+        content: Text(AppLocalizations.of(context).deleteAllDownloadsConfirm),
+        actions: [
+          TextButton(
+            onPressed: () => Navigator.of(context).pop(false),
+            child: Text(AppLocalizations.of(context).commonCancel),
+          ),
+          FilledButton(
+            onPressed: () => Navigator.of(context).pop(true),
+            child: Text(AppLocalizations.of(context).delete),
+          ),
+        ],
+      ),
+    );
+    if (confirmed == true) {
+      _deleteAllDownloads();
+    }
   }
 
   Future<void> _confirmAndDelete(DownloadEntry entry) async {

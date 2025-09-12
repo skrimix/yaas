@@ -246,6 +246,8 @@
   "openDownloadsFolder": "Open Downloads Folder",
   "downloadsTitle": "Downloads",
   "deleteAllDownloads": "Delete all downloads",
+  "deleteAllDownloadsTitle": "Delete All Downloads",
+  "deleteAllDownloadsConfirm": "Are you sure you want to delete all downloaded releases?",
   "deleteAllDownloadsResult": "Deleted {removed}, skipped {skipped}",
   "@deleteAllDownloadsResult": {"placeholders": {"removed": {"type": "String"}, "skipped": {"type": "String"}}},
   "deleteDownloadTitle": "Delete Download",

@@ -623,6 +623,13 @@ class AppLocalizationsEn extends AppLocalizations {
   String get deleteAllDownloads => 'Delete all downloads';
 
   @override
+  String get deleteAllDownloadsTitle => 'Delete All Downloads';
+
+  @override
+  String get deleteAllDownloadsConfirm =>
+      'Are you sure you want to delete all downloaded releases?';
+
+  @override
   String deleteAllDownloadsResult(String removed, String skipped) {
     return 'Deleted $removed, skipped $skipped';
   }

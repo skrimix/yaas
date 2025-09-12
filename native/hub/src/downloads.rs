@@ -238,6 +238,9 @@ impl DownloadsHandler {
             let dir = entry.path();
             let meta = match entry.metadata().await { Ok(m) => m, Err(_) => continue };
             if !meta.is_dir() { continue; }
+            // Only delete directories that contain release.json
+            let release_path = dir.join("release.json");
+            if !release_path.exists() { continue; }
             if dir.exists() {
                 match fs::remove_dir_all(&dir).await {
                     Ok(()) => { removed = removed.saturating_add(1); }

@@ -43,33 +43,23 @@ jobs:
         with:
           submodules: true
 
-      - name: Cache dependencies
-        uses: actions/cache@v4
-        with:
-          path: |
-            ~/.cargo/registry
-            target
-            ~/.pub-cache
-          key: >
-            ${{ matrix.runner }}-${{ matrix.target }}
-            ${{ hashFiles('**/Cargo.toml', '**/pubspec.yaml') }}
-          restore-keys: |
-            ${{ matrix.runner }}-${{ matrix.target }}
-            ${{ matrix.runner }}
-
       - name: Setup Flutter SDK
         uses: subosito/flutter-action@v2
         with:
           channel: "stable"
+          cache: true
 
       - name: Setup Rust toolchain
         uses: dtolnay/rust-toolchain@stable
+
+      - name: Enable Rust cache
+        uses: Swatinem/rust-cache@v2
 
       - name: Install Linux dependencies
         if: matrix.target == 'linux'
         uses: awalsh128/cache-apt-pkgs-action@latest
         with:
-          packages: ninja-build libgtk-3-dev libasound2-dev
+          packages: ninja-build libgtk-3-dev libasound2-dev libmpv-dev
           version: 1.0
 
       - name: Install rinf_cli from crates.io

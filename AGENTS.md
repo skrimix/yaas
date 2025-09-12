@@ -38,6 +38,12 @@ The project uses Rinf for automatic code generation:
 - Always run `just gen` after modifying Rust signals before Flutter operations
 - Generated files are in `lib/src/bindings/`
 
+### Localization (ARB → Dart)
+- Edit only the ARB files in `lib/l10n` when adding or changing localized strings.
+- Do not modify any generated localization Dart files in `lib/src/l10n` directly.
+- Generate implementations with `flutter gen-l10n` (configured via `l10n.yaml`).
+- Ensure `flutter analyze` passes after regeneration.
+
 ## Dependencies
 
 **Flutter key packages:**

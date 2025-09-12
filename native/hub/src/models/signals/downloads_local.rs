@@ -34,3 +34,23 @@ pub struct GetDownloadsDirectoryResponse {
     pub path: String,
 }
 
+#[derive(Serialize, Deserialize, DartSignal)]
+pub struct DeleteDownloadRequest {
+    pub path: String,
+}
+
+#[derive(Serialize, Deserialize, RustSignal)]
+pub struct DeleteDownloadResponse {
+    pub path: String,
+    pub error: Option<String>,
+}
+
+#[derive(Serialize, Deserialize, DartSignal)]
+pub struct CleanupDownloadsRequest {}
+
+#[derive(Serialize, Deserialize, RustSignal)]
+pub struct CleanupDownloadsResponse {
+    pub removed: u32,
+    pub skipped: u32,
+    pub error: Option<String>,
+}

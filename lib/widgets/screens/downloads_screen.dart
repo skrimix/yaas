@@ -65,6 +65,11 @@ class _DownloadsScreenState extends State<DownloadsScreen> {
                   ),
                   const Spacer(),
                   IconButton(
+                    tooltip: l10n.cleanupDownloads,
+                    onPressed: _cleanupDownloads,
+                    icon: const Icon(Icons.cleaning_services),
+                  ),
+                  IconButton(
                     tooltip: l10n.openDownloadsFolder,
                     onPressed: _openDownloadsRoot,
                     icon: const Icon(Icons.folder_open),
@@ -92,6 +97,7 @@ class _DownloadsScreenState extends State<DownloadsScreen> {
                                 onInstall: () =>
                                     SideloadUtils.installApp(_entries[index].path, true),
                                 onOpenFolder: () => _openFolder(_entries[index].path),
+                                onDelete: () => _confirmAndDelete(_entries[index]),
                               ),
                             ),
             ),
@@ -136,17 +142,73 @@ class _DownloadsScreenState extends State<DownloadsScreen> {
     });
     GetDownloadsDirectoryRequest().sendSignalToRust();
   }
+
+  void _cleanupDownloads() {
+    CleanupDownloadsResponse.rustSignalStream.take(1).listen((event) {
+      final msg = event.message;
+      if (!mounted) return;
+      if (msg.error != null) {
+        SideloadUtils.showErrorToast(context, msg.error!);
+      } else {
+        final l10n = AppLocalizations.of(context);
+        final text = l10n.cleanupDownloadsResult(msg.removed.toString(), msg.skipped.toString());
+        SideloadUtils.showInfoToast(context, l10n.cleanupDownloads, text);
+        _loadDownloads();
+      }
+    });
+    CleanupDownloadsRequest().sendSignalToRust();
+  }
+
+  Future<void> _confirmAndDelete(DownloadEntry entry) async {
+    final confirmed = await showDialog<bool>(
+      context: context,
+      builder: (context) => AlertDialog(
+        title: Text(AppLocalizations.of(context).deleteDownloadTitle),
+        content:
+            Text(AppLocalizations.of(context).deleteDownloadConfirm(entry.name)),
+        actions: [
+          TextButton(
+            onPressed: () => Navigator.of(context).pop(false),
+            child: Text(AppLocalizations.of(context).commonCancel),
+          ),
+          FilledButton(
+            onPressed: () => Navigator.of(context).pop(true),
+            child: Text(AppLocalizations.of(context).delete),
+          ),
+        ],
+      ),
+    );
+
+    if (confirmed != true) return;
+
+    DeleteDownloadResponse.rustSignalStream.take(1).listen((event) {
+      final msg = event.message;
+      if (!mounted) return;
+      if (msg.error != null) {
+        SideloadUtils.showErrorToast(context, msg.error!);
+      } else {
+        SideloadUtils.showInfoToast(
+            context,
+            AppLocalizations.of(context).downloadDeletedTitle,
+            entry.name);
+        _loadDownloads();
+      }
+    });
+    DeleteDownloadRequest(path: entry.path).sendSignalToRust();
+  }
 }
 
 class _DownloadTile extends StatelessWidget {
   final DownloadEntry entry;
   final VoidCallback onInstall;
   final VoidCallback onOpenFolder;
+  final VoidCallback onDelete;
 
   const _DownloadTile({
     required this.entry,
     required this.onInstall,
     required this.onOpenFolder,
+    required this.onDelete,
   });
 
   @override
@@ -163,6 +225,12 @@ class _DownloadTile extends StatelessWidget {
           mainAxisSize: MainAxisSize.min,
           crossAxisAlignment: CrossAxisAlignment.center,
           children: [
+            IconButton(
+              tooltip: l10n.delete,
+              icon: const Icon(Icons.delete_outline),
+              onPressed: onDelete,
+            ),
+            const SizedBox(width: 8),
             IconButton(
               tooltip: l10n.openFolderTooltip,
               icon: const Icon(Icons.folder_open),
@@ -210,4 +278,3 @@ class _DownloadTile extends StatelessWidget {
     return meta.isEmpty ? '$tsStr • $sizeStr' : '$meta • $tsStr • $sizeStr';
   }
 }
-

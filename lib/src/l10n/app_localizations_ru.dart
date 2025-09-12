@@ -625,6 +625,25 @@ class AppLocalizationsRu extends AppLocalizations {
   String get downloadsTitle => 'Загрузки';
 
   @override
+  String get cleanupDownloads => 'Очистить загрузки';
+
+  @override
+  String cleanupDownloadsResult(String removed, String skipped) {
+    return 'Удалено $removed, пропущено $skipped';
+  }
+
+  @override
+  String get deleteDownloadTitle => 'Удалить загрузку';
+
+  @override
+  String deleteDownloadConfirm(String name) {
+    return 'Удалить \"$name\"?';
+  }
+
+  @override
+  String get downloadDeletedTitle => 'Загрузка удалена';
+
+  @override
   String get noBackupsFound => 'Резервные копии не найдены.';
 
   @override

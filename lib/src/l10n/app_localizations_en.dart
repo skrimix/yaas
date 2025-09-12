@@ -620,6 +620,25 @@ class AppLocalizationsEn extends AppLocalizations {
   String get downloadsTitle => 'Downloads';
 
   @override
+  String get cleanupDownloads => 'Clean up downloads';
+
+  @override
+  String cleanupDownloadsResult(String removed, String skipped) {
+    return 'Removed $removed, skipped $skipped';
+  }
+
+  @override
+  String get deleteDownloadTitle => 'Delete Download';
+
+  @override
+  String deleteDownloadConfirm(String name) {
+    return 'Are you sure you want to delete \"$name\"?';
+  }
+
+  @override
+  String get downloadDeletedTitle => 'Download deleted';
+
+  @override
   String get noBackupsFound => 'No backups found.';
 
   @override

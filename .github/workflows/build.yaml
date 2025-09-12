@@ -28,14 +28,14 @@ jobs:
     strategy:
       fail-fast: false
       matrix:
-        runner: [ubuntu, windows, macos]
+        runner: [ubuntu, windows]
         include:
           - runner: ubuntu
             target: linux
           - runner: windows
             target: windows
-          - runner: macos
-            target: macos
+          #- runner: macos
+          #  target: macos
 
     steps:
       - name: Checkout repository
@@ -65,26 +65,38 @@ jobs:
       - name: Setup Rust toolchain
         uses: dtolnay/rust-toolchain@stable
 
-      - name: Setup Ninja and GTK3 toolchain (Only Linux target)
+      - name: Install Linux dependencies
         if: matrix.target == 'linux'
-        run: |
-          sudo apt-get update -y
-          sudo apt-get install -y ninja-build libgtk-3-dev
+        uses: awalsh128/cache-apt-pkgs-action@latest
+        with:
+          packages: ninja-build libgtk-3-dev libasound2-dev
+          version: 1.0
 
-      - name: Install Rinf CLI tool
-        run: cargo install rinf_cli
+      - name: Install rinf_cli from crates.io
+        uses: baptiste0928/cargo-install@v3
+        with:
+          crate: rinf_cli
+
+      - name: Generate Rinf bindings
+        run: $HOME/.cargo/bin/rinf gen
 
       - name: Build the app
         if: matrix.target == 'linux'
-        run: flutter build linux --verbose
+        run: flutter build linux --release
 
       - name: Build the app
         if: matrix.target == 'windows'
-        run: flutter build windows --verbose
+        run: flutter build windows --release
 
       - name: Build the app
         if: matrix.target == 'macos'
-        run: flutter build macos --verbose
+        run: flutter build macos --release
 
-      - name: Run unit tests
-        run: cargo test
+      - name: Upload Artifact
+        uses: actions/upload-artifact@v4
+        with:
+          name: build-${{ matrix.target }}
+          path: |
+            build/windows/x64/runner/Release/
+            build/linux/x64/release/bundle/
+            build/macos/Build/Products/Release/

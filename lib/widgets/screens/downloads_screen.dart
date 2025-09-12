@@ -65,9 +65,9 @@ class _DownloadsScreenState extends State<DownloadsScreen> {
                   ),
                   const Spacer(),
                   IconButton(
-                    tooltip: l10n.cleanupDownloads,
-                    onPressed: _cleanupDownloads,
-                    icon: const Icon(Icons.cleaning_services),
+                    tooltip: l10n.deleteAllDownloads,
+                    onPressed: _deleteAllDownloads,
+                    icon: const Icon(Icons.delete_sweep),
                   ),
                   IconButton(
                     tooltip: l10n.openDownloadsFolder,
@@ -143,20 +143,20 @@ class _DownloadsScreenState extends State<DownloadsScreen> {
     GetDownloadsDirectoryRequest().sendSignalToRust();
   }
 
-  void _cleanupDownloads() {
-    CleanupDownloadsResponse.rustSignalStream.take(1).listen((event) {
+  void _deleteAllDownloads() {
+    DeleteAllDownloadsResponse.rustSignalStream.take(1).listen((event) {
       final msg = event.message;
       if (!mounted) return;
       if (msg.error != null) {
         SideloadUtils.showErrorToast(context, msg.error!);
       } else {
         final l10n = AppLocalizations.of(context);
-        final text = l10n.cleanupDownloadsResult(msg.removed.toString(), msg.skipped.toString());
-        SideloadUtils.showInfoToast(context, l10n.cleanupDownloads, text);
+        final text = l10n.deleteAllDownloadsResult(msg.removed.toString(), msg.skipped.toString());
+        SideloadUtils.showInfoToast(context, l10n.deleteAllDownloads, text);
         _loadDownloads();
       }
     });
-    CleanupDownloadsRequest().sendSignalToRust();
+    DeleteAllDownloadsRequest().sendSignalToRust();
   }
 
   Future<void> _confirmAndDelete(DownloadEntry entry) async {

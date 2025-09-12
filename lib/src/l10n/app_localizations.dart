@@ -1238,17 +1238,17 @@ abstract class AppLocalizations {
   /// **'Downloads'**
   String get downloadsTitle;
 
-  /// No description provided for @cleanupDownloads.
+  /// No description provided for @deleteAllDownloads.
   ///
   /// In en, this message translates to:
-  /// **'Clean up downloads'**
-  String get cleanupDownloads;
+  /// **'Delete all downloads'**
+  String get deleteAllDownloads;
 
-  /// No description provided for @cleanupDownloadsResult.
+  /// No description provided for @deleteAllDownloadsResult.
   ///
   /// In en, this message translates to:
-  /// **'Removed {removed}, skipped {skipped}'**
-  String cleanupDownloadsResult(String removed, String skipped);
+  /// **'Deleted {removed}, skipped {skipped}'**
+  String deleteAllDownloadsResult(String removed, String skipped);
 
   /// No description provided for @deleteDownloadTitle.
   ///

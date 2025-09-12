@@ -625,10 +625,10 @@ class AppLocalizationsRu extends AppLocalizations {
   String get downloadsTitle => 'Загрузки';
 
   @override
-  String get cleanupDownloads => 'Очистить загрузки';
+  String get deleteAllDownloads => 'Удалить все загрузки';
 
   @override
-  String cleanupDownloadsResult(String removed, String skipped) {
+  String deleteAllDownloadsResult(String removed, String skipped) {
     return 'Удалено $removed, пропущено $skipped';
   }
 

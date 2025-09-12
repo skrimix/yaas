@@ -57,7 +57,7 @@ impl DownloadsHandler {
         let list_receiver = GetDownloadsRequest::get_dart_signal_receiver();
         let get_dir_receiver = GetDownloadsDirectoryRequest::get_dart_signal_receiver();
         let delete_receiver = DeleteDownloadRequest::get_dart_signal_receiver();
-        let cleanup_receiver = CleanupDownloadsRequest::get_dart_signal_receiver();
+        let delete_all_receiver = DeleteAllDownloadsRequest::get_dart_signal_receiver();
 
         loop {
             tokio::select! {
@@ -107,21 +107,21 @@ impl DownloadsHandler {
                         panic!("DeleteDownloadRequest receiver ended");
                     }
                 }
-                request = cleanup_receiver.recv() => {
+                request = delete_all_receiver.recv() => {
                     if let Some(_request) = request {
-                        debug!("Received CleanupDownloadsRequest");
-                        match self.cleanup_downloads_by_policy().await {
+                        debug!("Received DeleteAllDownloadsRequest");
+                        match self.delete_all_downloads().await {
                             Ok((removed, skipped)) => {
-                                CleanupDownloadsResponse { removed, skipped, error: None }.send_signal_to_dart();
+                                DeleteAllDownloadsResponse { removed, skipped, error: None }.send_signal_to_dart();
                                 if removed > 0 { DownloadsChanged {}.send_signal_to_dart(); }
                             }
                             Err(e) => {
-                                error!(error = %format!("{e:#}"), "Failed to cleanup downloads");
-                                CleanupDownloadsResponse { removed: 0, skipped: 0, error: Some(format!("{e:#}")) }.send_signal_to_dart();
+                                error!(error = %format!("{e:#}"), "Failed to delete all downloads");
+                                DeleteAllDownloadsResponse { removed: 0, skipped: 0, error: Some(format!("{e:#}")) }.send_signal_to_dart();
                             }
                         }
                     } else {
-                        panic!("CleanupDownloadsRequest receiver ended");
+                        panic!("DeleteAllDownloadsRequest receiver ended");
                     }
                 }
             }
@@ -229,50 +229,19 @@ impl DownloadsHandler {
     }
 
     #[instrument(skip(self), err, ret)]
-    async fn cleanup_downloads_by_policy(&self) -> Result<(u32, u32)> {
-        use std::collections::HashMap;
+    async fn delete_all_downloads(&self) -> Result<(u32, u32)> {
         let root = self.root.read().await.clone();
-        let policy = *self.policy.read().await;
-
-        let keep_count = match policy {
-            DownloadCleanupPolicy::DeleteAfterInstall => 0,
-            DownloadCleanupPolicy::KeepOneVersion => 1,
-            DownloadCleanupPolicy::KeepTwoVersions => 2,
-            DownloadCleanupPolicy::KeepAllVersions => usize::MAX,
-        };
-
-        if keep_count == usize::MAX { return Ok((0, 0)); }
-
-        let mut groups: HashMap<String, Vec<(PathBuf, u32)>> = HashMap::new();
+        let mut removed: u32 = 0;
+        let mut skipped: u32 = 0;
         let mut rd = fs::read_dir(&root).await?;
         while let Some(entry) = rd.next_entry().await? {
             let dir = entry.path();
             let meta = match entry.metadata().await { Ok(m) => m, Err(_) => continue };
             if !meta.is_dir() { continue; }
-            let release_path = dir.join("release.json");
-            if !release_path.exists() { continue; }
-            let text = match fs::read_to_string(&release_path).await { Ok(t) => t, Err(_) => continue };
-            #[derive(serde::Deserialize)]
-            struct Partial { package_name: Option<String>, version_code: Option<u32> }
-            if let Ok(p) = serde_json::from_str::<Partial>(&text) {
-                if let (Some(pkg), Some(ver)) = (p.package_name, p.version_code) {
-                    groups.entry(pkg).or_default().push((dir.clone(), ver));
-                }
-            }
-        }
-
-        let mut removed: u32 = 0;
-        let mut skipped: u32 = 0;
-        for (_pkg, mut items) in groups.into_iter() {
-            items.sort_by_key(|(_p, ver)| std::cmp::Reverse(*ver));
-            if items.len() <= keep_count { continue; }
-            for (idx, (path, _ver)) in items.into_iter().enumerate() {
-                if idx < keep_count { continue; }
-                if path.exists() {
-                    match fs::remove_dir_all(&path).await {
-                        Ok(()) => { removed = removed.saturating_add(1); }
-                        Err(_) => { skipped = skipped.saturating_add(1); }
-                    }
+            if dir.exists() {
+                match fs::remove_dir_all(&dir).await {
+                    Ok(()) => { removed = removed.saturating_add(1); }
+                    Err(_) => { skipped = skipped.saturating_add(1); }
                 }
             }
         }

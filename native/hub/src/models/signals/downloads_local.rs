@@ -46,10 +46,10 @@ pub struct DeleteDownloadResponse {
 }
 
 #[derive(Serialize, Deserialize, DartSignal)]
-pub struct CleanupDownloadsRequest {}
+pub struct DeleteAllDownloadsRequest {}
 
 #[derive(Serialize, Deserialize, RustSignal)]
-pub struct CleanupDownloadsResponse {
+pub struct DeleteAllDownloadsResponse {
     pub removed: u32,
     pub skipped: u32,
     pub error: Option<String>,

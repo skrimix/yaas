@@ -620,11 +620,11 @@ class AppLocalizationsEn extends AppLocalizations {
   String get downloadsTitle => 'Downloads';
 
   @override
-  String get cleanupDownloads => 'Clean up downloads';
+  String get deleteAllDownloads => 'Delete all downloads';
 
   @override
-  String cleanupDownloadsResult(String removed, String skipped) {
-    return 'Removed $removed, skipped $skipped';
+  String deleteAllDownloadsResult(String removed, String skipped) {
+    return 'Deleted $removed, skipped $skipped';
   }
 
   @override

@@ -213,11 +213,22 @@ class _TaskListDialogState extends State<TaskListDialog>
                   ),
                 ),
               ),
+              const SizedBox(width: 8),
+              Text(
+                l10n.taskStep(task.currentStep, task.totalSteps),
+                style: TextStyle(
+                  fontSize: 12,
+                  color: Theme.of(context)
+                      .colorScheme
+                      .onSurface
+                      .withValues(alpha: 0.7),
+                ),
+              ),
             ],
           ),
           if (!task.isFinished)
             LinearProgressIndicator(
-              value: task.totalProgress,
+              value: task.stepProgress,
               backgroundColor: Colors.grey.withValues(alpha: 0.1),
             ),
         ],
@@ -227,8 +238,10 @@ class _TaskListDialogState extends State<TaskListDialog>
           : Row(
               mainAxisSize: MainAxisSize.min,
               children: [
-                Text('${(task.totalProgress * 100).toInt()}%'),
-                const SizedBox(width: 4),
+                if (task.stepProgress != null) ...[
+                  Text('${(task.stepProgress! * 100).toInt()}%'),
+                  const SizedBox(width: 4),
+                ],
                 // TODO: disable button when task is not cancellable
                 IconButton(
                   visualDensity: VisualDensity.compact,

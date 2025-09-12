@@ -773,6 +773,11 @@ class AppLocalizationsEn extends AppLocalizations {
   String get taskUnknown => 'Unknown';
 
   @override
+  String taskStep(int current, int total) {
+    return 'Step $current of $total';
+  }
+
+  @override
   String get backupOptionsTitle => 'Backup Options';
 
   @override

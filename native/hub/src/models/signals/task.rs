@@ -75,4 +75,7 @@ pub struct TaskProgress {
     pub status: TaskStatus,
     pub total_progress: f32,
     pub message: String,
+    pub step: u32,
+    pub total_steps: u32,
+    pub step_progress: Option<f32>,
 }

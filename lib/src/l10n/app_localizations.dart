@@ -1532,6 +1532,12 @@ abstract class AppLocalizations {
   /// **'Unknown'**
   String get taskUnknown;
 
+  /// No description provided for @taskStep.
+  ///
+  /// In en, this message translates to:
+  /// **'Step {current} of {total}'**
+  String taskStep(int current, int total);
+
   /// No description provided for @backupOptionsTitle.
   ///
   /// In en, this message translates to:

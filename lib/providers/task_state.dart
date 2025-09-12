@@ -11,6 +11,9 @@ class TaskInfo {
   final String message;
   final DateTime startTime;
   DateTime? endTime;
+  final int currentStep;
+  final int totalSteps;
+  final double? stepProgress;
 
   TaskInfo({
     required this.taskId,
@@ -21,6 +24,9 @@ class TaskInfo {
     required this.message,
     required this.startTime,
     this.endTime,
+    required this.currentStep,
+    required this.totalSteps,
+    this.stepProgress,
   });
 
   TaskInfo copyWith({
@@ -29,6 +35,9 @@ class TaskInfo {
     double? totalProgress,
     String? message,
     DateTime? endTime,
+    int? currentStep,
+    int? totalSteps,
+    double? stepProgress,
   }) {
     return TaskInfo(
       taskId: taskId,
@@ -39,6 +48,9 @@ class TaskInfo {
       message: message ?? this.message,
       startTime: startTime,
       endTime: endTime ?? this.endTime,
+      currentStep: currentStep ?? this.currentStep,
+      totalSteps: totalSteps ?? this.totalSteps,
+      stepProgress: stepProgress ?? this.stepProgress,
     );
   }
 
@@ -71,6 +83,9 @@ class TaskState extends ChangeNotifier {
           status: progress.status,
           totalProgress: progress.totalProgress,
           message: progress.message,
+          currentStep: progress.step.toInt(),
+          totalSteps: progress.totalSteps.toInt(),
+          stepProgress: progress.stepProgress,
           endTime: progress.status == TaskStatus.completed ||
                   progress.status == TaskStatus.failed ||
                   progress.status == TaskStatus.cancelled
@@ -102,6 +117,9 @@ class TaskState extends ChangeNotifier {
           totalProgress: progress.totalProgress,
           message: progress.message,
           startTime: DateTime.now(),
+          currentStep: progress.step.toInt(),
+          totalSteps: progress.totalSteps.toInt(),
+          stepProgress: progress.stepProgress,
         );
 
         debugPrint(

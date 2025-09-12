@@ -237,6 +237,9 @@ impl TaskManager {
                     TaskStatus::Failed,
                     0.0,
                     format!("Failed to initialize task: {e:#}"),
+                    1,
+                    1,
+                    None,
                 );
 
                 // Log task cleanup
@@ -251,18 +254,32 @@ impl TaskManager {
             }
         };
 
-        let update_progress = |status: TaskStatus, progress: f32, message: String| {
-            // debug!(
-            //     task_id = id,
-            //     status = ?status,
-            //     progress = progress,
-            //     message = %message,
-            //     "Task progress update"
-            // ); // TODO: limit logging frequency
-            send_progress(id, task_type, Some(task_name.clone()), status, progress, message);
+        let total_steps = match task_type {
+            TaskType::DownloadInstall => 2,
+            _ => 1,
         };
 
-        update_progress(TaskStatus::Waiting, 0.0, "Starting...".into());
+        let update_progress = |status: TaskStatus,
+                               step: u32,
+                               total_steps: u32,
+                               step_progress: Option<f32>,
+                               message: String| {
+            let total_progress = ((step.saturating_sub(1)) as f32 + step_progress.unwrap_or(0.0))
+                / total_steps as f32;
+            send_progress(
+                id,
+                task_type,
+                Some(task_name.clone()),
+                status,
+                total_progress,
+                message,
+                step,
+                total_steps,
+                step_progress,
+            );
+        };
+
+        update_progress(TaskStatus::Waiting, 1, total_steps, None, "Starting...".into());
 
         Toast::send(
             task_name.clone(),
@@ -313,7 +330,13 @@ impl TaskManager {
                     duration_secs = duration.as_secs_f64(),
                     "Task completed successfully"
                 );
-                update_progress(TaskStatus::Completed, 1.0, "Done".into());
+                update_progress(
+                    TaskStatus::Completed,
+                    total_steps,
+                    total_steps,
+                    Some(1.0),
+                    "Done".into(),
+                );
                 Toast::send(task_name, format!("{task_type}: completed"), false, None);
             }
             Err(e) => {
@@ -324,7 +347,13 @@ impl TaskManager {
                         duration_ms = duration.as_millis(),
                         "Task was cancelled by user"
                     );
-                    update_progress(TaskStatus::Cancelled, 0.0, "Task cancelled by user".into());
+                    update_progress(
+                        TaskStatus::Cancelled,
+                        total_steps,
+                        total_steps,
+                        None,
+                        "Task cancelled by user".into(),
+                    );
                     Toast::send(task_name, format!("{task_type}: cancelled"), false, None);
                 } else {
                     error!(
@@ -335,7 +364,13 @@ impl TaskManager {
                         error_chain = ?e.chain().collect::<Vec<_>>(),
                         "Task failed with error"
                     );
-                    update_progress(TaskStatus::Failed, 0.0, format!("Task failed: {e:#}"));
+                    update_progress(
+                        TaskStatus::Failed,
+                        total_steps,
+                        total_steps,
+                        None,
+                        format!("Task failed: {e:#}"),
+                    );
                     Toast::send(
                         task_name,
                         format!("{task_type}: failed"),
@@ -359,7 +394,7 @@ impl TaskManager {
     async fn handle_download_install(
         &self,
         params: TaskParams,
-        update_progress: &impl Fn(TaskStatus, f32, String),
+        update_progress: &impl Fn(TaskStatus, u32, u32, Option<f32>, String),
         token: CancellationToken,
     ) -> Result<()> {
         let app_full_name =
@@ -372,7 +407,7 @@ impl TaskManager {
             "Starting download and install task"
         );
 
-        update_progress(TaskStatus::Waiting, 0.0, "Waiting to start download...".into());
+        update_progress(TaskStatus::Waiting, 1, 1, None, "Waiting to start download...".into());
 
         let _download_permit =
             acquire_permit_or_cancel!(self.download_semaphore, token, "download");
@@ -381,7 +416,7 @@ impl TaskManager {
             "Acquired download semaphore"
         );
 
-        update_progress(TaskStatus::Running, 0.0, "Starting download...".into());
+        update_progress(TaskStatus::Running, 1, 1, None, "Starting download...".into());
 
         let (tx, mut rx) = mpsc::unbounded_channel::<RcloneTransferStats>();
 
@@ -431,7 +466,9 @@ impl TaskManager {
 
                     update_progress(
                         TaskStatus::Running,
-                        step_progress * 0.5, // Scaling to 1/2 to get total
+                        1,
+                        2,
+                        Some(step_progress),
                         format!("Downloading ({:.1}%) - {}/s", step_progress * 100.0, humansize::format_size(progress.speed, humansize::DECIMAL)),
                     );
                 }
@@ -451,7 +488,7 @@ impl TaskManager {
             return Err(anyhow!("Task cancelled after download"));
         }
 
-        update_progress(TaskStatus::Waiting, 0.5, "Waiting to start installation...".into());
+        update_progress(TaskStatus::Waiting, 2, 2, None, "Waiting to start installation...".into());
 
         let _adb_permit = acquire_permit_or_cancel!(self.adb_semaphore, token, "ADB");
         info!(
@@ -459,7 +496,7 @@ impl TaskManager {
             "Acquired ADB semaphore for installation"
         );
 
-        update_progress(TaskStatus::Running, 0.75, "Installing app...".into());
+        update_progress(TaskStatus::Running, 2, 2, None, "Installing app...".into());
 
         // self.adb_handler.sideload_app(Path::new(&app_path)).await?;
 
@@ -498,7 +535,7 @@ impl TaskManager {
                         last_sideload_log = now;
                     }
 
-                    update_progress(TaskStatus::Running, 0.75 + step_progress * 0.25, progress.status);
+                    update_progress(TaskStatus::Running, 2, 2, Some(step_progress), progress.status);
                 }
             }
         }
@@ -517,7 +554,7 @@ impl TaskManager {
     async fn handle_download(
         &self,
         params: TaskParams,
-        update_progress: &impl Fn(TaskStatus, f32, String),
+        update_progress: &impl Fn(TaskStatus, u32, u32, Option<f32>, String),
         token: CancellationToken,
     ) -> Result<()> {
         let app_full_name =
@@ -529,7 +566,7 @@ impl TaskManager {
             "Starting download task"
         );
 
-        update_progress(TaskStatus::Waiting, 0.0, "Waiting to start download...".into());
+        update_progress(TaskStatus::Waiting, 1, 1, None, "Waiting to start download...".into());
 
         let _permit = acquire_permit_or_cancel!(self.download_semaphore, token, "download");
         info!(
@@ -537,7 +574,7 @@ impl TaskManager {
             "Acquired download semaphore"
         );
 
-        update_progress(TaskStatus::Running, 0.0, "Starting download...".into());
+        update_progress(TaskStatus::Running, 1, 1, None, "Starting download...".into());
 
         let (tx, mut rx) = mpsc::unbounded_channel::<RcloneTransferStats>();
 
@@ -583,7 +620,9 @@ impl TaskManager {
 
                     update_progress(
                         TaskStatus::Running,
-                        step_progress,
+                        1,
+                        1,
+                        Some(step_progress),
                         format!("Downloading ({:.1}%) - {}/s", step_progress * 100.0, humansize::format_size(progress.speed, humansize::DECIMAL)),
                     );
                 }
@@ -604,7 +643,7 @@ impl TaskManager {
     async fn handle_install_apk(
         &self,
         params: TaskParams,
-        update_progress: &impl Fn(TaskStatus, f32, String),
+        update_progress: &impl Fn(TaskStatus, u32, u32, Option<f32>, String),
         token: CancellationToken,
     ) -> Result<()> {
         let apk_path = params.apk_path.context("Missing apk_path parameter")?;
@@ -615,7 +654,7 @@ impl TaskManager {
             "Starting APK install task"
         );
 
-        update_progress(TaskStatus::Waiting, 0.0, "Waiting to start installation...".into());
+        update_progress(TaskStatus::Waiting, 1, 1, None, "Waiting to start installation...".into());
 
         let _permit = acquire_permit_or_cancel!(self.adb_semaphore, token, "ADB");
         info!(
@@ -623,7 +662,7 @@ impl TaskManager {
             "Acquired ADB semaphore for APK installation"
         );
 
-        update_progress(TaskStatus::Running, 0.0, "Installing APK...".into());
+        update_progress(TaskStatus::Running, 1, 1, None, "Installing APK...".into());
 
         let (tx, mut rx) = mpsc::unbounded_channel::<f32>();
 
@@ -659,7 +698,7 @@ impl TaskManager {
                         last_log_time = now;
                     }
 
-                    update_progress(TaskStatus::Running, step_progress, "Installing APK...".into());
+                    update_progress(TaskStatus::Running, 1, 1, Some(step_progress), "Installing APK...".into());
                 }
             }
         }
@@ -677,7 +716,7 @@ impl TaskManager {
     async fn handle_install_local_app(
         &self,
         params: TaskParams,
-        update_progress: &impl Fn(TaskStatus, f32, String),
+        update_progress: &impl Fn(TaskStatus, u32, u32, Option<f32>, String),
         token: CancellationToken,
     ) -> Result<()> {
         let app_path = params.local_app_path.context("Missing local_app_path parameter")?;
@@ -688,7 +727,7 @@ impl TaskManager {
             "Starting local app install task"
         );
 
-        update_progress(TaskStatus::Waiting, 0.0, "Waiting to start installation...".into());
+        update_progress(TaskStatus::Waiting, 1, 1, None, "Waiting to start installation...".into());
 
         let _permit = acquire_permit_or_cancel!(self.adb_semaphore, token, "ADB");
         info!(
@@ -696,7 +735,7 @@ impl TaskManager {
             "Acquired ADB semaphore for local app installation"
         );
 
-        update_progress(TaskStatus::Running, 0.0, "Installing app...".into());
+        update_progress(TaskStatus::Running, 1, 1, None, "Installing app...".into());
 
         // self.adb_handler.sideload_app(Path::new(&app_path)).await?;
 
@@ -735,7 +774,7 @@ impl TaskManager {
                         last_sideload_log = now;
                     }
 
-                    update_progress(TaskStatus::Running, step_progress, progress.status);
+                    update_progress(TaskStatus::Running, 1, 1, Some(step_progress), progress.status);
                 }
             }
         }
@@ -754,7 +793,7 @@ impl TaskManager {
     async fn handle_uninstall(
         &self,
         params: TaskParams,
-        update_progress: &impl Fn(TaskStatus, f32, String),
+        update_progress: &impl Fn(TaskStatus, u32, u32, Option<f32>, String),
         token: CancellationToken,
     ) -> Result<()> {
         let package_name = params.package_name.context("Missing package_name parameter")?;
@@ -765,7 +804,13 @@ impl TaskManager {
             "Starting uninstall task"
         );
 
-        update_progress(TaskStatus::Waiting, 0.0, "Waiting to start uninstallation...".into());
+        update_progress(
+            TaskStatus::Waiting,
+            1,
+            1,
+            None,
+            "Waiting to start uninstallation...".into(),
+        );
 
         let _permit = acquire_permit_or_cancel!(self.adb_semaphore, token, "ADB");
         info!(
@@ -773,7 +818,7 @@ impl TaskManager {
             "Acquired ADB semaphore for uninstallation"
         );
 
-        update_progress(TaskStatus::Running, 0.0, "Uninstalling app...".into());
+        update_progress(TaskStatus::Running, 1, 1, None, "Uninstalling app...".into());
 
         info!(package_name = %package_name, "Starting uninstall operation");
         self.adb_handler.uninstall_package(&package_name).await?;
@@ -791,7 +836,7 @@ impl TaskManager {
     async fn handle_backup(
         &self,
         params: TaskParams,
-        update_progress: &impl Fn(TaskStatus, f32, String),
+        update_progress: &impl Fn(TaskStatus, u32, u32, Option<f32>, String),
         token: CancellationToken,
     ) -> Result<()> {
         let package_name = params.package_name.context("Missing package_name parameter")?;
@@ -808,7 +853,7 @@ impl TaskManager {
             "Starting backup task"
         );
 
-        update_progress(TaskStatus::Waiting, 0.0, "Waiting to start backup...".into());
+        update_progress(TaskStatus::Waiting, 1, 1, None, "Waiting to start backup...".into());
 
         let _permit = acquire_permit_or_cancel!(self.adb_semaphore, token, "ADB");
         info!(
@@ -826,7 +871,7 @@ impl TaskManager {
         .collect::<Vec<_>>()
         .join(", ");
 
-        update_progress(TaskStatus::Running, 0.0, format!("Creating backup ({parts})..."));
+        update_progress(TaskStatus::Running, 1, 1, None, format!("Creating backup ({parts})..."));
 
         let backups_dir = {
             let s = self.settings.read().await;
@@ -869,7 +914,7 @@ impl TaskManager {
     async fn handle_restore(
         &self,
         params: TaskParams,
-        update_progress: &impl Fn(TaskStatus, f32, String),
+        update_progress: &impl Fn(TaskStatus, u32, u32, Option<f32>, String),
         token: CancellationToken,
     ) -> Result<()> {
         let backup_path = params.backup_path.context("Missing backup_path parameter")?;
@@ -880,7 +925,7 @@ impl TaskManager {
             "Starting restore task"
         );
 
-        update_progress(TaskStatus::Waiting, 0.0, "Waiting to start restore...".into());
+        update_progress(TaskStatus::Waiting, 1, 1, None, "Waiting to start restore...".into());
 
         let _permit = acquire_permit_or_cancel!(self.adb_semaphore, token, "ADB");
         info!(
@@ -888,7 +933,7 @@ impl TaskManager {
             "Acquired ADB semaphore for restore"
         );
 
-        update_progress(TaskStatus::Running, 0.0, "Restoring backup...".into());
+        update_progress(TaskStatus::Running, 1, 1, None, "Restoring backup...".into());
 
         self.adb_handler.restore_backup(Path::new(&backup_path)).await?;
 
@@ -908,6 +953,9 @@ fn send_progress(
     status: TaskStatus,
     total_progress: f32,
     message: String,
+    step: u32,
+    total_steps: u32,
+    step_progress: Option<f32>,
 ) {
     // Log significant status changes (not every progress update to avoid spam)
     match status {
@@ -937,8 +985,18 @@ fn send_progress(
         }
     }
 
-    TaskProgress { task_id, task_type, task_name, status, total_progress, message }
-        .send_signal_to_dart();
+    TaskProgress {
+        task_id,
+        task_type,
+        task_name,
+        status,
+        total_progress,
+        message,
+        step,
+        total_steps,
+        step_progress,
+    }
+    .send_signal_to_dart();
 }
 
 fn get_task_name(task_type: TaskType, params: &TaskParams) -> Result<String> {

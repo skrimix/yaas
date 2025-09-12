@@ -780,6 +780,11 @@ class AppLocalizationsRu extends AppLocalizations {
   String get taskUnknown => 'Неизвестно';
 
   @override
+  String taskStep(int current, int total) {
+    return 'Шаг $current из $total';
+  }
+
+  @override
   String get backupOptionsTitle => 'Параметры резервного копирования';
 
   @override

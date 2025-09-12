@@ -32,7 +32,7 @@ serde_json = { version = "1.0.135", features = ["preserve_order"] }
 sevenz-rust2 = "0.18.0"
 sysproxy = { git = "https://github.com/zzzgydi/sysproxy-rs" }
 test-log = { version = "0.2.16", features = ["trace"] }
-tokio = { version = "1.42.0", features = [
+tokio = { version = "1.43.1", features = [
     "macros",
     "fs",
     "tracing",

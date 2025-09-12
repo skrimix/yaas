@@ -73,6 +73,15 @@ pub struct TaskProgress {
     pub task_type: TaskType,
     pub task_name: Option<String>,
     pub status: TaskStatus,
+    /// Overall progress across all steps in range [0.0, 1.0]
     pub total_progress: f32,
+    /// Human-readable status for the current step
     pub message: String,
+    /// 1-based index of the current step being executed
+    pub current_step: u32,
+    /// Total number of steps for this task
+    pub total_steps: u32,
+    /// Progress for the current step in range [0.0, 1.0].
+    /// None means this step does not report progress (show indeterminate).
+    pub step_progress: Option<f32>,
 }

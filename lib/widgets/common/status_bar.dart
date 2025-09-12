@@ -159,7 +159,7 @@ class StatusBar extends StatelessWidget {
     final recentTasks = taskState.recentTasks;
     final hasActiveTasks = activeTasks.isNotEmpty;
     final hasRecentTasks = recentTasks.isNotEmpty;
-    final progress = hasActiveTasks ? activeTasks.first.totalProgress : null;
+    final progress = hasActiveTasks ? activeTasks.first.stepProgress : null;
 
     return Material(
       color: Colors.transparent,

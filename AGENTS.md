@@ -96,7 +96,7 @@ State flows from Rust backend to Flutter frontend via Rinf signals.
 - One-line subject, imperative mood, no trailing period.
 - Capitalize the first word; keep nouns lower-case unless proper (e.g., ADB, YAAS).
 - Favor ultra-concise phrasing; avoid "feat:", "fix:", or long explanations.
-- If touching multiple tiny things, separate with commas; `+` is acceptable to join paired additions.
+- If touching multiple things, separate with commas; `+` is acceptable to join paired additions.
 - Prefer empty body; only add a body when necessary.
 
 Examples:

@@ -36,6 +36,9 @@ class AppLocalizationsRu extends AppLocalizations {
   String get navAbout => 'О программе';
 
   @override
+  String get navDownloads => 'Загрузки';
+
+  @override
   String get settingsTitle => 'Настройки';
 
   @override
@@ -616,7 +619,16 @@ class AppLocalizationsRu extends AppLocalizations {
   String get openBackupsFolder => 'Открыть папку резервных копий';
 
   @override
+  String get openDownloadsFolder => 'Открыть папку загрузок';
+
+  @override
+  String get downloadsTitle => 'Загрузки';
+
+  @override
   String get noBackupsFound => 'Резервные копии не найдены.';
+
+  @override
+  String get noDownloadsFound => 'Загрузки не найдены.';
 
   @override
   String get unsupportedPlatform => 'Платформа не поддерживается';

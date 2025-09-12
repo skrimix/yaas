@@ -152,6 +152,12 @@ abstract class AppLocalizations {
   /// **'About'**
   String get navAbout;
 
+  /// No description provided for @navDownloads.
+  ///
+  /// In en, this message translates to:
+  /// **'Downloads'**
+  String get navDownloads;
+
   /// No description provided for @settingsTitle.
   ///
   /// In en, this message translates to:
@@ -1220,11 +1226,29 @@ abstract class AppLocalizations {
   /// **'Open Backups Folder'**
   String get openBackupsFolder;
 
+  /// No description provided for @openDownloadsFolder.
+  ///
+  /// In en, this message translates to:
+  /// **'Open Downloads Folder'**
+  String get openDownloadsFolder;
+
+  /// No description provided for @downloadsTitle.
+  ///
+  /// In en, this message translates to:
+  /// **'Downloads'**
+  String get downloadsTitle;
+
   /// No description provided for @noBackupsFound.
   ///
   /// In en, this message translates to:
   /// **'No backups found.'**
   String get noBackupsFound;
+
+  /// No description provided for @noDownloadsFound.
+  ///
+  /// In en, this message translates to:
+  /// **'No downloads found.'**
+  String get noDownloadsFound;
 
   /// No description provided for @unsupportedPlatform.
   ///

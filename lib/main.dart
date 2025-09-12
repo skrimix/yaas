@@ -17,6 +17,7 @@ import 'widgets/screens/error_screen.dart';
 import 'widgets/screens/settings_screen.dart';
 import 'widgets/screens/logs_screen.dart';
 import 'widgets/screens/backups_screen.dart';
+import 'widgets/screens/downloads_screen.dart';
 import 'widgets/common/drag_drop_overlay.dart';
 import 'providers/device_state.dart';
 import 'providers/adb_state.dart';
@@ -193,6 +194,10 @@ class _SinglePageState extends State<SinglePage> {
           icon: Icons.get_app,
           label: l10n.navDownload,
           content: const DownloadApps()),
+      Destination(
+          icon: Icons.download_done_outlined,
+          label: l10n.navDownloads,
+          content: const DownloadsScreen()),
       Destination(
           icon: Icons.arrow_circle_down,
           label: l10n.navSideload,

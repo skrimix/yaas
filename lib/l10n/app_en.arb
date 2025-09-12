@@ -10,6 +10,7 @@
   "navSettings": "Settings",
   "navLogs": "Logs",
   "navAbout": "About",
+  "navDownloads": "Downloads",
 
   "settingsTitle": "Settings",
   "settingsErrorLoading": "Error loading settings",
@@ -242,7 +243,10 @@
 
   "backupsTitle": "Backups",
   "openBackupsFolder": "Open Backups Folder",
+  "openDownloadsFolder": "Open Downloads Folder",
+  "downloadsTitle": "Downloads",
   "noBackupsFound": "No backups found.",
+  "noDownloadsFound": "No downloads found.",
   "unsupportedPlatform": "Platform not supported",
   "folderPathCopied": "Folder path copied to clipboard",
   "unableToOpenFolder": "Unable to open folder: {path}",

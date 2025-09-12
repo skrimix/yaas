@@ -327,4 +327,6 @@ impl RcloneStorage {
     pub async fn remotes(&self) -> Result<Vec<String>> {
         self.client.remotes().await
     }
+
+    pub fn remote_name(&self) -> &str { &self.remote }
 }

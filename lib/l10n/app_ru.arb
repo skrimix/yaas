@@ -10,6 +10,7 @@
   "navSettings": "Настройки",
   "navLogs": "Журнал",
   "navAbout": "О программе",
+  "navDownloads": "Загрузки",
 
   "settingsTitle": "Настройки",
   "settingsErrorLoading": "Ошибка загрузки настроек",
@@ -224,7 +225,10 @@
 
   "backupsTitle": "Резервные копии",
   "openBackupsFolder": "Открыть папку резервных копий",
+  "openDownloadsFolder": "Открыть папку загрузок",
+  "downloadsTitle": "Загрузки",
   "noBackupsFound": "Резервные копии не найдены.",
+  "noDownloadsFound": "Загрузки не найдены.",
   "unsupportedPlatform": "Платформа не поддерживается",
   "folderPathCopied": "Путь к папке скопирован в буфер обмена",
   "unableToOpenFolder": "Не удалось открыть папку: {path}",

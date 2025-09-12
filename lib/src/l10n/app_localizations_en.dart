@@ -36,6 +36,9 @@ class AppLocalizationsEn extends AppLocalizations {
   String get navAbout => 'About';
 
   @override
+  String get navDownloads => 'Downloads';
+
+  @override
   String get settingsTitle => 'Settings';
 
   @override
@@ -611,7 +614,16 @@ class AppLocalizationsEn extends AppLocalizations {
   String get openBackupsFolder => 'Open Backups Folder';
 
   @override
+  String get openDownloadsFolder => 'Open Downloads Folder';
+
+  @override
+  String get downloadsTitle => 'Downloads';
+
+  @override
   String get noBackupsFound => 'No backups found.';
+
+  @override
+  String get noDownloadsFound => 'No downloads found.';
 
   @override
   String get unsupportedPlatform => 'Platform not supported';

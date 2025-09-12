@@ -18,6 +18,7 @@ use crate::models::{
         AppDetailsResponse, CloudAppsChangedEvent, GetAppDetailsRequest, GetRcloneRemotesRequest,
         LoadCloudAppsRequest, RcloneRemotesChanged,
     },
+    signals::downloads_local::DownloadsChanged,
 };
 
 mod rclone;
@@ -307,6 +308,18 @@ impl Downloader {
             )
             .await?;
 
+        // Try to write release metadata for the downloaded directory
+        if let Err(e) = self.write_release_metadata(&app_full_name, &dst_dir).await {
+            warn!(
+                error = e.as_ref() as &dyn Error,
+                dir = %dst_dir.display(),
+                "Failed to write release.json metadata"
+            );
+        } else {
+            // Notify UI that downloads may have changed
+            DownloadsChanged {}.send_signal_to_dart();
+        }
+
         Ok(dst_dir.display().to_string())
     }
 }
@@ -326,4 +339,53 @@ async fn fetch_app_details(package_name: String) -> Result<Option<AppApiResponse
 
     let api: AppApiResponse = resp.json().await?;
     Ok(Some(api))
+}
+
+#[derive(serde::Serialize)]
+struct ReleaseMetadata {
+    #[serde(default)]
+    format_version: u32,
+    full_name: String,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    app_name: Option<String>,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    package_name: Option<String>,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    version_code: Option<u32>,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    last_updated: Option<String>,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    size: Option<u64>,
+    downloaded_at: String,
+    source_remote: String,
+}
+
+impl Downloader {
+    #[instrument(skip(self), fields(app_full_name = %app_full_name, dir = %dst_dir.display()), err)]
+    async fn write_release_metadata(&self, app_full_name: &str, dst_dir: &PathBuf) -> Result<()> {
+        use time::format_description::well_known::Rfc3339;
+        use time::OffsetDateTime;
+        let cached = self.get_app_by_full_name(app_full_name).await;
+        let now = OffsetDateTime::now_utc().format(&Rfc3339).unwrap_or_else(|_| "".to_string());
+
+        let meta = ReleaseMetadata {
+            format_version: 1,
+            full_name: app_full_name.to_string(),
+            app_name: cached.as_ref().map(|a| a.app_name.clone()),
+            package_name: cached.as_ref().map(|a| a.package_name.clone()),
+            version_code: cached.as_ref().map(|a| a.version_code),
+            last_updated: cached.as_ref().map(|a| a.last_updated.clone()),
+            size: cached.as_ref().map(|a| a.size),
+            downloaded_at: now,
+            source_remote: self.storage.read().await.remote_name().to_string(),
+        };
+
+        let json = serde_json::to_string_pretty(&meta)?;
+        let release_path = dst_dir.join("release.json");
+        tokio::fs::write(&release_path, json)
+            .await
+            .with_context(|| format!("Failed to write {}", release_path.display()))?;
+        info!(path = %release_path.display(), "Wrote release metadata");
+        Ok(())
+    }
 }

@@ -78,7 +78,7 @@ jobs:
           crate: rinf_cli
 
       - name: Generate Rinf bindings
-        run: $HOME/.cargo/bin/rinf gen
+        run: rinf gen
 
       - name: Build the app
         if: matrix.target == 'linux'

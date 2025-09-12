@@ -32,10 +32,13 @@ jobs:
         include:
           - runner: ubuntu
             target: linux
+            build-path: build/linux/x64/release/bundle/
           - runner: windows
             target: windows
+            build-path: build/windows/x64/runner/Release/
           - runner: macos
             target: macos
+            build-path: build/macos/Build/Products/Release/
 
     steps:
       - name: Checkout repository
@@ -86,22 +89,10 @@ jobs:
         run: rinf gen
 
       - name: Build the app
-        if: matrix.target == 'linux'
-        run: flutter build linux --release
-
-      - name: Build the app
-        if: matrix.target == 'windows'
-        run: flutter build windows --release
-
-      - name: Build the app
-        if: matrix.target == 'macos'
-        run: flutter build macos --release
+        run: flutter build ${{ matrix.target }} --release
 
       - name: Upload Artifact
         uses: actions/upload-artifact@v4
         with:
           name: build-${{ matrix.target }}
-          path: |
-            build/windows/x64/runner/Release/
-            build/linux/x64/release/bundle/
-            build/macos/Build/Products/Release/
+          path: ${{ matrix.build-path }}

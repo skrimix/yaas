@@ -171,7 +171,7 @@ class AppLocalizationsEn extends AppLocalizations {
   }
 
   @override
-  String get statusAdbConnected => 'Connected';
+  String get statusAdbConnected => 'Device connected';
 
   @override
   String get statusAdbDeviceUnauthorized => 'Device unauthorized';
@@ -244,6 +244,64 @@ class AppLocalizationsEn extends AppLocalizations {
 
   @override
   String get commonError => 'Error';
+
+  @override
+  String get diagnosticsTitle => 'Connection Diagnostics';
+
+  @override
+  String get diagnosticsAdbServer => 'ADB server';
+
+  @override
+  String get diagnosticsDevices => 'Devices';
+
+  @override
+  String get diagnosticsAuthorization => 'Authorization';
+
+  @override
+  String get diagnosticsActiveDevice => 'Active device';
+
+  @override
+  String get diagnosticsAdbPath => 'ADB path';
+
+  @override
+  String get diagnosticsServerNotRunningDesc =>
+      'ADB server is not running. Ensure ADB is installed and accessible in PATH or set the ADB path in Settings.';
+
+  @override
+  String get diagnosticsServerStartingDesc => 'ADB server is starting...';
+
+  @override
+  String get diagnosticsServerRunningDesc => 'ADB server is running.';
+
+  @override
+  String get diagnosticsNoDevicesDesc =>
+      'No devices detected. Enable ADB/developer mode and connect via USB.';
+
+  @override
+  String diagnosticsDevicesAvailableDesc(int count) {
+    return 'Devices detected ($count)';
+  }
+
+  @override
+  String get diagnosticsUnauthorizedDesc =>
+      'Device is unauthorized. Confirm the authorization prompt on the device.';
+
+  @override
+  String get diagnosticsAuthorizedDesc => 'Device authorized.';
+
+  @override
+  String get diagnosticsConnectedDesc => 'Device connected and ready.';
+
+  @override
+  String get diagnosticsUnknownDesc => 'Unknown state.';
+
+  @override
+  String diagnosticsConfiguredPath(String path) {
+    return 'Configured path: $path';
+  }
+
+  @override
+  String get diagnosticsUsingSystemPath => 'Using system PATH';
 
   @override
   String get commonYes => 'Yes';

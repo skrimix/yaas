@@ -751,14 +751,21 @@ impl AdbHandler {
         let new_state = if !self.is_server_running().await {
             AdbState::ServerNotRunning
         } else if self.try_current_device().await.is_some() {
-            AdbState::DeviceConnected
+            // Get full list for count
+            match self.get_adb_devices().await {
+                Ok(devices) => {
+                    let count = devices.len() as u32;
+                    AdbState::DeviceConnected { count }
+                }
+                Err(_) => AdbState::DeviceConnected { count: 1 },
+            }
         } else {
             match self.get_adb_devices().await {
                 Ok(devices) => {
                     if devices.is_empty() {
                         AdbState::NoDevices
                     } else if devices.iter().all(|d| d.state == DeviceState::Unauthorized) {
-                        AdbState::DeviceUnauthorized
+                        AdbState::DeviceUnauthorized { count: devices.len() as u32 }
                     } else {
                         let device_serials = devices.iter().map(|d| d.serial.clone()).collect();
                         AdbState::DevicesAvailable(device_serials)

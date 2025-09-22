@@ -5,6 +5,16 @@ import '../src/l10n/app_localizations.dart';
 class AdbStateProvider extends ChangeNotifier {
   AdbState _state = const AdbStateServerNotRunning();
   AdbState get state => _state;
+  int get devicesCount {
+    if (_state is AdbStateDevicesAvailable) {
+      return (_state as AdbStateDevicesAvailable).value.length;
+    } else if (_state is AdbStateDeviceConnected) {
+      return (_state as AdbStateDeviceConnected).count;
+    } else if (_state is AdbStateDeviceUnauthorized) {
+      return (_state as AdbStateDeviceUnauthorized).count;
+    }
+    return 0;
+  }
 
   AdbStateProvider() {
     AdbState.rustSignalStream.listen((event) {
@@ -48,9 +58,10 @@ class AdbStateProvider extends ChangeNotifier {
       final devices = (_state as AdbStateDevicesAvailable).value;
       return l10n.statusAdbDevicesAvailable(devices.length);
     } else if (_state is AdbStateDeviceUnauthorized) {
-      return l10n.statusAdbDeviceUnauthorized;
+      return l10n.statusAdbDevicesAvailable(devicesCount);
     } else if (_state is AdbStateDeviceConnected) {
-      return l10n.statusAdbConnected;
+      final count = devicesCount <= 0 ? 1 : devicesCount;
+      return l10n.statusAdbDevicesAvailable(count);
     }
     return l10n.statusAdbUnknown;
   }

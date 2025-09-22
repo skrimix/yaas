@@ -230,17 +230,17 @@ impl TaskManager {
             }
             Err(e) => {
                 error!(task_id = id, error = e.as_ref() as &dyn Error, "Failed to get task name");
-                send_progress(
-                    id,
+                send_progress(TaskProgress {
+                    task_id: id,
                     task_type,
-                    None,
-                    TaskStatus::Failed,
-                    0.0,
-                    format!("Failed to initialize task: {e:#}"),
-                    1,
-                    1,
-                    None,
-                );
+                    task_name: None,
+                    status: TaskStatus::Failed,
+                    total_progress: 0.0,
+                    message: format!("Failed to initialize task: {e:#}"),
+                    current_step: 1,
+                    total_steps: 1,
+                    step_progress: None,
+                });
 
                 // Log task cleanup
                 let duration = start_time.elapsed();
@@ -275,17 +275,17 @@ impl TaskManager {
                 let sp = step_progress.unwrap_or(0.0).clamp(0.0, 1.0);
                 let total_progress = (completed_steps + sp) / safe_total;
 
-                send_progress(
-                    id,
+                send_progress(TaskProgress {
+                    task_id: id,
                     task_type,
-                    Some(task_name.clone()),
+                    task_name: Some(task_name.clone()),
                     status,
                     total_progress,
                     message,
-                    step_index,
+                    current_step: step_index,
                     total_steps,
                     step_progress,
-                );
+                });
             };
 
         update_progress(TaskStatus::Waiting, 1, None, "Starting...".into());
@@ -947,57 +947,40 @@ impl TaskManager {
     }
 }
 
-fn send_progress(
-    task_id: u64,
-    task_type: TaskType,
-    task_name: Option<String>,
-    status: TaskStatus,
-    total_progress: f32,
-    message: String,
-    current_step: u32,
-    total_steps: u32,
-    step_progress: Option<f32>,
-) {
+fn send_progress(progress: TaskProgress) {
     // Log significant status changes (not every progress update to avoid spam)
-    match status {
+    match progress.status {
         TaskStatus::Waiting
         | TaskStatus::Completed
         | TaskStatus::Failed
         | TaskStatus::Cancelled => {
             debug!(
-                task_id = task_id,
-                task_type = %task_type,
-                task_name = ?task_name,
-                status = ?status,
-                progress = total_progress,
-                message = %message,
+                task_id = progress.task_id,
+                task_type = %progress.task_type,
+                task_name = ?progress.task_name,
+                status = ?progress.status,
+                progress = progress.total_progress,
+                message = %progress.message,
                 "Sending progress signal to Dart"
             ); // FIXME: doesn't show up on logs screen?
         }
         TaskStatus::Running => {
             // Only log running status at major milestones to avoid log spam
-            if total_progress == 0.0
-                || (0.25..0.26).contains(&total_progress)
-                || (0.5..0.51).contains(&total_progress)
-                || (0.75..0.76).contains(&total_progress)
+            if progress.total_progress == 0.0
+                || (0.25..0.26).contains(&progress.total_progress)
+                || (0.5..0.51).contains(&progress.total_progress)
+                || (0.75..0.76).contains(&progress.total_progress)
             {
-                debug!(task_id = task_id, progress = total_progress, "Task progress milestone");
+                debug!(
+                    task_id = progress.task_id,
+                    progress = progress.total_progress,
+                    "Task progress milestone"
+                );
             }
         }
     }
 
-    TaskProgress {
-        task_id,
-        task_type,
-        task_name,
-        status,
-        total_progress,
-        message,
-        current_step,
-        total_steps,
-        step_progress,
-    }
-    .send_signal_to_dart();
+    progress.send_signal_to_dart();
 }
 
 fn get_task_name(task_type: TaskType, params: &TaskParams) -> Result<String> {

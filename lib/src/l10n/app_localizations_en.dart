@@ -275,7 +275,7 @@ class AppLocalizationsEn extends AppLocalizations {
 
   @override
   String get diagnosticsNoDevicesDesc =>
-      'No devices detected. Connect a device via USB or enable wireless debugging.';
+      'No devices detected. Enable ADB/developer mode and connect via USB.';
 
   @override
   String diagnosticsDevicesAvailableDesc(int count) {
@@ -284,7 +284,7 @@ class AppLocalizationsEn extends AppLocalizations {
 
   @override
   String get diagnosticsUnauthorizedDesc =>
-      'Device is unauthorized. Confirm the RSA prompt on the device.';
+      'Device is unauthorized. Confirm the authorization prompt on the device.';
 
   @override
   String get diagnosticsAuthorizedDesc => 'Device authorized.';

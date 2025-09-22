@@ -279,7 +279,7 @@ class AppLocalizationsRu extends AppLocalizations {
 
   @override
   String get diagnosticsNoDevicesDesc =>
-      'Устройства не обнаружены. Подключите устройство по USB или включите беспроводную отладку.';
+      'Устройства не обнаружены. Включите ADB/режим разработчика и подключите устройство по USB.';
 
   @override
   String diagnosticsDevicesAvailableDesc(int count) {
@@ -288,7 +288,7 @@ class AppLocalizationsRu extends AppLocalizations {
 
   @override
   String get diagnosticsUnauthorizedDesc =>
-      'Устройство не авторизовано. Подтвердите RSA-ключ на устройстве.';
+      'Устройство не авторизовано. Подтвердите запрос авторизации на устройстве.';
 
   @override
   String get diagnosticsAuthorizedDesc => 'Устройство авторизовано.';

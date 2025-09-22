@@ -97,7 +97,6 @@ class ConnectionDiagnosticsDialog extends StatelessWidget {
       if (adbState is AdbStateServerStarting) {
         return l10n.diagnosticsServerStartingDesc;
       }
-      // Server is up and reachable
       return l10n.diagnosticsServerRunningDesc;
     }
 
@@ -108,11 +107,10 @@ class ConnectionDiagnosticsDialog extends StatelessWidget {
         return l10n.diagnosticsDevicesAvailableDesc(count);
       }
       if (adbState is AdbStateDeviceUnauthorized) {
-        // At least one device is present (authorization handled below)
         return l10n.diagnosticsDevicesAvailableDesc(1);
       }
-      if (adbState is AdbStateDeviceConnected) {
-        // At least one device is present and connected
+      if (adbState is AdbStateDeviceConnected ||
+          adbState is AdbStateDeviceUnauthorized) {
         return l10n.diagnosticsDevicesAvailableDesc(1);
       }
       return l10n.diagnosticsUnknownDesc;
@@ -145,7 +143,6 @@ class ConnectionDiagnosticsDialog extends StatelessWidget {
           mainAxisSize: MainAxisSize.min,
           crossAxisAlignment: CrossAxisAlignment.start,
           children: [
-            // ADB Path at the top
             ListTile(
               leading: const Icon(Icons.settings),
               title: Text(l10n.diagnosticsAdbPath),

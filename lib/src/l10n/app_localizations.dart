@@ -575,7 +575,7 @@ abstract class AppLocalizations {
   /// No description provided for @diagnosticsNoDevicesDesc.
   ///
   /// In en, this message translates to:
-  /// **'No devices detected. Connect a device via USB or enable wireless debugging.'**
+  /// **'No devices detected. Enable ADB/developer mode and connect via USB.'**
   String get diagnosticsNoDevicesDesc;
 
   /// No description provided for @diagnosticsDevicesAvailableDesc.
@@ -587,7 +587,7 @@ abstract class AppLocalizations {
   /// No description provided for @diagnosticsUnauthorizedDesc.
   ///
   /// In en, this message translates to:
-  /// **'Device is unauthorized. Confirm the RSA prompt on the device.'**
+  /// **'Device is unauthorized. Confirm the authorization prompt on the device.'**
   String get diagnosticsUnauthorizedDesc;
 
   /// No description provided for @diagnosticsAuthorizedDesc.

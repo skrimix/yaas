@@ -191,7 +191,7 @@ class _SinglePageState extends State<SinglePage> {
       Destination(
           icon: Icons.apps, label: l10n.navManage, content: const ManageApps()),
       Destination(
-          icon: Icons.get_app,
+          icon: Icons.cloud_download,
           label: l10n.navDownload,
           content: const DownloadApps()),
       Destination(
@@ -203,7 +203,7 @@ class _SinglePageState extends State<SinglePage> {
           label: l10n.navSideload,
           content: const LocalSideload()),
       Destination(
-          icon: Icons.backup_outlined,
+          icon: Icons.archive,
           label: l10n.navBackups,
           content: const BackupsScreen()),
       Destination(

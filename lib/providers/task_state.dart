@@ -8,6 +8,9 @@ class TaskInfo {
   final String? taskName;
   final TaskStatus status;
   final double totalProgress;
+  final int currentStep;
+  final int totalSteps;
+  final double? stepProgress;
   final String message;
   final DateTime startTime;
   DateTime? endTime;
@@ -18,6 +21,9 @@ class TaskInfo {
     this.taskName,
     required this.status,
     required this.totalProgress,
+    required this.currentStep,
+    required this.totalSteps,
+    required this.stepProgress,
     required this.message,
     required this.startTime,
     this.endTime,
@@ -27,6 +33,9 @@ class TaskInfo {
     String? taskName,
     TaskStatus? status,
     double? totalProgress,
+    int? currentStep,
+    int? totalSteps,
+    double? Function()? stepProgress,
     String? message,
     DateTime? endTime,
   }) {
@@ -36,6 +45,9 @@ class TaskInfo {
       taskName: taskName ?? this.taskName,
       status: status ?? this.status,
       totalProgress: totalProgress ?? this.totalProgress,
+      currentStep: currentStep ?? this.currentStep,
+      totalSteps: totalSteps ?? this.totalSteps,
+      stepProgress: stepProgress == null ? this.stepProgress : stepProgress(),
       message: message ?? this.message,
       startTime: startTime,
       endTime: endTime ?? this.endTime,
@@ -70,6 +82,9 @@ class TaskState extends ChangeNotifier {
           taskName: progress.taskName,
           status: progress.status,
           totalProgress: progress.totalProgress,
+          currentStep: progress.currentStep,
+          totalSteps: progress.totalSteps,
+          stepProgress: () => progress.stepProgress,
           message: progress.message,
           endTime: progress.status == TaskStatus.completed ||
                   progress.status == TaskStatus.failed ||
@@ -100,6 +115,9 @@ class TaskState extends ChangeNotifier {
           taskName: progress.taskName,
           status: progress.status,
           totalProgress: progress.totalProgress,
+          currentStep: progress.currentStep,
+          totalSteps: progress.totalSteps,
+          stepProgress: progress.stepProgress,
           message: progress.message,
           startTime: DateTime.now(),
         );

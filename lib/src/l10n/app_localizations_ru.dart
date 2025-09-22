@@ -171,7 +171,7 @@ class AppLocalizationsRu extends AppLocalizations {
   }
 
   @override
-  String get statusAdbConnected => 'Подключено';
+  String get statusAdbConnected => 'Устройство подключено';
 
   @override
   String get statusAdbDeviceUnauthorized => 'Устройство не авторизовано';
@@ -253,18 +253,6 @@ class AppLocalizationsRu extends AppLocalizations {
   String get diagnosticsTitle => 'Диагностика подключения';
 
   @override
-  String get diagnosticsLegendTitle => 'Статусы';
-
-  @override
-  String get diagnosticsLegendOk => 'ОК';
-
-  @override
-  String get diagnosticsLegendWarning => 'Внимание';
-
-  @override
-  String get diagnosticsLegendError => 'Не работает';
-
-  @override
   String get diagnosticsAdbServer => 'Сервер ADB';
 
   @override
@@ -287,6 +275,9 @@ class AppLocalizationsRu extends AppLocalizations {
   String get diagnosticsServerStartingDesc => 'Запуск сервера ADB...';
 
   @override
+  String get diagnosticsServerRunningDesc => 'Сервер ADB запущен.';
+
+  @override
   String get diagnosticsNoDevicesDesc =>
       'Устройства не обнаружены. Подключите устройство по USB или включите беспроводную отладку.';
 
@@ -298,6 +289,9 @@ class AppLocalizationsRu extends AppLocalizations {
   @override
   String get diagnosticsUnauthorizedDesc =>
       'Устройство не авторизовано. Подтвердите RSA-ключ на устройстве.';
+
+  @override
+  String get diagnosticsAuthorizedDesc => 'Устройство авторизовано.';
 
   @override
   String get diagnosticsConnectedDesc => 'Устройство подключено и готово.';

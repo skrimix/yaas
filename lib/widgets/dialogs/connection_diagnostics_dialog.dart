@@ -3,7 +3,6 @@ import 'package:provider/provider.dart';
 import '../../providers/adb_state.dart';
 import '../../providers/device_state.dart';
 import '../../providers/settings_state.dart';
-import '../../src/bindings/signals/signals.dart' as signals;
 import '../../src/bindings/bindings.dart';
 import '../../src/l10n/app_localizations.dart';
 
@@ -47,8 +46,10 @@ class ConnectionDiagnosticsDialog extends StatelessWidget {
   _DiagLevel _devicesLevel(AdbState state) {
     if (state is AdbStateNoDevices) return _DiagLevel.error;
     if (state is AdbStateDevicesAvailable) return _DiagLevel.warn;
-    if (state is AdbStateDeviceUnauthorized) return _DiagLevel.error;
-    if (state is AdbStateDeviceConnected) return _DiagLevel.ok;
+    if (state is AdbStateDeviceUnauthorized ||
+        state is AdbStateDeviceConnected) {
+      return _DiagLevel.ok;
+    }
     return _DiagLevel.warn;
   }
 
@@ -56,34 +57,6 @@ class ConnectionDiagnosticsDialog extends StatelessWidget {
     if (state is AdbStateDeviceUnauthorized) return _DiagLevel.error;
     if (state is AdbStateDeviceConnected) return _DiagLevel.ok;
     return _DiagLevel.info;
-  }
-
-  Widget _legend(AppLocalizations l10n) {
-    Widget dot(Color c) => Container(
-          width: 10,
-          height: 10,
-          decoration: BoxDecoration(color: c, shape: BoxShape.circle),
-        );
-    return Row(
-      children: [
-        Text(
-          l10n.diagnosticsLegendTitle,
-          style: const TextStyle(fontWeight: FontWeight.bold),
-        ),
-        const SizedBox(width: 12),
-        dot(_levelColor(_DiagLevel.ok)),
-        const SizedBox(width: 6),
-        Text(l10n.diagnosticsLegendOk),
-        const SizedBox(width: 12),
-        dot(_levelColor(_DiagLevel.warn)),
-        const SizedBox(width: 6),
-        Text(l10n.diagnosticsLegendWarning),
-        const SizedBox(width: 12),
-        dot(_levelColor(_DiagLevel.error)),
-        const SizedBox(width: 6),
-        Text(l10n.diagnosticsLegendError),
-      ],
-    );
   }
 
   Widget _item(
@@ -124,7 +97,8 @@ class ConnectionDiagnosticsDialog extends StatelessWidget {
       if (adbState is AdbStateServerStarting) {
         return l10n.diagnosticsServerStartingDesc;
       }
-      return l10n.diagnosticsConnectedDesc; // server up
+      // Server is up and reachable
+      return l10n.diagnosticsServerRunningDesc;
     }
 
     String devicesDesc() {
@@ -134,10 +108,12 @@ class ConnectionDiagnosticsDialog extends StatelessWidget {
         return l10n.diagnosticsDevicesAvailableDesc(count);
       }
       if (adbState is AdbStateDeviceUnauthorized) {
-        return l10n.diagnosticsUnauthorizedDesc;
+        // At least one device is present (authorization handled below)
+        return l10n.diagnosticsDevicesAvailableDesc(1);
       }
       if (adbState is AdbStateDeviceConnected) {
-        return l10n.diagnosticsConnectedDesc;
+        // At least one device is present and connected
+        return l10n.diagnosticsDevicesAvailableDesc(1);
       }
       return l10n.diagnosticsUnknownDesc;
     }
@@ -147,7 +123,7 @@ class ConnectionDiagnosticsDialog extends StatelessWidget {
         return l10n.diagnosticsUnauthorizedDesc;
       }
       if (adbState is AdbStateDeviceConnected) {
-        return l10n.diagnosticsConnectedDesc;
+        return l10n.diagnosticsAuthorizedDesc;
       }
       return l10n.diagnosticsUnknownDesc;
     }
@@ -163,31 +139,21 @@ class ConnectionDiagnosticsDialog extends StatelessWidget {
         : l10n.diagnosticsConfiguredPath(adbPath);
 
     return AlertDialog(
-      title: Row(
-        children: [
-          Expanded(child: Text(l10n.diagnosticsTitle)),
-          IconButton(
-            tooltip: l10n.refresh,
-            onPressed: () {
-              signals.AdbRequest(
-                command: const signals.AdbCommandRefreshDevice(),
-                commandKey: '',
-              ).sendSignalToRust();
-            },
-            icon: const Icon(Icons.refresh),
-          ),
-        ],
-      ),
+      title: Text(l10n.diagnosticsTitle),
       content: SingleChildScrollView(
         child: Column(
           mainAxisSize: MainAxisSize.min,
           crossAxisAlignment: CrossAxisAlignment.start,
           children: [
-            _legend(l10n),
-            const SizedBox(height: 12),
-            Divider(
-                height: 1, color: Theme.of(context).colorScheme.outlineVariant),
-            const SizedBox(height: 8),
+            // ADB Path at the top
+            ListTile(
+              leading: const Icon(Icons.settings),
+              title: Text(l10n.diagnosticsAdbPath),
+              subtitle: Text(adbPathDesc),
+              contentPadding: const EdgeInsets.symmetric(horizontal: 8),
+              dense: false,
+            ),
+            const SizedBox(height: 4),
             _item(
               context,
               level: serverLevel,
@@ -211,14 +177,6 @@ class ConnectionDiagnosticsDialog extends StatelessWidget {
               level: deviceLevel,
               title: l10n.diagnosticsActiveDevice,
               description: deviceDesc,
-            ),
-            const SizedBox(height: 8),
-            ListTile(
-              leading: const Icon(Icons.settings),
-              title: Text(l10n.diagnosticsAdbPath),
-              subtitle: Text(adbPathDesc),
-              contentPadding: const EdgeInsets.symmetric(horizontal: 8),
-              dense: false,
             ),
           ],
         ),

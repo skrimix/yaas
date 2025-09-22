@@ -401,7 +401,7 @@ abstract class AppLocalizations {
   /// No description provided for @statusAdbConnected.
   ///
   /// In en, this message translates to:
-  /// **'Connected'**
+  /// **'Device connected'**
   String get statusAdbConnected;
 
   /// No description provided for @statusAdbDeviceUnauthorized.
@@ -524,30 +524,6 @@ abstract class AppLocalizations {
   /// **'Connection Diagnostics'**
   String get diagnosticsTitle;
 
-  /// No description provided for @diagnosticsLegendTitle.
-  ///
-  /// In en, this message translates to:
-  /// **'Status colors'**
-  String get diagnosticsLegendTitle;
-
-  /// No description provided for @diagnosticsLegendOk.
-  ///
-  /// In en, this message translates to:
-  /// **'OK'**
-  String get diagnosticsLegendOk;
-
-  /// No description provided for @diagnosticsLegendWarning.
-  ///
-  /// In en, this message translates to:
-  /// **'Attention'**
-  String get diagnosticsLegendWarning;
-
-  /// No description provided for @diagnosticsLegendError.
-  ///
-  /// In en, this message translates to:
-  /// **'Not working'**
-  String get diagnosticsLegendError;
-
   /// No description provided for @diagnosticsAdbServer.
   ///
   /// In en, this message translates to:
@@ -590,6 +566,12 @@ abstract class AppLocalizations {
   /// **'ADB server is starting...'**
   String get diagnosticsServerStartingDesc;
 
+  /// No description provided for @diagnosticsServerRunningDesc.
+  ///
+  /// In en, this message translates to:
+  /// **'ADB server is running.'**
+  String get diagnosticsServerRunningDesc;
+
   /// No description provided for @diagnosticsNoDevicesDesc.
   ///
   /// In en, this message translates to:
@@ -607,6 +589,12 @@ abstract class AppLocalizations {
   /// In en, this message translates to:
   /// **'Device is unauthorized. Confirm the RSA prompt on the device.'**
   String get diagnosticsUnauthorizedDesc;
+
+  /// No description provided for @diagnosticsAuthorizedDesc.
+  ///
+  /// In en, this message translates to:
+  /// **'Device authorized.'**
+  String get diagnosticsAuthorizedDesc;
 
   /// No description provided for @diagnosticsConnectedDesc.
   ///

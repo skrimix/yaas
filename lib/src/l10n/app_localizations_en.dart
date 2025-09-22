@@ -171,7 +171,7 @@ class AppLocalizationsEn extends AppLocalizations {
   }
 
   @override
-  String get statusAdbConnected => 'Connected';
+  String get statusAdbConnected => 'Device connected';
 
   @override
   String get statusAdbDeviceUnauthorized => 'Device unauthorized';
@@ -249,18 +249,6 @@ class AppLocalizationsEn extends AppLocalizations {
   String get diagnosticsTitle => 'Connection Diagnostics';
 
   @override
-  String get diagnosticsLegendTitle => 'Status colors';
-
-  @override
-  String get diagnosticsLegendOk => 'OK';
-
-  @override
-  String get diagnosticsLegendWarning => 'Attention';
-
-  @override
-  String get diagnosticsLegendError => 'Not working';
-
-  @override
   String get diagnosticsAdbServer => 'ADB server';
 
   @override
@@ -283,6 +271,9 @@ class AppLocalizationsEn extends AppLocalizations {
   String get diagnosticsServerStartingDesc => 'ADB server is starting...';
 
   @override
+  String get diagnosticsServerRunningDesc => 'ADB server is running.';
+
+  @override
   String get diagnosticsNoDevicesDesc =>
       'No devices detected. Connect a device via USB or enable wireless debugging.';
 
@@ -294,6 +285,9 @@ class AppLocalizationsEn extends AppLocalizations {
   @override
   String get diagnosticsUnauthorizedDesc =>
       'Device is unauthorized. Confirm the RSA prompt on the device.';
+
+  @override
+  String get diagnosticsAuthorizedDesc => 'Device authorized.';
 
   @override
   String get diagnosticsConnectedDesc => 'Device connected and ready.';

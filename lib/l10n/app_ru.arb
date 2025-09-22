@@ -92,10 +92,6 @@
   "commonError": "Ошибка",
 
   "diagnosticsTitle": "Диагностика подключения",
-  "diagnosticsLegendTitle": "Статусы",
-  "diagnosticsLegendOk": "ОК",
-  "diagnosticsLegendWarning": "Внимание",
-  "diagnosticsLegendError": "Не работает",
   "diagnosticsAdbServer": "Сервер ADB",
   "diagnosticsDevices": "Устройства",
   "diagnosticsAuthorization": "Авторизация",

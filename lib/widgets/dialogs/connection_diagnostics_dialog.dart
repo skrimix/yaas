@@ -106,12 +106,10 @@ class ConnectionDiagnosticsDialog extends StatelessWidget {
         final count = adbState.value.length;
         return l10n.diagnosticsDevicesAvailableDesc(count);
       }
-      if (adbState is AdbStateDeviceUnauthorized) {
-        return l10n.diagnosticsDevicesAvailableDesc(1);
-      }
-      if (adbState is AdbStateDeviceConnected ||
-          adbState is AdbStateDeviceUnauthorized) {
-        return l10n.diagnosticsDevicesAvailableDesc(1);
+      if (adbState is AdbStateDeviceUnauthorized ||
+          adbState is AdbStateDeviceConnected) {
+        final count = adb.devicesCount;
+        return l10n.diagnosticsDevicesAvailableDesc(count <= 0 ? 1 : count);
       }
       return l10n.diagnosticsUnknownDesc;
     }

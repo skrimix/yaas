@@ -632,7 +632,7 @@ class AppLocalizationsRu extends AppLocalizations {
 
   @override
   String get deleteAllDownloadsConfirm =>
-      'Вы уверены, что хотите удалить все загруженные релизы?';
+      'Вы уверены, что хотите удалить все загрузки?';
 
   @override
   String deleteAllDownloadsResult(String removed, String skipped) {

@@ -229,7 +229,7 @@
   "downloadsTitle": "Загрузки",
   "deleteAllDownloads": "Удалить все загрузки",
   "deleteAllDownloadsTitle": "Удалить все загрузки",
-  "deleteAllDownloadsConfirm": "Вы уверены, что хотите удалить все загруженные релизы?",
+  "deleteAllDownloadsConfirm": "Вы уверены, что хотите удалить все загрузки?",
   "deleteAllDownloadsResult": "Удалено {removed}, пропущено {skipped}",
   "@deleteAllDownloadsResult": {"placeholders": {"removed": {"type": "String"}, "skipped": {"type": "String"}}},
   "deleteDownloadTitle": "Удалить загрузку",

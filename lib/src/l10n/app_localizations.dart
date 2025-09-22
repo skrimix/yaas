@@ -1253,7 +1253,7 @@ abstract class AppLocalizations {
   /// No description provided for @deleteAllDownloadsConfirm.
   ///
   /// In en, this message translates to:
-  /// **'Are you sure you want to delete all downloaded releases?'**
+  /// **'Are you sure you want to delete all downloads?'**
   String get deleteAllDownloadsConfirm;
 
   /// No description provided for @deleteAllDownloadsResult.

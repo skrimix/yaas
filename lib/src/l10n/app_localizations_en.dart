@@ -627,7 +627,7 @@ class AppLocalizationsEn extends AppLocalizations {
 
   @override
   String get deleteAllDownloadsConfirm =>
-      'Are you sure you want to delete all downloaded releases?';
+      'Are you sure you want to delete all downloads?';
 
   @override
   String deleteAllDownloadsResult(String removed, String skipped) {

@@ -9,15 +9,7 @@ import 'src/l10n/app_localizations.dart';
 import 'package:rinf/rinf.dart';
 import 'package:toastification/toastification.dart'; // TODO: find an alternative
 import 'src/bindings/bindings.dart' as messages;
-import 'widgets/screens/home.dart';
-import 'widgets/common/status_bar.dart';
-import 'widgets/app_management/manage_apps.dart';
-import 'widgets/app_management/local_sideload.dart';
 import 'widgets/screens/error_screen.dart';
-import 'widgets/screens/settings_screen.dart';
-import 'widgets/screens/logs_screen.dart';
-import 'widgets/screens/backups_screen.dart';
-import 'widgets/screens/downloads_screen.dart';
 import 'widgets/common/drag_drop_overlay.dart';
 import 'providers/device_state.dart';
 import 'providers/adb_state.dart';
@@ -25,8 +17,9 @@ import 'providers/cloud_apps_state.dart';
 import 'providers/task_state.dart';
 import 'providers/settings_state.dart';
 import 'providers/log_state.dart';
-import 'widgets/app_management/download_apps.dart';
 import 'providers/app_state.dart';
+import 'navigation.dart';
+import 'widgets/common/status_bar.dart';
 
 final colorScheme = ColorScheme.fromSeed(
   seedColor: Colors.deepPurple,
@@ -162,17 +155,6 @@ class _YAASAppState extends State<YAASApp> {
   }
 }
 
-class Destination {
-  final IconData icon;
-  final String label;
-  final Widget content;
-
-  Destination({required this.icon, required this.label, required this.content});
-
-  NavigationRailDestination get navigationDestination =>
-      NavigationRailDestination(icon: Icon(icon), label: Text(label));
-}
-
 class SinglePage extends StatefulWidget {
   const SinglePage({super.key});
 
@@ -182,49 +164,48 @@ class SinglePage extends StatefulWidget {
 
 class _SinglePageState extends State<SinglePage> {
   var pageIndex = 0;
+  var _startupApplied = false;
 
   @override
   Widget build(BuildContext context) {
     final l10n = AppLocalizations.of(context);
-    final destinations = [
-      Destination(icon: Icons.home, label: l10n.navHome, content: const Home()),
-      Destination(
-          icon: Icons.apps, label: l10n.navManage, content: const ManageApps()),
-      Destination(
-          icon: Icons.cloud_download,
-          label: l10n.navDownload,
-          content: const DownloadApps()),
-      Destination(
-          icon: Icons.download_done_outlined,
-          label: l10n.navDownloads,
-          content: const DownloadsScreen()),
-      Destination(
-          icon: Icons.arrow_circle_down,
-          label: l10n.navSideload,
-          content: const LocalSideload()),
-      Destination(
-          icon: Icons.archive,
-          label: l10n.navBackups,
-          content: const BackupsScreen()),
-      Destination(
-          icon: Icons.settings,
-          label: l10n.navSettings,
-          content: const SettingsScreen()),
-      Destination(
-          icon: Icons.terminal,
-          label: l10n.navLogs,
-          content: const LogsScreen()),
-      Destination(
-          icon: Icons.info, label: l10n.navAbout, content: Text(l10n.navAbout)),
-    ];
+    final settingsState = context.watch<SettingsState>();
+    final pageDefinitions = AppPageRegistry.pages;
+    final destinations = pageDefinitions
+        .map((page) => page.toNavigationDestination(l10n))
+        .toList();
+
+    if (!_startupApplied && settingsState.hasLoaded) {
+      final initialIndex = _indexForStartupPage(
+        settingsState.settings.startupPageKey,
+        pageDefinitions,
+      );
+
+      if (initialIndex != null && initialIndex != pageIndex) {
+        WidgetsBinding.instance.addPostFrameCallback((_) {
+          if (!mounted) return;
+          setState(() {
+            pageIndex = initialIndex;
+          });
+        });
+      }
+      _startupApplied = true;
+    }
+
+    final labelType =
+        switch (settingsState.settings.navigationRailLabelVisibility) {
+      messages.NavigationRailLabelVisibility.all => NavigationRailLabelType.all,
+      messages.NavigationRailLabelVisibility.selected =>
+        NavigationRailLabelType.selected,
+    };
     return Scaffold(
         body: Row(
       children: [
         SafeArea(
             child: NavigationRail(
           backgroundColor: Theme.of(context).colorScheme.surfaceContainerLow,
-          labelType: NavigationRailLabelType.selected,
-          destinations: _buildNavDestinations(destinations),
+          labelType: labelType,
+          destinations: destinations,
           selectedIndex: pageIndex,
           onDestinationSelected: (index) => setState(() => pageIndex = index),
         )),
@@ -236,7 +217,7 @@ class _SinglePageState extends State<SinglePage> {
                   duration: const Duration(milliseconds: 100),
                   child: SizedBox.expand(
                     key: ValueKey(pageIndex),
-                    child: destinations[pageIndex].content,
+                    child: pageDefinitions[pageIndex].buildContent(),
                   ),
                 ),
               ),
@@ -248,10 +229,15 @@ class _SinglePageState extends State<SinglePage> {
     ));
   }
 
-  List<NavigationRailDestination> _buildNavDestinations(
-      List<Destination> destinations) {
-    return destinations
-        .map((destination) => destination.navigationDestination)
-        .toList();
+  int? _indexForStartupPage(
+    String pageKey,
+    List<AppPageDefinition> definitions,
+  ) {
+    for (var i = 0; i < definitions.length; i++) {
+      if (definitions[i].key == pageKey) {
+        return i;
+      }
+    }
+    return null;
   }
 }

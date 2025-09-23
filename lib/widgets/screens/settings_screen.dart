@@ -27,8 +27,15 @@ class SettingsConstants {
 }
 
 // TODO: validate paths on input change
+typedef StartupPageOption = ({
+  String key,
+  String Function(AppLocalizations l10n) label,
+});
+
 class SettingsScreen extends StatefulWidget {
-  const SettingsScreen({super.key});
+  const SettingsScreen({super.key, required this.pageOptions});
+
+  final List<StartupPageOption> pageOptions;
 
   @override
   State<SettingsScreen> createState() => _SettingsScreenState();
@@ -44,6 +51,7 @@ class _SettingsScreenState extends State<SettingsScreen> {
   final ValueNotifier<bool> _isShiftPressedNotifier =
       ValueNotifier<bool>(false);
   bool _rcloneRemoteCustom = false;
+  late final List<StartupPageOption> _pageOptions;
 
   @override
   void initState() {
@@ -51,6 +59,9 @@ class _SettingsScreenState extends State<SettingsScreen> {
 
     final settingsState = Provider.of<SettingsState>(context, listen: false);
     _settingsState = settingsState;
+    _originalSettings = settingsState.settings;
+    _currentFormSettings = _originalSettings.copyWith();
+    _pageOptions = List.unmodifiable(widget.pageOptions);
     _originalSettings = settingsState.settings;
     _currentFormSettings = _originalSettings.copyWith();
 
@@ -246,6 +257,17 @@ class _SettingsScreenState extends State<SettingsScreen> {
           l10n.settingsCleanupKeepAllVersions,
       };
 
+  String _formatNavigationRailLabelVisibility(
+    AppLocalizations l10n,
+    NavigationRailLabelVisibility visibility,
+  ) =>
+      switch (visibility) {
+        NavigationRailLabelVisibility.selected =>
+          l10n.settingsNavigationRailLabelsSelected,
+        NavigationRailLabelVisibility.all =>
+          l10n.settingsNavigationRailLabelsAll,
+      };
+
   // String _formatConnectionType(AppLocalizations l10n, ConnectionType type) =>
   //     switch (type) {
   //       ConnectionType.usb => l10n.settingsConnectionUsb,
@@ -368,6 +390,41 @@ class _SettingsScreenState extends State<SettingsScreen> {
             onChanged: (code) {
               if (code != null) {
                 settingsState.setLocaleCode(code);
+              }
+            },
+          ),
+          _buildDropdownSetting<NavigationRailLabelVisibility>(
+            label: l10n.settingsNavigationRailLabels,
+            value: _currentFormSettings.navigationRailLabelVisibility,
+            items: NavigationRailLabelVisibility.values
+                .map((visibility) => DropdownMenuItem(
+                      value: visibility,
+                      child: Text(_formatNavigationRailLabelVisibility(
+                          l10n, visibility)),
+                    ))
+                .toList(),
+            onChanged: (value) {
+              if (value != null) {
+                setState(() => _currentFormSettings = _currentFormSettings
+                    .copyWith(navigationRailLabelVisibility: value));
+                _checkForChanges();
+              }
+            },
+          ),
+          _buildDropdownSetting<String>(
+            label: l10n.settingsStartupPage,
+            value: _currentFormSettings.startupPageKey,
+            items: _pageOptions
+                .map((page) => DropdownMenuItem(
+                      value: page.key,
+                      child: Text(page.label(l10n)),
+                    ))
+                .toList(),
+            onChanged: (value) {
+              if (value != null) {
+                setState(() => _currentFormSettings =
+                    _currentFormSettings.copyWith(startupPageKey: value));
+                _checkForChanges();
               }
             },
           ),

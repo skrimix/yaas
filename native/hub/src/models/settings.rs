@@ -1,6 +1,14 @@
 use rinf::SignalPiece;
 use serde::{Deserialize, Serialize};
 
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize, SignalPiece, Default)]
+#[serde(rename_all = "snake_case")]
+pub enum NavigationRailLabelVisibility {
+    #[default]
+    Selected,
+    All,
+}
+
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize, SignalPiece)]
 pub enum ConnectionType {
     Usb,
@@ -27,6 +35,10 @@ pub struct Settings {
     pub cleanup_policy: DownloadCleanupPolicy, // TODO: implement
     #[serde(default)]
     pub locale_code: String,
+    #[serde(default)]
+    pub navigation_rail_label_visibility: NavigationRailLabelVisibility,
+    #[serde(default)]
+    pub startup_page_key: String,
 }
 
 impl Default for Settings {
@@ -49,6 +61,8 @@ impl Default for Settings {
             bandwidth_limit: "".to_string(),
             cleanup_policy: DownloadCleanupPolicy::DeleteAfterInstall,
             locale_code: "system".to_string(),
+            navigation_rail_label_visibility: NavigationRailLabelVisibility::Selected,
+            startup_page_key: "home".to_string(),
         }
     }
 }

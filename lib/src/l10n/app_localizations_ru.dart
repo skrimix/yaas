@@ -61,6 +61,19 @@ class AppLocalizationsRu extends AppLocalizations {
   String get settingsLanguage => 'Язык';
 
   @override
+  String get settingsNavigationRailLabels => 'Подписи панели навигации';
+
+  @override
+  String get settingsNavigationRailLabelsSelected =>
+      'Только для выбранной страницы';
+
+  @override
+  String get settingsNavigationRailLabelsAll => 'Для всех страниц';
+
+  @override
+  String get settingsStartupPage => 'Стартовая страница';
+
+  @override
   String get settingsSystemDefault => 'Системный';
 
   @override

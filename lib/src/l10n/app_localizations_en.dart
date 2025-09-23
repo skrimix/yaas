@@ -61,6 +61,18 @@ class AppLocalizationsEn extends AppLocalizations {
   String get settingsLanguage => 'Language';
 
   @override
+  String get settingsNavigationRailLabels => 'Navigation rail labels';
+
+  @override
+  String get settingsNavigationRailLabelsSelected => 'Selected page only';
+
+  @override
+  String get settingsNavigationRailLabelsAll => 'All pages';
+
+  @override
+  String get settingsStartupPage => 'Startup page';
+
+  @override
   String get settingsSystemDefault => 'System default';
 
   @override

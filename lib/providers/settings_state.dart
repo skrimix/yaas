@@ -1,4 +1,5 @@
 import 'package:flutter/material.dart';
+import '../navigation.dart';
 import '../src/bindings/bindings.dart';
 
 class SettingsState extends ChangeNotifier {
@@ -12,10 +13,14 @@ class SettingsState extends ChangeNotifier {
     bandwidthLimit: '',
     cleanupPolicy: DownloadCleanupPolicy.deleteAfterInstall,
     localeCode: 'system',
+    navigationRailLabelVisibility: NavigationRailLabelVisibility.selected,
+    startupPageKey: 'home',
   );
 
   bool _isLoading = false;
   String? _error;
+  bool _hasLoaded = false;
+  final List<String> _availableStartupKeys = AppPageRegistry.pageKeys;
 
   List<String> _rcloneRemotes = const [];
   bool _isRemotesLoading = true;
@@ -36,8 +41,14 @@ class SettingsState extends ChangeNotifier {
         _error = event.message.error;
       } else {
         _settings = event.message.settings;
+        final changed = _normalizeStartupPageKey();
         _error = null;
+        if (changed) {
+          SaveSettingsRequest(settings: _settings).sendSignalToRust();
+          notifyListeners();
+        }
       }
+      _hasLoaded = true;
       _setIsLoading(false);
     });
 
@@ -79,6 +90,7 @@ class SettingsState extends ChangeNotifier {
 
   Settings get settings => _settings;
   bool get isLoading => _isLoading;
+  bool get hasLoaded => _hasLoaded;
   String? get error => _error;
   List<String> get rcloneRemotes => _rcloneRemotes;
   bool get isRemotesLoading => _isRemotesLoading;
@@ -101,5 +113,20 @@ class SettingsState extends ChangeNotifier {
     _remotesError = null;
     notifyListeners();
     GetRcloneRemotesRequest().sendSignalToRust();
+  }
+
+  bool _normalizeStartupPageKey() {
+    if (_availableStartupKeys.isEmpty) {
+      return false;
+    }
+    final currentKey = _settings.startupPageKey;
+    if (_availableStartupKeys.contains(currentKey)) {
+      return false;
+    }
+
+    final fallbackKey = _availableStartupKeys.first;
+    _settings = _settings.copyWith(startupPageKey: fallbackKey);
+
+    return true;
   }
 }

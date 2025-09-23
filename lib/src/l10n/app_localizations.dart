@@ -200,6 +200,30 @@ abstract class AppLocalizations {
   /// **'Language'**
   String get settingsLanguage;
 
+  /// No description provided for @settingsNavigationRailLabels.
+  ///
+  /// In en, this message translates to:
+  /// **'Navigation rail labels'**
+  String get settingsNavigationRailLabels;
+
+  /// No description provided for @settingsNavigationRailLabelsSelected.
+  ///
+  /// In en, this message translates to:
+  /// **'Selected page only'**
+  String get settingsNavigationRailLabelsSelected;
+
+  /// No description provided for @settingsNavigationRailLabelsAll.
+  ///
+  /// In en, this message translates to:
+  /// **'All pages'**
+  String get settingsNavigationRailLabelsAll;
+
+  /// No description provided for @settingsStartupPage.
+  ///
+  /// In en, this message translates to:
+  /// **'Startup page'**
+  String get settingsStartupPage;
+
   /// No description provided for @settingsSystemDefault.
   ///
   /// In en, this message translates to:

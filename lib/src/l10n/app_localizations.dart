@@ -788,6 +788,30 @@ abstract class AppLocalizations {
   /// **'Rating:'**
   String get detailsRating;
 
+  /// No description provided for @detailsReviewsTitle.
+  ///
+  /// In en, this message translates to:
+  /// **'Recent reviews'**
+  String get detailsReviewsTitle;
+
+  /// No description provided for @detailsReviewsUnavailable.
+  ///
+  /// In en, this message translates to:
+  /// **'Reviews are unavailable for this app.'**
+  String get detailsReviewsUnavailable;
+
+  /// No description provided for @detailsReviewsError.
+  ///
+  /// In en, this message translates to:
+  /// **'Failed to load reviews.'**
+  String get detailsReviewsError;
+
+  /// No description provided for @detailsReviewsEmpty.
+  ///
+  /// In en, this message translates to:
+  /// **'No reviews available yet.'**
+  String get detailsReviewsEmpty;
+
   /// No description provided for @commonCopy.
   ///
   /// In en, this message translates to:

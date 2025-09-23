@@ -388,6 +388,19 @@ class AppLocalizationsEn extends AppLocalizations {
   String get detailsRating => 'Rating:';
 
   @override
+  String get detailsReviewsTitle => 'Recent reviews';
+
+  @override
+  String get detailsReviewsUnavailable =>
+      'Reviews are unavailable for this app.';
+
+  @override
+  String get detailsReviewsError => 'Failed to load reviews.';
+
+  @override
+  String get detailsReviewsEmpty => 'No reviews available yet.';
+
+  @override
   String get commonCopy => 'Copy';
 
   @override

@@ -7,6 +7,7 @@ import 'package:cached_network_image/cached_network_image.dart';
 import 'package:video_player/video_player.dart';
 import 'package:flutter_cache_manager/flutter_cache_manager.dart';
 import 'package:http/http.dart' as http;
+import 'package:intl/intl.dart';
 
 import '../../src/bindings/bindings.dart';
 import 'package:rinf/rinf.dart';
@@ -34,21 +35,61 @@ class CloudAppDetailsDialog extends StatefulWidget {
 
 class _CloudAppDetailsDialogState extends State<CloudAppDetailsDialog> {
   StreamSubscription<RustSignalPack<AppDetailsResponse>>? _sub;
+  StreamSubscription<RustSignalPack<AppReviewsResponse>>? _reviewsSub;
   AppDetailsResponse? _details;
   bool _loading = true;
   final ScrollController _descScrollController = ScrollController();
+  List<VrdbReview>? _reviews;
+  bool _reviewsLoading = false;
+  String? _reviewsError;
+  String? _currentReviewsAppId;
 
   @override
   void initState() {
     super.initState();
     _sub = AppDetailsResponse.rustSignalStream.listen((event) {
       final message = event.message;
-      if (message.packageName == widget.cachedApp.app.packageName) {
-        setState(() {
-          _details = message;
-          _loading = false;
-        });
+      if (message.packageName != widget.cachedApp.app.packageName) {
+        return;
       }
+
+      final newAppId = message.appId;
+      var shouldFetchReviews = false;
+
+      setState(() {
+        _details = message;
+        _loading = false;
+
+        if (message.notFound || newAppId == null || newAppId.isEmpty) {
+          _reviews = null;
+          _reviewsError = null;
+          _reviewsLoading = false;
+          _currentReviewsAppId = null;
+        } else if (newAppId != _currentReviewsAppId) {
+          _currentReviewsAppId = newAppId;
+          _reviews = null;
+          _reviewsError = null;
+          _reviewsLoading = true;
+          shouldFetchReviews = true;
+        }
+      });
+
+      if (shouldFetchReviews && newAppId != null) {
+        GetAppReviewsRequest(appId: newAppId).sendSignalToRust();
+      }
+    });
+
+    _reviewsSub = AppReviewsResponse.rustSignalStream.listen((event) {
+      final message = event.message;
+      if (message.appId != _currentReviewsAppId) {
+        return;
+      }
+
+      setState(() {
+        _reviews = message.reviews;
+        _reviewsError = message.error;
+        _reviewsLoading = false;
+      });
     });
 
     GetAppDetailsRequest(packageName: widget.cachedApp.app.packageName)
@@ -58,6 +99,7 @@ class _CloudAppDetailsDialogState extends State<CloudAppDetailsDialog> {
   @override
   void dispose() {
     _sub?.cancel();
+    _reviewsSub?.cancel();
     _descScrollController.dispose();
     super.dispose();
   }
@@ -99,98 +141,113 @@ class _CloudAppDetailsDialogState extends State<CloudAppDetailsDialog> {
                 height: 120,
                 child: Center(child: CircularProgressIndicator()),
               )
-            : Row(
-                crossAxisAlignment: CrossAxisAlignment.start,
-                children: [
-                  // Left: Thumbnail + hover overlay + trailer player
-                  _CloudAppMedia(
-                    packageName: widget.cachedApp.app.packageName,
-                    width: 450,
-                    height: 270,
-                  ),
-                  const SizedBox(width: 16),
-                  // Right: Details + description
-                  Expanded(
-                    child: SizedBox(
+            : SingleChildScrollView(
+                child: Column(
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  children: [
+                    SizedBox(
                       height: 270,
-                      child: Column(
+                      child: Row(
                         crossAxisAlignment: CrossAxisAlignment.start,
                         children: [
-                          // Size and rating row
-                          Wrap(
-                            spacing: 12,
-                            runSpacing: 4,
-                            crossAxisAlignment: WrapCrossAlignment.center,
-                            children: [
-                              Row(
-                                mainAxisSize: MainAxisSize.min,
-                                children: [
-                                  const Icon(Icons.download_outlined, size: 16),
-                                  const SizedBox(width: 6),
-                                  Text(widget.cachedApp.formattedSize),
-                                ],
-                              ),
-                              if (showRating && _details!.ratingAverage != null)
-                                Row(
-                                  mainAxisSize: MainAxisSize.min,
+                          // Left: Thumbnail + hover overlay + trailer player
+                          _CloudAppMedia(
+                            packageName: widget.cachedApp.app.packageName,
+                            width: 450,
+                            height: 270,
+                          ),
+                          const SizedBox(width: 16),
+                          // Right: Details + description
+                          Expanded(
+                            child: Column(
+                              crossAxisAlignment: CrossAxisAlignment.start,
+                              children: [
+                                // Size and rating row
+                                Wrap(
+                                  spacing: 12,
+                                  runSpacing: 4,
+                                  crossAxisAlignment: WrapCrossAlignment.center,
                                   children: [
-                                    const Icon(Icons.star_rate_rounded,
-                                        size: 18, color: Colors.amber),
-                                    const SizedBox(width: 4),
-                                    Text(_formatRating(
-                                        _details!.ratingAverage!)),
-                                    if (_details!.ratingCount != null) ...[
-                                      const SizedBox(width: 4),
-                                      Text('(${_details!.ratingCount})',
-                                          style: textTheme.bodySmall?.copyWith(
-                                            color: textTheme.bodySmall?.color
-                                                ?.withValues(alpha: 0.7),
-                                          )),
-                                    ],
+                                    Row(
+                                      mainAxisSize: MainAxisSize.min,
+                                      children: [
+                                        const Icon(Icons.download_outlined,
+                                            size: 16),
+                                        const SizedBox(width: 6),
+                                        Text(widget.cachedApp.formattedSize),
+                                      ],
+                                    ),
+                                    if (showRating &&
+                                        _details!.ratingAverage != null)
+                                      Row(
+                                        mainAxisSize: MainAxisSize.min,
+                                        children: [
+                                          const Icon(Icons.star_rate_rounded,
+                                              size: 18, color: Colors.amber),
+                                          const SizedBox(width: 4),
+                                          Text(_formatRating(
+                                              _details!.ratingAverage!)),
+                                          if (_details!.ratingCount !=
+                                              null) ...[
+                                            const SizedBox(width: 4),
+                                            Text('(${_details!.ratingCount})',
+                                                style: textTheme.bodySmall
+                                                    ?.copyWith(
+                                                  color: textTheme
+                                                      .bodySmall?.color
+                                                      ?.withValues(alpha: 0.7),
+                                                )),
+                                          ],
+                                        ],
+                                      ),
                                   ],
                                 ),
-                            ],
-                          ),
-                          const SizedBox(height: 8),
-                          if (_details?.error != null)
-                            Padding(
-                              padding: const EdgeInsets.only(bottom: 8.0),
-                              child: Text(
-                                _details!.error!,
-                                style: textTheme.bodySmall?.copyWith(
-                                  color: theme.colorScheme.error,
-                                ),
-                              ),
-                            ),
-                          if (showRating && _details?.description != null)
-                            Expanded(
-                              child: DecoratedBox(
-                                decoration: BoxDecoration(
-                                  border: Border.all(
-                                    color: theme.colorScheme.outlineVariant,
-                                  ),
-                                  borderRadius: BorderRadius.circular(6),
-                                ),
-                                child: Padding(
-                                  padding: const EdgeInsets.all(8.0),
-                                  child: Scrollbar(
-                                    controller: _descScrollController,
-                                    child: SingleChildScrollView(
-                                      controller: _descScrollController,
-                                      child: SelectableText(
-                                        _details!.description!,
-                                        style: textTheme.bodyMedium,
+                                const SizedBox(height: 8),
+                                if (_details?.error != null)
+                                  Padding(
+                                    padding: const EdgeInsets.only(bottom: 8.0),
+                                    child: Text(
+                                      _details!.error!,
+                                      style: textTheme.bodySmall?.copyWith(
+                                        color: theme.colorScheme.error,
                                       ),
                                     ),
                                   ),
-                                ),
-                              ),
+                                if (showRating && _details?.description != null)
+                                  Expanded(
+                                    child: DecoratedBox(
+                                      decoration: BoxDecoration(
+                                        border: Border.all(
+                                          color:
+                                              theme.colorScheme.outlineVariant,
+                                        ),
+                                        borderRadius: BorderRadius.circular(6),
+                                      ),
+                                      child: Padding(
+                                        padding: const EdgeInsets.all(8.0),
+                                        child: Scrollbar(
+                                          controller: _descScrollController,
+                                          child: SingleChildScrollView(
+                                            controller: _descScrollController,
+                                            child: SelectableText(
+                                              _details!.description!,
+                                              style: textTheme.bodyMedium,
+                                            ),
+                                          ),
+                                        ),
+                                      ),
+                                    ),
+                                  ),
+                              ],
                             ),
+                          ),
                         ],
                       ),
                     ),
-                  ),
-                ],
+                    const SizedBox(height: 16),
+                    _buildReviewsSection(context),
+                  ],
+                ),
               ),
       ),
       actions: [
@@ -251,6 +308,160 @@ class _CloudAppDetailsDialogState extends State<CloudAppDetailsDialog> {
       }
     }
     return buf.toString();
+  }
+
+  Widget _buildReviewsSection(BuildContext context) {
+    final details = _details;
+    if (details == null || details.notFound) {
+      return const SizedBox.shrink();
+    }
+
+    final l10n = AppLocalizations.of(context);
+    final theme = Theme.of(context);
+    final textTheme = theme.textTheme;
+    final appId = details.appId;
+
+    Widget body;
+    if (appId == null || appId.isEmpty) {
+      body = Text(
+        l10n.detailsReviewsUnavailable,
+        style: textTheme.bodySmall,
+      );
+    } else if (_reviewsLoading) {
+      body = const SizedBox(
+        height: 120,
+        child: Center(child: CircularProgressIndicator()),
+      );
+    } else if (_reviewsError != null) {
+      body = Text(
+        _reviewsError!,
+        style: textTheme.bodySmall?.copyWith(
+          color: theme.colorScheme.error,
+        ),
+      );
+    } else {
+      final reviews = _reviews ?? const <VrdbReview>[];
+      final reviewFallback =
+          details.displayName ?? widget.cachedApp.app.appName;
+      if (reviews.isEmpty) {
+        body = Text(
+          l10n.detailsReviewsEmpty,
+          style: textTheme.bodySmall,
+        );
+      } else {
+        // TODO: Add pagination for additional review pages.
+        body = ListView.separated(
+          shrinkWrap: true,
+          physics: const NeverScrollableScrollPhysics(),
+          itemCount: reviews.length,
+          itemBuilder: (context, index) => _ReviewTile(
+              review: reviews[index], fallbackAuthor: reviewFallback),
+          separatorBuilder: (_, __) => const SizedBox(height: 12),
+        );
+      }
+    }
+
+    return Column(
+      crossAxisAlignment: CrossAxisAlignment.start,
+      children: [
+        Text(
+          l10n.detailsReviewsTitle,
+          style: textTheme.titleMedium,
+        ),
+        const SizedBox(height: 8),
+        body,
+      ],
+    );
+  }
+}
+
+class _ReviewTile extends StatelessWidget {
+  const _ReviewTile({required this.review, this.fallbackAuthor});
+
+  final VrdbReview review;
+  final String? fallbackAuthor;
+
+  @override
+  Widget build(BuildContext context) {
+    final theme = Theme.of(context);
+    final textTheme = theme.textTheme;
+    final authorName = review.authorDisplayName?.trim();
+    final title = (review.title?.trim().isEmpty ?? true)
+        ? (authorName?.isNotEmpty == true ? authorName! : fallbackAuthor ?? '')
+        : review.title!.trim();
+
+    final rawDate = review.date;
+    final parsedDate = rawDate != null ? DateTime.tryParse(rawDate) : null;
+    final subtitleParts = <String>[
+      if (review.title != null && authorName?.isNotEmpty == true) authorName!,
+      if (parsedDate != null)
+        DateFormat.yMMMd().add_jm().format(parsedDate.toLocal()),
+    ];
+
+    final subtitle = subtitleParts.join(' • ');
+    final description = review.description?.trim().isEmpty ?? true
+        ? null
+        : review.description!.replaceAll('\r\n', '\n');
+
+    final score = review.score;
+    final scoreText = score == null
+        ? null
+        : (score % 1 == 0
+            ? score.toInt().toString()
+            : score.toStringAsFixed(1));
+
+    return DecoratedBox(
+      decoration: BoxDecoration(
+        border: Border.all(color: theme.colorScheme.outlineVariant),
+        borderRadius: BorderRadius.circular(6),
+      ),
+      child: Padding(
+        padding: const EdgeInsets.all(12),
+        child: Column(
+          crossAxisAlignment: CrossAxisAlignment.start,
+          children: [
+            Row(
+              crossAxisAlignment: CrossAxisAlignment.center,
+              children: [
+                if (scoreText != null)
+                  Row(
+                    mainAxisSize: MainAxisSize.min,
+                    children: [
+                      const Icon(Icons.star_rate_rounded,
+                          size: 16, color: Colors.amber),
+                      const SizedBox(width: 4),
+                      Text('$scoreText/5', style: textTheme.bodyMedium),
+                      const SizedBox(width: 12),
+                    ],
+                  ),
+                Expanded(
+                  child: Text(
+                    title,
+                    style: textTheme.titleSmall,
+                  ),
+                ),
+              ],
+            ),
+            if (subtitle.isNotEmpty) ...[
+              const SizedBox(height: 6),
+              Text(
+                subtitle,
+                style: textTheme.bodySmall?.copyWith(
+                  color: textTheme.bodySmall?.color?.withValues(alpha: 0.7),
+                ),
+              ),
+            ],
+            if (description != null) ...[
+              const SizedBox(height: 8),
+              Text(
+                description,
+                style: textTheme.bodyMedium,
+              ),
+            ],
+          ],
+        ),
+      ),
+    );
   }
 }
 

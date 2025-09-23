@@ -393,6 +393,19 @@ class AppLocalizationsRu extends AppLocalizations {
   String get detailsRating => 'Рейтинг:';
 
   @override
+  String get detailsReviewsTitle => 'Недавние отзывы';
+
+  @override
+  String get detailsReviewsUnavailable =>
+      'Отзывы недоступны для этого приложения.';
+
+  @override
+  String get detailsReviewsError => 'Не удалось загрузить отзывы.';
+
+  @override
+  String get detailsReviewsEmpty => 'Отзывов пока нет.';
+
+  @override
   String get commonCopy => 'Копировать';
 
   @override

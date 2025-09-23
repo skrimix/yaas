@@ -1,7 +1,7 @@
 use rinf::{DartSignal, RustSignal};
 use serde::{Deserialize, Serialize};
 
-use crate::models::CloudApp;
+use crate::models::{CloudApp, VrdbReview};
 
 #[derive(Serialize, Deserialize, DartSignal)]
 pub struct LoadCloudAppsRequest {
@@ -33,6 +33,7 @@ pub struct GetAppDetailsRequest {
 #[derive(Serialize, Deserialize, RustSignal)]
 pub struct AppDetailsResponse {
     pub package_name: String,
+    pub app_id: Option<String>,
     pub display_name: Option<String>,
     pub description: Option<String>,
     pub rating_average: Option<f32>,
@@ -47,6 +48,7 @@ impl AppDetailsResponse {
     pub fn default_not_found(package_name: String) -> Self {
         Self {
             package_name,
+            app_id: None,
             display_name: None,
             description: None,
             rating_average: None,
@@ -59,6 +61,7 @@ impl AppDetailsResponse {
     pub fn default_error(package_name: String, error: String) -> Self {
         Self {
             package_name,
+            app_id: None,
             display_name: None,
             description: None,
             rating_average: None,
@@ -67,4 +70,16 @@ impl AppDetailsResponse {
             error: Some(error),
         }
     }
+}
+
+#[derive(Serialize, Deserialize, DartSignal)]
+pub struct GetAppReviewsRequest {
+    pub app_id: String,
+}
+
+#[derive(Serialize, Deserialize, RustSignal)]
+pub struct AppReviewsResponse {
+    pub app_id: String,
+    pub reviews: Vec<VrdbReview>,
+    pub error: Option<String>,
 }

@@ -13,11 +13,12 @@ use tokio_util::sync::CancellationToken;
 use tracing::{Instrument, Span, debug, error, info, info_span, instrument, warn};
 
 use crate::models::{
-    AppApiResponse, CloudApp, Settings,
+    AppApiResponse, CloudApp, Settings, VrdbReview,
     signals::{
         download::{
-            AppDetailsResponse, CloudAppsChangedEvent, GetAppDetailsRequest,
-            GetRcloneRemotesRequest, LoadCloudAppsRequest, RcloneRemotesChanged,
+            AppDetailsResponse, AppReviewsResponse, CloudAppsChangedEvent, GetAppDetailsRequest,
+            GetAppReviewsRequest, GetRcloneRemotesRequest, LoadCloudAppsRequest,
+            RcloneRemotesChanged,
         },
         downloads_local::DownloadsChanged,
     },
@@ -159,6 +160,7 @@ impl Downloader {
         let load_cloud_apps_receiver = LoadCloudAppsRequest::get_dart_signal_receiver();
         let get_rclone_remotes_receiver = GetRcloneRemotesRequest::get_dart_signal_receiver();
         let get_app_details_receiver = GetAppDetailsRequest::get_dart_signal_receiver();
+        let get_app_reviews_receiver = GetAppReviewsRequest::get_dart_signal_receiver();
         loop {
             tokio::select! {
                 request = load_cloud_apps_receiver.recv() => {
@@ -195,12 +197,20 @@ impl Downloader {
                         tokio::spawn(async move {
                             match fetch_app_details(package_name.clone()).await {
                                 Ok(Some(api)) => {
+                                    let AppApiResponse {
+                                        id,
+                                        display_name,
+                                        description,
+                                        quality_rating_aggregate,
+                                        rating_count,
+                                    } = api;
                                     AppDetailsResponse {
                                         package_name,
-                                        display_name: api.display_name,
-                                        description: api.description,
-                                        rating_average: api.quality_rating_aggregate,
-                                        rating_count: api.rating_count,
+                                        app_id: id,
+                                        display_name,
+                                        description,
+                                        rating_average: quality_rating_aggregate,
+                                        rating_count,
                                         not_found: false,
                                         error: None,
                                     }.send_signal_to_dart();
@@ -216,6 +226,35 @@ impl Downloader {
                         });
                     } else {
                         panic!("GetAppDetailsRequest receiver closed");
+                    }
+                }
+                request = get_app_reviews_receiver.recv() => {
+                    if let Some(request) = request {
+                        let app_id = request.message.app_id;
+                        info!(%app_id, "Received GetAppReviewsRequest");
+                        tokio::spawn(async move {
+                            match fetch_app_reviews_only(app_id.clone()).await {
+                                Ok(reviews) => {
+                                    AppReviewsResponse {
+                                        app_id,
+                                        reviews,
+                                        error: None,
+                                    }
+                                    .send_signal_to_dart();
+                                }
+                                Err(e) => {
+                                    error!(error = e.as_ref() as &dyn Error, "Failed to fetch app reviews");
+                                    AppReviewsResponse {
+                                        app_id,
+                                        reviews: Vec::new(),
+                                        error: Some(format!("Failed to fetch reviews: {:#}", e)),
+                                    }
+                                    .send_signal_to_dart();
+                                }
+                            }
+                        });
+                    } else {
+                        panic!("GetAppReviewsRequest receiver closed");
                     }
                 }
             }
@@ -336,6 +375,84 @@ async fn fetch_app_details(package_name: String) -> Result<Option<AppApiResponse
 
     let api: AppApiResponse = resp.json().await?;
     Ok(Some(api))
+}
+
+#[derive(serde::Deserialize)]
+struct VrdbReviewsResponse {
+    #[serde(default)]
+    reviews: Vec<VrdbReviewApi>,
+}
+
+#[derive(serde::Deserialize)]
+struct VrdbReviewApi {
+    id: String,
+    #[serde(default)]
+    author_display_name: Option<String>,
+    #[serde(default)]
+    score: Option<f32>,
+    #[serde(default)]
+    review_title: Option<String>,
+    #[serde(default)]
+    review_description: Option<String>,
+    #[serde(default)]
+    date: Option<String>,
+}
+
+impl From<VrdbReviewApi> for VrdbReview {
+    fn from(src: VrdbReviewApi) -> Self {
+        VrdbReview {
+            id: src.id,
+            author_display_name: src.author_display_name,
+            score: src.score,
+            title: src.review_title,
+            description: src.review_description,
+            date: src.date,
+        }
+    }
+}
+
+async fn fetch_app_reviews(client: &reqwest::Client, app_id: &str) -> Result<Vec<VrdbReview>> {
+    use reqwest::header::{
+        ACCEPT, ACCEPT_LANGUAGE, CACHE_CONTROL, HeaderMap, HeaderName, HeaderValue, USER_AGENT,
+    };
+
+    let mut headers = HeaderMap::new();
+    headers.insert(ACCEPT, HeaderValue::from_static("application/json"));
+    headers.insert(ACCEPT_LANGUAGE, HeaderValue::from_static("en-US,en;q=0.9"));
+    headers.insert(CACHE_CONTROL, HeaderValue::from_static("no-cache"));
+    headers.insert(
+        USER_AGENT,
+        HeaderValue::from_static(
+            "Mozilla/5.0 (X11; Linux x86_64) AppleWebKit/537.36 (KHTML, like Gecko) \
+             Chrome/140.0.0.0 Safari/537.36",
+        ),
+    );
+    headers.insert(
+        HeaderName::from_static("x-requested-with"),
+        HeaderValue::from_static("XMLHttpRequest"),
+    );
+
+    let response = client
+        .get("https://vrdb.app/api/reviews")
+        .headers(headers)
+        .query(&[
+            ("appId", app_id),
+            ("limit", "5"),
+            ("offset", "0"),
+            ("sortBy", "newest"),
+            ("score", "null"),
+        ])
+        .send()
+        .await?;
+
+    response.error_for_status_ref()?;
+    let payload: VrdbReviewsResponse = response.json().await?;
+    Ok(payload.reviews.into_iter().map(Into::into).collect())
+}
+
+async fn fetch_app_reviews_only(app_id: String) -> Result<Vec<VrdbReview>> {
+    let client = reqwest::Client::builder().user_agent("YAAS/1.0)").build()?;
+    fetch_app_reviews(&client, &app_id).await
 }
 
 #[derive(serde::Serialize)]

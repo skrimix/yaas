@@ -61,6 +61,8 @@ impl<'de> Deserialize<'de> for CloudApp {
 #[derive(serde::Deserialize, Debug)]
 pub struct AppApiResponse {
     #[serde(default)]
+    pub id: Option<String>,
+    #[serde(default)]
     pub display_name: Option<String>,
     #[serde(default)]
     pub description: Option<String>,
@@ -68,4 +70,14 @@ pub struct AppApiResponse {
     pub quality_rating_aggregate: Option<f32>,
     #[serde(default)]
     pub rating_count: Option<u32>,
+}
+
+#[derive(Serialize, Deserialize, Debug, Clone, SignalPiece)]
+pub struct VrdbReview {
+    pub id: String,
+    pub author_display_name: Option<String>,
+    pub score: Option<f32>,
+    pub title: Option<String>,
+    pub description: Option<String>,
+    pub date: Option<String>,
 }

@@ -36,6 +36,9 @@ class AppLocalizationsRu extends AppLocalizations {
   String get navAbout => 'О программе';
 
   @override
+  String get navDownloads => 'Загрузки';
+
+  @override
   String get settingsTitle => 'Настройки';
 
   @override
@@ -674,7 +677,42 @@ class AppLocalizationsRu extends AppLocalizations {
   String get openBackupsFolder => 'Открыть папку резервных копий';
 
   @override
+  String get openDownloadsFolder => 'Открыть папку загрузок';
+
+  @override
+  String get downloadsTitle => 'Загрузки';
+
+  @override
+  String get deleteAllDownloads => 'Удалить все загрузки';
+
+  @override
+  String get deleteAllDownloadsTitle => 'Удалить все загрузки';
+
+  @override
+  String get deleteAllDownloadsConfirm =>
+      'Вы уверены, что хотите удалить все загрузки?';
+
+  @override
+  String deleteAllDownloadsResult(String removed, String skipped) {
+    return 'Удалено $removed, пропущено $skipped';
+  }
+
+  @override
+  String get deleteDownloadTitle => 'Удалить загрузку';
+
+  @override
+  String deleteDownloadConfirm(String name) {
+    return 'Удалить \"$name\"?';
+  }
+
+  @override
+  String get downloadDeletedTitle => 'Загрузка удалена';
+
+  @override
   String get noBackupsFound => 'Резервные копии не найдены.';
+
+  @override
+  String get noDownloadsFound => 'Загрузки не найдены.';
 
   @override
   String get unsupportedPlatform => 'Платформа не поддерживается';

@@ -36,6 +36,9 @@ class AppLocalizationsEn extends AppLocalizations {
   String get navAbout => 'About';
 
   @override
+  String get navDownloads => 'Downloads';
+
+  @override
   String get settingsTitle => 'Settings';
 
   @override
@@ -669,7 +672,42 @@ class AppLocalizationsEn extends AppLocalizations {
   String get openBackupsFolder => 'Open Backups Folder';
 
   @override
+  String get openDownloadsFolder => 'Open Downloads Folder';
+
+  @override
+  String get downloadsTitle => 'Downloads';
+
+  @override
+  String get deleteAllDownloads => 'Delete all downloads';
+
+  @override
+  String get deleteAllDownloadsTitle => 'Delete All Downloads';
+
+  @override
+  String get deleteAllDownloadsConfirm =>
+      'Are you sure you want to delete all downloads?';
+
+  @override
+  String deleteAllDownloadsResult(String removed, String skipped) {
+    return 'Deleted $removed, skipped $skipped';
+  }
+
+  @override
+  String get deleteDownloadTitle => 'Delete Download';
+
+  @override
+  String deleteDownloadConfirm(String name) {
+    return 'Are you sure you want to delete \"$name\"?';
+  }
+
+  @override
+  String get downloadDeletedTitle => 'Download deleted';
+
+  @override
   String get noBackupsFound => 'No backups found.';
+
+  @override
+  String get noDownloadsFound => 'No downloads found.';
 
   @override
   String get unsupportedPlatform => 'Platform not supported';

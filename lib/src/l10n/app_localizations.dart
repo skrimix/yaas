@@ -152,6 +152,12 @@ abstract class AppLocalizations {
   /// **'About'**
   String get navAbout;
 
+  /// No description provided for @navDownloads.
+  ///
+  /// In en, this message translates to:
+  /// **'Downloads'**
+  String get navDownloads;
+
   /// No description provided for @settingsTitle.
   ///
   /// In en, this message translates to:
@@ -1322,11 +1328,71 @@ abstract class AppLocalizations {
   /// **'Open Backups Folder'**
   String get openBackupsFolder;
 
+  /// No description provided for @openDownloadsFolder.
+  ///
+  /// In en, this message translates to:
+  /// **'Open Downloads Folder'**
+  String get openDownloadsFolder;
+
+  /// No description provided for @downloadsTitle.
+  ///
+  /// In en, this message translates to:
+  /// **'Downloads'**
+  String get downloadsTitle;
+
+  /// No description provided for @deleteAllDownloads.
+  ///
+  /// In en, this message translates to:
+  /// **'Delete all downloads'**
+  String get deleteAllDownloads;
+
+  /// No description provided for @deleteAllDownloadsTitle.
+  ///
+  /// In en, this message translates to:
+  /// **'Delete All Downloads'**
+  String get deleteAllDownloadsTitle;
+
+  /// No description provided for @deleteAllDownloadsConfirm.
+  ///
+  /// In en, this message translates to:
+  /// **'Are you sure you want to delete all downloads?'**
+  String get deleteAllDownloadsConfirm;
+
+  /// No description provided for @deleteAllDownloadsResult.
+  ///
+  /// In en, this message translates to:
+  /// **'Deleted {removed}, skipped {skipped}'**
+  String deleteAllDownloadsResult(String removed, String skipped);
+
+  /// No description provided for @deleteDownloadTitle.
+  ///
+  /// In en, this message translates to:
+  /// **'Delete Download'**
+  String get deleteDownloadTitle;
+
+  /// No description provided for @deleteDownloadConfirm.
+  ///
+  /// In en, this message translates to:
+  /// **'Are you sure you want to delete \"{name}\"?'**
+  String deleteDownloadConfirm(String name);
+
+  /// No description provided for @downloadDeletedTitle.
+  ///
+  /// In en, this message translates to:
+  /// **'Download deleted'**
+  String get downloadDeletedTitle;
+
   /// No description provided for @noBackupsFound.
   ///
   /// In en, this message translates to:
   /// **'No backups found.'**
   String get noBackupsFound;
+
+  /// No description provided for @noDownloadsFound.
+  ///
+  /// In en, this message translates to:
+  /// **'No downloads found.'**
+  String get noDownloadsFound;
 
   /// No description provided for @unsupportedPlatform.
   ///

@@ -942,6 +942,9 @@ class AppLocalizationsRu extends AppLocalizations {
   String get openLogsDirectory => 'Открыть папку логов';
 
   @override
+  String get videoLink => 'Ссылка на видео';
+
+  @override
   String get clearFilters => 'Сбросить фильтры';
 
   @override

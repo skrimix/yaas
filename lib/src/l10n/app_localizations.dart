@@ -1826,6 +1826,12 @@ abstract class AppLocalizations {
   /// **'Open logs directory'**
   String get openLogsDirectory;
 
+  /// No description provided for @videoLink.
+  ///
+  /// In en, this message translates to:
+  /// **'Video link'**
+  String get videoLink;
+
   /// No description provided for @clearFilters.
   ///
   /// In en, this message translates to:

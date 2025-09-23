@@ -8,6 +8,7 @@ import 'package:video_player/video_player.dart';
 import 'package:flutter_cache_manager/flutter_cache_manager.dart';
 import 'package:http/http.dart' as http;
 import 'package:intl/intl.dart';
+import 'package:url_launcher/url_launcher.dart';
 
 import '../../src/bindings/bindings.dart';
 import 'package:rinf/rinf.dart';
@@ -229,9 +230,10 @@ class _CloudAppDetailsDialogState extends State<CloudAppDetailsDialog> {
                                           controller: _descScrollController,
                                           child: SingleChildScrollView(
                                             controller: _descScrollController,
-                                            child: SelectableText(
+                                            child: _buildDescriptionContent(
+                                              context,
                                               _details!.description!,
-                                              style: textTheme.bodyMedium,
+                                              textTheme.bodyMedium,
                                             ),
                                           ),
                                         ),
@@ -310,6 +312,122 @@ class _CloudAppDetailsDialogState extends State<CloudAppDetailsDialog> {
     return buf.toString();
   }
 
+  // Parses the description, replacing Oculus-style media markdown
+  // - Video: ![{"height":720,"type":"video","width":1280}](https://...mp4)
+  //   Renders a localized "Video link" button
+  // - Image: ![{"height":732,"type":"image","width":2160}](https://...png)
+  //   Renders the image inline (click to open externally)
+  Widget _buildDescriptionContent(
+    BuildContext context,
+    String description,
+    TextStyle? style,
+  ) {
+    final parts = _splitDescriptionWithVideoLinks(description);
+    final children = <Widget>[];
+
+    for (final part in parts) {
+      if (part.isVideo) {
+        children.add(
+          Padding(
+            padding: const EdgeInsets.symmetric(vertical: 4.0),
+            child: Align(
+              alignment: Alignment.centerLeft,
+              child: TextButton.icon(
+                icon: const Icon(Icons.play_circle_outline),
+                label: Text(AppLocalizations.of(context).videoLink),
+                onPressed: () => _openExternalUrl(context, part.url!),
+              ),
+            ),
+          ),
+        );
+      } else if (part.isImage) {
+        children.add(
+          Padding(
+            padding: const EdgeInsets.symmetric(vertical: 8.0),
+            child: _InlineNetworkImage(
+              url: part.url!,
+              onTap: () => _openExternalUrl(context, part.url!),
+            ),
+          ),
+        );
+      } else if (part.text != null && part.text!.isNotEmpty) {
+        children.add(SelectableText(part.text!, style: style));
+      }
+    }
+
+    if (children.isEmpty) {
+      return SelectableText(description, style: style);
+    }
+
+    return Column(
+      crossAxisAlignment: CrossAxisAlignment.start,
+      children: children,
+    );
+  }
+
+  Future<void> _openExternalUrl(BuildContext context, String url) async {
+    final l10n = AppLocalizations.of(context);
+    final uri = Uri.parse(url);
+    final ok = await launchUrl(uri, mode: LaunchMode.externalApplication);
+    if (!ok && context.mounted) {
+      final msg = l10n.couldNotOpenUrl(url);
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(content: Text(msg)),
+      );
+    }
+  }
+
+  // Simple split that extracts media markdown and keeps surrounding text.
+  List<_DescPart> _splitDescriptionWithVideoLinks(String input) {
+    final regex = RegExp(r'!\[(.*?)\]\((https?:\/\/[^\s)]+)\)');
+    final result = <_DescPart>[];
+    int last = 0;
+    for (final m in regex.allMatches(input)) {
+      if (m.start > last) {
+        result.add(_DescPart.text(input.substring(last, m.start)));
+      }
+      final alt = m.group(1) ?? '';
+      final url = m.group(2) ?? '';
+      final kind = _classifyMarkdown(alt, url);
+      if (kind == _MediaKind.video) {
+        result.add(_DescPart.video(url));
+      } else if (kind == _MediaKind.image) {
+        result.add(_DescPart.image(url));
+      } else {
+        // Not a video pattern; keep original literal markdown text.
+        result.add(_DescPart.text(input.substring(m.start, m.end)));
+      }
+      last = m.end;
+    }
+    if (last < input.length) {
+      result.add(_DescPart.text(input.substring(last)));
+    }
+    return result;
+  }
+
+  _MediaKind _classifyMarkdown(String alt, String url) {
+    final altL = alt.toLowerCase();
+    final urlL = url.toLowerCase();
+    if (urlL.endsWith('.mp4') || urlL.contains('.mp4?'))
+      return _MediaKind.video;
+    if (altL.contains('type') && altL.contains('video'))
+      return _MediaKind.video;
+    if (urlL.endsWith('.png') ||
+        urlL.endsWith('.jpg') ||
+        urlL.endsWith('.jpeg') ||
+        urlL.endsWith('.gif') ||
+        urlL.endsWith('.webp') ||
+        urlL.contains('.png?') ||
+        urlL.contains('.jpg?') ||
+        urlL.contains('.jpeg?') ||
+        urlL.contains('.gif?') ||
+        urlL.contains('.webp?') ||
+        (altL.contains('type') && altL.contains('image'))) {
+      return _MediaKind.image;
+    }
+    return _MediaKind.other;
+  }
+
   Widget _buildReviewsSection(BuildContext context) {
     final details = _details;
     if (details == null || details.notFound) {
@@ -371,6 +489,76 @@ class _CloudAppDetailsDialogState extends State<CloudAppDetailsDialog> {
         const SizedBox(height: 8),
         body,
       ],
+    );
+  }
+}
+
+enum _MediaKind { video, image, other }
+
+class _DescPart {
+  final String? text;
+  final String? url;
+  final bool isVideo;
+  final bool isImage;
+
+  _DescPart._(this.text, this.url, this.isVideo, this.isImage);
+
+  factory _DescPart.text(String t) => _DescPart._(t, null, false, false);
+  factory _DescPart.video(String u) => _DescPart._(null, u, true, false);
+  factory _DescPart.image(String u) => _DescPart._(null, u, false, true);
+}
+
+class _InlineNetworkImage extends StatelessWidget {
+  const _InlineNetworkImage({required this.url, this.onTap});
+
+  final String url;
+  final VoidCallback? onTap;
+
+  @override
+  Widget build(BuildContext context) {
+    final borderRadius = BorderRadius.circular(6);
+    final placeholder = Container(
+      decoration: BoxDecoration(
+        color: Theme.of(context).colorScheme.surfaceContainerHighest,
+        borderRadius: borderRadius,
+      ),
+      height: 180,
+      child: const Center(child: CircularProgressIndicator(strokeWidth: 2)),
+    );
+
+    final error = Container(
+      decoration: BoxDecoration(
+        color: Theme.of(context).colorScheme.surfaceContainerHighest,
+        borderRadius: borderRadius,
+      ),
+      height: 180,
+      child: const Center(child: Icon(Icons.broken_image_outlined, size: 40)),
+    );
+
+    final img = CachedNetworkImage(
+      imageUrl: url,
+      placeholder: (_, __) => placeholder,
+      errorWidget: (_, __, ___) => error,
+      imageBuilder: (context, provider) => ClipRRect(
+        borderRadius: borderRadius,
+        child: Container(
+          constraints: const BoxConstraints(maxHeight: 360),
+          color: Colors.black12,
+          child: GestureDetector(
+            onTap: onTap,
+            child: Image(
+              image: provider,
+              fit: BoxFit.contain,
+              width: double.infinity,
+            ),
+          ),
+        ),
+      ),
+    );
+
+    return MouseRegion(
+      cursor: onTap != null ? SystemMouseCursors.click : MouseCursor.defer,
+      child: img,
     );
   }
 }

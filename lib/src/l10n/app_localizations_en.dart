@@ -934,6 +934,9 @@ class AppLocalizationsEn extends AppLocalizations {
   String get openLogsDirectory => 'Open logs directory';
 
   @override
+  String get videoLink => 'Video link';
+
+  @override
   String get clearFilters => 'Clear filters';
 
   @override

@@ -337,6 +337,7 @@
   "clearCurrentLogs": "Очистить текущие логи",
   "exportLogs": "Экспорт логов",
   "openLogsDirectory": "Открыть папку логов",
+  "videoLink": "Ссылка на видео",
   "clearFilters": "Сбросить фильтры",
   "noLogsToDisplay": "Нет логов для отображения",
   "logsAppearHere": "Сообщения логов будут появляться здесь",

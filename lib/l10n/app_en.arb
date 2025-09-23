@@ -355,6 +355,7 @@
   "clearCurrentLogs": "Clear current logs",
   "exportLogs": "Export logs",
   "openLogsDirectory": "Open logs directory",
+  "videoLink": "Video link",
   "clearFilters": "Clear filters",
   "noLogsToDisplay": "No logs to display",
   "logsAppearHere": "Log messages will appear here as they are generated",

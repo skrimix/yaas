@@ -7,6 +7,10 @@ import 'package:proper_filesize/proper_filesize.dart' as filesize;
 import '../../utils/sideload_utils.dart';
 import '../../src/l10n/app_localizations.dart';
 
+const _listPadding = EdgeInsets.only(bottom: 24);
+const _cardMargin = EdgeInsets.symmetric(horizontal: 16, vertical: 2);
+const _cardPadding = EdgeInsets.symmetric(horizontal: 16, vertical: 4);
+
 class BackupsScreen extends StatefulWidget {
   const BackupsScreen({super.key});
 
@@ -69,10 +73,9 @@ class _BackupsScreenState extends State<BackupsScreen> {
                           ? Center(
                               child: Text(
                                   AppLocalizations.of(context).noBackupsFound))
-                          : ListView.separated(
+                          : ListView.builder(
+                              padding: _listPadding,
                               itemCount: _entries.length,
-                              separatorBuilder: (_, __) =>
-                                  const Divider(height: 1),
                               itemBuilder: (context, index) => _BackupTile(
                                 entry: _entries[index],
                                 onRestore: () => SideloadUtils.restoreBackup(
@@ -153,34 +156,38 @@ class _BackupTile extends StatelessWidget {
   Widget build(BuildContext context) {
     final l10n = AppLocalizations.of(context);
     final subtitle = _buildSubtitle(context, entry, l10n);
-    return ListTile(
-      leading: const Icon(Icons.archive_outlined),
-      title: Text(entry.name),
-      subtitle: Text(subtitle),
-      trailing: SizedBox(
-        height: 40,
-        child: Row(
-          mainAxisSize: MainAxisSize.min,
-          crossAxisAlignment: CrossAxisAlignment.center,
-          children: [
-            IconButton(
-              tooltip: l10n.delete,
-              icon: const Icon(Icons.delete_outline),
-              onPressed: onDelete,
-            ),
-            const SizedBox(width: 8),
-            IconButton(
-              tooltip: l10n.openFolderTooltip,
-              icon: const Icon(Icons.folder_open),
-              onPressed: onOpenFolder,
-            ),
-            const SizedBox(width: 8),
-            FilledButton.icon(
-              onPressed: onRestore,
-              icon: const Icon(Icons.restore),
-              label: Text(l10n.restore),
-            ),
-          ],
+    return Card(
+      margin: _cardMargin,
+      child: ListTile(
+        leading: const Icon(Icons.archive_outlined),
+        title: Text(entry.name),
+        subtitle: Text(subtitle),
+        contentPadding: _cardPadding,
+        trailing: SizedBox(
+          height: 40,
+          child: Row(
+            mainAxisSize: MainAxisSize.min,
+            crossAxisAlignment: CrossAxisAlignment.center,
+            children: [
+              IconButton(
+                tooltip: l10n.delete,
+                icon: const Icon(Icons.delete_outline),
+                onPressed: onDelete,
+              ),
+              const SizedBox(width: 8),
+              IconButton(
+                tooltip: l10n.openFolderTooltip,
+                icon: const Icon(Icons.folder_open),
+                onPressed: onOpenFolder,
+              ),
+              const SizedBox(width: 8),
+              FilledButton.icon(
+                onPressed: onRestore,
+                icon: const Icon(Icons.restore),
+                label: Text(l10n.restore),
+              ),
+            ],
+          ),
         ),
       ),
     );

@@ -6,6 +6,10 @@ import '../../utils/sideload_utils.dart';
 import '../../src/bindings/bindings.dart';
 import '../../src/l10n/app_localizations.dart';
 
+const _listPadding = EdgeInsets.only(bottom: 24);
+const _cardMargin = EdgeInsets.symmetric(horizontal: 16, vertical: 2);
+const _cardPadding = EdgeInsets.symmetric(horizontal: 16, vertical: 4);
+
 class DownloadsScreen extends StatefulWidget {
   const DownloadsScreen({super.key});
 
@@ -89,10 +93,9 @@ class _DownloadsScreenState extends State<DownloadsScreen> {
                       ? Center(child: Text(_error!))
                       : _entries.isEmpty
                           ? Center(child: Text(l10n.noDownloadsFound))
-                          : ListView.separated(
+                          : ListView.builder(
+                              padding: _listPadding,
                               itemCount: _entries.length,
-                              separatorBuilder: (_, __) =>
-                                  const Divider(height: 1),
                               itemBuilder: (context, index) => _DownloadTile(
                                 entry: _entries[index],
                                 onInstall: () => SideloadUtils.installApp(
@@ -242,33 +245,37 @@ class _DownloadTile extends StatelessWidget {
   Widget build(BuildContext context) {
     final l10n = AppLocalizations.of(context);
     final subtitle = _buildSubtitle(context, entry, l10n);
-    return ListTile(
-      title: Text(entry.name),
-      subtitle: Text(subtitle),
-      trailing: SizedBox(
-        height: 40,
-        child: Row(
-          mainAxisSize: MainAxisSize.min,
-          crossAxisAlignment: CrossAxisAlignment.center,
-          children: [
-            IconButton(
-              tooltip: l10n.delete,
-              icon: const Icon(Icons.delete_outline),
-              onPressed: onDelete,
-            ),
-            const SizedBox(width: 8),
-            IconButton(
-              tooltip: l10n.openFolderTooltip,
-              icon: const Icon(Icons.folder_open),
-              onPressed: onOpenFolder,
-            ),
-            const SizedBox(width: 8),
-            FilledButton.icon(
-              onPressed: onInstall,
-              icon: const Icon(Icons.install_mobile),
-              label: Text(l10n.install),
-            ),
-          ],
+    return Card(
+      margin: _cardMargin,
+      child: ListTile(
+        title: Text(entry.name),
+        subtitle: Text(subtitle),
+        contentPadding: _cardPadding,
+        trailing: SizedBox(
+          height: 40,
+          child: Row(
+            mainAxisSize: MainAxisSize.min,
+            crossAxisAlignment: CrossAxisAlignment.center,
+            children: [
+              IconButton(
+                tooltip: l10n.delete,
+                icon: const Icon(Icons.delete_outline),
+                onPressed: onDelete,
+              ),
+              const SizedBox(width: 8),
+              IconButton(
+                tooltip: l10n.openFolderTooltip,
+                icon: const Icon(Icons.folder_open),
+                onPressed: onOpenFolder,
+              ),
+              const SizedBox(width: 8),
+              FilledButton.icon(
+                onPressed: onInstall,
+                icon: const Icon(Icons.install_mobile),
+                label: Text(l10n.install),
+              ),
+            ],
+          ),
         ),
       ),
     );

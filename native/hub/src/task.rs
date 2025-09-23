@@ -22,6 +22,7 @@ use crate::{
         device::{BackupOptions, SideloadProgress},
     },
     downloader::{Downloader, RcloneTransferStats},
+    downloads::DownloadsCatalog,
     models::{
         Settings,
         signals::{
@@ -59,6 +60,7 @@ pub struct TaskManager {
     tasks: Mutex<HashMap<u64, (TaskType, CancellationToken)>>,
     adb_handler: Arc<AdbHandler>,
     downloader: Arc<Downloader>,
+    downloads_catalog: Arc<DownloadsCatalog>,
     settings: RwLock<Settings>,
 }
 
@@ -66,6 +68,7 @@ impl TaskManager {
     pub fn new(
         adb_handler: Arc<AdbHandler>,
         downloader: Arc<Downloader>,
+        downloads_catalog: Arc<DownloadsCatalog>,
         mut settings_stream: WatchStream<Settings>,
     ) -> Arc<Self> {
         let initial_settings = futures::executor::block_on(settings_stream.next())
@@ -78,6 +81,7 @@ impl TaskManager {
             tasks: Mutex::new(HashMap::new()),
             adb_handler,
             downloader,
+            downloads_catalog,
             settings: RwLock::new(initial_settings),
         });
 
@@ -963,96 +967,10 @@ impl TaskManager {
         app_full_name: &str,
         app_path: &str,
     ) -> Result<()> {
-        use crate::models::DownloadCleanupPolicy as Policy;
-
         let settings = self.settings.read().await.clone();
-        match settings.cleanup_policy {
-            Policy::KeepAllVersions => {
-                info!("Cleanup policy: keep all versions; nothing to do");
-                return Ok(());
-            }
-            Policy::DeleteAfterInstall => {
-                info!("Cleanup policy: delete after install; removing downloaded directory");
-                let path = std::path::Path::new(app_path);
-                if path.exists() {
-                    tokio::fs::remove_dir_all(path).await.with_context(|| {
-                        format!("Failed to remove downloaded directory: {}", path.display())
-                    })?;
-                    info!(removed = %path.display(), "Removed downloaded directory after install");
-                } else {
-                    debug!(missing = %path.display(), "Downloaded directory no longer exists");
-                }
-                return Ok(());
-            }
-            Policy::KeepOneVersion | Policy::KeepTwoVersions => {
-                let keep_count = match settings.cleanup_policy {
-                    Policy::KeepOneVersion => 1,
-                    Policy::KeepTwoVersions => 2,
-                    _ => unreachable!(),
-                };
-
-                // Try to resolve package and versions from cached cloud apps
-                let downloader = self.downloader.clone();
-                let Some(installed_app) = downloader.get_app_by_full_name(app_full_name).await
-                else {
-                    warn!(
-                        "Installed app not found in cloud apps cache; skipping versioned cleanup"
-                    );
-                    return Ok(());
-                };
-
-                let mut versions =
-                    downloader.get_apps_by_package(&installed_app.package_name).await;
-                // Sort by version code (desc)
-                versions.sort_by_key(|a| std::cmp::Reverse(a.version_code));
-
-                // Build keep-set: always include installed version, then highest others
-                let mut keep = vec![installed_app.full_name.clone()];
-                for app in versions.into_iter() {
-                    if keep.len() >= keep_count {
-                        break;
-                    }
-                    if app.full_name != installed_app.full_name {
-                        keep.push(app.full_name);
-                    }
-                }
-
-                let downloads_dir = downloader.get_download_dir().await;
-                info!(
-                    keep_count,
-                    package = %installed_app.package_name,
-                    keep = ?keep,
-                    downloads_dir = %downloads_dir.display(),
-                    "Applying versioned downloads cleanup"
-                );
-
-                // Iterate known versions for the package and delete those not in keep set if present on disk
-                for name in self
-                    .downloader
-                    .get_apps_by_package(&installed_app.package_name)
-                    .await
-                    .into_iter()
-                    .map(|a| a.full_name)
-                {
-                    if keep.iter().any(|k| k == &name) {
-                        continue;
-                    }
-                    let candidate = downloads_dir.join(&name);
-                    if candidate.exists() {
-                        info!(remove = %candidate.display(), "Removing older downloaded version");
-                        if let Err(err) = tokio::fs::remove_dir_all(&candidate).await {
-                            warn!(
-                                error = &err as &dyn Error,
-                                path = %candidate.display(),
-                                "Failed to remove older downloaded version"
-                            );
-                        }
-                    }
-                }
-
-                Ok(())
-            }
-        }
+        self.downloads_catalog
+            .apply_cleanup_policy(settings.cleanup_policy, app_full_name, app_path)
+            .await
     }
 }
 

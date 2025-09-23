@@ -335,13 +335,13 @@ abstract class AppLocalizations {
   /// No description provided for @settingsCleanupKeepOneVersion.
   ///
   /// In en, this message translates to:
-  /// **'Keep latest version only'**
+  /// **'Keep one version'**
   String get settingsCleanupKeepOneVersion;
 
   /// No description provided for @settingsCleanupKeepTwoVersions.
   ///
   /// In en, this message translates to:
-  /// **'Keep last two versions'**
+  /// **'Keep two versions'**
   String get settingsCleanupKeepTwoVersions;
 
   /// No description provided for @settingsCleanupKeepAllVersions.

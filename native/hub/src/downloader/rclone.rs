@@ -328,5 +328,7 @@ impl RcloneStorage {
         self.client.remotes().await
     }
 
-    pub fn remote_name(&self) -> &str { &self.remote }
+    pub fn remote_name(&self) -> &str {
+        &self.remote
+    }
 }

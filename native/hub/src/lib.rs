@@ -76,19 +76,18 @@ async fn main() {
 
     let adb_handler = AdbHandler::new(WatchStream::new(settings_handler.subscribe())).await;
     let downloader = Downloader::new(WatchStream::new(settings_handler.subscribe())).await;
+    let downloads_catalog =
+        downloads::DownloadsCatalog::start(WatchStream::new(settings_handler.subscribe()));
     let _task_manager = TaskManager::new(
         adb_handler.clone(),
         downloader.clone(),
+        downloads_catalog.clone(),
         WatchStream::new(settings_handler.subscribe()),
     );
 
     // Backups-related requests
     let _backups_handler =
         backups::BackupsHandler::start(WatchStream::new(settings_handler.subscribe()));
-
-    // Download catalog-related requests
-    let _downloads_catalog =
-        downloads::DownloadsCatalog::start(WatchStream::new(settings_handler.subscribe()));
 
     // Log-related requests from Flutter
     SignalLayer::start_request_handler(app_dir.join("logs"));

@@ -128,10 +128,10 @@ class AppLocalizationsRu extends AppLocalizations {
   String get settingsCleanupDeleteAfterInstall => 'Удалять после установки';
 
   @override
-  String get settingsCleanupKeepOneVersion => 'Хранить только последнюю версию';
+  String get settingsCleanupKeepOneVersion => 'Хранить одну версию';
 
   @override
-  String get settingsCleanupKeepTwoVersions => 'Хранить две последние версии';
+  String get settingsCleanupKeepTwoVersions => 'Хранить две версии';
 
   @override
   String get settingsCleanupKeepAllVersions => 'Хранить все версии';

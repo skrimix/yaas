@@ -1,16 +1,19 @@
 use std::{
+    collections::HashSet,
+    error::Error,
     path::{Path, PathBuf},
     sync::Arc,
     time::{SystemTime, UNIX_EPOCH},
 };
 
 use anyhow::{Context, Result, ensure};
+use lazy_regex::regex;
 use rinf::{DartSignal, RustSignal};
 use tokio::fs;
 use tokio_stream::{StreamExt, wrappers::WatchStream};
-use tracing::{Span, debug, error, info, instrument, trace};
+use tracing::{Span, debug, error, info, instrument, trace, warn};
 
-use crate::models::{Settings, signals::downloads_local::*};
+use crate::models::{DownloadCleanupPolicy, Settings, signals::downloads_local::*};
 
 #[derive(Debug, Clone)]
 pub struct DownloadsCatalog {
@@ -244,6 +247,129 @@ async fn dir_size(dir: &Path) -> Result<u64> {
 }
 
 impl DownloadsCatalog {
+    /// Applies the cleanup policy after an app installation.
+    ///
+    /// Downloads are grouped by their directory name using the `{name} v{version}+{build}`
+    /// convention (regex: `(?m)^(.+) v\d+\+.+$`). Entries that do not match this pattern are
+    /// left untouched and a warning is logged.
+    #[instrument(skip(self), fields(policy = ?policy, installed = %installed_full_name), err)]
+    pub async fn apply_cleanup_policy(
+        &self,
+        policy: DownloadCleanupPolicy,
+        installed_full_name: &str,
+        installed_path: &str,
+    ) -> Result<()> {
+        use DownloadCleanupPolicy as Policy;
+
+        match policy {
+            Policy::KeepAllVersions => {
+                info!("Cleanup policy: keep all versions; nothing to do");
+                return Ok(());
+            }
+            Policy::DeleteAfterInstall => {
+                info!("Cleanup policy: delete after install; removing downloaded directory");
+                let path = Path::new(installed_path);
+                if !path.exists() {
+                    debug!(missing = %path.display(), "Downloaded directory no longer exists");
+                    return Ok(());
+                }
+
+                if let Err(err) = self.delete_download(path).await {
+                    return Err(err.context("Failed to remove downloaded directory after install"));
+                }
+
+                info!(removed = %path.display(), "Removed downloaded directory after install");
+                return Ok(());
+            }
+            Policy::KeepOneVersion | Policy::KeepTwoVersions => {
+                let keep_total = match policy {
+                    Policy::KeepOneVersion => 1,
+                    Policy::KeepTwoVersions => 2,
+                    _ => unreachable!(),
+                };
+
+                let pattern = regex!(r"^(.+) v\d+\+.+$");
+                let Some(captures) = pattern.captures(installed_full_name) else {
+                    warn!(
+                        installed = installed_full_name,
+                        "Installed release name does not follow `{{name}} vX+Y` convention; \
+                         skipping cleanup"
+                    );
+                    return Ok(());
+                };
+                let base_name = captures.get(1).map(|m| m.as_str().trim()).unwrap_or("");
+
+                if base_name.is_empty() {
+                    warn!(
+                        installed = installed_full_name,
+                        "Unable to determine base name for cleanup; skipping"
+                    );
+                    return Ok(());
+                }
+
+                let entries = self.list_downloads().await?;
+                let mut matching = Vec::new();
+                for entry in entries {
+                    if let Some(caps) = pattern.captures(&entry.name) {
+                        let entry_base = caps.get(1).map(|m| m.as_str().trim()).unwrap_or("");
+                        if entry_base == base_name {
+                            matching.push(entry);
+                        }
+                    } else {
+                        warn!(name = %entry.name, "Ignoring download with non-standard name during cleanup");
+                    }
+                }
+
+                if matching.is_empty() {
+                    debug!(%base_name, "No matching downloads found for cleanup");
+                    return Ok(());
+                }
+
+                matching.sort_by(|a, b| b.timestamp.cmp(&a.timestamp));
+
+                let mut keep: Vec<String> = Vec::with_capacity(keep_total as usize);
+                keep.push(installed_full_name.to_string());
+                for entry in &matching {
+                    if keep.len() >= keep_total as usize {
+                        break;
+                    }
+                    if entry.name != installed_full_name {
+                        keep.push(entry.name.clone());
+                    }
+                }
+                let keep_set: HashSet<String> = keep.into_iter().collect();
+
+                info!(
+                    base = %base_name,
+                    keep_count = keep_set.len(),
+                    desired_keep = keep_total,
+                    kept = ?keep_set,
+                    "Applying versioned downloads cleanup"
+                );
+
+                for entry in matching {
+                    if keep_set.contains(&entry.name) {
+                        continue;
+                    }
+
+                    let path = Path::new(&entry.path);
+                    if !path.exists() {
+                        debug!(missing = %path.display(), "Skipping cleanup for missing download directory");
+                        continue;
+                    }
+
+                    if let Err(err) = self.delete_download(path).await {
+                        warn!(error = err.as_ref() as &dyn Error, path = %path.display(), "Failed to remove older downloaded version");
+                    } else {
+                        info!(removed = %path.display(), "Removed older downloaded version");
+                    }
+                }
+
+                Ok(())
+            }
+        }
+    }
+
     #[instrument(skip(self), err)]
     async fn delete_download(&self, path: &Path) -> Result<()> {
         let root = self.root.read().await.clone();

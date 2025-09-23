@@ -35,7 +35,7 @@ Key architectural components:
 
 The project uses Rinf for automatic code generation:
 - Rust signal definitions in `native/hub/src/models/signals/` generate corresponding Dart classes
-- Always run `just gen` after modifying Rust signals before Flutter operations
+- Always run `just gen` after modifying Rust signals before Flutter operations and after finishing changes
 - Generated files are in `lib/src/bindings/`
 
 ### Localization (ARB → Dart)

@@ -91,13 +91,16 @@ class _DownloadsScreenState extends State<DownloadsScreen> {
                           ? Center(child: Text(l10n.noDownloadsFound))
                           : ListView.separated(
                               itemCount: _entries.length,
-                              separatorBuilder: (_, __) => const Divider(height: 1),
+                              separatorBuilder: (_, __) =>
+                                  const Divider(height: 1),
                               itemBuilder: (context, index) => _DownloadTile(
                                 entry: _entries[index],
-                                onInstall: () =>
-                                    SideloadUtils.installApp(_entries[index].path, true),
-                                onOpenFolder: () => _openFolder(_entries[index].path),
-                                onDelete: () => _confirmAndDelete(_entries[index]),
+                                onInstall: () => SideloadUtils.installApp(
+                                    _entries[index].path, true),
+                                onOpenFolder: () =>
+                                    _openFolder(_entries[index].path),
+                                onDelete: () =>
+                                    _confirmAndDelete(_entries[index]),
                               ),
                             ),
             ),
@@ -136,7 +139,9 @@ class _DownloadsScreenState extends State<DownloadsScreen> {
   }
 
   void _openDownloadsRoot() {
-    GetDownloadsDirectoryResponse.rustSignalStream.take(1).listen((event) async {
+    GetDownloadsDirectoryResponse.rustSignalStream
+        .take(1)
+        .listen((event) async {
       final path = event.message.path;
       await _openFolder(path);
     });
@@ -151,7 +156,8 @@ class _DownloadsScreenState extends State<DownloadsScreen> {
         SideloadUtils.showErrorToast(context, msg.error!);
       } else {
         final l10n = AppLocalizations.of(context);
-        final text = l10n.deleteAllDownloadsResult(msg.removed.toString(), msg.skipped.toString());
+        final text = l10n.deleteAllDownloadsResult(
+            msg.removed.toString(), msg.skipped.toString());
         SideloadUtils.showInfoToast(context, l10n.deleteAllDownloads, text);
         _loadDownloads();
       }
@@ -187,8 +193,8 @@ class _DownloadsScreenState extends State<DownloadsScreen> {
       context: context,
       builder: (context) => AlertDialog(
         title: Text(AppLocalizations.of(context).deleteDownloadTitle),
-        content:
-            Text(AppLocalizations.of(context).deleteDownloadConfirm(entry.name)),
+        content: Text(
+            AppLocalizations.of(context).deleteDownloadConfirm(entry.name)),
         actions: [
           TextButton(
             onPressed: () => Navigator.of(context).pop(false),
@@ -210,10 +216,8 @@ class _DownloadsScreenState extends State<DownloadsScreen> {
       if (msg.error != null) {
         SideloadUtils.showErrorToast(context, msg.error!);
       } else {
-        SideloadUtils.showInfoToast(
-            context,
-            AppLocalizations.of(context).downloadDeletedTitle,
-            entry.name);
+        SideloadUtils.showInfoToast(context,
+            AppLocalizations.of(context).downloadDeletedTitle, entry.name);
         _loadDownloads();
       }
     });
@@ -239,7 +243,6 @@ class _DownloadTile extends StatelessWidget {
     final l10n = AppLocalizations.of(context);
     final subtitle = _buildSubtitle(context, entry, l10n);
     return ListTile(
-      leading: const Icon(Icons.download_done_outlined),
       title: Text(entry.name),
       subtitle: Text(subtitle),
       trailing: SizedBox(
@@ -282,7 +285,8 @@ class _DownloadTile extends StatelessWidget {
         : '${dt.year.toString().padLeft(4, '0')}-${dt.month.toString().padLeft(2, '0')}-${dt.day.toString().padLeft(2, '0')} '
             '${dt.hour.toString().padLeft(2, '0')}:${dt.minute.toString().padLeft(2, '0')}:${dt.second.toString().padLeft(2, '0')}';
 
-    final sizeStr = filesize.FileSize.fromBytes(entry.totalSize.toInt()).toString(
+    final sizeStr =
+        filesize.FileSize.fromBytes(entry.totalSize.toInt()).toString(
       unit: filesize.Unit.auto(
         size: entry.totalSize.toInt(),
         baseType: filesize.BaseType.metric,

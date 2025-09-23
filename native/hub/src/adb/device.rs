@@ -808,7 +808,7 @@ impl AdbDevice {
         fn send_progress(
             progress_sender: &UnboundedSender<SideloadProgress>,
             status: &str,
-            progress: f32,
+            progress: Option<f32>,
         ) {
             let _ = progress_sender.send(SideloadProgress { status: status.to_string(), progress });
         }
@@ -818,7 +818,7 @@ impl AdbDevice {
         // TODO: check free space before proceeding
         ensure!(app_dir.is_dir(), "App path must be a directory");
 
-        send_progress(&progress_sender, "Enumerating files", 0.0);
+        send_progress(&progress_sender, "Enumerating files", None);
         let mut entries = Vec::new();
         let mut dir = tokio::fs::read_dir(app_dir).await?;
         while let Some(entry) = dir.next_entry().await? {
@@ -829,7 +829,7 @@ impl AdbDevice {
             .iter()
             .find(|e| e.file_name().to_str().is_some_and(|n| n.to_lowercase() == "install.txt"))
         {
-            send_progress(&progress_sender, "Executing install script", 0.5);
+            send_progress(&progress_sender, "Executing install script", None);
             return self
                 .execute_install_script(&entry.path())
                 .await
@@ -858,7 +858,7 @@ impl AdbDevice {
             }
         });
 
-        send_progress(&progress_sender, "Installing APK", 0.0);
+        send_progress(&progress_sender, "Installing APK", Some(0.0));
         let install_progress_scale = if obb_dir.is_some() { 0.5 } else { 1.0 };
 
         let (tx, mut rx) = mpsc::unbounded_channel::<f32>();
@@ -870,7 +870,7 @@ impl AdbDevice {
                         send_progress(
                             &progress_sender,
                             &format!("Installing APK ({:.0}%)", progress * 100.0),
-                            progress * install_progress_scale,
+                            Some(progress * install_progress_scale),
                         );
                     }
                 }
@@ -903,7 +903,7 @@ impl AdbDevice {
                                 progress.total_files,
                                 file_progress * 100.0
                             );
-                            send_progress(&progress_sender, &status, 0.5 + push_progress * 0.5);
+                            send_progress(&progress_sender, &status, Some(push_progress * 0.5));
                         }
                     }
                 }
@@ -1211,7 +1211,7 @@ impl AdbDevice {
 #[derive(Debug)]
 pub struct SideloadProgress {
     pub status: String,
-    pub progress: f32,
+    pub progress: Option<f32>,
 }
 
 /// Options to control backup behavior

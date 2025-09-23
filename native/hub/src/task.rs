@@ -543,7 +543,7 @@ impl TaskManager {
                         last_sideload_log = now;
                     }
 
-                    update_progress(TaskStatus::Running, 2, Some(step_progress), progress.status);
+                    update_progress(TaskStatus::Running, 2, step_progress, progress.status);
                 }
             }
         }
@@ -794,7 +794,7 @@ impl TaskManager {
                         last_sideload_log = now;
                     }
 
-                    update_progress(TaskStatus::Running, 1, Some(step_progress), progress.status);
+                    update_progress(TaskStatus::Running, 1, step_progress, progress.status);
                 }
             }
         }

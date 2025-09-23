@@ -526,6 +526,9 @@ impl AdbHandler {
         let device = AdbDevice::new(inner_device).await?;
         info!(serial = %device.serial, "Device connected successfully");
 
+        // Clean up old APKs (might be leftovers from interrupted installs)
+        device.clean_temp_apks().await?;
+
         self.set_device(Some(device.clone()), false).await;
         self.refresh_adb_state().await;
         Ok(device)

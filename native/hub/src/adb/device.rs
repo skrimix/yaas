@@ -1205,6 +1205,13 @@ impl AdbDevice {
         info!("Backup restored successfully");
         Ok(())
     }
+
+    #[instrument(skip(self), err)]
+    pub async fn clean_temp_apks(&self) -> Result<()> {
+        debug!("Cleaning up temporary APKs");
+        self.shell("rm -rf /data/local/tmp/*.apk").await?;
+        Ok(())
+    }
 }
 
 // TODO: move somewhere else?

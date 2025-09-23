@@ -10,6 +10,7 @@ import '../../src/l10n/app_localizations.dart';
 import '../../providers/task_state.dart';
 import '../../utils/utils.dart';
 import '../dialogs/task_list_dialog.dart';
+import '../dialogs/connection_diagnostics_dialog.dart';
 
 class StatusBar extends StatelessWidget {
   const StatusBar({super.key});
@@ -21,18 +22,33 @@ class StatusBar extends StatelessWidget {
   ) {
     return Tooltip(
       message: l10n.statusAdb(adbState.statusDescription(context)),
-      child: Row(
-        children: [
-          Container(
-            width: 18,
-            height: 18,
-            decoration: BoxDecoration(
-              color: adbState.connectionColor,
-              shape: BoxShape.circle,
+      child: Material(
+        color: Colors.transparent,
+        child: InkWell(
+          onTap: () {
+            showDialog(
+              context: context,
+              builder: (context) => const ConnectionDiagnosticsDialog(),
+            );
+          },
+          borderRadius: BorderRadius.circular(20),
+          child: Padding(
+            padding: const EdgeInsets.symmetric(horizontal: 2, vertical: 3),
+            child: Row(
+              children: [
+                Container(
+                  width: 18,
+                  height: 18,
+                  decoration: BoxDecoration(
+                    color: adbState.connectionColor,
+                    shape: BoxShape.circle,
+                  ),
+                ),
+                const SizedBox(width: 4),
+              ],
             ),
           ),
-          const SizedBox(width: 4),
-        ],
+        ),
       ),
     );
   }
@@ -159,7 +175,7 @@ class StatusBar extends StatelessWidget {
     final recentTasks = taskState.recentTasks;
     final hasActiveTasks = activeTasks.isNotEmpty;
     final hasRecentTasks = recentTasks.isNotEmpty;
-    final progress = hasActiveTasks ? activeTasks.first.totalProgress : null;
+    final progress = hasActiveTasks ? activeTasks.first.stepProgress : null;
 
     return Material(
       color: Colors.transparent,

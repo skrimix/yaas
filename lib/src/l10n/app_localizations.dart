@@ -407,7 +407,7 @@ abstract class AppLocalizations {
   /// No description provided for @statusAdbConnected.
   ///
   /// In en, this message translates to:
-  /// **'Connected'**
+  /// **'Device connected'**
   String get statusAdbConnected;
 
   /// No description provided for @statusAdbDeviceUnauthorized.
@@ -523,6 +523,108 @@ abstract class AppLocalizations {
   /// In en, this message translates to:
   /// **'Error'**
   String get commonError;
+
+  /// No description provided for @diagnosticsTitle.
+  ///
+  /// In en, this message translates to:
+  /// **'Connection Diagnostics'**
+  String get diagnosticsTitle;
+
+  /// No description provided for @diagnosticsAdbServer.
+  ///
+  /// In en, this message translates to:
+  /// **'ADB server'**
+  String get diagnosticsAdbServer;
+
+  /// No description provided for @diagnosticsDevices.
+  ///
+  /// In en, this message translates to:
+  /// **'Devices'**
+  String get diagnosticsDevices;
+
+  /// No description provided for @diagnosticsAuthorization.
+  ///
+  /// In en, this message translates to:
+  /// **'Authorization'**
+  String get diagnosticsAuthorization;
+
+  /// No description provided for @diagnosticsActiveDevice.
+  ///
+  /// In en, this message translates to:
+  /// **'Active device'**
+  String get diagnosticsActiveDevice;
+
+  /// No description provided for @diagnosticsAdbPath.
+  ///
+  /// In en, this message translates to:
+  /// **'ADB path'**
+  String get diagnosticsAdbPath;
+
+  /// No description provided for @diagnosticsServerNotRunningDesc.
+  ///
+  /// In en, this message translates to:
+  /// **'ADB server is not running. Ensure ADB is installed and accessible in PATH or set the ADB path in Settings.'**
+  String get diagnosticsServerNotRunningDesc;
+
+  /// No description provided for @diagnosticsServerStartingDesc.
+  ///
+  /// In en, this message translates to:
+  /// **'ADB server is starting...'**
+  String get diagnosticsServerStartingDesc;
+
+  /// No description provided for @diagnosticsServerRunningDesc.
+  ///
+  /// In en, this message translates to:
+  /// **'ADB server is running.'**
+  String get diagnosticsServerRunningDesc;
+
+  /// No description provided for @diagnosticsNoDevicesDesc.
+  ///
+  /// In en, this message translates to:
+  /// **'No devices detected. Enable ADB/developer mode and connect via USB.'**
+  String get diagnosticsNoDevicesDesc;
+
+  /// No description provided for @diagnosticsDevicesAvailableDesc.
+  ///
+  /// In en, this message translates to:
+  /// **'Devices detected ({count})'**
+  String diagnosticsDevicesAvailableDesc(int count);
+
+  /// No description provided for @diagnosticsUnauthorizedDesc.
+  ///
+  /// In en, this message translates to:
+  /// **'Device is unauthorized. Confirm the authorization prompt on the device.'**
+  String get diagnosticsUnauthorizedDesc;
+
+  /// No description provided for @diagnosticsAuthorizedDesc.
+  ///
+  /// In en, this message translates to:
+  /// **'Device authorized.'**
+  String get diagnosticsAuthorizedDesc;
+
+  /// No description provided for @diagnosticsConnectedDesc.
+  ///
+  /// In en, this message translates to:
+  /// **'Device connected and ready.'**
+  String get diagnosticsConnectedDesc;
+
+  /// No description provided for @diagnosticsUnknownDesc.
+  ///
+  /// In en, this message translates to:
+  /// **'Unknown state.'**
+  String get diagnosticsUnknownDesc;
+
+  /// No description provided for @diagnosticsConfiguredPath.
+  ///
+  /// In en, this message translates to:
+  /// **'Configured path: {path}'**
+  String diagnosticsConfiguredPath(String path);
+
+  /// No description provided for @diagnosticsUsingSystemPath.
+  ///
+  /// In en, this message translates to:
+  /// **'Using system PATH'**
+  String get diagnosticsUsingSystemPath;
 
   /// No description provided for @commonYes.
   ///

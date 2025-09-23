@@ -240,9 +240,9 @@ class _TaskListDialogState extends State<TaskListDialog>
           : Row(
               mainAxisSize: MainAxisSize.min,
               children: [
-                if (task.stepProgress != null)
-                  Text('${(task.stepProgress! * 100).toInt()}%'),
-                const SizedBox(width: 4),
+                // if (task.stepProgress != null)
+                //   Text('${(task.stepProgress! * 100).toInt()}%'),
+                // const SizedBox(width: 4),
                 // TODO: disable button when task is not cancellable
                 IconButton(
                   visualDensity: VisualDensity.compact,

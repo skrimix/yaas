@@ -14,11 +14,13 @@ use tracing::{Instrument, Span, debug, error, info, info_span, instrument, warn}
 
 use crate::models::{
     AppApiResponse, CloudApp, Settings,
-    signals::download::{
-        AppDetailsResponse, CloudAppsChangedEvent, GetAppDetailsRequest, GetRcloneRemotesRequest,
-        LoadCloudAppsRequest, RcloneRemotesChanged,
+    signals::{
+        download::{
+            AppDetailsResponse, CloudAppsChangedEvent, GetAppDetailsRequest,
+            GetRcloneRemotesRequest, LoadCloudAppsRequest, RcloneRemotesChanged,
+        },
+        downloads_local::DownloadsChanged,
     },
-    signals::downloads_local::DownloadsChanged,
 };
 
 mod rclone;
@@ -144,11 +146,7 @@ impl Downloader {
     /// Returns all cached CloudApps for a given package name
     pub async fn get_apps_by_package(&self, package_name: &str) -> Vec<CloudApp> {
         let cache = self.cloud_apps.lock().await;
-        cache
-            .iter()
-            .filter(|a| a.package_name == package_name)
-            .cloned()
-            .collect()
+        cache.iter().filter(|a| a.package_name == package_name).cloned().collect()
     }
 
     /// Returns the current downloads directory
@@ -315,10 +313,9 @@ impl Downloader {
                 dir = %dst_dir.display(),
                 "Failed to write release.json metadata"
             );
-        } else {
-            // Notify UI that downloads may have changed
-            DownloadsChanged {}.send_signal_to_dart();
         }
+        // Notify UI that downloads may have changed
+        DownloadsChanged {}.send_signal_to_dart();
 
         Ok(dst_dir.display().to_string())
     }
@@ -363,8 +360,7 @@ struct ReleaseMetadata {
 impl Downloader {
     #[instrument(skip(self), fields(app_full_name = %app_full_name, dir = %dst_dir.display()), err)]
     async fn write_release_metadata(&self, app_full_name: &str, dst_dir: &PathBuf) -> Result<()> {
-        use time::format_description::well_known::Rfc3339;
-        use time::OffsetDateTime;
+        use time::{OffsetDateTime, format_description::well_known::Rfc3339};
         let cached = self.get_app_by_full_name(app_full_name).await;
         let now = OffsetDateTime::now_utc().format(&Rfc3339).unwrap_or_else(|_| "".to_string());
 

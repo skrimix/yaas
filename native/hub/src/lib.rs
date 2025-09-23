@@ -6,7 +6,7 @@ use anyhow::{Context, Result};
 use downloader::Downloader;
 use logging::SignalLayer;
 use mimalloc::MiMalloc;
-use models::signals::system::{RustPanic, MediaConfigChanged};
+use models::signals::system::{MediaConfigChanged, RustPanic};
 use rinf::RustSignal;
 use settings::SettingsHandler;
 use task::TaskManager;
@@ -71,11 +71,8 @@ async fn main() {
         rinf::debug_print!("Failed to create media cache directory: {:#}", e);
     }
     let media_base_url = "https://webdav.5698452.xyz/media/".to_string();
-    MediaConfigChanged {
-        media_base_url,
-        cache_dir: media_cache_dir.display().to_string(),
-    }
-    .send_signal_to_dart();
+    MediaConfigChanged { media_base_url, cache_dir: media_cache_dir.display().to_string() }
+        .send_signal_to_dart();
 
     let adb_handler = AdbHandler::new(WatchStream::new(settings_handler.subscribe())).await;
     let downloader = Downloader::new(WatchStream::new(settings_handler.subscribe())).await;
@@ -89,9 +86,9 @@ async fn main() {
     let _backups_handler =
         backups::BackupsHandler::start(WatchStream::new(settings_handler.subscribe()));
 
-    // Downloads-related requests
-    let _downloads_handler =
-        downloads::DownloadsHandler::start(WatchStream::new(settings_handler.subscribe()));
+    // Download catalog-related requests
+    let _downloads_catalog =
+        downloads::DownloadsCatalog::start(WatchStream::new(settings_handler.subscribe()));
 
     // Log-related requests from Flutter
     SignalLayer::start_request_handler(app_dir.join("logs"));

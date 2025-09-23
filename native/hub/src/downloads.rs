@@ -10,15 +10,14 @@ use tokio::fs;
 use tokio_stream::{StreamExt, wrappers::WatchStream};
 use tracing::{Span, debug, error, info, instrument, trace};
 
-use crate::models::{DownloadCleanupPolicy, Settings, signals::downloads_local::*};
+use crate::models::{Settings, signals::downloads_local::*};
 
 #[derive(Debug, Clone)]
-pub struct DownloadsHandler {
+pub struct DownloadsCatalog {
     root: Arc<tokio::sync::RwLock<PathBuf>>,
-    policy: Arc<tokio::sync::RwLock<DownloadCleanupPolicy>>,
 }
 
-impl DownloadsHandler {
+impl DownloadsCatalog {
     pub fn start(mut settings_stream: WatchStream<Settings>) -> Arc<Self> {
         let initial_settings = futures::executor::block_on(settings_stream.next())
             .expect("Settings stream closed on downloads handler init");
@@ -27,7 +26,6 @@ impl DownloadsHandler {
             root: Arc::new(tokio::sync::RwLock::new(PathBuf::from(
                 initial_settings.downloads_location,
             ))),
-            policy: Arc::new(tokio::sync::RwLock::new(initial_settings.cleanup_policy)),
         });
 
         // Watch settings updates
@@ -37,7 +35,6 @@ impl DownloadsHandler {
                 while let Some(settings) = settings_stream.next().await {
                     info!(dir = %settings.downloads_location, "Downloads location updated");
                     *handler.root.write().await = PathBuf::from(settings.downloads_location);
-                    *handler.policy.write().await = settings.cleanup_policy;
                 }
                 panic!("Settings stream closed for DownloadsHandler");
             });
@@ -246,7 +243,7 @@ async fn dir_size(dir: &Path) -> Result<u64> {
     Ok(total)
 }
 
-impl DownloadsHandler {
+impl DownloadsCatalog {
     #[instrument(skip(self), err)]
     async fn delete_download(&self, path: &Path) -> Result<()> {
         let root = self.root.read().await.clone();

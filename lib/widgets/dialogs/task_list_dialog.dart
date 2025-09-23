@@ -3,6 +3,7 @@ import 'package:provider/provider.dart';
 import '../../src/bindings/bindings.dart';
 import '../../providers/task_state.dart';
 import '../../src/l10n/app_localizations.dart';
+import '../../utils/utils.dart';
 
 class TaskListDialog extends StatefulWidget {
   final int initialTabIndex;
@@ -206,9 +207,16 @@ class _TaskListDialogState extends State<TaskListDialog>
                   child: Tooltip(
                     message: task.message,
                     waitDuration: const Duration(milliseconds: 500),
-                    child: Text(
-                      task.message, // TODO: make copyable
-                      overflow: TextOverflow.ellipsis,
+                    child: InkWell(
+                      onTap: () => copyToClipboard(
+                        context,
+                        task.message,
+                        description: task.message,
+                      ),
+                      child: Text(
+                        task.message,
+                        overflow: TextOverflow.ellipsis,
+                      ),
                     ),
                   ),
                 ),

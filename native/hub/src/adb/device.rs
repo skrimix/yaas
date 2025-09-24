@@ -611,11 +611,14 @@ impl AdbDevice {
             {
                 let progress_sender = progress_sender.clone();
                 async move {
-                    while let Some(p) = rx.recv().await {
-                        let _ = progress_sender.send(SideloadProgress {
-                            status: "Installing APK".to_string(),
-                            progress: Some(p),
-                        });
+                    // Avoid overwriting reinstall status
+                    if !did_reinstall {
+                        while let Some(p) = rx.recv().await {
+                            let _ = progress_sender.send(SideloadProgress {
+                                status: "Installing APK".to_string(),
+                                progress: Some(p),
+                            });
+                        }
                     }
                 }
             }

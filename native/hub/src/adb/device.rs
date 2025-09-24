@@ -588,7 +588,7 @@ impl AdbDevice {
     #[instrument(skip(self, apk_path), err)]
     pub async fn install_apk(&self, apk_path: &Path) -> Result<()> {
         info!(path = %apk_path.display(), "Installing APK");
-        Box::pin(self.inner.install_package(apk_path, true, true))
+        Box::pin(self.inner.install_package(apk_path, true, true, true))
             .await
             .context("Failed to install APK")
     }
@@ -601,9 +601,15 @@ impl AdbDevice {
         progress_sender: UnboundedSender<f32>,
     ) -> Result<()> {
         info!(path = %apk_path.display(), "Installing APK with progress");
-        Box::pin(self.inner.install_package_with_progress(apk_path, true, true, progress_sender))
-            .await
-            .context("Failed to install APK")
+        Box::pin(self.inner.install_package_with_progress(
+            apk_path,
+            true,
+            true,
+            true,
+            progress_sender,
+        ))
+        .await
+        .context("Failed to install APK")
     }
 
     /// Uninstalls a package from the device

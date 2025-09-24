@@ -598,6 +598,7 @@ impl AdbDevice {
     pub async fn install_apk_with_progress(
         &self,
         apk_path: &Path,
+        // backups_location: &Path,
         progress_sender: UnboundedSender<f32>,
     ) -> Result<()> {
         info!(path = %apk_path.display(), "Installing APK with progress");

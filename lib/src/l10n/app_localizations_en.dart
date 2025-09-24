@@ -606,6 +606,21 @@ class AppLocalizationsEn extends AppLocalizations {
   String get statusLabel => 'Status';
 
   @override
+  String get controllerStatusNotConnected => 'Not connected';
+
+  @override
+  String get controllerStatusActive => 'Active';
+
+  @override
+  String get controllerStatusDisabled => 'Disabled';
+
+  @override
+  String get controllerStatusSearching => 'Searching';
+
+  @override
+  String get controllerStatusUnknown => 'Unknown';
+
+  @override
   String get batteryLabel => 'Battery';
 
   @override

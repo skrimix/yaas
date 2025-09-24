@@ -1196,6 +1196,36 @@ abstract class AppLocalizations {
   /// **'Status'**
   String get statusLabel;
 
+  /// No description provided for @controllerStatusNotConnected.
+  ///
+  /// In en, this message translates to:
+  /// **'Not connected'**
+  String get controllerStatusNotConnected;
+
+  /// No description provided for @controllerStatusActive.
+  ///
+  /// In en, this message translates to:
+  /// **'Active'**
+  String get controllerStatusActive;
+
+  /// No description provided for @controllerStatusDisabled.
+  ///
+  /// In en, this message translates to:
+  /// **'Disabled'**
+  String get controllerStatusDisabled;
+
+  /// No description provided for @controllerStatusSearching.
+  ///
+  /// In en, this message translates to:
+  /// **'Searching'**
+  String get controllerStatusSearching;
+
+  /// No description provided for @controllerStatusUnknown.
+  ///
+  /// In en, this message translates to:
+  /// **'Unknown'**
+  String get controllerStatusUnknown;
+
   /// No description provided for @batteryLabel.
   ///
   /// In en, this message translates to:

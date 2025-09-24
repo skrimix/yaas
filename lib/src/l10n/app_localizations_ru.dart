@@ -612,6 +612,21 @@ class AppLocalizationsRu extends AppLocalizations {
   String get statusLabel => 'Статус';
 
   @override
+  String get controllerStatusNotConnected => 'Не подключено';
+
+  @override
+  String get controllerStatusActive => 'Активно';
+
+  @override
+  String get controllerStatusDisabled => 'Отключено';
+
+  @override
+  String get controllerStatusSearching => 'Поиск';
+
+  @override
+  String get controllerStatusUnknown => 'Неизвестно';
+
+  @override
   String get batteryLabel => 'Батарея';
 
   @override

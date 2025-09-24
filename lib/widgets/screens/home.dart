@@ -119,7 +119,7 @@ class Home extends StatelessWidget {
                                   context,
                                   title: l10n.leftController,
                                   status: deviceState.controllerStatusString(
-                                      deviceState.leftController),
+                                      context, deviceState.leftController),
                                   batteryLevel:
                                       deviceState.controllerBatteryLevel(
                                           deviceState.leftController),
@@ -144,7 +144,7 @@ class Home extends StatelessWidget {
                                   context,
                                   title: l10n.rightController,
                                   status: deviceState.controllerStatusString(
-                                      deviceState.rightController),
+                                      context, deviceState.rightController),
                                   batteryLevel:
                                       deviceState.controllerBatteryLevel(
                                           deviceState.rightController),

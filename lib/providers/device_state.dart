@@ -1,5 +1,6 @@
 import 'package:flutter/material.dart';
 import '../src/bindings/bindings.dart';
+import '../src/l10n/app_localizations.dart';
 
 class DeviceState extends ChangeNotifier {
   AdbDevice? _device;
@@ -24,17 +25,19 @@ class DeviceState extends ChangeNotifier {
 
   SpaceInfo? get spaceInfo => _device?.spaceInfo;
 
-  String controllerStatusString(ControllerInfo? controller) {
-    if (controller == null) return 'Not Connected';
+  String controllerStatusString(
+      BuildContext context, ControllerInfo? controller) {
+    final l10n = AppLocalizations.of(context);
+    if (controller == null) return l10n.controllerStatusNotConnected;
     switch (controller.status) {
       case ControllerStatus.active:
-        return 'Active';
+        return l10n.controllerStatusActive;
       case ControllerStatus.disabled:
-        return 'Disabled';
+        return l10n.controllerStatusDisabled;
       case ControllerStatus.searching:
-        return 'Searching';
+        return l10n.controllerStatusSearching;
       default:
-        return 'Unknown';
+        return l10n.controllerStatusUnknown;
     }
   }
 

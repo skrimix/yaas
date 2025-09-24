@@ -60,8 +60,7 @@ class AdbStateProvider extends ChangeNotifier {
     } else if (_state is AdbStateDeviceUnauthorized) {
       return l10n.statusAdbDevicesAvailable(devicesCount);
     } else if (_state is AdbStateDeviceConnected) {
-      final count = devicesCount <= 0 ? 1 : devicesCount;
-      return l10n.statusAdbDevicesAvailable(count);
+      return l10n.statusAdbConnected;
     }
     return l10n.statusAdbUnknown;
   }

@@ -4,8 +4,10 @@ import 'package:flutter/material.dart';
 
 import '../../src/bindings/bindings.dart';
 import 'package:proper_filesize/proper_filesize.dart' as filesize;
+import 'package:provider/provider.dart';
 import '../../utils/sideload_utils.dart';
 import '../../src/l10n/app_localizations.dart';
+import '../../providers/device_state.dart';
 
 const _listPadding = EdgeInsets.only(bottom: 24);
 const _cardMargin = EdgeInsets.symmetric(horizontal: 16, vertical: 2);
@@ -181,10 +183,24 @@ class _BackupTile extends StatelessWidget {
                 onPressed: onOpenFolder,
               ),
               const SizedBox(width: 8),
-              FilledButton.icon(
-                onPressed: onRestore,
-                icon: const Icon(Icons.restore),
-                label: Text(l10n.restore),
+              Consumer<DeviceState>(
+                builder: (context, deviceState, _) {
+                  if (!deviceState.isConnected) {
+                    return Tooltip(
+                      message: l10n.connectDeviceToRestore,
+                      child: FilledButton.icon(
+                        onPressed: null,
+                        icon: const Icon(Icons.restore),
+                        label: Text(l10n.restore),
+                      ),
+                    );
+                  }
+                  return FilledButton.icon(
+                    onPressed: onRestore,
+                    icon: const Icon(Icons.restore),
+                    label: Text(l10n.restore),
+                  );
+                },
               ),
             ],
           ),

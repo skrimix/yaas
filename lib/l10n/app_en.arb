@@ -107,6 +107,7 @@
   "dragDropInvalidDir": "Dropped directory is not a valid app directory or backup folder",
   "dragDropInvalidFile": "Dropped file is not a valid APK file",
   "connectDeviceToInstall": "Connect a device to install apps",
+  "connectDeviceToRestore": "Connect a device to restore backups",
   "batteryDumpCopied": "Battery state dump copied to clipboard",
   "batteryDumpFailed": "Failed to obtain battery state dump",
   "commonSuccess": "Success",

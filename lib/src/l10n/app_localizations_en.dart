@@ -249,6 +249,9 @@ class AppLocalizationsEn extends AppLocalizations {
   String get connectDeviceToInstall => 'Connect a device to install apps';
 
   @override
+  String get connectDeviceToRestore => 'Connect a device to restore backups';
+
+  @override
   String get batteryDumpCopied => 'Battery state dump copied to clipboard';
 
   @override

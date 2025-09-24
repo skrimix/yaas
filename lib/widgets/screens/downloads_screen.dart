@@ -2,9 +2,11 @@ import 'dart:io';
 
 import 'package:flutter/material.dart';
 import 'package:proper_filesize/proper_filesize.dart' as filesize;
+import 'package:provider/provider.dart';
 import '../../utils/sideload_utils.dart';
 import '../../src/bindings/bindings.dart';
 import '../../src/l10n/app_localizations.dart';
+import '../../providers/device_state.dart';
 
 const _listPadding = EdgeInsets.only(bottom: 24);
 const _cardMargin = EdgeInsets.symmetric(horizontal: 16, vertical: 2);
@@ -269,10 +271,24 @@ class _DownloadTile extends StatelessWidget {
                 onPressed: onOpenFolder,
               ),
               const SizedBox(width: 8),
-              FilledButton.icon(
-                onPressed: onInstall,
-                icon: const Icon(Icons.install_mobile),
-                label: Text(l10n.install),
+              Consumer<DeviceState>(
+                builder: (context, deviceState, _) {
+                  if (!deviceState.isConnected) {
+                    return Tooltip(
+                      message: l10n.connectDeviceToInstall,
+                      child: FilledButton.icon(
+                        onPressed: null,
+                        icon: const Icon(Icons.install_mobile),
+                        label: Text(l10n.install),
+                      ),
+                    );
+                  }
+                  return FilledButton.icon(
+                    onPressed: onInstall,
+                    icon: const Icon(Icons.install_mobile),
+                    label: Text(l10n.install),
+                  );
+                },
               ),
             ],
           ),

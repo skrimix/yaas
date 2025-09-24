@@ -524,6 +524,12 @@ abstract class AppLocalizations {
   /// **'Connect a device to install apps'**
   String get connectDeviceToInstall;
 
+  /// No description provided for @connectDeviceToRestore.
+  ///
+  /// In en, this message translates to:
+  /// **'Connect a device to restore backups'**
+  String get connectDeviceToRestore;
+
   /// No description provided for @batteryDumpCopied.
   ///
   /// In en, this message translates to:

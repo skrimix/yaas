@@ -253,6 +253,10 @@ class AppLocalizationsRu extends AppLocalizations {
       'Подключите устройство, чтобы устанавливать приложения';
 
   @override
+  String get connectDeviceToRestore =>
+      'Подключите устройство, чтобы восстанавливать резервные копии';
+
+  @override
   String get batteryDumpCopied =>
       'Состояние батареи скопировано в буфер обмена';
 

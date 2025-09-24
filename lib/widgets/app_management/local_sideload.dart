@@ -6,6 +6,7 @@ import '../../providers/device_state.dart';
 import '../../utils/sideload_utils.dart';
 import '../../providers/app_state.dart';
 import '../../src/l10n/app_localizations.dart';
+import '../common/no_device_connected_indicator.dart';
 
 class LocalSideload extends StatefulWidget {
   const LocalSideload({super.key});
@@ -114,12 +115,7 @@ class _LocalSideloadState extends State<LocalSideload> {
       builder: (context, deviceState, _) {
         final l10n = AppLocalizations.of(context);
         if (!deviceState.isConnected) {
-          return Center(
-            child: Text(
-              l10n.noDeviceConnected,
-              style: const TextStyle(fontSize: 18),
-            ),
-          );
+          return const NoDeviceConnectedIndicator();
         }
 
         return Scaffold(

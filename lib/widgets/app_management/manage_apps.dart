@@ -9,6 +9,7 @@ import '../../providers/app_state.dart';
 import '../../src/bindings/bindings.dart';
 import '../../utils/utils.dart';
 import '../common/animated_adb_button.dart';
+import '../common/no_device_connected_indicator.dart';
 import '../dialogs/animated_uninstall_dialog.dart';
 import '../dialogs/backup_options_dialog.dart';
 
@@ -593,12 +594,7 @@ class _ManageAppsState extends State<ManageApps> {
       builder: (context, deviceState, _) {
         final l10n = AppLocalizations.of(context);
         if (!deviceState.isConnected) {
-          return Center(
-            child: Text(
-              l10n.noDeviceConnected,
-              style: const TextStyle(fontSize: 18),
-            ),
-          );
+          return const NoDeviceConnectedIndicator();
         }
 
         _updateCachedLists(deviceState.device?.installedPackages);

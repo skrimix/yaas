@@ -5,6 +5,7 @@ import '../../providers/device_state.dart';
 import '../../src/bindings/bindings.dart';
 import '../../src/l10n/app_localizations.dart';
 import '../device/device_actions.dart';
+import '../common/no_device_connected_indicator.dart';
 
 class Home extends StatelessWidget {
   const Home({super.key});
@@ -58,12 +59,7 @@ class Home extends StatelessWidget {
       builder: (context, deviceState, _) {
         final l10n = AppLocalizations.of(context);
         if (!deviceState.isConnected) {
-          return Center(
-            child: Text(
-              l10n.noDeviceConnected,
-              style: const TextStyle(fontSize: 18),
-            ),
-          );
+          return const NoDeviceConnectedIndicator();
         }
 
         return Column(

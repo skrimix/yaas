@@ -584,11 +584,14 @@ impl AdbHandler {
     pub async fn install_apk(
         &self,
         apk_path: &Path,
-        progress_sender: UnboundedSender<f32>,
+        backups_location: std::path::PathBuf,
+        progress_sender: UnboundedSender<SideloadProgress>,
     ) -> Result<()> {
         let device = self.current_device().await?;
         let device_clone = (*device).clone();
-        let result = device_clone.install_apk_with_progress(apk_path, progress_sender).await;
+        let result = device_clone
+            .install_apk_with_progress(apk_path, &backups_location, progress_sender, false)
+            .await;
         self.refresh_device().await?;
         result
     }
@@ -608,11 +611,14 @@ impl AdbHandler {
     pub async fn sideload_app(
         &self,
         app_path: &Path,
+        backups_location: std::path::PathBuf,
         progress_sender: UnboundedSender<SideloadProgress>,
     ) -> Result<()> {
         let device = self.current_device().await?;
         let device_clone = (*device).clone();
-        let result = device_clone.sideload_app(app_path, progress_sender).await;
+        let result = device_clone
+            .sideload_app(app_path, &backups_location, progress_sender)
+            .await;
         self.refresh_device().await?;
         result
     }

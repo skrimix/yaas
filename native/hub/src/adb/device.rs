@@ -17,6 +17,7 @@ use tracing::{Instrument, Span, debug, error, info, instrument, trace, warn};
 
 use crate::{
     adb::{PACKAGE_NAME_REGEX, ensure_valid_package},
+    apk::get_apk_info,
     models::{
         DeviceType, InstalledPackage, SPACE_INFO_COMMAND, SpaceInfo, parse_list_apps_dex,
         signals::adb::command::RebootMode,
@@ -585,12 +586,13 @@ impl AdbDevice {
     }
 
     /// Installs an APK on the device
-    #[instrument(skip(self, apk_path), err)]
-    pub async fn install_apk(&self, apk_path: &Path) -> Result<()> {
+    #[instrument(skip(self, apk_path, backups_location), err)]
+    pub async fn install_apk(&self, apk_path: &Path, backups_location: &Path) -> Result<()> {
         info!(path = %apk_path.display(), "Installing APK");
-        Box::pin(self.inner.install_package(apk_path, true, true, true))
-            .await
-            .context("Failed to install APK")
+        let (tx, mut _rx) = mpsc::unbounded_channel::<SideloadProgress>();
+        // Drain in background to avoid unbounded buffer growth
+        tokio::spawn(async move { while _rx.recv().await.is_some() {} });
+        self.install_apk_with_progress(apk_path, backups_location, tx, false).await
     }
 
     /// Installs an APK on the device (with progress)
@@ -598,19 +600,85 @@ impl AdbDevice {
     pub async fn install_apk_with_progress(
         &self,
         apk_path: &Path,
-        // backups_location: &Path,
-        progress_sender: UnboundedSender<f32>,
+        backups_location: &Path,
+        progress_sender: UnboundedSender<SideloadProgress>,
+        did_reinstall: bool,
     ) -> Result<()> {
         info!(path = %apk_path.display(), "Installing APK with progress");
-        Box::pin(self.inner.install_package_with_progress(
-            apk_path,
-            true,
-            true,
-            true,
-            progress_sender,
-        ))
-        .await
-        .context("Failed to install APK")
+        // Bridge inner f32 progress into SideloadProgress
+        let (tx, mut rx) = mpsc::unbounded_channel::<f32>();
+        tokio::spawn(
+            {
+                let progress_sender = progress_sender.clone();
+                async move {
+                    while let Some(p) = rx.recv().await {
+                        let _ = progress_sender.send(SideloadProgress {
+                            status: "Installing APK".to_string(),
+                            progress: Some(p),
+                        });
+                    }
+                }
+            }
+            .instrument(Span::current()),
+        );
+
+        match Box::pin(self.inner.install_package_with_progress(apk_path, true, true, true, tx))
+            .await
+        {
+            Ok(_) => Ok(()),
+            Err(e) => {
+                let error_str = e.to_string();
+                debug!(error = %error_str, "Install failed, checking error type");
+
+                // TODO: add a settings flag to disable this behavior?
+                if (error_str.contains("INSTALL_FAILED_VERSION_DOWNGRADE")
+                    || error_str.contains("INSTALL_FAILED_UPDATE_INCOMPATIBLE"))
+                    && !did_reinstall
+                {
+                    info!("Incompatible update, reinstalling. Reason: {}", error_str);
+                    let _ = progress_sender.send(SideloadProgress {
+                        status: "Incompatible update, reinstalling".to_string(),
+                        progress: None,
+                    });
+                    let apk_info =
+                        get_apk_info(apk_path).context("Failed to get APK info for backup")?;
+                    let package_name = apk_info.package_name;
+                    let backup_path = self
+                        .backup_app(
+                            &package_name,
+                            None,
+                            backups_location,
+                            &BackupOptions {
+                                name_append: Some("reinstall".to_string()),
+                                backup_apk: false,
+                                backup_data: true,
+                                backup_obb: true,
+                            },
+                        )
+                        .await
+                        .context("Failed to backup app for reinstall")?;
+                    self.uninstall_package(&package_name)
+                        .await
+                        .context("Failed to uninstall package for reinstall")?;
+                    Box::pin(self.install_apk_with_progress(
+                        apk_path,
+                        backups_location,
+                        progress_sender,
+                        true,
+                    ))
+                    .await
+                    .context("Failed to reinstall APK")?;
+                    if let Some(backup_path) = backup_path {
+                        self.restore_backup(&backup_path)
+                            .await
+                            .context("Failed to restore backup after reinstall")?;
+                    }
+                    Ok(())
+                } else {
+                    Err(e.into())
+                }
+            }
+        }
     }
 
     /// Uninstalls a package from the device
@@ -656,7 +724,11 @@ impl AdbDevice {
 
     /// Executes an install script from the given path
     #[instrument(skip(self), err)]
-    async fn execute_install_script(&self, script_path: &Path) -> Result<()> {
+    async fn execute_install_script(
+        &self,
+        script_path: &Path,
+        backups_location: &Path,
+    ) -> Result<()> {
         let script_content = tokio::fs::read_to_string(script_path)
             .await
             .context("Failed to read install script")?;
@@ -719,7 +791,7 @@ impl AdbDevice {
                             format!("Line {line_num}: adb install: missing APK path")
                         })?,
                     );
-                    self.install_apk(&apk_path).await.with_context(|| {
+                    self.install_apk(&apk_path, backups_location).await.with_context(|| {
                         format!(
                             "Line {line_num}: adb install: failed to install APK '{}'",
                             apk_path.display()
@@ -809,6 +881,7 @@ impl AdbDevice {
     pub async fn sideload_app(
         &self,
         app_dir: &Path,
+        backups_location: &Path,
         progress_sender: UnboundedSender<SideloadProgress>,
     ) -> Result<()> {
         // TODO: add a test for this (smallest APK with generated OBB)
@@ -838,7 +911,7 @@ impl AdbDevice {
         {
             send_progress(&progress_sender, "Executing install script", None);
             return self
-                .execute_install_script(&entry.path())
+                .execute_install_script(&entry.path(), backups_location)
                 .await
                 .context("Failed to execute install script");
         }
@@ -868,23 +941,25 @@ impl AdbDevice {
         send_progress(&progress_sender, "Installing APK", Some(0.0));
         let install_progress_scale = if obb_dir.is_some() { 0.5 } else { 1.0 };
 
-        let (tx, mut rx) = mpsc::unbounded_channel::<f32>();
+        let (tx, mut rx) = mpsc::unbounded_channel::<SideloadProgress>();
         tokio::spawn(
             {
                 let progress_sender = progress_sender.clone();
                 async move {
-                    while let Some(progress) = rx.recv().await {
-                        send_progress(
-                            &progress_sender,
-                            &format!("Installing APK ({:.0}%)", progress * 100.0),
-                            Some(progress * install_progress_scale),
-                        );
+                    while let Some(p) = rx.recv().await {
+                        let scaled = p.progress.map(|v| v * install_progress_scale);
+                        let status = if let Some(pr) = p.progress {
+                            format!("Installing APK ({:.0}%)", pr * 100.0)
+                        } else {
+                            p.status
+                        };
+                        send_progress(&progress_sender, &status, scaled);
                     }
                 }
             }
             .instrument(Span::current()),
         );
-        self.install_apk_with_progress(apk_path, tx).await?;
+        self.install_apk_with_progress(apk_path, backups_location, tx, false).await?;
 
         if let Some(obb_dir) = obb_dir {
             let package_name = obb_dir
@@ -1162,7 +1237,10 @@ impl AdbDevice {
             } else {
                 let apk = apk_candidate.unwrap();
                 info!(apk = %apk.display(), "Restoring APK");
-                self.install_apk(&apk).await?;
+                // Use direct install without any special handling
+                Box::pin(self.inner.install_package(&apk, true, true, true))
+                    .await
+                    .context("Failed to install APK during restore")?;
             }
         }
 

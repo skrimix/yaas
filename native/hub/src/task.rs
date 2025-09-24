@@ -513,9 +513,13 @@ impl TaskManager {
         let mut sideload_task = {
             let adb_handler = self.adb_handler.clone();
             let app_path = app_path.clone();
+            let backups_location =
+                std::path::PathBuf::from(self.settings.read().await.backups_location.clone());
             tokio::spawn(
-                async move { adb_handler.sideload_app(Path::new(&app_path), tx).await }
-                    .instrument(Span::current()),
+                async move {
+                    adb_handler.sideload_app(Path::new(&app_path), backups_location, tx).await
+                }
+                .instrument(Span::current()),
             )
         };
 
@@ -684,14 +688,18 @@ impl TaskManager {
 
         update_progress(TaskStatus::Running, 1, None, "Installing APK...".into());
 
-        let (tx, mut rx) = mpsc::unbounded_channel::<f32>();
+        let (tx, mut rx) = mpsc::unbounded_channel::<SideloadProgress>();
 
         let mut install_task = {
             let adb_handler = self.adb_handler.clone();
             let apk_path = apk_path.clone();
+            let backups_location =
+                std::path::PathBuf::from(self.settings.read().await.backups_location.clone());
             tokio::spawn(
-                async move { adb_handler.install_apk(Path::new(&apk_path), tx).await }
-                    .instrument(Span::current()),
+                async move {
+                    adb_handler.install_apk(Path::new(&apk_path), backups_location, tx).await
+                }
+                .instrument(Span::current()),
             )
         };
 
@@ -706,19 +714,25 @@ impl TaskManager {
                     info!("APK install task completed");
                 }
                 Some(progress) = rx.recv() => {
-                    let step_progress = progress;
+                    let step_progress = progress.progress.unwrap_or(0.0);
 
                     // Log install progress every 5 seconds or at major milestones
                     let now = std::time::Instant::now();
                     if now.duration_since(last_log_time) > Duration::from_secs(5) {
                         info!(
                             install_progress = step_progress,
+                            status = %progress.status,
                             "APK installation progress"
                         );
                         last_log_time = now;
                     }
 
-                    update_progress(TaskStatus::Running, 1, Some(step_progress), "Installing APK...".into());
+                    update_progress(
+                        TaskStatus::Running,
+                        1,
+                        progress.progress,
+                        progress.status,
+                    );
                 }
             }
         }
@@ -764,9 +778,13 @@ impl TaskManager {
         let mut sideload_task = {
             let adb_handler = self.adb_handler.clone();
             let app_path = app_path.clone();
+            let backups_location =
+                std::path::PathBuf::from(self.settings.read().await.backups_location.clone());
             tokio::spawn(
-                async move { adb_handler.sideload_app(Path::new(&app_path), tx).await }
-                    .instrument(Span::current()),
+                async move {
+                    adb_handler.sideload_app(Path::new(&app_path), backups_location, tx).await
+                }
+                .instrument(Span::current()),
             )
         };
 

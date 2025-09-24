@@ -655,7 +655,7 @@ impl AdbDevice {
                                 name_append: Some("reinstall".to_string()),
                                 backup_apk: false,
                                 backup_data: true,
-                                backup_obb: true,
+                                backup_obb: false,
                             },
                         )
                         .await

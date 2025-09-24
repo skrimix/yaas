@@ -408,10 +408,12 @@ class _CloudAppDetailsDialogState extends State<CloudAppDetailsDialog> {
   _MediaKind _classifyMarkdown(String alt, String url) {
     final altL = alt.toLowerCase();
     final urlL = url.toLowerCase();
-    if (urlL.endsWith('.mp4') || urlL.contains('.mp4?'))
+    if (urlL.endsWith('.mp4') || urlL.contains('.mp4?')) {
       return _MediaKind.video;
-    if (altL.contains('type') && altL.contains('video'))
+    }
+    if (altL.contains('type') && altL.contains('video')) {
       return _MediaKind.video;
+    }
     if (urlL.endsWith('.png') ||
         urlL.endsWith('.jpg') ||
         urlL.endsWith('.jpeg') ||

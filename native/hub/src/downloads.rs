@@ -66,7 +66,7 @@ impl DownloadsCatalog {
                         debug!("Received GetDownloadsRequest");
                         match self.list_downloads().await {
                             Ok(mut entries) => {
-                                entries.sort_by(|a, b| b.timestamp.cmp(&a.timestamp));
+                                entries.sort_by(|a, b| a.name.cmp(&b.name));
                                 GetDownloadsResponse { entries, error: None }.send_signal_to_dart();
                             }
                             Err(e) => {

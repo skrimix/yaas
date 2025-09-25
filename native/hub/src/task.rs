@@ -919,6 +919,7 @@ impl TaskManager {
             backup_apk,
             backup_data,
             backup_obb,
+            require_private_data: true,
         };
 
         let maybe_created = self

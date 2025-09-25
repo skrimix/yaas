@@ -657,6 +657,8 @@ impl AdbDevice {
                                 backup_apk: false,
                                 backup_data: true,
                                 backup_obb: false,
+                                // Don't lose private data on reinstall, e.g. when the app is not debuggable
+                                require_private_data: true,
                             },
                         )
                         .await
@@ -1062,6 +1064,10 @@ impl AdbDevice {
 
         ensure_valid_package(package_name)?;
         ensure!(backups_location.is_dir(), "Backups location must be a directory");
+        ensure!(
+            !options.require_private_data || options.backup_data,
+            "require_private_data requires backup_data"
+        );
 
         info!(package = package_name, "Creating app backup");
         let fmt = format_description!("[year]-[month]-[day]_[hour]-[minute]-[second]");
@@ -1124,6 +1130,9 @@ impl AdbDevice {
             let cmd_output = self.shell(&cmd).await?;
             if !cmd_output.is_empty() {
                 debug!("Command output: {}", cmd_output);
+            }
+            if options.require_private_data && cmd_output.contains("run-as:") {
+                bail!("Private data backup failed: run-as failed: {}", cmd_output);
             }
             self.pull_dir(&tmp_pkg, &private_data_backup_path).await?;
             let _ = self.shell("rm -rf /sdcard/backup_tmp/").await;
@@ -1330,6 +1339,8 @@ pub struct BackupOptions {
     pub backup_apk: bool,
     /// Should backup data (private/shared)
     pub backup_data: bool,
+    /// Should fail if private data backup fails
+    pub require_private_data: bool,
     /// Should backup OBB files
     pub backup_obb: bool,
 }

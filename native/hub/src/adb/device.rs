@@ -1,6 +1,7 @@
 use std::{
     fmt::Display,
     path::{Path, PathBuf},
+    time::{Duration, Instant},
 };
 
 use anyhow::{Context, Result, anyhow, bail, ensure};
@@ -976,7 +977,18 @@ impl AdbDevice {
                 {
                     let progress_sender = progress_sender.clone();
                     async move {
+                        let mut last_update = Instant::now();
+                        let mut last_file_index: Option<u64> = None;
                         while let Some(progress) = rx.recv().await {
+                            let now = Instant::now();
+                            if now.duration_since(last_update) < Duration::from_millis(300)
+                                && (last_file_index == Some(progress.transferred_files as u64))
+                            {
+                                continue;
+                            }
+                            last_update = now;
+                            last_file_index = Some(progress.transferred_files as u64);
+
                             let push_progress =
                                 progress.transferred_bytes as f32 / progress.total_bytes as f32;
                             let file_progress = progress.current_file_progress.transferred_bytes

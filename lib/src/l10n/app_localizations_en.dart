@@ -454,6 +454,23 @@ class AppLocalizationsEn extends AppLocalizations {
   }
 
   @override
+  String get downgradeAppTitle => 'Downgrade App';
+
+  @override
+  String downgradeConfirmMessage(String versionCode) {
+    return 'Downgrade to version $versionCode? This may cause issues.';
+  }
+
+  @override
+  String get holdShiftToDowngrade => 'Hold Shift to downgrade to this version';
+
+  @override
+  String get downgradeToThisVersion => 'Downgrade to this version';
+
+  @override
+  String get holdShiftToViewVersions => 'Hold Shift to view versions';
+
+  @override
   String get noAppsInCategory => 'No apps in this category';
 
   @override

@@ -183,6 +183,16 @@
   "@updateFromTo": {
     "placeholders": {"from": {"type": "String"}, "to": {"type": "String"}}
   },
+  "downgradeAppTitle": "Downgrade App",
+  "downgradeConfirmMessage": "Downgrade to version {versionCode}? This may cause issues.",
+  "@downgradeConfirmMessage": {
+    "placeholders": {
+      "versionCode": {"type": "String"}
+    }
+  },
+  "holdShiftToDowngrade": "Hold Shift to downgrade to this version",
+  "downgradeToThisVersion": "Downgrade to this version",
+  "holdShiftToViewVersions": "Hold Shift to view versions",
   "noAppsInCategory": "No apps in this category",
   "appDetails": "App Details",
   "launch": "Launch",

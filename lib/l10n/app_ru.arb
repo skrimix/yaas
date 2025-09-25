@@ -165,6 +165,16 @@
   "noMatchingCloudApp": "Нет подходящего приложения в облачном репозитории",
   "updateFromTo": "Обновить с {from} до {to}",
   "@updateFromTo": {"placeholders": {"from": {"type": "String"}, "to": {"type": "String"}}},
+  "downgradeAppTitle": "Откат приложения",
+  "downgradeConfirmMessage": "Откатить до версии {versionCode}? Это может вызвать проблемы.",
+  "@downgradeConfirmMessage": {
+    "placeholders": {
+      "versionCode": {"type": "String"}
+    }
+  },
+  "holdShiftToDowngrade": "Удерживайте Shift для отката до этой версии",
+  "downgradeToThisVersion": "Откатить до этой версии",
+  "holdShiftToViewVersions": "Удерживайте Shift для просмотра версий",
   "noAppsInCategory": "Нет приложений в этой категории",
   "appDetails": "Сведения о приложении",
   "launch": "Запустить",

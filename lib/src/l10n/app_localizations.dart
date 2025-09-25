@@ -914,6 +914,36 @@ abstract class AppLocalizations {
   /// **'Update from {from} to {to}'**
   String updateFromTo(String from, String to);
 
+  /// No description provided for @downgradeAppTitle.
+  ///
+  /// In en, this message translates to:
+  /// **'Downgrade App'**
+  String get downgradeAppTitle;
+
+  /// No description provided for @downgradeConfirmMessage.
+  ///
+  /// In en, this message translates to:
+  /// **'Downgrade to version {versionCode}? This may cause issues.'**
+  String downgradeConfirmMessage(String versionCode);
+
+  /// No description provided for @holdShiftToDowngrade.
+  ///
+  /// In en, this message translates to:
+  /// **'Hold Shift to downgrade to this version'**
+  String get holdShiftToDowngrade;
+
+  /// No description provided for @downgradeToThisVersion.
+  ///
+  /// In en, this message translates to:
+  /// **'Downgrade to this version'**
+  String get downgradeToThisVersion;
+
+  /// No description provided for @holdShiftToViewVersions.
+  ///
+  /// In en, this message translates to:
+  /// **'Hold Shift to view versions'**
+  String get holdShiftToViewVersions;
+
   /// No description provided for @noAppsInCategory.
   ///
   /// In en, this message translates to:

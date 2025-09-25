@@ -461,6 +461,25 @@ class AppLocalizationsRu extends AppLocalizations {
   }
 
   @override
+  String get downgradeAppTitle => 'Откат приложения';
+
+  @override
+  String downgradeConfirmMessage(String versionCode) {
+    return 'Откатить до версии $versionCode? Это может вызвать проблемы.';
+  }
+
+  @override
+  String get holdShiftToDowngrade =>
+      'Удерживайте Shift для отката до этой версии';
+
+  @override
+  String get downgradeToThisVersion => 'Откатить до этой версии';
+
+  @override
+  String get holdShiftToViewVersions =>
+      'Удерживайте Shift для просмотра версий';
+
+  @override
   String get noAppsInCategory => 'Нет приложений в этой категории';
 
   @override

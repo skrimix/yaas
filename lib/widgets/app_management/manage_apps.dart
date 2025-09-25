@@ -333,9 +333,12 @@ class _ManageAppsState extends State<ManageApps> {
                     final isNewer = _isNewerVersion(app, cloudApp);
                     final isSameVersion =
                         cloudApp.versionCode == app.versionCode.toInt();
+                    final isOlder =
+                        cloudApp.versionCode < app.versionCode.toInt();
 
-                    final bool canInstall =
-                        isNewer || (isSameVersion && isShiftPressed);
+                    final bool canInstall = isNewer ||
+                        (isSameVersion && isShiftPressed) ||
+                        (isOlder && isShiftPressed);
 
                     String tooltipText;
                     if (isNewer) {
@@ -345,7 +348,10 @@ class _ManageAppsState extends State<ManageApps> {
                           ? l10n.reinstallThisVersion
                           : l10n.holdShiftToReinstall;
                     } else {
-                      tooltipText = l10n.cannotDowngrade;
+                      // Older version
+                      tooltipText = isShiftPressed
+                          ? l10n.downgradeToThisVersion
+                          : l10n.holdShiftToDowngrade;
                     }
 
                     return ListTile(
@@ -353,8 +359,7 @@ class _ManageAppsState extends State<ManageApps> {
                       subtitle: Column(
                         crossAxisAlignment: CrossAxisAlignment.start,
                         children: [
-                          Text(
-                              '${app.versionName} (${app.versionCode}) → v${cloudApp.versionCode}'),
+                          Text(_formatInstalledToCloudVersion(app, cloudApp)),
                           Text(
                             isNewer
                                 ? l10n.newerVersion
@@ -374,15 +379,41 @@ class _ManageAppsState extends State<ManageApps> {
                       ),
                       trailing: Tooltip(
                         message: tooltipText,
-                        child: FilledButton(
-                          onPressed: canInstall
-                              ? () {
-                                  Navigator.of(context).pop();
-                                  _installCloudApp(cloudApp.fullName);
-                                }
-                              : null,
-                          child: Text(isNewer ? l10n.update : l10n.install),
-                        ),
+                        child: Builder(builder: (context) {
+                          final theme = Theme.of(context);
+                          final bool isDowngradeAction = isOlder && canInstall;
+                          final button = FilledButton(
+                            style: isDowngradeAction
+                                ? ButtonStyle(
+                                    backgroundColor: WidgetStatePropertyAll(
+                                        theme.colorScheme.error),
+                                    foregroundColor: WidgetStatePropertyAll(
+                                        theme.colorScheme.onError),
+                                  )
+                                : null,
+                            onPressed: canInstall
+                                ? () async {
+                                    if (isOlder) {
+                                      final confirmed = await _confirmDowngrade(
+                                        context,
+                                        app,
+                                        cloudApp,
+                                      );
+                                      if (!confirmed) return;
+                                    }
+                                    if (!context.mounted) return;
+                                    Navigator.of(context).pop();
+                                    _installCloudApp(cloudApp.fullName);
+                                  }
+                                : null,
+                            child: Text(isNewer
+                                ? l10n.update
+                                : isOlder
+                                    ? l10n.install
+                                    : l10n.install),
+                          );
+                          return button;
+                        }),
                       ),
                     );
                   },
@@ -444,19 +475,54 @@ class _ManageAppsState extends State<ManageApps> {
               final l10n = AppLocalizations.of(context);
               if (matchingCloudApps.length == 1) {
                 // Single match
+                final isSameVersion =
+                    newestCloudApp.versionCode == app.versionCode.toInt();
+                final isOlder =
+                    newestCloudApp.versionCode < app.versionCode.toInt();
+
+                final bool enable = hasNewerVersion ||
+                    (isSameVersion && isShiftPressed) ||
+                    (isOlder && isShiftPressed);
+
+                String tooltip;
+                if (hasNewerVersion) {
+                  tooltip = l10n.updateFromTo(
+                      '${app.versionCode}', '${newestCloudApp.versionCode}');
+                } else if (isSameVersion) {
+                  tooltip = isShiftPressed
+                      ? l10n.reinstallThisVersion
+                      : l10n.holdShiftToReinstall;
+                } else {
+                  // Older
+                  tooltip = isShiftPressed
+                      ? l10n.downgradeToThisVersion
+                      : l10n.holdShiftToDowngrade;
+                }
+
+                final Color? iconColor = hasNewerVersion
+                    ? Colors.green
+                    : (isOlder && isShiftPressed)
+                        ? Colors.red
+                        : null;
+
                 return IconButton(
                   icon: Icon(
                     hasNewerVersion ? Icons.system_update : Icons.update,
-                    color: hasNewerVersion ? Colors.green : null,
+                    color: iconColor,
                   ),
-                  tooltip: hasNewerVersion
-                      ? l10n.updateFromTo(
-                          '${app.versionCode}', '${newestCloudApp.versionCode}')
-                      : isShiftPressed
-                          ? l10n.reinstallThisVersion
-                          : l10n.holdShiftToReinstall,
-                  onPressed: hasNewerVersion || isShiftPressed
-                      ? () => _installCloudApp(newestCloudApp.fullName)
+                  tooltip: tooltip,
+                  onPressed: enable
+                      ? () async {
+                          if (isOlder) {
+                            final confirmed = await _confirmDowngrade(
+                              context,
+                              app,
+                              newestCloudApp,
+                            );
+                            if (!confirmed) return;
+                          }
+                          _installCloudApp(newestCloudApp.fullName);
+                        }
                       : null,
                 );
               } else {
@@ -470,7 +536,7 @@ class _ManageAppsState extends State<ManageApps> {
                   ),
                   tooltip: hasNewerVersion || isShiftPressed
                       ? l10n.availableVersions
-                      : l10n.holdShiftToReinstall,
+                      : l10n.holdShiftToViewVersions,
                   onPressed: hasNewerVersion || isShiftPressed
                       ? () => _showUpdateDialog(context, app, matchingCloudApps)
                       : null,
@@ -479,6 +545,61 @@ class _ManageAppsState extends State<ManageApps> {
             });
       },
     );
+  }
+
+  // Try to extract something like "v545+1.28.0_4124311467" from CloudApp.fullName
+  // Returns null if not found.
+  String? _tryParseVersionFromFullName(String fullName) {
+    final regex =
+        RegExp(r"v(\d+)(?:\+([A-Za-z0-9._-]+))?", caseSensitive: false);
+    final match = regex.firstMatch(fullName);
+    if (match == null) return null;
+    final code = match.group(1);
+    final name = match.group(2);
+    if (code == null) return null;
+    return name == null ? 'v$code' : '$name ($code)';
+  }
+
+  String _formatInstalledToCloudVersion(
+      InstalledPackage installed, CloudApp cloud) {
+    final parsed = _tryParseVersionFromFullName(cloud.fullName);
+    final target = parsed ?? 'v${cloud.versionCode}';
+    if (installed.versionCode.toInt() == cloud.versionCode) {
+      return '${installed.versionName} (${installed.versionCode})';
+    }
+    return '${installed.versionName} (${installed.versionCode}) → $target';
+  }
+
+  Future<bool> _confirmDowngrade(
+    BuildContext context,
+    InstalledPackage installed,
+    CloudApp target,
+  ) async {
+    final l10n = AppLocalizations.of(context);
+    final res = await showDialog<bool>(
+      context: context,
+      builder: (context) => AlertDialog(
+        title: Text(l10n.downgradeAppTitle),
+        content: Text(l10n.downgradeConfirmMessage('${target.versionCode}')),
+        actions: [
+          TextButton(
+            onPressed: () => Navigator.of(context).pop(false),
+            child: Text(l10n.commonCancel),
+          ),
+          FilledButton(
+            style: ButtonStyle(
+              backgroundColor:
+                  WidgetStatePropertyAll(Theme.of(context).colorScheme.error),
+              foregroundColor:
+                  WidgetStatePropertyAll(Theme.of(context).colorScheme.onError),
+            ),
+            onPressed: () => Navigator.of(context).pop(true),
+            child: Text(l10n.commonConfirm),
+          ),
+        ],
+      ),
+    );
+    return res ?? false;
   }
 
   Widget _buildAppList(List<InstalledPackage> apps) {

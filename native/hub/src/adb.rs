@@ -3,7 +3,7 @@ use std::{error::Error, path::Path, sync::Arc, time::Duration};
 use anyhow::{Context, Result, bail, ensure};
 use derive_more::Debug;
 use device::AdbDevice;
-use forensic_adb::{AndroidStorageInput, DeviceBrief, DeviceState};
+use forensic_adb::{DeviceBrief, DeviceState};
 use lazy_regex::{Lazy, Regex, lazy_regex};
 use rinf::{DartSignal, RustSignal};
 use tokio::{
@@ -518,7 +518,6 @@ impl AdbHandler {
             adb_host,
             first_device.serial.clone(),
             first_device.info.clone(),
-            AndroidStorageInput::default(),
         )
         .await
         .context("Failed to connect to device")?;
@@ -616,9 +615,7 @@ impl AdbHandler {
     ) -> Result<()> {
         let device = self.current_device().await?;
         let device_clone = (*device).clone();
-        let result = device_clone
-            .sideload_app(app_path, &backups_location, progress_sender)
-            .await;
+        let result = device_clone.sideload_app(app_path, &backups_location, progress_sender).await;
         self.refresh_device().await?;
         result
     }

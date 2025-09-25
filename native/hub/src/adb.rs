@@ -1,6 +1,6 @@
 use std::{error::Error, path::Path, sync::Arc, time::Duration};
 
-use anyhow::{Context, Result, bail, ensure};
+use anyhow::{Context, Result, anyhow, bail, ensure};
 use derive_more::Debug;
 use device::AdbDevice;
 use forensic_adb::{DeviceBrief, DeviceState};
@@ -67,7 +67,7 @@ impl AdbHandler {
         let adb_path = if adb_path.is_empty() { None } else { Some(adb_path) };
         let handle = Arc::new(Self {
             adb_host: if cfg!(target_os = "windows") {
-                // This is some retarded shit, but it fails to connect on my Windows VM without this
+                // This is some retarded stuff, but it fails to connect on a Windows host without this
                 // However, passing this host to `adb start-server` fails too (so we're not using `adb_host.start_server()`)
                 forensic_adb::Host { host: Some("127.0.0.1".to_string()), port: Some(5037) }
             } else {
@@ -149,7 +149,10 @@ impl AdbHandler {
             let cancel_token = cancel_token.clone();
             let handler = self.clone();
             async move {
-                cancel_token.run_until_cancelled(handler.handle_device_updates(receiver)).await
+                let result =
+                    cancel_token.run_until_cancelled(handler.handle_device_updates(receiver)).await;
+                debug!(result = ?result, "Device update handler task finished");
+                result
             }
         });
 
@@ -157,14 +160,21 @@ impl AdbHandler {
         tokio::spawn({
             let cancel_token = cancel_token.clone();
             let handler = self.clone();
-            async move { cancel_token.run_until_cancelled(handler.run_device_tracker(sender)).await }
+            async move {
+                let result =
+                    cancel_token.run_until_cancelled(handler.run_device_tracker(sender)).await;
+                debug!(result = ?result, "Device tracker task finished");
+                result
+            }
         });
 
         // Listen for commands
         tokio::spawn({
             let handle = self.clone();
             async move {
-                cancel_token.run_until_cancelled(handle.receive_commands()).await;
+                let result = cancel_token.run_until_cancelled(handle.receive_commands()).await;
+                debug!(result = ?result, "Command receiver task finished");
+                result
             }
         });
 
@@ -173,13 +183,15 @@ impl AdbHandler {
             let handle = self.clone();
             let cancel_token = self.cancel_token.read().await.clone();
             async move {
-                cancel_token.run_until_cancelled(handle.run_periodic_refresh()).await;
+                let result = cancel_token.run_until_cancelled(handle.run_periodic_refresh()).await;
+                debug!(result = ?result, "Periodic refresh task finished");
+                result
             }
         });
     }
 
     /// Restarts the ADB handling
-    // FIXME: make sure this cannot race with `ensure_server_running`
+    // TODO: make sure this cannot race with `ensure_server_running`
     #[instrument(skip(self), err)]
     async fn restart_adb(self: Arc<AdbHandler>) -> Result<()> {
         info!("Restarting ADB server and tasks");
@@ -451,7 +463,7 @@ impl AdbHandler {
     /// * `device` - Optional new device state
     /// * `update_current` - Whether to update the current device if it exists
     #[instrument(skip(self, device))]
-    async fn set_device(&self, device: Option<AdbDevice>, update_current: bool) {
+    async fn set_device(&self, device: Option<AdbDevice>, update_current: bool) -> Result<()> {
         fn report_device_change(device: &Option<AdbDevice>) {
             let proto_device = device.clone().map(|d| d.into());
             DeviceChangedEvent { device: proto_device }.send_signal_to_dart();
@@ -461,9 +473,8 @@ impl AdbHandler {
 
         if update_current {
             if device.is_none() {
-                // TODO: should this be an error?
-                warn!("Attempted to pass None as a device update");
-                return;
+                error!("Attempted to pass None as a device update");
+                return Err(anyhow!("Attempted to pass None as a device update"));
             }
 
             if let (Some(current), Some(new)) = (current_device.as_ref(), &device)
@@ -474,13 +485,14 @@ impl AdbHandler {
                     new = %new.serial,
                     "Ignoring device update for different device"
                 );
-                return;
+                return Ok(());
             }
         }
 
         debug!(device = ?device.as_ref().map(|d| &d.serial), "Setting new device data");
         *current_device = device.clone().map(Arc::new);
         report_device_change(&device);
+        Ok(())
     }
 
     /// Attempts to get the currently connected device    ///
@@ -528,7 +540,7 @@ impl AdbHandler {
         // Clean up old APKs (might be leftovers from interrupted installs)
         device.clean_temp_apks().await?;
 
-        self.set_device(Some(device.clone()), false).await;
+        self.set_device(Some(device.clone()), false).await?;
         self.refresh_adb_state().await;
         Ok(device)
     }
@@ -541,7 +553,7 @@ impl AdbHandler {
             "Cannot disconnect from a device when none is connected"
         );
         info!("Disconnecting from device");
-        self.set_device(None, false).await;
+        self.set_device(None, false).await?;
         self.refresh_adb_state().await;
         Ok(())
     }
@@ -573,7 +585,7 @@ impl AdbHandler {
         debug!(serial = %device.serial, "Refreshing device data");
         let mut device_clone = (*device).clone();
         device_clone.refresh().await?;
-        self.set_device(Some(device_clone), true).await;
+        self.set_device(Some(device_clone), true).await?;
         debug!("Device data refreshed successfully");
         Ok(())
     }
@@ -705,7 +717,14 @@ impl AdbHandler {
             .context("Failed to start ADB server")?;
 
             if !output.status.success() {
-                bail!("Failed to start ADB server: {}", String::from_utf8_lossy(&output.stderr));
+                let stderr = String::from_utf8_lossy(&output.stderr);
+                Toast::send(
+                    "Failed to start ADB server".to_string(),
+                    stderr.to_string(),
+                    true,
+                    None,
+                );
+                bail!("Failed to start ADB server: {}", stderr);
             }
             self.refresh_adb_state().await;
             info!("ADB server started successfully");
@@ -716,7 +735,7 @@ impl AdbHandler {
     /// Checks if the ADB server is running
     #[instrument(skip(self), level = "debug", ret)]
     async fn is_server_running(&self) -> bool {
-        match timeout(Duration::from_millis(500), self.adb_host.check_host_running()).await {
+        match timeout(Duration::from_millis(1000), self.adb_host.check_host_running()).await {
             Ok(Ok(_)) => true,
             Ok(Err(e)) => {
                 error!(error = &e as &dyn Error, "Failed to check ADB server status");

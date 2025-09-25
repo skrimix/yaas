@@ -147,11 +147,11 @@ impl AdbDevice {
     }
 
     /// Executes a shell command and fails if exit code is non-zero.
-    /// Appends `; echo -n $?` and parses the final line as the exit status.
+    /// Appends `; printf %s $?` and parses the final line as the exit status.
     #[instrument(skip(self), err)]
     async fn shell_checked(&self, command: &str) -> Result<String> {
         let shell_output = self
-            .shell(&format!("{} ; echo -n $?", command))
+            .shell(&format!("{} ; printf %s $?", command))
             .await
             .context(format!("Failed to execute checked shell command: {command}"))?;
         let (output, exit_code) =
@@ -701,7 +701,7 @@ impl AdbDevice {
                     // Check if package exists
                     let escaped = package_name.replace('.', "\\.");
                     let output = self
-                        .shell(&format!("pm list packages | grep -w ^package:{escaped}"))
+                        .shell(&format!("pm list packages | grep -w ^package:{escaped}$"))
                         .await
                         .unwrap_or_default();
 

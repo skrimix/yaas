@@ -57,10 +57,19 @@ jobs:
         with:
           components: rustfmt, clippy
       
-      - uses: Mozilla-Actions/sccache-action@v0.0.9
-      - run: |
+      - name: Setup sccache
+        uses: Mozilla-Actions/sccache-action@v0.0.9
+
+      - name: Set sccache environment variables
+        run: |
           echo "SCCACHE_GHA_ENABLED=true" >> $GITHUB_ENV
           echo "RUSTC_WRAPPER=sccache" >> $GITHUB_ENV
+      
+      - name: Set sccache environment variables (Windows)
+        if: runner.os == 'Windows'
+        run: |
+          Add-Content -Path $env:GITHUB_ENV -Value "SCCACHE_GHA_ENABLED=true"
+          Add-Content -Path $env:GITHUB_ENV -Value "RUSTC_WRAPPER=sccache"
 
       - name: Install Linux dependencies
         if: matrix.target == 'linux'

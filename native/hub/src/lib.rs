@@ -6,7 +6,7 @@ use anyhow::{Context, Result};
 use downloader::Downloader;
 use logging::SignalLayer;
 use mimalloc::MiMalloc;
-use models::signals::system::{MediaConfigChanged, RustPanic};
+use models::signals::system::{AppVersionInfo, MediaConfigChanged, RustPanic};
 use rinf::RustSignal;
 use settings::SettingsHandler;
 use task::TaskManager;
@@ -65,8 +65,26 @@ async fn main() {
     if let Err(e) = _guard {
         rinf::debug_print!("Failed to setup logging: {:#}", e);
     }
-
-    info!("Starting YAAS backend");
+    // Log and send version/build info
+    info!(
+        "Starting YAAS backend | version={} | commit={}{} | profile={} | rustc={} | built={}",
+        built_info::PKG_VERSION,
+        built_info::GIT_COMMIT_HASH_SHORT.unwrap_or("unknown"),
+        if built_info::GIT_DIRTY.unwrap_or(false) { " (dirty)" } else { "" },
+        built_info::PROFILE,
+        built_info::RUSTC_VERSION,
+        built_info::BUILT_TIME_UTC
+    );
+    AppVersionInfo {
+        backend_version: built_info::PKG_VERSION.to_string(),
+        profile: built_info::PROFILE.to_string(),
+        rustc_version: built_info::RUSTC_VERSION.to_string(),
+        built_time_utc: built_info::BUILT_TIME_UTC.to_string(),
+        git_commit_hash: built_info::GIT_COMMIT_HASH.map(|s| s.to_string()),
+        git_commit_hash_short: built_info::GIT_COMMIT_HASH_SHORT.map(|s| s.to_string()),
+        git_dirty: built_info::GIT_DIRTY,
+    }
+    .send_signal_to_dart();
 
     let settings_handler = SettingsHandler::new(app_dir.clone());
 

@@ -72,6 +72,13 @@ void main() async {
       finalizeRust(); // Rust side is in an undefined state, shut it down
     }
   });
+
+  // Receive backend build/version info
+  messages.AppVersionInfo.rustSignalStream.listen((pack) {
+    final info = pack.message;
+    final appState = YAASApp.navigatorKey.currentContext?.read<AppState>();
+    appState?.setBackendVersionInfo(info);
+  });
 }
 
 class YAASApp extends StatefulWidget {

@@ -9,6 +9,7 @@ import 'widgets/screens/downloads_screen.dart';
 import 'widgets/screens/home.dart';
 import 'widgets/screens/logs_screen.dart';
 import 'widgets/screens/settings_screen.dart';
+import 'widgets/screens/about_screen.dart';
 
 typedef AppPageLabelBuilder = String Function(AppLocalizations l10n);
 typedef AppPageContentBuilder = Widget Function();
@@ -105,9 +106,7 @@ class AppPageRegistry {
         key: 'about',
         icon: Icons.info,
         labelBuilder: (l10n) => l10n.navAbout,
-        contentBuilder: () => Builder(
-          builder: (context) => Text(AppLocalizations.of(context).navAbout),
-        ),
+        contentBuilder: () => const AboutScreen(),
       ),
     ];
     return pages;

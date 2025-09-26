@@ -27,6 +27,25 @@ pub struct MediaConfigChanged {
     pub cache_dir: String,
 }
 
+/// Sent once on startup with build/version information.
+#[derive(Serialize, Deserialize, RustSignal)]
+pub struct AppVersionInfo {
+    /// Crate version (from Cargo.toml)
+    pub backend_version: String,
+    /// Rust profile (debug/release)
+    pub profile: String,
+    /// rustc version string
+    pub rustc_version: String,
+    /// RFC2822 UTC build time
+    pub built_time_utc: String,
+    /// Full git commit hash, if available
+    pub git_commit_hash: Option<String>,
+    /// Short git commit hash, if available
+    pub git_commit_hash_short: Option<String>,
+    /// Repo dirty flag, if available
+    pub git_dirty: Option<bool>,
+}
+
 impl Toast {
     pub fn send(title: String, description: String, error: bool, duration: Option<Duration>) {
         Toast { title, description, error, duration: duration.map(|d| d.as_millis() as u32) }

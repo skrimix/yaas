@@ -1,4 +1,5 @@
 import 'package:flutter/material.dart';
+import '../src/bindings/bindings.dart' as messages;
 
 // Global UI state retained across page navigation.
 class AppState extends ChangeNotifier {
@@ -114,4 +115,40 @@ class AppState extends ChangeNotifier {
     _sideloadLastPath = path;
     notifyListeners();
   }
+
+  // Backend (Rust) version/build info
+  BackendVersionInfo? _backendVersionInfo;
+  BackendVersionInfo? get backendVersionInfo => _backendVersionInfo;
+  void setBackendVersionInfo(messages.AppVersionInfo info) {
+    _backendVersionInfo = BackendVersionInfo(
+      backendVersion: info.backendVersion,
+      profile: info.profile,
+      rustcVersion: info.rustcVersion,
+      builtTimeUtc: info.builtTimeUtc,
+      gitCommitHash: info.gitCommitHash,
+      gitCommitHashShort: info.gitCommitHashShort,
+      gitDirty: info.gitDirty ?? false,
+    );
+    notifyListeners();
+  }
+}
+
+class BackendVersionInfo {
+  final String backendVersion;
+  final String profile;
+  final String rustcVersion;
+  final String builtTimeUtc;
+  final String? gitCommitHash;
+  final String? gitCommitHashShort;
+  final bool gitDirty;
+
+  const BackendVersionInfo({
+    required this.backendVersion,
+    required this.profile,
+    required this.rustcVersion,
+    required this.builtTimeUtc,
+    this.gitCommitHash,
+    this.gitCommitHashShort,
+    required this.gitDirty,
+  });
 }

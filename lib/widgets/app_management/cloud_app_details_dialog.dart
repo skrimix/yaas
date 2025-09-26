@@ -576,22 +576,23 @@ class _ReviewTile extends StatelessWidget {
     final theme = Theme.of(context);
     final textTheme = theme.textTheme;
     final authorName = review.authorDisplayName?.trim();
-    final title = (review.title?.trim().isEmpty ?? true)
+    final title = (review.reviewTitle?.trim().isEmpty ?? true)
         ? (authorName?.isNotEmpty == true ? authorName! : fallbackAuthor ?? '')
-        : review.title!.trim();
+        : review.reviewTitle!.trim();
 
     final rawDate = review.date;
     final parsedDate = rawDate != null ? DateTime.tryParse(rawDate) : null;
     final subtitleParts = <String>[
-      if (review.title != null && authorName?.isNotEmpty == true) authorName!,
+      if (review.reviewTitle != null && authorName?.isNotEmpty == true)
+        authorName!,
       if (parsedDate != null)
         DateFormat.yMMMd().add_jm().format(parsedDate.toLocal()),
     ];
 
     final subtitle = subtitleParts.join(' • ');
-    final description = review.description?.trim().isEmpty ?? true
+    final description = review.reviewDescription?.trim().isEmpty ?? true
         ? null
-        : review.description!.replaceAll('\r\n', '\n');
+        : review.reviewDescription!.replaceAll('\r\n', '\n');
 
     final score = review.score;
     final scoreText = score == null

@@ -77,7 +77,7 @@ pub struct VrdbReview {
     pub id: String,
     pub author_display_name: Option<String>,
     pub score: Option<f32>,
-    pub title: Option<String>,
-    pub description: Option<String>,
+    pub review_title: Option<String>,
+    pub review_description: Option<String>,
     pub date: Option<String>,
 }

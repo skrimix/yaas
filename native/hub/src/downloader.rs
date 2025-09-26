@@ -3,6 +3,7 @@ use std::{error::Error, path::PathBuf, sync::Arc};
 use anyhow::{Context, Result};
 use futures::TryStreamExt;
 use rclone::RcloneStorage;
+use reqwest::header::{ACCEPT, HeaderMap, HeaderValue};
 use rinf::{DartSignal, RustSignal};
 use tokio::{
     fs::File,
@@ -233,7 +234,7 @@ impl Downloader {
                         let app_id = request.message.app_id;
                         info!(%app_id, "Received GetAppReviewsRequest");
                         tokio::spawn(async move {
-                            match fetch_app_reviews_only(app_id.clone()).await {
+                            match fetch_app_reviews(&app_id).await {
                                 Ok(reviews) => {
                                     AppReviewsResponse {
                                         app_id,
@@ -378,81 +379,28 @@ async fn fetch_app_details(package_name: String) -> Result<Option<AppApiResponse
 }
 
 #[derive(serde::Deserialize)]
-struct VrdbReviewsResponse {
+struct ReviewsResponse {
     #[serde(default)]
-    reviews: Vec<VrdbReviewApi>,
+    reviews: Vec<VrdbReview>,
 }
 
-#[derive(serde::Deserialize)]
-struct VrdbReviewApi {
-    id: String,
-    #[serde(default)]
-    author_display_name: Option<String>,
-    #[serde(default)]
-    score: Option<f32>,
-    #[serde(default)]
-    review_title: Option<String>,
-    #[serde(default)]
-    review_description: Option<String>,
-    #[serde(default)]
-    date: Option<String>,
-}
-
-impl From<VrdbReviewApi> for VrdbReview {
-    fn from(src: VrdbReviewApi) -> Self {
-        VrdbReview {
-            id: src.id,
-            author_display_name: src.author_display_name,
-            score: src.score,
-            title: src.review_title,
-            description: src.review_description,
-            date: src.date,
-        }
-    }
-}
-
-async fn fetch_app_reviews(client: &reqwest::Client, app_id: &str) -> Result<Vec<VrdbReview>> {
-    use reqwest::header::{
-        ACCEPT, ACCEPT_LANGUAGE, CACHE_CONTROL, HeaderMap, HeaderName, HeaderValue, USER_AGENT,
-    };
+async fn fetch_app_reviews(app_id: &str) -> Result<Vec<VrdbReview>> {
+    let client = reqwest::Client::builder().user_agent("YAAS/1.0").build()?;
+    let url = "https://reviews.5698452.xyz";
 
     let mut headers = HeaderMap::new();
     headers.insert(ACCEPT, HeaderValue::from_static("application/json"));
-    headers.insert(ACCEPT_LANGUAGE, HeaderValue::from_static("en-US,en;q=0.9"));
-    headers.insert(CACHE_CONTROL, HeaderValue::from_static("no-cache"));
-    headers.insert(
-        USER_AGENT,
-        HeaderValue::from_static(
-            "Mozilla/5.0 (X11; Linux x86_64) AppleWebKit/537.36 (KHTML, like Gecko) \
-             Chrome/140.0.0.0 Safari/537.36",
-        ),
-    );
-    headers.insert(
-        HeaderName::from_static("x-requested-with"),
-        HeaderValue::from_static("XMLHttpRequest"),
-    );
 
     let response = client
-        .get("https://vrdb.app/api/reviews")
+        .get(url)
         .headers(headers)
-        .query(&[
-            ("appId", app_id),
-            ("limit", "5"),
-            ("offset", "0"),
-            ("sortBy", "newest"),
-            ("score", "null"),
-        ])
+        .query(&[("appId", app_id), ("limit", "5"), ("offset", "0"), ("sortBy", "newest")])
         .send()
         .await?;
 
     response.error_for_status_ref()?;
-    let payload: VrdbReviewsResponse = response.json().await?;
-    Ok(payload.reviews.into_iter().map(Into::into).collect())
-}
-
-async fn fetch_app_reviews_only(app_id: String) -> Result<Vec<VrdbReview>> {
-    let client = reqwest::Client::builder().user_agent("YAAS/1.0)").build()?;
-    fetch_app_reviews(&client, &app_id).await
+    let payload: ReviewsResponse = response.json().await?;
+    Ok(payload.reviews)
 }
 
 #[derive(serde::Serialize)]

@@ -663,7 +663,7 @@ class AppLocalizationsRu extends AppLocalizations {
   String get rightController => 'Правый контроллер';
 
   @override
-  String get headset => 'Шлем';
+  String get headset => 'Гарнитура';
 
   @override
   String get deviceActionsTooltip => 'Действия с устройством';

@@ -34,6 +34,10 @@ pub mod settings;
 pub mod task;
 pub mod utils;
 
+pub mod built_info {
+    include!(concat!(env!("OUT_DIR"), "/built.rs"));
+}
+
 #[tokio::main(flavor = "multi_thread")]
 async fn main() {
     let original_hook = std::panic::take_hook();

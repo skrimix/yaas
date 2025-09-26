@@ -60,6 +60,9 @@ reqwest = { version = "0.12.23", default-features = false, features = ["json", "
 resand = { git = "https://github.com/skrimix/resand" }
 zip = "5.1.1"
 
+[build-dependencies]
+built = { version = "0.8", features = ["git2", "chrono"] }
+
 [package.metadata.cargo-machete]
 ignored = ["log"]
 

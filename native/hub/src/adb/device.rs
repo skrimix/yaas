@@ -1,4 +1,5 @@
 use std::{
+    error::Error,
     fmt::Display,
     path::{Path, PathBuf},
     time::{Duration, Instant},
@@ -554,7 +555,7 @@ impl AdbDevice {
     }
 
     /// Pulls an item from the device.
-    #[instrument(skip(self, remote_path, local_path), err)]
+    #[instrument(skip(self, remote_path, local_path))]
     async fn pull_any(&self, remote_path: &UnixPath, local_path: &Path) -> Result<()> {
         let stat = self.inner.stat(remote_path).await.context("Stat command failed")?;
 
@@ -705,7 +706,7 @@ impl AdbDevice {
     }
 
     /// Uninstalls a package from the device
-    #[instrument(skip(self), err)]
+    #[instrument(skip(self))]
     pub async fn uninstall_package(&self, package_name: &str) -> Result<()> {
         ensure_valid_package(package_name)?;
         match self.inner.uninstall_package(package_name).await {
@@ -829,12 +830,13 @@ impl AdbDevice {
                         adb_args.len()
                     );
                     let package = &adb_args[0];
-                    self.uninstall_package(package).await.with_context(|| {
-                        format!(
+                    let _ = self.uninstall_package(package).await.inspect_err(|e| {
+                        warn!(
+                            error = e.as_ref() as &dyn Error,
                             "Line {line_num}: adb uninstall: failed to uninstall package \
                              '{package}'"
                         )
-                    })?;
+                    });
                 }
                 "shell" => {
                     ensure!(!adb_args.is_empty(), "Line {line_num}: adb shell: missing command");
@@ -865,13 +867,15 @@ impl AdbDevice {
                     );
                     let source = script_dir.join(&adb_args[0]);
                     let dest = UnixPath::new(&adb_args[1]);
-                    self.push_any(&source, dest).await.with_context(|| {
-                        format!(
+                    // Ignore errors
+                    let _ = self.push_any(&source, dest).await.inspect_err(|e| {
+                        warn!(
+                            error = e.as_ref() as &dyn Error,
                             "Line {line_num}: adb push: failed to push '{}' to '{}'",
                             source.display(),
                             dest.display()
                         )
-                    })?;
+                    });
                 }
                 "pull" => {
                     ensure!(
@@ -881,12 +885,15 @@ impl AdbDevice {
                     );
                     let source = UnixPath::new(&adb_args[0]);
                     let dest = script_dir.join(&adb_args[1]);
-                    self.pull_any(source, &dest).await.with_context(|| {
-                        format!(
+                    // Ignore errors
+                    let _ = self.pull_any(source, &dest).await.inspect_err(|e| {
+                        warn!(
+                            error = e.as_ref() as &dyn Error,
                             "Line {line_num}: adb pull: failed to pull '{}' to '{}'",
-                            adb_args[0], adb_args[1]
+                            adb_args[0],
+                            adb_args[1]
                         )
-                    })?;
+                    });
                 }
                 _ => bail!("Line {line_num}: Unsupported ADB command '{command}'"),
             }

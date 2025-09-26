@@ -40,7 +40,7 @@ class _CloudAppDetailsDialogState extends State<CloudAppDetailsDialog> {
   AppDetailsResponse? _details;
   bool _loading = true;
   final ScrollController _descScrollController = ScrollController();
-  List<VrdbReview>? _reviews;
+  List<AppReview>? _reviews;
   bool _reviewsLoading = false;
   String? _reviewsError;
   String? _currentReviewsAppId;
@@ -460,7 +460,7 @@ class _CloudAppDetailsDialogState extends State<CloudAppDetailsDialog> {
         ),
       );
     } else {
-      final reviews = _reviews ?? const <VrdbReview>[];
+      final reviews = _reviews ?? const <AppReview>[];
       final reviewFallback =
           details.displayName ?? widget.cachedApp.app.appName;
       if (reviews.isEmpty) {
@@ -568,7 +568,7 @@ class _InlineNetworkImage extends StatelessWidget {
 class _ReviewTile extends StatelessWidget {
   const _ReviewTile({required this.review, this.fallbackAuthor});
 
-  final VrdbReview review;
+  final AppReview review;
   final String? fallbackAuthor;
 
   @override

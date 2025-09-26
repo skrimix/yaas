@@ -14,12 +14,12 @@ use tokio_util::sync::CancellationToken;
 use tracing::{Instrument, Span, debug, error, info, info_span, instrument, warn};
 
 use crate::models::{
-    AppApiResponse, CloudApp, Settings, VrdbReview,
+    AppApiResponse, CloudApp, Settings,
     signals::{
         download::{
-            AppDetailsResponse, AppReviewsResponse, CloudAppsChangedEvent, GetAppDetailsRequest,
-            GetAppReviewsRequest, GetRcloneRemotesRequest, LoadCloudAppsRequest,
-            RcloneRemotesChanged,
+            AppDetailsResponse, AppReview, AppReviewsResponse, CloudAppsChangedEvent,
+            GetAppDetailsRequest, GetAppReviewsRequest, GetRcloneRemotesRequest,
+            LoadCloudAppsRequest, RcloneRemotesChanged,
         },
         downloads_local::DownloadsChanged,
     },
@@ -381,10 +381,10 @@ async fn fetch_app_details(package_name: String) -> Result<Option<AppApiResponse
 #[derive(serde::Deserialize)]
 struct ReviewsResponse {
     #[serde(default)]
-    reviews: Vec<VrdbReview>,
+    reviews: Vec<AppReview>,
 }
 
-async fn fetch_app_reviews(app_id: &str) -> Result<Vec<VrdbReview>> {
+async fn fetch_app_reviews(app_id: &str) -> Result<Vec<AppReview>> {
     let client = reqwest::Client::builder().user_agent("YAAS/1.0").build()?;
     let url = "https://reviews.5698452.xyz";
 

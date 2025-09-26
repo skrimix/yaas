@@ -71,13 +71,3 @@ pub struct AppApiResponse {
     #[serde(default)]
     pub rating_count: Option<u32>,
 }
-
-#[derive(Serialize, Deserialize, Debug, Clone, SignalPiece)]
-pub struct VrdbReview {
-    pub id: String,
-    pub author_display_name: Option<String>,
-    pub score: Option<f32>,
-    pub review_title: Option<String>,
-    pub review_description: Option<String>,
-    pub date: Option<String>,
-}

@@ -28,7 +28,9 @@ class NoDeviceConnectedIndicator extends StatelessWidget {
         textAlign: centered ? TextAlign.center : null,
       ),
       if (showDiagnosticsButton) ...[
-        SizedBox(height: direction == Axis.vertical ? spacing : 0, width: direction == Axis.horizontal ? spacing : 0),
+        SizedBox(
+            height: direction == Axis.vertical ? spacing : 0,
+            width: direction == Axis.horizontal ? spacing : 0),
         const ConnectionDiagnosticsButton(),
       ],
     ];
@@ -40,4 +42,3 @@ class NoDeviceConnectedIndicator extends StatelessWidget {
     return centered ? Center(child: content) : content;
   }
 }
-

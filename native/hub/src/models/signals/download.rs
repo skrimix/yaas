@@ -1,7 +1,7 @@
-use rinf::{DartSignal, RustSignal};
+use rinf::{DartSignal, RustSignal, SignalPiece};
 use serde::{Deserialize, Serialize};
 
-use crate::models::{CloudApp, VrdbReview};
+use crate::models::CloudApp;
 
 #[derive(Serialize, Deserialize, DartSignal)]
 pub struct LoadCloudAppsRequest {
@@ -80,6 +80,16 @@ pub struct GetAppReviewsRequest {
 #[derive(Serialize, Deserialize, RustSignal)]
 pub struct AppReviewsResponse {
     pub app_id: String,
-    pub reviews: Vec<VrdbReview>,
+    pub reviews: Vec<AppReview>,
     pub error: Option<String>,
+}
+
+#[derive(Serialize, Deserialize, Debug, Clone, SignalPiece)]
+pub struct AppReview {
+    pub id: String,
+    pub author_display_name: Option<String>,
+    pub score: Option<f32>,
+    pub review_title: Option<String>,
+    pub review_description: Option<String>,
+    pub date: Option<String>,
 }

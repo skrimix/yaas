@@ -24,6 +24,7 @@ static GLOBAL: MiMalloc = MiMalloc;
 rinf::write_interface!();
 
 pub mod adb;
+pub mod apk;
 pub mod backups;
 pub mod downloader;
 pub mod downloads;
@@ -32,7 +33,6 @@ pub mod models;
 pub mod settings;
 pub mod task;
 pub mod utils;
-pub mod apk;
 
 #[tokio::main(flavor = "multi_thread")]
 async fn main() {

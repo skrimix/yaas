@@ -147,6 +147,22 @@
   "detailsReviewsUnavailable": "Отзывы недоступны для этого приложения.",
   "detailsReviewsError": "Не удалось загрузить отзывы.",
   "detailsReviewsEmpty": "Отзывов пока нет.",
+  "detailsDeveloperResponse": "Ответ разработчика",
+  "detailsReviewHelpful": "Полезно",
+  "detailsReviewHelpfulCount": "{count, plural, one {{count} человек считает это полезным} few {{count} человека считают это полезным} many {{count} человек считают это полезным} other {{count} человек считают это полезным}}",
+  "@detailsReviewHelpfulCount": {
+    "placeholders": {
+      "count": {
+        "type": "int"
+      }
+    }
+  },
+  "reviewsSortBy": "Сортировать по",
+  "reviewsSortHelpful": "Самые полезные",
+  "reviewsSortNewest": "Самые новые",
+  "previous": "Назад",
+  "next": "Вперёд",
+  "reviewsReadAll": "Посмотреть все отзывы",
   "commonCopy": "Копировать",
   "commonClose": "Закрыть",
   "commonCancel": "Отмена",

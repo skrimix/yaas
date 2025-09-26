@@ -232,13 +232,20 @@ impl Downloader {
                 request = get_app_reviews_receiver.recv() => {
                     if let Some(request) = request {
                         let app_id = request.message.app_id;
+                        let limit = request.message.limit.unwrap_or(5);
+                        let offset = request.message.offset.unwrap_or(0);
+                        let sort_by = request
+                            .message
+                            .sort_by
+                            .unwrap_or_else(|| "helpful".to_string());
                         info!(%app_id, "Received GetAppReviewsRequest");
                         tokio::spawn(async move {
-                            match fetch_app_reviews(&app_id).await {
+                            match fetch_app_reviews(&app_id, limit, offset, &sort_by).await {
                                 Ok(reviews) => {
                                     AppReviewsResponse {
                                         app_id,
-                                        reviews,
+                                        total: Some(reviews.total),
+                                        reviews: reviews.reviews,
                                         error: None,
                                     }
                                     .send_signal_to_dart();
@@ -247,6 +254,7 @@ impl Downloader {
                                     error!(error = e.as_ref() as &dyn Error, "Failed to fetch app reviews");
                                     AppReviewsResponse {
                                         app_id,
+                                        total: None,
                                         reviews: Vec::new(),
                                         error: Some(format!("Failed to fetch reviews: {:#}", e)),
                                     }
@@ -366,7 +374,7 @@ async fn fetch_app_details(package_name: String) -> Result<Option<AppApiResponse
     let url = format!("https://qloader.5698452.xyz/api/v1/oculusgames/{}", package_name);
     debug!(%url, "Fetching app details from QLoader API");
 
-    let client = reqwest::Client::builder().user_agent("YAAS/1.0)").build()?;
+    let client = reqwest::Client::builder().user_agent("YAAS/1.0").build()?;
 
     let resp = client.get(&url).send().await?;
     if resp.status() == reqwest::StatusCode::NOT_FOUND {
@@ -382,9 +390,16 @@ async fn fetch_app_details(package_name: String) -> Result<Option<AppApiResponse
 struct ReviewsResponse {
     #[serde(default)]
     reviews: Vec<AppReview>,
+    #[serde(default)]
+    total: u32,
 }
 
-async fn fetch_app_reviews(app_id: &str) -> Result<Vec<AppReview>> {
+async fn fetch_app_reviews(
+    app_id: &str,
+    limit: u32,
+    offset: u32,
+    sort_by: &str,
+) -> Result<ReviewsResponse> {
     let client = reqwest::Client::builder().user_agent("YAAS/1.0").build()?;
     let url = "https://reviews.5698452.xyz";
 
@@ -394,13 +409,18 @@ async fn fetch_app_reviews(app_id: &str) -> Result<Vec<AppReview>> {
     let response = client
         .get(url)
         .headers(headers)
-        .query(&[("appId", app_id), ("limit", "5"), ("offset", "0"), ("sortBy", "newest")])
+        .query(&[
+            ("appId", app_id),
+            ("limit", &limit.to_string()),
+            ("offset", &offset.to_string()),
+            ("sortBy", sort_by),
+        ])
         .send()
         .await?;
 
     response.error_for_status_ref()?;
     let payload: ReviewsResponse = response.json().await?;
-    Ok(payload.reviews)
+    Ok(payload)
 }
 
 #[derive(serde::Serialize)]

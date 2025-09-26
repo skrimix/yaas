@@ -404,6 +404,41 @@ class AppLocalizationsEn extends AppLocalizations {
   String get detailsReviewsEmpty => 'No reviews available yet.';
 
   @override
+  String get detailsDeveloperResponse => 'Developer response';
+
+  @override
+  String get detailsReviewHelpful => 'Helpful';
+
+  @override
+  String detailsReviewHelpfulCount(int count) {
+    String _temp0 = intl.Intl.pluralLogic(
+      count,
+      locale: localeName,
+      other: '$count people found this helpful',
+      one: '$count person found this helpful',
+    );
+    return '$_temp0';
+  }
+
+  @override
+  String get reviewsSortBy => 'Sort by';
+
+  @override
+  String get reviewsSortHelpful => 'Most helpful';
+
+  @override
+  String get reviewsSortNewest => 'Newest';
+
+  @override
+  String get previous => 'Previous';
+
+  @override
+  String get next => 'Next';
+
+  @override
+  String get reviewsReadAll => 'Read all reviews';
+
+  @override
   String get commonCopy => 'Copy';
 
   @override

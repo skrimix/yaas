@@ -163,6 +163,22 @@
   "detailsReviewsUnavailable": "Reviews are unavailable for this app.",
   "detailsReviewsError": "Failed to load reviews.",
   "detailsReviewsEmpty": "No reviews available yet.",
+  "detailsDeveloperResponse": "Developer response",
+  "detailsReviewHelpful": "Helpful",
+  "detailsReviewHelpfulCount": "{count, plural, one {{count} person found this helpful} other {{count} people found this helpful}}",
+  "@detailsReviewHelpfulCount": {
+    "placeholders": {
+      "count": {
+        "type": "int"
+      }
+    }
+  },
+  "reviewsSortBy": "Sort by",
+  "reviewsSortHelpful": "Most helpful",
+  "reviewsSortNewest": "Newest",
+  "previous": "Previous",
+  "next": "Next",
+  "reviewsReadAll": "Read all reviews",
   "commonCopy": "Copy",
   "commonClose": "Close",
   "commonCancel": "Cancel",

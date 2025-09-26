@@ -35,6 +35,8 @@ class CloudAppDetailsDialog extends StatefulWidget {
 }
 
 class _CloudAppDetailsDialogState extends State<CloudAppDetailsDialog> {
+  static _ReviewSort _lastSort =
+      _ReviewSort.helpful; // remember for this session
   StreamSubscription<RustSignalPack<AppDetailsResponse>>? _sub;
   StreamSubscription<RustSignalPack<AppReviewsResponse>>? _reviewsSub;
   AppDetailsResponse? _details;
@@ -44,10 +46,16 @@ class _CloudAppDetailsDialogState extends State<CloudAppDetailsDialog> {
   bool _reviewsLoading = false;
   String? _reviewsError;
   String? _currentReviewsAppId;
+  int? _reviewsTotal;
+  final int _pageSize = 5;
+  int _pageIndex = 0;
+  _ReviewSort _sort = _ReviewSort.helpful;
 
   @override
   void initState() {
     super.initState();
+    // Initialize sort from last session choice
+    _sort = _lastSort;
     _sub = AppDetailsResponse.rustSignalStream.listen((event) {
       final message = event.message;
       if (message.packageName != widget.cachedApp.app.packageName) {
@@ -71,12 +79,13 @@ class _CloudAppDetailsDialogState extends State<CloudAppDetailsDialog> {
           _reviews = null;
           _reviewsError = null;
           _reviewsLoading = true;
+          _pageIndex = 0;
           shouldFetchReviews = true;
         }
       });
 
       if (shouldFetchReviews && newAppId != null) {
-        GetAppReviewsRequest(appId: newAppId).sendSignalToRust();
+        _fetchReviews();
       }
     });
 
@@ -88,6 +97,7 @@ class _CloudAppDetailsDialogState extends State<CloudAppDetailsDialog> {
 
       setState(() {
         _reviews = message.reviews;
+        _reviewsTotal = message.total;
         _reviewsError = message.error;
         _reviewsLoading = false;
       });
@@ -463,20 +473,69 @@ class _CloudAppDetailsDialogState extends State<CloudAppDetailsDialog> {
       final reviews = _reviews ?? const <AppReview>[];
       final reviewFallback =
           details.displayName ?? widget.cachedApp.app.appName;
-      if (reviews.isEmpty) {
+      if (reviews.isEmpty && (_reviewsTotal ?? 0) == 0) {
         body = Text(
           l10n.detailsReviewsEmpty,
           style: textTheme.bodySmall,
         );
       } else {
-        // TODO: Add pagination for additional review pages.
-        body = ListView.separated(
-          shrinkWrap: true,
-          physics: const NeverScrollableScrollPhysics(),
-          itemCount: reviews.length,
-          itemBuilder: (context, index) => _ReviewTile(
-              review: reviews[index], fallbackAuthor: reviewFallback),
-          separatorBuilder: (_, __) => const SizedBox(height: 12),
+        body = Column(
+          mainAxisSize: MainAxisSize.min,
+          crossAxisAlignment: CrossAxisAlignment.start,
+          children: [
+            // Sorting selector
+            Row(
+              children: [
+                Text(l10n.reviewsSortBy, style: textTheme.bodySmall),
+                const SizedBox(width: 8),
+                DropdownButton<_ReviewSort>(
+                  value: _sort,
+                  onChanged: (v) {
+                    if (v != null && v != _sort) {
+                      setState(() {
+                        _sort = v;
+                        _lastSort = v; // remember selection
+                        _pageIndex = 0;
+                        _reviewsLoading = true;
+                      });
+                      _fetchReviews();
+                    }
+                  },
+                  items: [
+                    DropdownMenuItem(
+                      value: _ReviewSort.helpful,
+                      child: Text(l10n.reviewsSortHelpful),
+                    ),
+                    DropdownMenuItem(
+                      value: _ReviewSort.newest,
+                      child: Text(l10n.reviewsSortNewest),
+                    ),
+                  ],
+                ),
+                const Spacer(),
+                if (appId.isNotEmpty)
+                  TextButton.icon(
+                    icon: const Icon(Icons.open_in_new),
+                    label: Text(l10n.reviewsReadAll),
+                    onPressed: () => _openExternalUrl(
+                        context, 'https://www.meta.com/experiences/$appId'),
+                  ),
+              ],
+            ),
+            const SizedBox(height: 8),
+            if (reviews.isNotEmpty) ...[
+              ListView.separated(
+                shrinkWrap: true,
+                physics: const NeverScrollableScrollPhysics(),
+                itemCount: reviews.length,
+                itemBuilder: (context, index) => _ReviewTile(
+                    review: reviews[index], fallbackAuthor: reviewFallback),
+                separatorBuilder: (_, __) => const SizedBox(height: 12),
+              ),
+              const SizedBox(height: 8),
+            ],
+            _buildReviewsPager(context),
+          ],
         );
       }
     }
@@ -493,7 +552,108 @@ class _CloudAppDetailsDialogState extends State<CloudAppDetailsDialog> {
       ],
     );
   }
+
+  // more state helpers
+  void _fetchReviews() {
+    final appId = _currentReviewsAppId;
+    if (appId == null) return;
+    final sortBy = _sort == _ReviewSort.helpful ? 'helpful' : 'newest';
+    final offset = _pageIndex * _pageSize;
+    GetAppReviewsRequest(
+      appId: appId,
+      limit: _pageSize,
+      offset: offset,
+      sortBy: sortBy,
+    ).sendSignalToRust();
+  }
+
+  Widget _buildReviewsPager(BuildContext context) {
+    final total = _reviewsTotal ?? 0;
+    if (total <= _pageSize) return const SizedBox.shrink();
+    final totalPages = (total / _pageSize).ceil();
+    final pageNo = _pageIndex + 1;
+
+    List<int?> pageModel;
+    if (totalPages <= 7) {
+      pageModel = List<int?>.generate(totalPages, (i) => i + 1);
+    } else if (pageNo <= 4) {
+      pageModel = [1, 2, 3, 4, 5, null, totalPages];
+    } else if (pageNo >= totalPages - 3) {
+      pageModel = [
+        1,
+        null,
+        totalPages - 4,
+        totalPages - 3,
+        totalPages - 2,
+        totalPages - 1,
+        totalPages
+      ];
+    } else {
+      pageModel = [1, null, pageNo - 1, pageNo, pageNo + 1, null, totalPages];
+    }
+
+    final buttons = <Widget>[];
+    buttons.add(IconButton(
+      tooltip: AppLocalizations.of(context).previous,
+      icon: const Icon(Icons.chevron_left),
+      onPressed: _pageIndex > 0
+          ? () {
+              setState(() {
+                _pageIndex -= 1;
+                _reviewsLoading = true;
+              });
+              _fetchReviews();
+            }
+          : null,
+    ));
+
+    for (final entry in pageModel) {
+      if (entry == null) {
+        buttons.add(const Padding(
+          padding: EdgeInsets.symmetric(horizontal: 4),
+          child: Text('…'),
+        ));
+      } else {
+        final isCurrent = entry == pageNo;
+        final btn = isCurrent
+            ? FilledButton.tonal(
+                onPressed: null,
+                child: Text('$entry'),
+              )
+            : TextButton(
+                onPressed: () {
+                  setState(() {
+                    _pageIndex = entry - 1;
+                    _reviewsLoading = true;
+                  });
+                  _fetchReviews();
+                },
+                child: Text('$entry'),
+              );
+        buttons.add(Padding(
+            padding: const EdgeInsets.symmetric(horizontal: 2), child: btn));
+      }
+    }
+
+    buttons.add(IconButton(
+      tooltip: AppLocalizations.of(context).next,
+      icon: const Icon(Icons.chevron_right),
+      onPressed: pageNo < totalPages
+          ? () {
+              setState(() {
+                _pageIndex += 1;
+                _reviewsLoading = true;
+              });
+              _fetchReviews();
+            }
+          : null,
+    ));
+
+    return Row(children: buttons);
+  }
 }
+
+enum _ReviewSort { helpful, newest }
 
 enum _MediaKind { video, image, other }
 
@@ -573,18 +733,36 @@ class _ReviewTile extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
+    final l10n = AppLocalizations.of(context);
     final theme = Theme.of(context);
     final textTheme = theme.textTheme;
     final authorName = review.authorDisplayName?.trim();
-    final title = (review.reviewTitle?.trim().isEmpty ?? true)
-        ? (authorName?.isNotEmpty == true ? authorName! : fallbackAuthor ?? '')
-        : review.reviewTitle!.trim();
+    final authorAlias = review.authorAlias?.trim();
+
+    String? aliasPretty;
+    if (authorAlias != null && authorAlias.isNotEmpty) {
+      aliasPretty = authorAlias.startsWith('@') ? authorAlias : '@$authorAlias';
+    }
+
+    String? authorCombined;
+    if ((authorName != null && authorName.isNotEmpty) &&
+        (aliasPretty != null)) {
+      authorCombined = '$authorName ($aliasPretty)';
+    } else if (authorName != null && authorName.isNotEmpty) {
+      authorCombined = authorName;
+    } else if (aliasPretty != null) {
+      authorCombined = aliasPretty;
+    }
+
+    final title = (review.reviewTitle?.trim().isNotEmpty == true)
+        ? review.reviewTitle!.trim()
+        : (authorCombined ?? fallbackAuthor ?? '');
 
     final rawDate = review.date;
     final parsedDate = rawDate != null ? DateTime.tryParse(rawDate) : null;
     final subtitleParts = <String>[
-      if (review.reviewTitle != null && authorName?.isNotEmpty == true)
-        authorName!,
+      if (review.reviewTitle != null && (authorCombined != null))
+        authorCombined,
       if (parsedDate != null)
         DateFormat.yMMMd().add_jm().format(parsedDate.toLocal()),
     ];
@@ -600,6 +778,9 @@ class _ReviewTile extends StatelessWidget {
         : (score % 1 == 0
             ? score.toInt().toString()
             : score.toStringAsFixed(1));
+
+    final helpful = review.reviewHelpfulCount;
+    final devResp = review.developerResponse;
 
     return DecoratedBox(
       decoration: BoxDecoration(
@@ -649,10 +830,71 @@ class _ReviewTile extends StatelessWidget {
                 style: textTheme.bodyMedium,
               ),
             ],
+            if (helpful != null && helpful > 0) ...[
+              const SizedBox(height: 8),
+              Text(
+                l10n.detailsReviewHelpfulCount(helpful),
+                style:
+                    textTheme.bodySmall?.copyWith(fontStyle: FontStyle.italic),
+              ),
+            ],
+            if (devResp != null) ...[
+              const SizedBox(height: 8),
+              Theme(
+                data: theme.copyWith(dividerColor: Colors.transparent),
+                child: ExpansionTile(
+                  tilePadding: EdgeInsets.zero,
+                  childrenPadding: EdgeInsets.zero,
+                  initiallyExpanded: false,
+                  title: Row(
+                    children: [
+                      const Icon(Icons.reply, size: 18),
+                      const SizedBox(width: 6),
+                      Text(l10n.detailsDeveloperResponse,
+                          style: textTheme.titleSmall),
+                    ],
+                  ),
+                  children: [
+                    Align(
+                      alignment: Alignment.centerLeft,
+                      child: Column(
+                        crossAxisAlignment: CrossAxisAlignment.start,
+                        children: [
+                          Text(
+                            devResp.body,
+                            style: textTheme.bodyMedium,
+                          ),
+                          if (devResp.date != null) ...[
+                            const SizedBox(height: 6),
+                            Text(
+                              _formatEpochSeconds(devResp.date!),
+                              style: textTheme.bodySmall?.copyWith(
+                                color: textTheme.bodySmall?.color
+                                    ?.withValues(alpha: 0.7),
+                              ),
+                            ),
+                          ],
+                        ],
+                      ),
+                    ),
+                  ],
+                ),
+              ),
+            ],
           ],
         ),
       ),
     );
+  }
+}
+
+String _formatEpochSeconds(int seconds) {
+  try {
+    final dt = DateTime.fromMillisecondsSinceEpoch(seconds * 1000, isUtc: true)
+        .toLocal();
+    return DateFormat.yMMMd().add_jm().format(dt);
+  } catch (_) {
+    return '';
   }
 }
 

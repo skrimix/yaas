@@ -818,6 +818,60 @@ abstract class AppLocalizations {
   /// **'No reviews available yet.'**
   String get detailsReviewsEmpty;
 
+  /// No description provided for @detailsDeveloperResponse.
+  ///
+  /// In en, this message translates to:
+  /// **'Developer response'**
+  String get detailsDeveloperResponse;
+
+  /// No description provided for @detailsReviewHelpful.
+  ///
+  /// In en, this message translates to:
+  /// **'Helpful'**
+  String get detailsReviewHelpful;
+
+  /// No description provided for @detailsReviewHelpfulCount.
+  ///
+  /// In en, this message translates to:
+  /// **'{count, plural, one {{count} person found this helpful} other {{count} people found this helpful}}'**
+  String detailsReviewHelpfulCount(int count);
+
+  /// No description provided for @reviewsSortBy.
+  ///
+  /// In en, this message translates to:
+  /// **'Sort by'**
+  String get reviewsSortBy;
+
+  /// No description provided for @reviewsSortHelpful.
+  ///
+  /// In en, this message translates to:
+  /// **'Most helpful'**
+  String get reviewsSortHelpful;
+
+  /// No description provided for @reviewsSortNewest.
+  ///
+  /// In en, this message translates to:
+  /// **'Newest'**
+  String get reviewsSortNewest;
+
+  /// No description provided for @previous.
+  ///
+  /// In en, this message translates to:
+  /// **'Previous'**
+  String get previous;
+
+  /// No description provided for @next.
+  ///
+  /// In en, this message translates to:
+  /// **'Next'**
+  String get next;
+
+  /// No description provided for @reviewsReadAll.
+  ///
+  /// In en, this message translates to:
+  /// **'Read all reviews'**
+  String get reviewsReadAll;
+
   /// No description provided for @commonCopy.
   ///
   /// In en, this message translates to:

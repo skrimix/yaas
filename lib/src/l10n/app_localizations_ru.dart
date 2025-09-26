@@ -410,6 +410,43 @@ class AppLocalizationsRu extends AppLocalizations {
   String get detailsReviewsEmpty => 'Отзывов пока нет.';
 
   @override
+  String get detailsDeveloperResponse => 'Ответ разработчика';
+
+  @override
+  String get detailsReviewHelpful => 'Полезно';
+
+  @override
+  String detailsReviewHelpfulCount(int count) {
+    String _temp0 = intl.Intl.pluralLogic(
+      count,
+      locale: localeName,
+      other: '$count человек считают это полезным',
+      many: '$count человек считают это полезным',
+      few: '$count человека считают это полезным',
+      one: '$count человек считает это полезным',
+    );
+    return '$_temp0';
+  }
+
+  @override
+  String get reviewsSortBy => 'Сортировать по';
+
+  @override
+  String get reviewsSortHelpful => 'Самые полезные';
+
+  @override
+  String get reviewsSortNewest => 'Самые новые';
+
+  @override
+  String get previous => 'Назад';
+
+  @override
+  String get next => 'Вперёд';
+
+  @override
+  String get reviewsReadAll => 'Посмотреть все отзывы';
+
+  @override
   String get commonCopy => 'Копировать';
 
   @override

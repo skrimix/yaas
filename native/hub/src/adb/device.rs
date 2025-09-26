@@ -556,18 +556,35 @@ impl AdbDevice {
     /// Pulls an item from the device.
     #[instrument(skip(self, remote_path, local_path), err)]
     async fn pull_any(&self, remote_path: &UnixPath, local_path: &Path) -> Result<()> {
-        ensure!(
-            local_path.is_dir(),
-            "Destination path does not exist or is not a directory: {}",
-            local_path.display()
-        );
         let stat = self.inner.stat(remote_path).await.context("Stat command failed")?;
-        if stat.file_mode == UnixFileStatus::Directory {
-            self.pull_dir(remote_path, local_path).await?;
-        } else if stat.file_mode == UnixFileStatus::RegularFile {
-            self.pull(remote_path, local_path).await?;
-        } else {
-            bail!("Unsupported file type: {:?}", stat.file_mode);
+
+        match stat.file_mode {
+            UnixFileStatus::Directory => {
+                // If destination exists and is a regular file, this is an error.
+                if local_path.exists() && local_path.is_file() {
+                    bail!(
+                        "Cannot pull directory '{}' to existing file '{}'",
+                        remote_path.display(),
+                        local_path.display()
+                    );
+                }
+                // `pull_dir` will ensure the destination directory exists (create_dir_all).
+                self.pull_dir(remote_path, local_path).await?
+            }
+            UnixFileStatus::RegularFile => {
+                // For files, allow non-existent destination paths as long as the parent exists.
+                if let Some(parent) = local_path.parent() {
+                    ensure!(
+                        parent.exists(),
+                        "Parent directory '{}' does not exist",
+                        parent.display()
+                    );
+                }
+                // If destination is a directory, `pull` will place the file inside it via
+                // `resolve_pull_dest_path`. Otherwise it writes to the given file path.
+                self.pull(remote_path, local_path).await?
+            }
+            other => bail!("Unsupported file type: {:?}", other),
         }
         Ok(())
     }

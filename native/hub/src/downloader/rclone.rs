@@ -144,11 +144,9 @@ impl RcloneClient {
         source: String,
         dest: String,
         operation: RcloneTransferOperation,
-        total_bytes: u64,
         cancellation_token: Option<CancellationToken>,
     ) -> Result<()> {
-        self.transfer_with_stats(source, dest, operation, total_bytes, None, cancellation_token)
-            .await
+        self.transfer_with_stats(source, dest, operation, 0, None, cancellation_token).await
     }
 
     #[instrument(skip(self, stats_tx, cancellation_token), err)]
@@ -161,6 +159,12 @@ impl RcloneClient {
         stats_tx: Option<UnboundedSender<RcloneTransferStats>>,
         cancellation_token: Option<CancellationToken>,
     ) -> Result<()> {
+        // TODO: create an internal function that both transfer and transfer_with_stats can use
+        ensure!(
+            total_bytes > 0 || stats_tx.is_none(),
+            "total_bytes must be provided if stats_tx is provided"
+        );
+
         let mut args = vec![
             operation.as_str(),
             "--stats",
@@ -305,16 +309,13 @@ impl RcloneStorage {
     pub async fn download_file(&self, source: String, dest: PathBuf) -> Result<PathBuf> {
         ensure!(dest.is_dir(), "destination must be a directory");
         let source = self.format_remote_path(&source);
-        let total_bytes =
-            self.client.size(&source).await.context("Failed to get remote file size")?.bytes;
         let mut dest_path = dest.clone();
-        info!(source = %source, dest = %dest.display(), total_bytes, "Starting file download");
+        info!(source = %source, dest = %dest.display(), "Starting file download");
         self.client
             .transfer(
                 source.clone(),
                 dest.display().to_string(),
                 RcloneTransferOperation::Copy,
-                total_bytes,
                 None,
             )
             .await?;

@@ -18,9 +18,11 @@ use tracing::{Instrument, Span, debug, error, info, info_span, instrument, trace
 use crate::{
     adb::device::{BackupOptions, SideloadProgress},
     models::{
-        AdbState, Settings,
+        Settings,
         signals::{
-            adb::{command::*, device::DeviceChangedEvent, dump::BatteryDumpResponse},
+            adb::{
+                command::*, device::DeviceChangedEvent, dump::BatteryDumpResponse, state::AdbState,
+            },
             system::Toast,
         },
     },

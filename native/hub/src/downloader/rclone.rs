@@ -326,7 +326,10 @@ impl RcloneStorage {
 
     #[instrument(skip(self), ret, err)]
     pub async fn remotes(&self) -> Result<Vec<String>> {
-        self.client.remotes().await
+        // TODO: make configurable
+        let regex = lazy_regex::regex!(r"^FFA-\d+");
+        let remotes = self.client.remotes().await?;
+        Ok(remotes.into_iter().filter(|r| regex.is_match(r)).collect())
     }
 
     pub fn remote_name(&self) -> &str {

@@ -2,6 +2,7 @@ use std::{error::Error, path::PathBuf, sync::Arc};
 
 use anyhow::{Context, Result};
 use futures::TryStreamExt;
+use rand::seq::IndexedRandom;
 use rclone::RcloneStorage;
 use reqwest::header::{ACCEPT, HeaderMap, HeaderValue};
 use rinf::{DartSignal, RustSignal};
@@ -40,14 +41,37 @@ impl Downloader {
     pub async fn new(mut settings_stream: WatchStream<Settings>) -> Arc<Self> {
         let settings =
             settings_stream.next().await.expect("Settings stream closed on downloader init");
+
+        // TODO: this is pretty bad, make configurable and rework
+        let storage = RcloneStorage::new(
+            PathBuf::from(settings.rclone_path.clone()),
+            None,
+            settings.rclone_remote_name.clone(),
+            settings.bandwidth_limit.clone(),
+        );
+        let storage = match storage.remotes().await {
+            Ok(remotes) => {
+                let mut rng = rand::rng();
+                let remote = remotes.choose(&mut rng).unwrap_or(&settings.rclone_remote_name);
+                RcloneStorage::new(
+                    PathBuf::from(settings.rclone_path.clone()),
+                    None,
+                    remote.to_string(),
+                    settings.bandwidth_limit.clone(),
+                )
+            }
+            Err(e) => {
+                warn!(
+                    error = e.as_ref() as &dyn std::error::Error,
+                    "Failed to get rclone remotes on init"
+                );
+                storage
+            }
+        };
+
         let handle = Arc::new(Self {
             cloud_apps: Mutex::new(Vec::new()),
-            storage: RwLock::new(RcloneStorage::new(
-                PathBuf::from(settings.rclone_path),
-                None,
-                settings.rclone_remote_name,
-                settings.bandwidth_limit,
-            )),
+            storage: RwLock::new(storage),
             download_dir: RwLock::new(PathBuf::from(settings.downloads_location)),
             current_load_token: RwLock::new(CancellationToken::new()),
         });

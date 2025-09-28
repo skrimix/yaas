@@ -871,6 +871,7 @@ dependencies = [
  "lazy-regex",
  "log",
  "mimalloc",
+ "rand",
  "reqwest",
  "resand",
  "rinf",

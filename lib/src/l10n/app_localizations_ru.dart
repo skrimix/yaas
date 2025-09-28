@@ -179,6 +179,9 @@ class AppLocalizationsRu extends AppLocalizations {
   String get statusAdbServerStarting => 'Запуск ADB сервера';
 
   @override
+  String get statusAdbServerStartFailed => 'Не удалось запустить ADB сервер';
+
+  @override
   String get statusAdbNoDevices => 'Нет найденных устройств';
 
   @override
@@ -293,6 +296,10 @@ class AppLocalizationsRu extends AppLocalizations {
 
   @override
   String get diagnosticsServerStartingDesc => 'Запуск сервера ADB...';
+
+  @override
+  String get diagnosticsServerStartFailedDesc =>
+      'Не удалось запустить сервер ADB. Проверьте путь к ADB в настройках и просмотрите логи.';
 
   @override
   String get diagnosticsServerRunningDesc => 'Сервер ADB запущен.';

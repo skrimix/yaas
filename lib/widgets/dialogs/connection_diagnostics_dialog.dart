@@ -40,6 +40,7 @@ class ConnectionDiagnosticsDialog extends StatelessWidget {
   _DiagLevel _serverLevel(AdbState state) {
     if (state is AdbStateServerNotRunning) return _DiagLevel.error;
     if (state is AdbStateServerStarting) return _DiagLevel.warn;
+    if (state is AdbStateServerStartFailed) return _DiagLevel.error;
     return _DiagLevel.ok;
   }
 
@@ -96,6 +97,9 @@ class ConnectionDiagnosticsDialog extends StatelessWidget {
       }
       if (adbState is AdbStateServerStarting) {
         return l10n.diagnosticsServerStartingDesc;
+      }
+      if (adbState is AdbStateServerStartFailed) {
+        return l10n.diagnosticsServerStartFailedDesc;
       }
       return l10n.diagnosticsServerRunningDesc;
     }

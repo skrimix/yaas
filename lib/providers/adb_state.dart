@@ -37,7 +37,9 @@ class AdbStateProvider extends ChangeNotifier {
   /// - Connected: green
   /// - Everything else: yellow
   Color get connectionColor {
-    if (_state is AdbStateServerNotRunning || _state is AdbStateNoDevices) {
+    if (_state is AdbStateServerNotRunning ||
+        _state is AdbStateServerStartFailed ||
+        _state is AdbStateNoDevices) {
       return Colors.red;
     } else if (_state is AdbStateDeviceConnected) {
       return Colors.green;
@@ -52,6 +54,8 @@ class AdbStateProvider extends ChangeNotifier {
       return l10n.statusAdbServerNotRunning;
     } else if (_state is AdbStateServerStarting) {
       return l10n.statusAdbServerStarting;
+    } else if (_state is AdbStateServerStartFailed) {
+      return l10n.statusAdbServerStartFailed;
     } else if (_state is AdbStateNoDevices) {
       return l10n.statusAdbNoDevices;
     } else if (_state is AdbStateDevicesAvailable) {

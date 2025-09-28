@@ -178,6 +178,9 @@ class AppLocalizationsEn extends AppLocalizations {
   String get statusAdbServerStarting => 'Starting ADB server';
 
   @override
+  String get statusAdbServerStartFailed => 'Failed to start ADB server';
+
+  @override
   String get statusAdbNoDevices => 'No devices found';
 
   @override
@@ -287,6 +290,10 @@ class AppLocalizationsEn extends AppLocalizations {
 
   @override
   String get diagnosticsServerStartingDesc => 'ADB server is starting...';
+
+  @override
+  String get diagnosticsServerStartFailedDesc =>
+      'Failed to start the ADB server. Check the ADB path in Settings and view logs for details.';
 
   @override
   String get diagnosticsServerRunningDesc => 'ADB server is running.';

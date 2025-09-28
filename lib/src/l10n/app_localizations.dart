@@ -416,6 +416,12 @@ abstract class AppLocalizations {
   /// **'Starting ADB server'**
   String get statusAdbServerStarting;
 
+  /// No description provided for @statusAdbServerStartFailed.
+  ///
+  /// In en, this message translates to:
+  /// **'Failed to start ADB server'**
+  String get statusAdbServerStartFailed;
+
   /// No description provided for @statusAdbNoDevices.
   ///
   /// In en, this message translates to:
@@ -601,6 +607,12 @@ abstract class AppLocalizations {
   /// In en, this message translates to:
   /// **'ADB server is starting...'**
   String get diagnosticsServerStartingDesc;
+
+  /// No description provided for @diagnosticsServerStartFailedDesc.
+  ///
+  /// In en, this message translates to:
+  /// **'Failed to start the ADB server. Check the ADB path in Settings and view logs for details.'**
+  String get diagnosticsServerStartFailedDesc;
 
   /// No description provided for @diagnosticsServerRunningDesc.
   ///

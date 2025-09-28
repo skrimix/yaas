@@ -90,9 +90,10 @@ impl AdbHandler {
                             error = e.as_ref() as &dyn Error,
                             "Failed to start ADB server on init"
                         );
-                        // TODO: report this to the UI
+                        // State will be set inside ensure_server_running on failure
+                    } else {
+                        handle.refresh_adb_state().await;
                     }
-                    handle.refresh_adb_state().await;
                 }
             }
             .instrument(info_span!("task_init_adb_server")),
@@ -665,8 +666,7 @@ impl AdbHandler {
         if !self.is_server_running().await {
             info!("ADB server not running, attempting to start it");
             self.set_adb_state(AdbState::ServerStarting).await;
-
-            let adb_path_buf = self
+            let adb_path_buf = match self
                 .adb_path
                 .read()
                 .await
@@ -685,12 +685,15 @@ impl AdbHandler {
                         "Failed to resolve custom ADB path (not set or invalid), searching in PATH"
                     );
                     which::which("adb").ok()
-                })
-                .context("ADB binary not found in PATH or settings")
-                .inspect_err(|e| {
-                    // FIXME: this is probably called too early?
+                }) {
+                Some(p) => p,
+                None => {
+                    let e = anyhow!("ADB binary not found in PATH or settings");
                     Toast::send("ADB binary not found".to_string(), format!("{e:#}"), true, None);
-                })?;
+                    self.set_adb_state(AdbState::ServerStartFailed).await;
+                    return Err(e);
+                }
+            };
 
             info!(path = %adb_path_buf.display(), "Found ADB binary, starting server");
             // self.adb_host
@@ -706,8 +709,8 @@ impl AdbHandler {
             //         );
             //     })?;
             // run "adb start-server"
-            let output = timeout(Duration::from_millis(10000), {
-                let mut command = Command::new(adb_path_buf);
+            let output = match timeout(Duration::from_millis(10000), {
+                let mut command = Command::new(&adb_path_buf);
                 command.arg("start-server");
                 #[cfg(target_os = "windows")]
                 // CREATE_NO_WINDOW
@@ -715,8 +718,30 @@ impl AdbHandler {
                 command.output()
             })
             .await
-            .context("Timed out while starting ADB server")?
-            .context("Failed to start ADB server")?;
+            {
+                Ok(Ok(o)) => o,
+                Ok(Err(e)) => {
+                    Toast::send(
+                        "Failed to start ADB server".to_string(),
+                        format!("{e:#}"),
+                        true,
+                        None,
+                    );
+                    self.set_adb_state(AdbState::ServerStartFailed).await;
+                    return Err(e).context("Failed to start ADB server");
+                }
+                Err(_) => {
+                    let e = anyhow!("Timed out while starting ADB server");
+                    Toast::send(
+                        "Failed to start ADB server".to_string(),
+                        e.to_string(),
+                        true,
+                        None,
+                    );
+                    self.set_adb_state(AdbState::ServerStartFailed).await;
+                    return Err(e);
+                }
+            };
 
             if !output.status.success() {
                 let stderr = String::from_utf8_lossy(&output.stderr);
@@ -726,6 +751,7 @@ impl AdbHandler {
                     true,
                     None,
                 );
+                self.set_adb_state(AdbState::ServerStartFailed).await;
                 bail!("Failed to start ADB server: {}", stderr);
             }
             self.refresh_adb_state().await;
@@ -774,9 +800,14 @@ impl AdbHandler {
     /// Refreshes the ADB state based on the current device and server status
     #[instrument(skip(self))]
     async fn refresh_adb_state(&self) {
-        let mut adb_state = self.adb_state.write().await;
+        let mut adb_state_lock = self.adb_state.write().await;
+        let current_state = adb_state_lock.clone();
         let new_state = if !self.is_server_running().await {
-            AdbState::ServerNotRunning
+            match current_state {
+                AdbState::ServerStartFailed => AdbState::ServerStartFailed,
+                AdbState::ServerStarting => AdbState::ServerStarting,
+                _ => AdbState::ServerNotRunning,
+            }
         } else if self.try_current_device().await.is_some() {
             // Get full list for count
             match self.get_adb_devices().await {
@@ -803,14 +834,19 @@ impl AdbHandler {
                         error = e.as_ref() as &dyn Error,
                         "Failed to get ADB devices for state refresh"
                     );
-                    AdbState::ServerNotRunning // Assume server is down if we can't get devices
+                    // Preserve failure/start states if they were set
+                    match current_state {
+                        AdbState::ServerStartFailed => AdbState::ServerStartFailed,
+                        AdbState::ServerStarting => AdbState::ServerStarting,
+                        _ => AdbState::ServerNotRunning,
+                    }
                 }
             }
         };
 
-        if *adb_state != new_state {
-            debug!(old_state = ?*adb_state, new_state = ?new_state, "ADB state changed");
-            *adb_state = new_state.clone();
+        if *adb_state_lock != new_state {
+            debug!(old_state = ?*adb_state_lock, new_state = ?new_state, "ADB state changed");
+            *adb_state_lock = new_state.clone();
             new_state.send_signal_to_dart();
         } else {
             trace!(state = ?new_state, "ADB state unchanged");

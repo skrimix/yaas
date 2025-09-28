@@ -77,14 +77,14 @@ class _AboutScreenState extends State<AboutScreen> {
                   message: 'Copy full SHA',
                   child: GestureDetector(
                     onTap: () {
-                      final full = backend.gitCommitHash ??
-                          backend.gitCommitHashShort ??
-                          '';
+                      final full = (backend.gitCommitHash ??
+                              backend.gitCommitHashShort ??
+                              '') +
+                          (backend.gitDirty ? ' (dirty)' : '');
                       if (full.isEmpty) return;
                       copyToClipboard(
                         context,
                         full,
-                        title: 'Commit copied',
                         description: full,
                       );
                     },

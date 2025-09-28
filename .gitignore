@@ -49,6 +49,6 @@ app.*.map.json
 target/
 
 # Generated bindings
-*/**/bindings/
+**/bindings/
 
 .aider*

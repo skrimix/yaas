@@ -2,6 +2,20 @@
 cmake_minimum_required(VERSION 3.13)
 project(runner LANGUAGES CXX)
 
+# Try to use sccache if it's available.
+find_program(SCCACHE_PROGRAM sccache)
+
+# Only enable when an env flag is set.
+# if(NOT DEFINED ENV{USE_SCCACHE})
+#   unset(SCCACHE_PROGRAM CACHE)
+# endif()
+
+if (SCCACHE_PROGRAM)
+  message(STATUS "Using sccache: ${SCCACHE_PROGRAM}")
+  set(CMAKE_C_COMPILER_LAUNCHER "${SCCACHE_PROGRAM}")
+  set(CMAKE_CXX_COMPILER_LAUNCHER "${SCCACHE_PROGRAM}")
+endif()
+
 # The name of the executable created for the application. Change this to change
 # the on-disk name of your application.
 set(BINARY_NAME "yaas")

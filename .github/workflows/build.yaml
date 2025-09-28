@@ -78,18 +78,19 @@ jobs:
           Add-Content -Path $env:GITHUB_ENV -Value "SCCACHE_GHA_ENABLED=true"
           Add-Content -Path $env:GITHUB_ENV -Value "RUSTC_WRAPPER=sccache"
       
-      - name: Prepare sccache for Xcode (macOS)
-        if: matrix.target == 'macos'
-        shell: bash
-        run: |
-          mkdir -p "$HOME/bin"
-          ln -sf "$(command -v sccache)" "$HOME/bin/clang"
-          ln -sf "$(command -v sccache)" "$HOME/bin/clang++"
-          echo "PATH=$HOME/bin:$PATH" >> "$GITHUB_ENV"
-          echo "CC=clang"            >> "$GITHUB_ENV"
-          echo "CXX=clang++"         >> "$GITHUB_ENV"
-          echo "LD=clang"            >> "$GITHUB_ENV"
-          echo "LDPLUSPLUS=clang++"  >> "$GITHUB_ENV"
+      # This breaks cargokit build
+      # - name: Prepare sccache for Xcode (macOS)
+      #   if: matrix.target == 'macos'
+      #   shell: bash
+      #   run: |
+      #     mkdir -p "$HOME/bin"
+      #     ln -sf "$(command -v sccache)" "$HOME/bin/clang"
+      #     ln -sf "$(command -v sccache)" "$HOME/bin/clang++"
+      #     echo "PATH=$HOME/bin:$PATH" >> "$GITHUB_ENV"
+      #     echo "CC=clang"            >> "$GITHUB_ENV"
+      #     echo "CXX=clang++"         >> "$GITHUB_ENV"
+      #     echo "LD=clang"            >> "$GITHUB_ENV"
+      #     echo "LDPLUSPLUS=clang++"  >> "$GITHUB_ENV"
 
       - name: Install Linux dependencies
         if: matrix.target == 'linux'

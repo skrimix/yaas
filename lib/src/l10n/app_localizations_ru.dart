@@ -1058,15 +1058,6 @@ class AppLocalizationsRu extends AppLocalizations {
   }
 
   @override
-  String get createdWord => 'создан';
-
-  @override
-  String get closedWord => 'закрыт';
-
-  @override
-  String get noMessage => 'нет сообщения';
-
-  @override
   String get uninstallAppTitle => 'Удалить приложение';
 
   @override
@@ -1097,7 +1088,4 @@ class AppLocalizationsRu extends AppLocalizations {
 
   @override
   String get emptyValue => '(пусто)';
-
-  @override
-  String get errorWord => 'ошибка';
 }

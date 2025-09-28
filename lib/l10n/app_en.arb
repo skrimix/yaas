@@ -401,9 +401,6 @@
   "@logsOpenNotSupported": {"placeholders": {"path": {"type": "String"}}},
   "logsOpenFailed": "Unable to open logs directory (copied to clipboard): {path}",
   "@logsOpenFailed": {"placeholders": {"path": {"type": "String"}}},
-  "createdWord": "created",
-  "closedWord": "closed",
-  "noMessage": "no message",
 
   "uninstallAppTitle": "Uninstall App",
   "uninstallConfirmMessage": "Are you sure you want to uninstall \"{app}\"?\n\nThis will permanently delete the app and all its data.",
@@ -416,6 +413,5 @@
   "commonClear": "Clear",
   "logsCopied": "{count} logs copied to clipboard",
   "@logsCopied": {"placeholders": {"count": {"type": "int"}}},
-  "emptyValue": "(empty)",
-  "errorWord": "error"
+  "emptyValue": "(empty)"
 }

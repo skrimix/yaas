@@ -1046,15 +1046,6 @@ class AppLocalizationsEn extends AppLocalizations {
   }
 
   @override
-  String get createdWord => 'created';
-
-  @override
-  String get closedWord => 'closed';
-
-  @override
-  String get noMessage => 'no message';
-
-  @override
   String get uninstallAppTitle => 'Uninstall App';
 
   @override
@@ -1085,7 +1076,4 @@ class AppLocalizationsEn extends AppLocalizations {
 
   @override
   String get emptyValue => '(empty)';
-
-  @override
-  String get errorWord => 'error';
 }

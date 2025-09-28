@@ -2018,24 +2018,6 @@ abstract class AppLocalizations {
   /// **'Unable to open logs directory (copied to clipboard): {path}'**
   String logsOpenFailed(String path);
 
-  /// No description provided for @createdWord.
-  ///
-  /// In en, this message translates to:
-  /// **'created'**
-  String get createdWord;
-
-  /// No description provided for @closedWord.
-  ///
-  /// In en, this message translates to:
-  /// **'closed'**
-  String get closedWord;
-
-  /// No description provided for @noMessage.
-  ///
-  /// In en, this message translates to:
-  /// **'no message'**
-  String get noMessage;
-
   /// No description provided for @uninstallAppTitle.
   ///
   /// In en, this message translates to:
@@ -2089,12 +2071,6 @@ abstract class AppLocalizations {
   /// In en, this message translates to:
   /// **'(empty)'**
   String get emptyValue;
-
-  /// No description provided for @errorWord.
-  ///
-  /// In en, this message translates to:
-  /// **'error'**
-  String get errorWord;
 }
 
 class _AppLocalizationsDelegate

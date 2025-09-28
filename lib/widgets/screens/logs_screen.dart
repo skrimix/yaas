@@ -393,8 +393,7 @@ class _LogsScreenState extends State<LogsScreen> {
   Widget _buildLogEntry(LogInfo log, int index) {
     final isEvenRow = index.isEven;
     final displayMessage = _getDisplayMessage(log);
-    final l10n = AppLocalizations.of(context);
-    final isSpecialMessage = displayMessage == '<${l10n.noMessage}>' ||
+    final isSpecialMessage = displayMessage == '<no message>' ||
         (displayMessage.startsWith('<') && displayMessage.endsWith('>'));
 
     return Material(
@@ -639,7 +638,7 @@ class _LogsScreenState extends State<LogsScreen> {
 
               // Include span trace with proper formatting
               if (log.spanTrace?.spans.isNotEmpty == true) {
-                buffer.writeln(l10n.spanTrace);
+                buffer.writeln("Span trace:");
                 for (int i = 0; i < log.spanTrace!.spans.length; i++) {
                   final span = log.spanTrace!.spans[i];
                   final isLast = i == log.spanTrace!.spans.length - 1;
@@ -1074,7 +1073,6 @@ class _LogsScreenState extends State<LogsScreen> {
   }
 
   String _getDisplayMessage(LogInfo log) {
-    final l10n = AppLocalizations.of(context);
     // Handle return events specially
     if (log.message.isEmpty && log.fields?.containsKey('return') == true) {
       // Get span name from span trace (last span is the current one)
@@ -1089,18 +1087,18 @@ class _LogsScreenState extends State<LogsScreen> {
       final spanName = log.spanTrace?.spans.isNotEmpty == true
           ? '${log.spanTrace!.spans.last.target}::${log.spanTrace!.spans.last.name}'
           : 'unknown';
-      return '<$spanName ${l10n.errorWord}: ${log.fields!['error']!}>';
+      return '<$spanName error: ${log.fields!['error']!}>';
     }
 
     // Handle span events using structured kind
     switch (log.kind) {
       case LogKind.spanNew:
-        return '<${log.message.substring(10)} ${l10n.createdWord}>';
+        return '<${log.message.substring(10)} created>';
       case LogKind.spanClose:
-        return '<${log.message.substring(12)} ${l10n.closedWord}>';
+        return '<${log.message.substring(12)} closed>';
       case LogKind.event:
         // Default handling for events
-        return log.message.isEmpty ? '<${l10n.noMessage}>' : log.message;
+        return log.message.isEmpty ? '<no message>' : log.message;
     }
   }
 

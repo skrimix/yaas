@@ -137,12 +137,12 @@ jobs:
         run: rinf gen
 
       - name: Build the app
-        run: |
-          if [ "${{ matrix.target }}" = "linux" ]; then
-            fastforge package --platform linux --targets appimage
-          else
-            flutter build -v ${{ matrix.target }} --release
-          fi
+        if: matrix.target != 'linux'
+        run: flutter build -v ${{ matrix.target }} --release
+      
+      - name: Build the app (Linux)
+        if: matrix.target == 'linux'
+        run: fastforge package --platform linux --targets appimage
 
       - name: Upload Artifact
         uses: actions/upload-artifact@v4

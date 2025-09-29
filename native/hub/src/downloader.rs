@@ -14,16 +14,19 @@ use tokio_stream::{StreamExt, wrappers::WatchStream};
 use tokio_util::sync::CancellationToken;
 use tracing::{Instrument, Span, debug, error, info, info_span, instrument, warn};
 
-use crate::models::{
-    AppApiResponse, CloudApp, Settings,
-    signals::{
-        cloud_app_metadata::{
-            AppDetailsResponse, AppReview, AppReviewsResponse, CloudAppsChangedEvent,
-            GetAppDetailsRequest, GetAppReviewsRequest, GetRcloneRemotesRequest,
-            LoadCloudAppsRequest, RcloneRemotesChanged,
+use crate::{
+    models::{
+        AppApiResponse, CloudApp, Settings,
+        signals::{
+            cloud_app_metadata::{
+                AppDetailsResponse, AppReview, AppReviewsResponse, CloudAppsChangedEvent,
+                GetAppDetailsRequest, GetAppReviewsRequest, GetRcloneRemotesRequest,
+                LoadCloudAppsRequest, RcloneRemotesChanged,
+            },
+            downloads_local::DownloadsChanged,
         },
-        downloads_local::DownloadsChanged,
     },
+    settings::SettingsHandler,
 };
 
 mod rclone;
@@ -38,7 +41,10 @@ pub struct Downloader {
 
 impl Downloader {
     #[instrument(skip(settings_stream))]
-    pub async fn new(mut settings_stream: WatchStream<Settings>) -> Arc<Self> {
+    pub async fn new(
+        settings_handler: Arc<SettingsHandler>,
+        mut settings_stream: WatchStream<Settings>,
+    ) -> Arc<Self> {
         let settings =
             settings_stream.next().await.expect("Settings stream closed on downloader init");
 
@@ -53,6 +59,17 @@ impl Downloader {
             Ok(remotes) => {
                 let mut rng = rand::rng();
                 let remote = remotes.choose(&mut rng).unwrap_or(&settings.rclone_remote_name);
+                if remote != &settings.rclone_remote_name {
+                    let mut updated = settings.clone();
+                    updated.rclone_remote_name = remote.to_string();
+                    if let Err(e) = settings_handler.save_settings(&updated) {
+                        warn!(
+                            error = e.as_ref() as &dyn std::error::Error,
+                            "Failed to persist randomized rclone remote"
+                        );
+                    }
+                }
+
                 RcloneStorage::new(
                     PathBuf::from(settings.rclone_path.clone()),
                     None,

@@ -26,14 +26,13 @@ impl SettingsHandler {
         let handler =
             Arc::new(Self { settings_file_path: app_dir.join("settings.json"), watch_tx });
 
-        let settings = match handler.load_settings() {
+        match handler.load_settings() {
             Ok(s) => s,
             Err(e) => {
                 warn!(error = e.as_ref() as &dyn Error, "Failed to load settings, using defaults.");
                 handler.load_default_settings().expect("Failed to load default settings")
             }
         };
-        handler.on_settings_change(settings, None, false);
 
         // Start receiving settings requests
         tokio::spawn({
@@ -61,21 +60,16 @@ impl SettingsHandler {
                     let handler = self.clone();
                     let result = handler.load_settings();
 
-                    match result {
-                        Ok(settings) => {
-                            handler.on_settings_change(settings.clone(), None, true);
-                        }
-                        Err(e) => {
-                            error!(error = e.as_ref() as &dyn Error, "Failed to load settings, using defaults");
-                            let settings = handler
-                                .load_default_settings()
-                                .expect("Failed to load default settings"); // TODO: handle error?
-                            handler.on_settings_change(
-                                settings.clone(),
-                                Some(format!("Failed to load settings: {e:#}")),
-                                true,
-                            );
-                        }
+                    if let Err(e) = result {
+                        error!(error = e.as_ref() as &dyn Error, "Failed to load settings, using defaults");
+                        let settings = handler
+                            .load_default_settings()
+                            .expect("Failed to load default settings"); // TODO: handle error?
+                        handler.on_settings_change(
+                            settings.clone(),
+                            Some(format!("Failed to load settings: {e:#}")),
+                            true,
+                        );
                     }
                 },
                 Some(signal_pack) = save_receiver.recv() => {
@@ -84,17 +78,12 @@ impl SettingsHandler {
                     let settings = signal_pack.message.settings;
                     let result = handler.save_settings(&settings);
 
-                    match result {
-                        Ok(_) => {
-                            handler.on_settings_change(settings.clone(), None, false);
+                    if let Err(e) = result {
+                        error!(error = e.as_ref() as &dyn Error, "Failed to save settings");
+                        SettingsSavedEvent {
+                            error: Some(format!("Failed to save settings: {e:#}")),
                         }
-                        Err(e) => {
-                            error!(error = e.as_ref() as &dyn Error, "Failed to save settings");
-                            SettingsSavedEvent {
-                                error: Some(format!("Failed to save settings: {e:#}")),
-                            }
-                            .send_signal_to_dart();
-                        }
+                        .send_signal_to_dart();
                     }
                 },
                 Some(_) = reset_receiver.recv() => {
@@ -180,10 +169,11 @@ impl SettingsHandler {
         // TODO: Validate settings
 
         debug!(settings = ?settings, "Loaded application settings successfully");
+        self.on_settings_change(settings.clone(), None, false);
         Ok(settings)
     }
 
-    /// Save settings to file
+    /// Save settings to file and notify subscribers/UI
     #[instrument(skip(self, settings))]
     pub fn save_settings(&self, settings: &Settings) -> Result<()> {
         info!(path = %self.settings_file_path.display(), settings = ?settings, "Saving settings to file");
@@ -204,6 +194,8 @@ impl SettingsHandler {
             .context("Failed to write settings file")?;
 
         info!("Saved application settings successfully");
+        self.on_settings_change(settings.clone(), None, false);
+
         Ok(())
     }
 

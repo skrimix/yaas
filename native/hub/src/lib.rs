@@ -98,7 +98,9 @@ async fn main() {
         .send_signal_to_dart();
 
     let adb_handler = AdbHandler::new(WatchStream::new(settings_handler.subscribe())).await;
-    let downloader = Downloader::new(WatchStream::new(settings_handler.subscribe())).await;
+    let downloader =
+        Downloader::new(settings_handler.clone(), WatchStream::new(settings_handler.subscribe()))
+            .await;
     let downloads_catalog =
         downloads::DownloadsCatalog::start(WatchStream::new(settings_handler.subscribe()));
     let _task_manager = TaskManager::new(

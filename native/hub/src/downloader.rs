@@ -18,12 +18,13 @@ use crate::{
     models::{
         AppApiResponse, CloudApp, Settings,
         signals::{
-            cloud_app_metadata::{
-                AppDetailsResponse, AppReview, AppReviewsResponse, CloudAppsChangedEvent,
-                GetAppDetailsRequest, GetAppReviewsRequest, GetRcloneRemotesRequest,
-                LoadCloudAppsRequest, RcloneRemotesChanged,
+            cloud_apps::{
+                details::{AppDetailsResponse, GetAppDetailsRequest},
+                list::{CloudAppsChangedEvent, LoadCloudAppsRequest},
+                reviews::{AppReview, AppReviewsResponse, GetAppReviewsRequest},
             },
             downloads_local::DownloadsChanged,
+            storage::remotes::{GetRcloneRemotesRequest, RcloneRemotesChanged},
         },
     },
     settings::SettingsHandler,

@@ -1,8 +1,9 @@
 pub mod adb;
 pub mod backups;
-pub mod cloud_app_metadata;
+pub mod cloud_apps;
 pub mod downloads_local;
 pub mod logging;
 pub mod settings;
+pub mod storage;
 pub mod system;
 pub mod task;

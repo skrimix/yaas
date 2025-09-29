@@ -17,7 +17,7 @@ use tracing::{Instrument, Span, debug, error, info, info_span, instrument, warn}
 use crate::models::{
     AppApiResponse, CloudApp, Settings,
     signals::{
-        download::{
+        cloud_app_metadata::{
             AppDetailsResponse, AppReview, AppReviewsResponse, CloudAppsChangedEvent,
             GetAppDetailsRequest, GetAppReviewsRequest, GetRcloneRemotesRequest,
             LoadCloudAppsRequest, RcloneRemotesChanged,

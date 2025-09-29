@@ -160,6 +160,7 @@ impl RcloneClient {
         cancellation_token: Option<CancellationToken>,
     ) -> Result<()> {
         // TODO: create an internal function that both transfer and transfer_with_stats can use
+        // Disable json log for when not using stats
         ensure!(
             total_bytes > 0 || stats_tx.is_none(),
             "total_bytes must be provided if stats_tx is provided"

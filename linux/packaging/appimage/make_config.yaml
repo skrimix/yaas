@@ -1,0 +1,7 @@
+display_name: YAAS
+icon: assets/png/app_icon.png
+generic_name: YAAS
+categories:
+  - Utility
+startup_notify: true
+include: []

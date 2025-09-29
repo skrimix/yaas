@@ -32,7 +32,7 @@ jobs:
         include:
           - runner: ubuntu
             target: linux
-            build-path: build/linux/x64/release/bundle/
+            build-path: dist/**/*.AppImage
           - runner: windows
             target: windows
             build-path: build/windows/x64/runner/Release/
@@ -92,12 +92,26 @@ jobs:
       #     echo "LD=clang"            >> "$GITHUB_ENV"
       #     echo "LDPLUSPLUS=clang++"  >> "$GITHUB_ENV"
 
-      - name: Install Linux dependencies
+      - name: Install dependencies (Linux)
         if: matrix.target == 'linux'
         uses: awalsh128/cache-apt-pkgs-action@latest
         with:
-          packages: ninja-build libgtk-3-dev libasound2-dev libmpv-dev
+          packages: ninja-build libgtk-3-dev libasound2-dev libmpv-dev locate
           version: 1
+      
+      - name: Install appimagetool (Linux)
+        if: matrix.target == 'linux'
+        run: |
+          mkdir -p "$HOME/bin"
+          wget -O "$HOME/bin/appimagetool" "https://github.com/AppImage/appimagetool/releases/download/continuous/appimagetool-x86_64.AppImage"
+          chmod +x "$HOME/bin/appimagetool"
+          echo "$HOME/bin" >> $GITHUB_PATH
+      
+      - name: Install Fastforge CLI (Linux)
+        if: matrix.target == 'linux'
+        run: |
+          dart pub global activate fastforge
+          echo "$HOME/.pub-cache/bin" >> $GITHUB_PATH
 
       - name: Fix Linux dependencies cache
         if: matrix.target == 'linux'
@@ -123,10 +137,16 @@ jobs:
         run: rinf gen
 
       - name: Build the app
-        run: flutter build -v ${{ matrix.target }} --release
+        run: |
+          if [ "${{ matrix.target }}" = "linux" ]; then
+            fastforge package --platform linux --targets appimage
+          else
+            flutter build -v ${{ matrix.target }} --release
+          fi
 
       - name: Upload Artifact
         uses: actions/upload-artifact@v4
         with:
           name: build-${{ matrix.target }}
           path: ${{ matrix.build-path }}
+          if-no-files-found: error

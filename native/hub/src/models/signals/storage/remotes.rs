@@ -9,4 +9,3 @@ pub struct RcloneRemotesChanged {
     pub remotes: Vec<String>,
     pub error: Option<String>,
 }
-

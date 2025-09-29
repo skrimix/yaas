@@ -16,4 +16,3 @@ pub struct CloudAppsChangedEvent {
     pub apps: Option<Vec<CloudApp>>,
     pub error: Option<String>,
 }
-

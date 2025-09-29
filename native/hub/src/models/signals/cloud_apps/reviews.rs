@@ -48,4 +48,3 @@ pub struct AppReview {
     #[serde(default)]
     pub developer_response: Option<DeveloperResponse>,
 }
-

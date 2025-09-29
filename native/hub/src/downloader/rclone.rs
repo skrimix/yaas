@@ -228,8 +228,9 @@ impl RcloneClient {
                     }
                     error!(code = status.code().unwrap_or(-1), stderr = %stderr_str, "rclone transfer failed");
                     Err(anyhow!(
-                        "rclone failed with exit code: {}",
-                        status.code().map_or("unknown".to_string(), |c| c.to_string())
+                        "rclone failed with exit code: {}, stderr: {}",
+                        status.code().map_or("unknown".to_string(), |c| c.to_string()),
+                        stderr_str
                     ))
                 }
             }

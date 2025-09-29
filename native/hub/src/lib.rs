@@ -52,7 +52,7 @@ async fn main() {
     // Set working directory to the app's data directory
     let data_dir = dirs::data_dir().expect("Failed to get data directory");
     let app_dir = if cfg!(target_os = "macos") {
-        data_dir.join("com.github.skrimix.yaas")
+        data_dir.join("io.github.skrimix.yaas")
     } else {
         data_dir.join("YAAS")
     };

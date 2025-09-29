@@ -62,15 +62,15 @@ impl SettingsHandler {
 
                     if let Err(e) = result {
                         error!(error = e.as_ref() as &dyn Error, "Failed to load settings, using defaults");
-                        let settings = handler
-                            .load_default_settings()
-                            .expect("Failed to load default settings"); // TODO: handle error?
-                        handler.on_settings_change(
-                            settings.clone(),
-                            Some(format!("Failed to load settings: {e:#}")),
-                            true,
-                        );
-                    }
+                            let settings = handler
+                                .load_default_settings()
+                                .expect("Failed to load default settings"); // TODO: handle error?
+                            handler.on_settings_change(
+                                settings.clone(),
+                                Some(format!("Failed to load settings: {e:#}")),
+                                true,
+                            );
+                        }
                 },
                 Some(signal_pack) = save_receiver.recv() => {
                     info!("Received SaveSettingsRequest");
@@ -169,7 +169,7 @@ impl SettingsHandler {
         // TODO: Validate settings
 
         debug!(settings = ?settings, "Loaded application settings successfully");
-        self.on_settings_change(settings.clone(), None, false);
+        self.on_settings_change(settings.clone(), None, true);
         Ok(settings)
     }
 

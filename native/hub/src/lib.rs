@@ -16,7 +16,7 @@ use tracing_appender::{
     non_blocking::WorkerGuard,
     rolling::{RollingFileAppender, Rotation},
 };
-use tracing_subscriber::{fmt, layer::SubscriberExt, EnvFilter};
+use tracing_subscriber::{EnvFilter, fmt, layer::SubscriberExt};
 
 #[global_allocator]
 static GLOBAL: MiMalloc = MiMalloc;
@@ -129,7 +129,7 @@ fn setup_logging() -> Result<WorkerGuard> {
         .max_log_files(10)
         .filename_prefix("yaas")
         .filename_suffix("log")
-        .build("logs/yaas_native.log")
+        .build("logs/yaas_native")
         .context("Failed to initialize file appender")?;
     let (non_blocking, _guard) = tracing_appender::non_blocking(file_appender);
 
@@ -146,9 +146,7 @@ fn setup_logging() -> Result<WorkerGuard> {
                 // .with_span_events(FmtSpan::NEW | FmtSpan::CLOSE)
                 .event_format(fmt::format().pretty()),
         )
-        .with(
-            EnvFilter::new("debug,hyper_util=info")
-        );
+        .with(EnvFilter::new("debug,hyper_util=info"));
 
     tracing::subscriber::set_global_default(subscriber)
         .context("Failed to set global subscriber")?;

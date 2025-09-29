@@ -139,7 +139,7 @@ impl Downloader {
                         }
 
                         // Refresh app list
-                        handle.load_app_list(true, new_token).await; // FIXME: this should set the UI to loading state
+                        handle.load_app_list(true, new_token).await;
                     }
 
                     let mut download_dir = handle.download_dir.write().await;
@@ -313,9 +313,11 @@ impl Downloader {
 
     #[instrument(skip(self, cancellation_token))]
     async fn load_app_list(&self, force_refresh: bool, cancellation_token: CancellationToken) {
-        fn send_app_list(apps: Vec<CloudApp>, error: Option<String>) {
-            debug!(count = apps.len(), ?error, "Sending app list to UI");
-            CloudAppsChangedEvent { apps, error }.send_signal_to_dart();
+        fn send_event(is_loading: bool, apps: Option<Vec<CloudApp>>, error: Option<String>) {
+            if let Some(ref a) = apps {
+                debug!(count = a.len(), ?error, "Sending app list to UI");
+            }
+            CloudAppsChangedEvent { is_loading, apps, error }.send_signal_to_dart();
         }
 
         let mut cache = self.cloud_apps.lock().await;
@@ -326,6 +328,7 @@ impl Downloader {
             }
 
             info!("Loading app list from remote");
+            send_event(true, None, None);
             cache.clear();
 
             if let Some(result) = cancellation_token.run_until_cancelled(self.get_app_list()).await
@@ -334,19 +337,20 @@ impl Downloader {
                     Ok(apps) => {
                         info!(len = apps.len(), "Loaded app list successfully");
                         *cache = apps;
-                        send_app_list(cache.clone(), None);
+                        send_event(false, Some(cache.clone()), None);
                     }
                     Err(e) => {
                         error!(error = e.as_ref() as &dyn Error, "Failed to load app list");
-                        send_app_list(Vec::new(), Some(format!("Failed to load app list: {e:#}")));
+                        send_event(false, None, Some(format!("Failed to load app list: {e:#}")));
                     }
                 }
             } else {
                 warn!("App list load was cancelled");
+                send_event(false, None, None);
             }
         } else {
             info!(count = cache.len(), "Using cached app list");
-            send_app_list(cache.clone(), None);
+            send_event(false, Some(cache.clone()), None);
         }
     }
 

@@ -33,9 +33,12 @@ class CloudAppsState extends ChangeNotifier {
 
   CloudAppsState() {
     CloudAppsChangedEvent.rustSignalStream.listen((event) {
-      _apps = event.message.apps;
+      _isLoading = event.message.isLoading;
       _error = event.message.error;
-      _isLoading = false;
+      final apps = event.message.apps;
+      if (apps != null) {
+        _apps = apps;
+      }
       notifyListeners();
     });
 
@@ -59,15 +62,11 @@ class CloudAppsState extends ChangeNotifier {
   }
 
   void refresh() {
-    _isLoading = true;
-    notifyListeners();
     LoadCloudAppsRequest(refresh: true).sendSignalToRust();
   }
 
   void load() {
     if (_apps.isEmpty && !_isLoading) {
-      _isLoading = true;
-      notifyListeners();
       LoadCloudAppsRequest(refresh: false).sendSignalToRust();
     }
   }

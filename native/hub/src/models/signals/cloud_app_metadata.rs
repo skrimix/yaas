@@ -10,7 +10,9 @@ pub struct LoadCloudAppsRequest {
 
 #[derive(Serialize, Deserialize, RustSignal)]
 pub struct CloudAppsChangedEvent {
-    pub apps: Vec<CloudApp>,
+    pub is_loading: bool,
+    /// New app list if it changed, None otherwise
+    pub apps: Option<Vec<CloudApp>>,
     pub error: Option<String>,
 }
 

@@ -16,7 +16,7 @@ use tracing_appender::{
     non_blocking::WorkerGuard,
     rolling::{RollingFileAppender, Rotation},
 };
-use tracing_subscriber::{fmt, layer::SubscriberExt};
+use tracing_subscriber::{fmt, layer::SubscriberExt, EnvFilter};
 
 #[global_allocator]
 static GLOBAL: MiMalloc = MiMalloc;
@@ -146,7 +146,9 @@ fn setup_logging() -> Result<WorkerGuard> {
                 // .with_span_events(FmtSpan::NEW | FmtSpan::CLOSE)
                 .event_format(fmt::format().pretty()),
         )
-        .with(tracing_subscriber::filter::LevelFilter::DEBUG);
+        .with(
+            EnvFilter::new("debug,hyper_util=info")
+        );
 
     tracing::subscriber::set_global_default(subscriber)
         .context("Failed to set global subscriber")?;

@@ -209,7 +209,7 @@ impl SettingsHandler {
 
     /// Load default settings
     #[instrument(skip(self))]
-    pub fn load_default_settings(&self) -> Result<Settings> {
+    fn load_default_settings(&self) -> Result<Settings> {
         info!("Loading default settings");
         let settings = Settings::default();
 

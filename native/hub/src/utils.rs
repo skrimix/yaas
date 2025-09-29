@@ -4,7 +4,6 @@ use std::{
 };
 
 use anyhow::{Context, Result};
-use glob::glob;
 use sysproxy::Sysproxy;
 use tokio::fs;
 use tracing::{debug, error, instrument};
@@ -46,10 +45,23 @@ pub async fn dir_has_any_files(dir: &Path) -> Result<bool> {
     if !dir.exists() || !dir.is_dir() {
         return Ok(false);
     }
-    let pattern = dir.join("**/*").to_string_lossy().to_string();
-    for path in (glob(&pattern).context("Invalid glob pattern for dir_has_any_files")?).flatten() {
-        if path.is_file() {
-            return Ok(true);
+    // Depth-first traversal using async fs; stop at first file
+    let mut stack: Vec<PathBuf> = vec![dir.to_path_buf()];
+    while let Some(path) = stack.pop() {
+        let mut rd = match fs::read_dir(&path).await {
+            Ok(r) => r,
+            Err(_) => continue,
+        };
+        while let Some(entry) = rd.next_entry().await? {
+            let meta = match entry.metadata().await {
+                Ok(m) => m,
+                Err(_) => continue,
+            };
+            if meta.is_file() {
+                return Ok(true);
+            } else if meta.is_dir() {
+                stack.push(entry.path());
+            }
         }
     }
     Ok(false)
@@ -70,11 +82,17 @@ pub async fn decompress_all_7z_in_dir(dir: &Path) -> Result<()> {
     if !dir.is_dir() {
         return Ok(());
     }
-    let pattern = dir.join("*.7z").to_string_lossy().to_string();
-    for path in
-        (glob(&pattern).context("Invalid glob pattern for decompress_all_7z_in_dir")?).flatten()
-    {
-        if path.is_file() {
+    let mut rd = fs::read_dir(dir).await?;
+    while let Some(entry) = rd.next_entry().await? {
+        // Ignore errors collecting metadata; just skip entries
+        if entry.file_type().await.map(|ft| ft.is_file()).unwrap_or(false)
+            && entry
+                .path()
+                .extension()
+                .and_then(|e| e.to_str())
+                .is_some_and(|e| e.eq_ignore_ascii_case("7z"))
+        {
+            let path = entry.path();
             debug!(path = %path.display(), "Decompressing 7z archive");
             let dir_clone = dir.to_path_buf();
             tokio::task::spawn_blocking(move || {

@@ -5,7 +5,6 @@ use std::{
 };
 
 use anyhow::{Context, Result, ensure};
-use glob::glob;
 use rinf::{DartSignal, RustSignal};
 use tokio::fs;
 use tokio_stream::{StreamExt, wrappers::WatchStream};
@@ -130,19 +129,17 @@ impl BackupsHandler {
         );
 
         let mut entries = Vec::new();
-        let pattern = dir_path.join("*").join(".backup").to_string_lossy().to_string();
-        for item in glob(&pattern).context("Invalid glob pattern for backups scan")? {
-            match item {
-                Ok(marker_path) => {
-                    if let Some(dir) = marker_path.parent() {
-                        trace!(path = %dir.display(), "Found backup candidate");
-                        if let Some(entry) = self.build_entry(dir).await? {
-                            entries.push(entry);
-                        }
+        let mut rd = fs::read_dir(dir_path)
+            .await
+            .with_context(|| format!("Failed to read backups directory: {}", dir_path.display()))?;
+        while let Some(entry) = rd.next_entry().await? {
+            if entry.file_type().await.map(|t| t.is_dir()).unwrap_or(false) {
+                let candidate = entry.path();
+                if candidate.join(".backup").exists() {
+                    trace!(path = %candidate.display(), "Found backup candidate");
+                    if let Some(entry) = self.build_entry(&candidate).await? {
+                        entries.push(entry);
                     }
-                }
-                Err(e) => {
-                    debug!(error = %e, "Glob match error while scanning backups");
                 }
             }
         }

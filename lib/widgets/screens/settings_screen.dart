@@ -1,6 +1,7 @@
 import 'dart:io';
 
 import 'package:flutter/material.dart';
+import '../../utils/theme_utils.dart' as app_theme;
 import 'package:flutter/services.dart';
 import 'package:provider/provider.dart';
 import 'package:file_picker/file_picker.dart';
@@ -373,6 +374,103 @@ class _SettingsScreenState extends State<SettingsScreen> {
   List<Widget> _buildSettingsSections(
       AppLocalizations l10n, SettingsState settingsState) {
     return [
+      _buildSection(
+        title: l10n.settingsSectionAppearance,
+        children: [
+          Padding(
+            padding: const EdgeInsets.symmetric(
+                vertical: SettingsConstants.verticalSpacing),
+            child: DropdownButtonFormField<ThemePreference>(
+              initialValue: _currentFormSettings.themePreference,
+              items: [
+                DropdownMenuItem(
+                  value: ThemePreference.auto,
+                  child: Text(l10n.themeAuto),
+                ),
+                DropdownMenuItem(
+                  value: ThemePreference.dark,
+                  child: Text(l10n.themeDark),
+                ),
+                DropdownMenuItem(
+                  value: ThemePreference.light,
+                  child: Text(l10n.themeLight),
+                ),
+              ],
+              onChanged: (value) {
+                if (value == null) return;
+                settingsState.setThemePreference(value);
+                setState(() {
+                  _currentFormSettings =
+                      _currentFormSettings.copyWith(themePreference: value);
+                  _hasChanges = false;
+                });
+              },
+              decoration: InputDecoration(
+                labelText: l10n.settingsTheme,
+                border: const OutlineInputBorder(),
+              ),
+            ),
+          ),
+          SwitchListTile(
+            title: Text(l10n.settingsUseSystemColor),
+            value: settingsState.settings.useSystemColor,
+            onChanged: (v) {
+              settingsState.setUseSystemColor(v);
+              setState(() {
+                _currentFormSettings =
+                    _currentFormSettings.copyWith(useSystemColor: v);
+                _hasChanges = false;
+              });
+            },
+          ),
+          Padding(
+            padding: const EdgeInsets.symmetric(
+                vertical: SettingsConstants.verticalSpacing),
+            child: DropdownButtonFormField<String>(
+              initialValue:
+                  app_theme.normalizeSeedKey(_currentFormSettings.seedColorKey),
+              items: app_theme.kSeedColorPalette.keys.map((key) {
+                final color = app_theme.seedFromKey(key);
+                return DropdownMenuItem(
+                  value: key,
+                  child: Row(
+                    children: [
+                      Container(
+                        width: 16,
+                        height: 16,
+                        decoration: BoxDecoration(
+                          color: color,
+                          shape: BoxShape.circle,
+                          border: Border.all(color: Colors.black12),
+                        ),
+                      ),
+                      const SizedBox(width: 8),
+                      Text(app_theme.seedLabel(l10n, key)),
+                    ],
+                  ),
+                );
+              }).toList(),
+              onChanged: settingsState.settings.useSystemColor
+                  ? null
+                  : (value) {
+                      if (value != null) {
+                        settingsState.setSeedColorKey(value);
+                        setState(() {
+                          _currentFormSettings = _currentFormSettings.copyWith(
+                              seedColorKey: value);
+                          _hasChanges = false;
+                        });
+                      }
+                    },
+              decoration: InputDecoration(
+                labelText: l10n.settingsSeedColor,
+                border: const OutlineInputBorder(),
+              ),
+            ),
+          ),
+        ],
+      ),
+      const SizedBox(height: SettingsConstants.sectionSpacing),
       _buildSection(
         title: l10n.settingsSectionGeneral,
         children: [

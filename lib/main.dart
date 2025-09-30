@@ -2,6 +2,8 @@ import 'dart:ui';
 
 import 'package:desktop_window/desktop_window.dart';
 import 'package:flutter/material.dart';
+import 'package:dynamic_color/dynamic_color.dart';
+import 'utils/theme_utils.dart' as app_theme;
 import 'package:provider/provider.dart';
 import 'package:flutter_localizations/flutter_localizations.dart';
 import 'package:video_player_media_kit/video_player_media_kit.dart';
@@ -20,11 +22,6 @@ import 'providers/log_state.dart';
 import 'providers/app_state.dart';
 import 'navigation.dart';
 import 'widgets/common/status_bar.dart';
-
-final colorScheme = ColorScheme.fromSeed(
-  seedColor: Colors.deepPurple,
-  brightness: Brightness.dark,
-);
 
 void main() async {
   await initializeRust(messages.assignRustSignal);
@@ -59,7 +56,7 @@ void main() async {
       description: Text(toast.description),
       autoCloseDuration: Duration(milliseconds: toast.duration ?? 3000),
       style: ToastificationStyle.flat,
-      backgroundColor: colorScheme.surfaceContainer,
+      backgroundColor: null,
       borderSide: BorderSide.none,
       alignment: Alignment.bottomRight,
     );
@@ -92,6 +89,8 @@ class YAASApp extends StatefulWidget {
 
 class _YAASAppState extends State<YAASApp> {
   late final AppLifecycleListener _listener;
+  Color? _linuxKdeAccent;
+  bool _triedReadLinuxAccent = false;
 
   @override
   void initState() {
@@ -109,6 +108,9 @@ class _YAASAppState extends State<YAASApp> {
       context.read<CloudAppsState>().load();
       context.read<SettingsState>().load();
     });
+
+    // Best-effort read of KDE accent color on Linux
+    _maybeLoadLinuxAccent();
   }
 
   @override
@@ -132,33 +134,80 @@ class _YAASAppState extends State<YAASApp> {
           };
         },
       ),
-      child: MaterialApp(
-        navigatorKey: YAASApp.navigatorKey,
-        onGenerateTitle: (context) => AppLocalizations.of(context).appTitle,
-        locale: context.watch<SettingsState>().locale,
-        localizationsDelegates: const [
-          AppLocalizations.delegate,
-          GlobalMaterialLocalizations.delegate,
-          GlobalWidgetsLocalizations.delegate,
-          GlobalCupertinoLocalizations.delegate,
-        ],
-        supportedLocales: AppLocalizations.supportedLocales,
-        theme: ThemeData(
-          colorScheme: colorScheme,
-          useMaterial3: true,
-        ),
-        home: Consumer<AppState>(
-          builder: (context, appState, child) {
-            if (appState.panicMessage != null) {
-              return ErrorScreen(message: appState.panicMessage!);
-            }
-            return DragDropOverlay(
-              child: const SinglePage(),
-            );
-          },
-        ),
+      child: DynamicColorBuilder(
+        builder: (ColorScheme? lightDynamic, ColorScheme? darkDynamic) {
+          final settings = context.watch<SettingsState>().settings;
+          final seed = app_theme.seedFromKey(settings.seedColorKey);
+
+          // If system color is enabled, prefer dynamic ColorScheme; otherwise use seed
+          final ColorScheme lightScheme;
+          final ColorScheme darkScheme;
+          if (settings.useSystemColor) {
+            final fallbackSeed = _linuxKdeAccent ?? seed;
+            lightScheme = lightDynamic ??
+                ColorScheme.fromSeed(
+                    seedColor: fallbackSeed, brightness: Brightness.light);
+            darkScheme = darkDynamic ??
+                ColorScheme.fromSeed(
+                    seedColor: fallbackSeed, brightness: Brightness.dark);
+          } else {
+            lightScheme = ColorScheme.fromSeed(
+                seedColor: seed, brightness: Brightness.light);
+            darkScheme = ColorScheme.fromSeed(
+                seedColor: seed, brightness: Brightness.dark);
+          }
+
+          ThemeMode themeMode;
+          switch (settings.themePreference) {
+            case messages.ThemePreference.auto:
+              themeMode = ThemeMode.system;
+              break;
+            case messages.ThemePreference.light:
+              themeMode = ThemeMode.light;
+              break;
+            case messages.ThemePreference.dark:
+              themeMode = ThemeMode.dark;
+              break;
+          }
+
+          return MaterialApp(
+            navigatorKey: YAASApp.navigatorKey,
+            onGenerateTitle: (context) => AppLocalizations.of(context).appTitle,
+            locale: context.watch<SettingsState>().locale,
+            localizationsDelegates: const [
+              AppLocalizations.delegate,
+              GlobalMaterialLocalizations.delegate,
+              GlobalWidgetsLocalizations.delegate,
+              GlobalCupertinoLocalizations.delegate,
+            ],
+            supportedLocales: AppLocalizations.supportedLocales,
+            themeMode: themeMode,
+            theme: ThemeData(colorScheme: lightScheme, useMaterial3: true),
+            darkTheme: ThemeData(colorScheme: darkScheme, useMaterial3: true),
+            home: Consumer<AppState>(
+              builder: (context, appState, child) {
+                if (appState.panicMessage != null) {
+                  return ErrorScreen(message: appState.panicMessage!);
+                }
+                return DragDropOverlay(
+                  child: const SinglePage(),
+                );
+              },
+            ),
+          );
+        },
       ),
     );
+  }
+
+  Future<void> _maybeLoadLinuxAccent() async {
+    if (_triedReadLinuxAccent) return;
+    _triedReadLinuxAccent = true;
+    final color = await app_theme.readKdeAccent();
+    if (!mounted) return;
+    if (color != null) {
+      setState(() => _linuxKdeAccent = color);
+    }
   }
 }
 

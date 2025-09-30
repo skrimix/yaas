@@ -110,6 +110,72 @@ class AppLocalizationsRu extends AppLocalizations {
   String get settingsSectionDownloader => 'Загрузчик';
 
   @override
+  String get settingsSectionAppearance => 'Оформление';
+
+  @override
+  String get settingsUseSystemColor => 'Использовать системный цвет';
+
+  @override
+  String get settingsSeedColor => 'Акцентный цвет';
+
+  @override
+  String get settingsTheme => 'Тема';
+
+  @override
+  String get themeAuto => 'Авто';
+
+  @override
+  String get themeDark => 'Тёмная';
+
+  @override
+  String get themeLight => 'Светлая';
+
+  @override
+  String get colorDeepPurple => 'Фиолетовый (тёмный)';
+
+  @override
+  String get colorIndigo => 'Индиго';
+
+  @override
+  String get colorBlue => 'Синий';
+
+  @override
+  String get colorCyan => 'Бирюзовый';
+
+  @override
+  String get colorTeal => 'Морская волна';
+
+  @override
+  String get colorGreen => 'Зелёный';
+
+  @override
+  String get colorLime => 'Лаймовый';
+
+  @override
+  String get colorAmber => 'Янтарный';
+
+  @override
+  String get colorOrange => 'Оранжевый';
+
+  @override
+  String get colorDeepOrange => 'Оранжевый (тёмный)';
+
+  @override
+  String get colorRed => 'Красный';
+
+  @override
+  String get colorPink => 'Розовый';
+
+  @override
+  String get colorPurple => 'Пурпурный';
+
+  @override
+  String get colorBrown => 'Коричневый';
+
+  @override
+  String get colorBlueGrey => 'Серо-синий';
+
+  @override
   String get settingsRclonePath => 'Путь к Rclone';
 
   @override

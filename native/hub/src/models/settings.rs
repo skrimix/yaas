@@ -3,6 +3,15 @@ use serde::{Deserialize, Serialize};
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize, SignalPiece, Default)]
 #[serde(rename_all = "snake_case")]
+pub enum ThemePreference {
+    #[default]
+    Dark,
+    Light,
+    Auto,
+}
+
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize, SignalPiece, Default)]
+#[serde(rename_all = "snake_case")]
 pub enum NavigationRailLabelVisibility {
     #[default]
     Selected,
@@ -39,6 +48,15 @@ pub struct Settings {
     pub navigation_rail_label_visibility: NavigationRailLabelVisibility,
     #[serde(default)]
     pub startup_page_key: String,
+    /// Whether to use system/dynamic color when available
+    #[serde(default)]
+    pub use_system_color: bool,
+    /// Seed color key from a fixed palette (e.g. "deep_purple")
+    #[serde(default)]
+    pub seed_color_key: String,
+    /// Preferred theme mode (dark is default)
+    #[serde(default)]
+    pub theme_preference: ThemePreference,
 }
 
 impl Default for Settings {
@@ -63,6 +81,9 @@ impl Default for Settings {
             locale_code: "system".to_string(),
             navigation_rail_label_visibility: NavigationRailLabelVisibility::Selected,
             startup_page_key: "home".to_string(),
+            use_system_color: false,
+            seed_color_key: "deep_purple".to_string(),
+            theme_preference: ThemePreference::Dark,
         }
     }
 }

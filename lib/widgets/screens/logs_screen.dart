@@ -395,6 +395,8 @@ class _LogsScreenState extends State<LogsScreen> {
     final displayMessage = _getDisplayMessage(log);
     final isSpecialMessage = displayMessage == '<no message>' ||
         (displayMessage.startsWith('<') && displayMessage.endsWith('>'));
+    final cs = Theme.of(context).colorScheme;
+    final isLight = Theme.of(context).brightness == Brightness.light;
 
     return Material(
       color: isEvenRow
@@ -424,7 +426,7 @@ class _LogsScreenState extends State<LogsScreen> {
                 child: Text(
                   _formatTimestamp(log.timestamp),
                   style: Theme.of(context).textTheme.bodySmall?.copyWith(
-                        color: Theme.of(context).colorScheme.outline,
+                        color: cs.onSurfaceVariant,
                         fontFamily: 'monospace',
                       ),
                 ),
@@ -461,7 +463,7 @@ class _LogsScreenState extends State<LogsScreen> {
                   child: Text(
                     log.target,
                     style: Theme.of(context).textTheme.bodySmall?.copyWith(
-                          color: Theme.of(context).colorScheme.primary,
+                          color: cs.primary,
                           fontFamily: 'monospace',
                         ),
                     overflow: TextOverflow.ellipsis,
@@ -479,8 +481,8 @@ class _LogsScreenState extends State<LogsScreen> {
                           fontFamily: 'monospace',
                           fontStyle: isSpecialMessage ? FontStyle.italic : null,
                           color: isSpecialMessage
-                              ? Theme.of(context).colorScheme.outline
-                              : null,
+                              ? cs.onSurfaceVariant
+                              : (isLight ? cs.onSurface : null),
                         ),
                     maxLines: 2,
                     overflow: TextOverflow.ellipsis,
@@ -494,7 +496,7 @@ class _LogsScreenState extends State<LogsScreen> {
                 Icon(
                   Icons.more_horiz,
                   size: 16,
-                  color: Theme.of(context).colorScheme.outline,
+                  color: cs.onSurfaceVariant,
                 ),
               ],
             ],

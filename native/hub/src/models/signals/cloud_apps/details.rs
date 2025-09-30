@@ -1,5 +1,4 @@
-use rinf::DartSignal;
-use rinf::RustSignal;
+use rinf::{DartSignal, RustSignal};
 use serde::{Deserialize, Serialize};
 
 // Request detailed info about an app from the external API by package name

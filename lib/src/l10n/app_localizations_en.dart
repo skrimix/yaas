@@ -109,6 +109,72 @@ class AppLocalizationsEn extends AppLocalizations {
   String get settingsSectionDownloader => 'Downloader';
 
   @override
+  String get settingsSectionAppearance => 'Appearance';
+
+  @override
+  String get settingsUseSystemColor => 'Use system color';
+
+  @override
+  String get settingsSeedColor => 'Accent color';
+
+  @override
+  String get settingsTheme => 'Theme';
+
+  @override
+  String get themeAuto => 'Auto';
+
+  @override
+  String get themeDark => 'Dark';
+
+  @override
+  String get themeLight => 'Light';
+
+  @override
+  String get colorDeepPurple => 'Deep purple';
+
+  @override
+  String get colorIndigo => 'Indigo';
+
+  @override
+  String get colorBlue => 'Blue';
+
+  @override
+  String get colorCyan => 'Cyan';
+
+  @override
+  String get colorTeal => 'Teal';
+
+  @override
+  String get colorGreen => 'Green';
+
+  @override
+  String get colorLime => 'Lime';
+
+  @override
+  String get colorAmber => 'Amber';
+
+  @override
+  String get colorOrange => 'Orange';
+
+  @override
+  String get colorDeepOrange => 'Deep orange';
+
+  @override
+  String get colorRed => 'Red';
+
+  @override
+  String get colorPink => 'Pink';
+
+  @override
+  String get colorPurple => 'Purple';
+
+  @override
+  String get colorBrown => 'Brown';
+
+  @override
+  String get colorBlueGrey => 'Blue grey';
+
+  @override
   String get settingsRclonePath => 'Rclone Path';
 
   @override

@@ -124,7 +124,17 @@ class Home extends StatelessWidget {
                                       deviceState.controllerBatteryLevel(
                                           deviceState.leftController),
                                   icon: SvgPicture.asset(
-                                      'assets/svg/controller_l.svg'),
+                                    'assets/svg/controller_l.svg',
+                                    colorFilter: Theme.of(context).brightness ==
+                                            Brightness.light
+                                        ? ColorFilter.mode(
+                                            Theme.of(context)
+                                                .colorScheme
+                                                .onSurfaceVariant,
+                                            BlendMode.srcIn,
+                                          )
+                                        : null,
+                                  ),
                                   isDimmed:
                                       deviceState.leftController?.status !=
                                           ControllerStatus.active,
@@ -136,7 +146,17 @@ class Home extends StatelessWidget {
                                   title: l10n.headset,
                                   batteryLevel: deviceState.batteryLevel,
                                   icon: SvgPicture.asset(
-                                      'assets/svg/headset.svg'),
+                                    'assets/svg/headset.svg',
+                                    colorFilter: Theme.of(context).brightness ==
+                                            Brightness.light
+                                        ? ColorFilter.mode(
+                                            Theme.of(context)
+                                                .colorScheme
+                                                .onSurfaceVariant,
+                                            BlendMode.srcIn,
+                                          )
+                                        : null,
+                                  ),
                                   l10n: l10n,
                                 ),
                                 const SizedBox(width: 12),
@@ -149,7 +169,17 @@ class Home extends StatelessWidget {
                                       deviceState.controllerBatteryLevel(
                                           deviceState.rightController),
                                   icon: SvgPicture.asset(
-                                      'assets/svg/controller_r.svg'),
+                                    'assets/svg/controller_r.svg',
+                                    colorFilter: Theme.of(context).brightness ==
+                                            Brightness.light
+                                        ? ColorFilter.mode(
+                                            Theme.of(context)
+                                                .colorScheme
+                                                .onSurfaceVariant,
+                                            BlendMode.srcIn,
+                                          )
+                                        : null,
+                                  ),
                                   isDimmed:
                                       deviceState.rightController?.status !=
                                           ControllerStatus.active,

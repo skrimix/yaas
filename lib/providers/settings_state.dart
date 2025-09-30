@@ -1,6 +1,7 @@
 import 'package:flutter/material.dart';
 import '../navigation.dart';
 import '../src/bindings/bindings.dart';
+import '../utils/theme_utils.dart' as app_theme;
 
 class SettingsState extends ChangeNotifier {
   Settings _settings = Settings(
@@ -15,6 +16,9 @@ class SettingsState extends ChangeNotifier {
     localeCode: 'system',
     navigationRailLabelVisibility: NavigationRailLabelVisibility.selected,
     startupPageKey: 'home',
+    useSystemColor: false,
+    seedColorKey: 'deep_purple',
+    themePreference: ThemePreference.dark,
   );
 
   bool _isLoading = false;
@@ -41,7 +45,8 @@ class SettingsState extends ChangeNotifier {
         _error = event.message.error;
       } else {
         _settings = event.message.settings;
-        final changed = _normalizeStartupPageKey();
+        final changed =
+            _normalizeStartupPageKey() | _normalizeAppearanceSettings();
         _error = null;
         if (changed) {
           SaveSettingsRequest(settings: _settings).sendSignalToRust();
@@ -108,6 +113,24 @@ class SettingsState extends ChangeNotifier {
     SaveSettingsRequest(settings: _settings).sendSignalToRust();
   }
 
+  Future<void> setUseSystemColor(bool value) async {
+    _settings = _settings.copyWith(useSystemColor: value);
+    notifyListeners();
+    SaveSettingsRequest(settings: _settings).sendSignalToRust();
+  }
+
+  Future<void> setSeedColorKey(String key) async {
+    _settings = _settings.copyWith(seedColorKey: key);
+    notifyListeners();
+    SaveSettingsRequest(settings: _settings).sendSignalToRust();
+  }
+
+  Future<void> setThemePreference(ThemePreference pref) async {
+    _settings = _settings.copyWith(themePreference: pref);
+    notifyListeners();
+    SaveSettingsRequest(settings: _settings).sendSignalToRust();
+  }
+
   Future<void> refreshRcloneRemotes() async {
     _isRemotesLoading = true;
     _remotesError = null;
@@ -128,5 +151,14 @@ class SettingsState extends ChangeNotifier {
     _settings = _settings.copyWith(startupPageKey: fallbackKey);
 
     return true;
+  }
+
+  bool _normalizeAppearanceSettings() {
+    final normalized = app_theme.normalizeSeedKey(_settings.seedColorKey);
+    if (normalized != _settings.seedColorKey) {
+      _settings = _settings.copyWith(seedColorKey: normalized);
+      return true;
+    }
+    return false;
   }
 }

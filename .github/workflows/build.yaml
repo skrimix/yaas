@@ -151,47 +151,47 @@ jobs:
           path: ${{ matrix.build-path }}
           if-no-files-found: error
 
-  publish:
-    name: Publish Nightly
-    needs: build
-    runs-on: ubuntu-latest
-    if: ${{ (github.event_name == 'push' && github.ref == 'refs/heads/master') || github.event_name == 'workflow_dispatch' }}
-    permissions:
-      contents: write
-    steps:
-      - name: Checkout repository
-        uses: actions/checkout@v4
-        with:
-          fetch-depth: 0
+  # publish:
+  #   name: Publish Nightly
+  #   needs: build
+  #   runs-on: ubuntu-latest
+  #   if: ${{ (github.event_name == 'push' && github.ref == 'refs/heads/master') || github.event_name == 'workflow_dispatch' }}
+  #   permissions:
+  #     contents: write
+  #   steps:
+  #     - name: Checkout repository
+  #       uses: actions/checkout@v4
+  #       with:
+  #         fetch-depth: 0
 
-      - name: Download build artifacts
-        uses: actions/download-artifact@v4
-        with:
-          path: release/
-          merge-multiple: true
+  #     - name: Download build artifacts
+  #       uses: actions/download-artifact@v4
+  #       with:
+  #         path: release/
+  #         merge-multiple: true
 
-      - name: Add checksums
-        run: |
-          (cd release && sha256sum * > SHA256SUMS.txt) || \
-          (cd release && shasum -a 256 * > SHA256SUMS.txt)
+  #     - name: Add checksums
+  #       run: |
+  #         (cd release && sha256sum * > SHA256SUMS.txt) || \
+  #         (cd release && shasum -a 256 * > SHA256SUMS.txt)
 
-      - name: Move 'nightly' tag to this commit
-        run: |
-          git config user.name "github-actions"
-          git config user.email "github-actions@github.com"
-          git tag -f nightly ${{ github.sha }}
-          git push -f origin nightly
+  #     - name: Move 'nightly' tag to this commit
+  #       run: |
+  #         git config user.name "github-actions"
+  #         git config user.email "github-actions@github.com"
+  #         git tag -f nightly ${{ github.sha }}
+  #         git push -f origin nightly
 
-      - name: Update CI Nightly pre-release
-        uses: ncipollo/release-action@v1
-        with:
-          tag: nightly
-          name: "CI Nightly"
-          prerelease: true
-          allowUpdates: true
-          removeArtifacts: true
-          replacesArtifacts: true
-          body: |
-            Nightly build for ${{ github.sha }}
-            Trigger: ${{ github.event_name }}
-          artifacts: "release/*"
+  #     - name: Update CI Nightly pre-release
+  #       uses: ncipollo/release-action@v1
+  #       with:
+  #         tag: nightly
+  #         name: "CI Nightly"
+  #         prerelease: true
+  #         allowUpdates: true
+  #         removeArtifacts: true
+  #         replacesArtifacts: true
+  #         body: |
+  #           Nightly build for ${{ github.sha }}
+  #           Trigger: ${{ github.event_name }}
+  #         artifacts: "release/*"

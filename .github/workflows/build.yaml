@@ -32,7 +32,7 @@ jobs:
         include:
           - runner: ubuntu
             target: linux
-            build-path: dist/**/*.AppImage
+            build-path: dist/yaas.AppImage
           - runner: windows
             target: windows
             build-path: build/windows/x64/runner/Release/
@@ -121,7 +121,6 @@ jobs:
               libblas.so.3-x86_64-linux-gnu \
               /usr/lib/x86_64-linux-gnu/blas/libblas.so.3 \
               10
-
           sudo update-alternatives --install \
               /usr/lib/x86_64-linux-gnu/liblapack.so.3 \
               liblapack.so.3-x86_64-linux-gnu \
@@ -136,13 +135,25 @@ jobs:
       - name: Generate Rinf bindings
         run: rinf gen
 
-      - name: Build the app
+      - name: Build the app (Linux AppImage)
+        if: matrix.target == 'linux'
+        shell: bash
+        run: |
+          set -euo pipefail
+          fastforge package --platform linux --targets appimage
+          shopt -s globstar nullglob
+          files=(dist/**/*.AppImage)
+          if (( ${#files[@]} == 0 )); then
+            echo "No AppImage found in dist/" >&2
+            find dist -maxdepth 3 -type f -name '*.AppImage' -print || true
+            exit 1
+          fi
+          # Rename to a stable filename for the artifact
+          cp -v "${files[0]}" "dist/yaas.AppImage"
+
+      - name: Build the app (Windows/macOS)
         if: matrix.target != 'linux'
         run: flutter build -v ${{ matrix.target }} --release
-      
-      - name: Build the app (Linux)
-        if: matrix.target == 'linux'
-        run: fastforge package --platform linux --targets appimage
 
       - name: Upload Artifact
         uses: actions/upload-artifact@v4
@@ -165,51 +176,46 @@ jobs:
           fetch-depth: 0
       
       - name: Get short SHA
-        if: matrix.target != 'windows'
-        run: echo "SHORT_SHA=`echo ${{ github.sha }} | cut -c1-8`" >> $GITHUB_ENV
-      
-      - name: Get short SHA (Windows)
-        if: matrix.target == 'windows'
-        shell: pwsh
-        run: echo "SHORT_SHA=`echo ${{ github.sha }} | cut -c1-8`" >> $env:GITHUB_ENV
+        run: echo "SHORT_SHA=${GITHUB_SHA::8}" >> $GITHUB_ENV
 
       - name: Download build artifacts
         uses: actions/download-artifact@v4
         with:
           path: artifacts/
-      
-      - name: Package artifact (Linux)
-        if: matrix.target == 'linux'
+          pattern: build-*
+
+      - name: Package all platforms
         shell: bash
         run: |
           set -euo pipefail
           mkdir -p release
           shopt -s globstar nullglob
-          files=(artifacts/build-linux/**/*.AppImage)
-          if (( ${#files[@]} == 0 )); then
-            echo "No AppImage found in artifacts/" >&2
+
+          found=0
+
+          if [ -f "artifacts/build-linux/yaas.AppImage" ]; then
+            cp -v "artifacts/build-linux/yaas.AppImage" "release/YAAS-${SHORT_SHA}-linux-x86_64.AppImage"
+            found=1
+          fi
+
+          if [ -d "artifacts/build-windows" ]; then
+            (cd artifacts/build-windows && \
+              zip -yr "$OLDPWD/release/YAAS-${SHORT_SHA}-windows-x64.zip" .)
+            found=1
+          fi
+
+          if [ -d "artifacts/build-macos" ]; then
+            app=$(ls -d artifacts/build-macos/*.app | head -n1)
+            (cd "$(dirname "$app")" && \
+              zip -yr "$OLDPWD/release/YAAS-${SHORT_SHA}-macos.zip" "$(basename "$app")")
+            found=1
+          fi
+
+          if [ "$found" -eq 0 ]; then
+            echo "No known artifacts found under artifacts/" >&2
+            find artifacts -maxdepth 5 -type f -print | sed 's/^/  /' || true
             exit 1
           fi
-          cp -v "${files[0]}" "release/YAAS-${SHORT_SHA}-linux-x86_64.AppImage"
-
-      - name: Package artifact (Windows)
-        if: matrix.target == 'windows'
-        shell: pwsh
-        run: |
-          New-Item -ItemType Directory -Force -Path release | Out-Null
-          $src = "artifacts/build-windows"
-          $dst = "release/YAAS-$env:SHORT_SHA-windows-x64.zip"
-          Compress-Archive -Path "$src/*" -DestinationPath $dst -Force
-
-      - name: Package artifact (macOS)
-        if: matrix.target == 'macos'
-        shell: bash
-        run: |
-          set -euo pipefail
-          mkdir -p release
-          app=$(ls -d artifacts/build-macos/*.app | head -n1)
-          # 'ditto' preserves bundle bits better than plain 'zip'
-          ditto -c -k --sequesterRsrc --keepParent "$app" "release/YAAS-${SHORT_SHA}-macos.zip"
 
       - name: Add checksums
         shell: bash
@@ -217,7 +223,6 @@ jobs:
           set -euo pipefail
           cd release
           find . -maxdepth 1 -type f -print0 | sort -z | xargs -0 sha256sum > SHA256SUMS.txt
-
 
       - name: Move 'nightly' tag to this commit
         run: |

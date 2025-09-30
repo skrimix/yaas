@@ -170,13 +170,16 @@ jobs:
     permissions:
       contents: write
     steps:
+      - name: Set current date as env variable
+        run: echo "PUBLISH_DATE=$(date +'%Y-%m-%dT%H:%M:%S')" >> $GITHUB_ENV
+
       - name: Checkout repository
         uses: actions/checkout@v4
         with:
           fetch-depth: 0
       
       - name: Get short SHA
-        run: echo "SHORT_SHA=${GITHUB_SHA::8}" >> $GITHUB_ENV
+        run: echo "SHORT_SHA=${GITHUB_SHA::7}" >> $GITHUB_ENV
 
       - name: Download build artifacts
         uses: actions/download-artifact@v4
@@ -222,7 +225,7 @@ jobs:
         run: |
           set -euo pipefail
           cd release
-          find . -maxdepth 1 -type f -print0 | sort -z | xargs -0 sha256sum > SHA256SUMS.txt
+          find . -maxdepth 1 -type f -not -name 'SHA256SUMS.txt' -print0 | sort -z | xargs -0 sha256sum > SHA256SUMS.txt
 
       - name: Move 'nightly' tag to this commit
         run: |
@@ -242,5 +245,6 @@ jobs:
           replacesArtifacts: true
           body: |
             Nightly build for ${{ github.sha }}
+            Published at ${{ env.PUBLISH_DATE }}
             Trigger: ${{ github.event_name }}
           artifacts: "release/*"

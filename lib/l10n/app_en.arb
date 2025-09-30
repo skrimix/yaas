@@ -1,441 +1,564 @@
 {
-  "@@locale": "en",
-  "appTitle": "YAAS",
-
-  "navHome": "Home",
-  "navManage": "Manage",
-  "navDownload": "Download",
-  "navSideload": "Sideload",
-  "navBackups": "Backups",
-  "navSettings": "Settings",
-  "navLogs": "Logs",
-  "navAbout": "About",
-  "navDownloads": "Downloads",
-
-  "settingsTitle": "Settings",
-  "settingsErrorLoading": "Error loading settings",
-  "settingsResetToDefaults": "Reset to Defaults",
-  "settingsRevertChangesTooltip": "Revert Changes\n(Shift+Click to reset to defaults)",
-  "settingsSaveChanges": "Save Changes",
-  "settingsSectionGeneral": "General",
-  "settingsLanguage": "Language",
-  "settingsNavigationRailLabels": "Navigation rail labels",
-  "settingsNavigationRailLabelsSelected": "Selected page only",
-  "settingsNavigationRailLabelsAll": "All pages",
-  "settingsStartupPage": "Startup page",
-  "settingsSystemDefault": "System default",
-  "languageEnglish": "English",
-  "languageRussian": "Russian",
-  "settingsSectionStorage": "Storage",
-  "settingsDownloadsLocation": "Downloads Location",
-  "settingsBackupsLocation": "Backups Location",
-  "settingsSectionAdb": "ADB",
-  "settingsAdbPath": "ADB Path",
-  "settingsPreferredConnection": "Preferred Connection Type",
-  "settingsConnectionUsb": "USB",
-  "settingsConnectionWireless": "Wireless",
-  "settingsSectionDownloader": "Downloader",
-  "settingsSectionAppearance": "Appearance",
-  "settingsUseSystemColor": "Use system color",
-  "settingsSeedColor": "Accent color",
-  "settingsTheme": "Theme",
-  "themeAuto": "Auto",
-  "themeDark": "Dark",
-  "themeLight": "Light",
-  "colorDeepPurple": "Deep purple",
-  "colorIndigo": "Indigo",
-  "colorBlue": "Blue",
-  "colorCyan": "Cyan",
-  "colorTeal": "Teal",
-  "colorGreen": "Green",
-  "colorLime": "Lime",
-  "colorAmber": "Amber",
-  "colorOrange": "Orange",
-  "colorDeepOrange": "Deep orange",
-  "colorRed": "Red",
-  "colorPink": "Pink",
-  "colorPurple": "Purple",
-  "colorBrown": "Brown",
-  "colorBlueGrey": "Blue grey",
-  "settingsRclonePath": "Rclone Path",
-  "settingsRcloneRemote": "Rclone Remote",
-  "settingsCustomRemoteName": "Custom Remote Name",
-  "settingsCustomInput": "[Custom]",
-  "settingsNoRemotesFound": "No remotes found",
-  "settingsFailedToLoadRemotes": "Failed to list remotes",
-  "settingsBandwidthLimit": "Bandwidth Limit",
-  "settingsBandwidthHelper": "(Not implemented) Value in KiB/s or with B|K|M|G|T|P suffix or more (click for documentation)",
-  "settingsDownloadsCleanup": "Downloads Cleanup",
-  "settingsCleanupDeleteAfterInstall": "Remove after installation",
-  "settingsCleanupKeepOneVersion": "Keep one version",
-  "settingsCleanupKeepTwoVersions": "Keep two versions",
-  "settingsCleanupKeepAllVersions": "Keep all versions",
-  "settingsBrowse": "Browse",
-  "selectLabel": "Select {label}",
-  "@selectLabel": {
-    "placeholders": {
-      "label": {
-        "type": "String",
-        "example": "Downloads Location"
-      }
-    }
-  },
-  "selectLabelDirectory": "Select {label} Directory",
-  "@selectLabelDirectory": {
-    "placeholders": {
-      "label": {
-        "type": "String",
-        "example": "Downloads"
-      }
-    }
-  },
-  "couldNotOpenUrl": "Could not open {url}",
-  "@couldNotOpenUrl": {
-    "placeholders": {"url": {"type": "String", "example": "https://example.com"}}
-  },
-  "statusAdb": "ADB Status: {status}",
-  "@statusAdb": {"placeholders": {"status": {"type": "String", "example": "Server running"}}},
-  "statusAdbServerNotRunning": "ADB server not running",
-  "statusAdbServerStarting": "Starting ADB server",
-  "statusAdbServerStartFailed": "Failed to start ADB server",
-  "statusAdbNoDevices": "No devices found",
-  "statusAdbDevicesAvailable": "Devices available ({count})",
-  "@statusAdbDevicesAvailable": {"placeholders": {"count": {"type": "int"}}},
-  "statusAdbConnected": "Device connected",
-  "statusAdbDeviceUnauthorized": "Device unauthorized",
-  "statusAdbUnknown": "Unknown",
-  "statusDeviceInfo": "Device: {name}\nSerial: {serial}",
-  "@statusDeviceInfo": {
-    "placeholders": {
-      "name": {"type": "String", "example": "Quest"},
-      "serial": {"type": "String", "example": "123456"}
-    }
-  },
-  "storageTooltip": "{available} free of {total}",
-  "@storageTooltip": {
-    "placeholders": {
-      "available": {"type": "String", "example": "10 GB"},
-      "total": {"type": "String", "example": "64 GB"}
-    }
-  },
-  "activeTasks": "{count, plural, one {{count} active task} other {{count} active tasks}}",
-  "@activeTasks": {"placeholders": {"count": {"type": "int"}}},
-  "viewTasks": "View tasks",
-  "refreshAllData": "Refresh all data",
-  "noDeviceConnected": "No device connected",
-  "dragDropDropToInstall": "Drop to Install / Restore",
-  "dragDropNoDevice": "No Device Connected",
-  "dragDropHintConnected": "Drop APK file/app directory to sideload, or backup folder to restore",
-  "dragDropHintDisconnected": "Connect a device to enable drag and drop installation",
-  "dragDropInvalidDir": "Dropped directory is not a valid app directory or backup folder",
-  "dragDropInvalidFile": "Dropped file is not a valid APK file",
-  "connectDeviceToInstall": "Connect a device to install apps",
-  "connectDeviceToRestore": "Connect a device to restore backups",
-  "batteryDumpCopied": "Battery state dump copied to clipboard",
-  "batteryDumpFailed": "Failed to obtain battery state dump",
-  "commonSuccess": "Success",
-  "commonError": "Error",
-
-  "diagnosticsTitle": "Connection Diagnostics",
-  "diagnosticsAdbServer": "ADB server",
-  "diagnosticsDevices": "Devices",
-  "diagnosticsAuthorization": "Authorization",
-  "diagnosticsActiveDevice": "Active device",
-  "diagnosticsAdbPath": "ADB path",
-  "diagnosticsServerNotRunningDesc": "ADB server is not running. Ensure ADB is installed and accessible in PATH or set the ADB path in Settings.",
-  "diagnosticsServerStartingDesc": "ADB server is starting...",
-  "diagnosticsServerStartFailedDesc": "Failed to start the ADB server. Check the ADB path in Settings and view logs for details.",
-  "diagnosticsServerRunningDesc": "ADB server is running.",
-  "diagnosticsNoDevicesDesc": "No devices detected. Enable ADB/developer mode and connect via USB.",
-  "diagnosticsDevicesAvailableDesc": "Devices detected ({count})",
-  "@diagnosticsDevicesAvailableDesc": {"placeholders": {"count": {"type": "int"}}},
-  "diagnosticsUnauthorizedDesc": "Device is unauthorized. Confirm the authorization prompt on the device.",
-  "diagnosticsAuthorizedDesc": "Device authorized.",
-  "diagnosticsConnectedDesc": "Device connected and ready.",
-  "diagnosticsUnknownDesc": "Unknown state.",
-  "diagnosticsConfiguredPath": "Configured path: {path}",
-  "@diagnosticsConfiguredPath": {"placeholders": {"path": {"type": "String"}}},
-  "diagnosticsUsingSystemPath": "Using system PATH",
-
-  "commonYes": "Yes",
-  "commonNo": "No",
-
-  "deviceActions": "Device Actions",
-  "deviceProximitySensor": "Proximity Sensor",
-  "disableProximitySensor": "Disable proximity sensor",
-  "enableProximitySensor": "Enable proximity sensor",
-  "deviceGuardian": "Guardian",
-  "guardianSuspend": "Suspend Guardian",
-  "guardianResume": "Resume Guardian",
-
-  "copiedToClipboard": "Copied to clipboard",
-  "clickToCopy": "Click to copy",
-
-  "detailsPackageName": "Package Name:",
-  "detailsVersion": "Version:",
-  "detailsVersionCode": "Version Code:",
-  "detailsIsVr": "Is VR:",
-  "detailsIsLaunchable": "Is Launchable:",
-  "detailsIsSystem": "Is System:",
-  "detailsStorageUsage": "Storage Usage:",
-  "detailsApp": "App:",
-  "detailsData": "Data:",
-  "detailsCache": "Cache:",
-  "detailsTotal": "Total:",
-  "detailsRating": "Rating:",
-  "detailsReviewsTitle": "Recent reviews",
-  "detailsReviewsUnavailable": "Reviews are unavailable for this app.",
-  "detailsReviewsError": "Failed to load reviews.",
-  "detailsReviewsEmpty": "No reviews available yet.",
-  "detailsDeveloperResponse": "Developer response",
-  "detailsReviewHelpful": "Helpful",
-  "detailsReviewHelpfulCount": "{count, plural, one {{count} person found this helpful} other {{count} people found this helpful}}",
-  "@detailsReviewHelpfulCount": {
-    "placeholders": {
-      "count": {
-        "type": "int"
-      }
-    }
-  },
-  "reviewsSortBy": "Sort by",
-  "reviewsSortHelpful": "Most helpful",
-  "reviewsSortNewest": "Newest",
-  "previous": "Previous",
-  "next": "Next",
-  "reviewsReadAll": "Read all reviews",
-  "commonCopy": "Copy",
-  "commonClose": "Close",
-  "commonCancel": "Cancel",
-
-  "availableVersions": "Available Versions",
-  "installNewerVersion": "Install newer version",
-  "reinstallThisVersion": "Reinstall this version",
-  "holdShiftToReinstall": "Hold Shift to reinstall this version",
-  "cannotDowngrade": "Cannot downgrade to older version",
-  "newerVersion": "Newer version",
-  "sameVersion": "Same version",
-  "olderVersion": "Older version",
-  "update": "Update",
-  "install": "Install",
-  "checkForUpdates": "Check for updates",
-  "noMatchingCloudApp": "No matching app found in cloud repository",
-  "updateFromTo": "Update from {from} to {to}",
-  "@updateFromTo": {
-    "placeholders": {"from": {"type": "String"}, "to": {"type": "String"}}
-  },
-  "downgradeAppTitle": "Downgrade App",
-  "downgradeConfirmMessage": "Downgrade to version {versionCode}? This may cause issues.",
-  "@downgradeConfirmMessage": {
-    "placeholders": {
-      "versionCode": {"type": "String"}
-    }
-  },
-  "holdShiftToDowngrade": "Hold Shift to downgrade to this version",
-  "downgradeToThisVersion": "Downgrade to this version",
-  "holdShiftToViewVersions": "Hold Shift to view versions",
-  "noAppsInCategory": "No apps in this category",
-  "appDetails": "App Details",
-  "launch": "Launch",
-  "forceStop": "Force Stop",
-  "backupApp": "Backup App",
-  "backup": "Backup",
-  "uninstall": "Uninstall",
-  "segmentVrApps": "VR Apps ({count})",
-  "@segmentVrApps": {"placeholders": {"count": {"type": "int"}}},
-  "segmentOtherApps": "Other Apps ({count})",
-  "@segmentOtherApps": {"placeholders": {"count": {"type": "int"}}},
-  "segmentSystemApps": "System & Hidden Apps ({count})",
-  "@segmentSystemApps": {"placeholders": {"count": {"type": "int"}}},
-
-  "noAppsFound": "No apps found",
-  "noAppsAvailable": "No apps available",
-  "copyFullName": "Copy full name",
-  "copyPackageName": "Copy package name",
-  "sizeAndDate": "Size: {size} • Last Updated: {date}",
-  "@sizeAndDate": {"placeholders": {"size": {"type": "String"}, "date": {"type": "String"}}},
-  "downloadToComputer": "Download to computer",
-  "downloadAndInstall": "Download and install on device",
-  "downloadAndInstallNotConnected": "Download and install on device (not connected)",
-
-  "sortBy": "Sort by",
-  "sortNameAsc": "Name (A to Z)",
-  "sortNameDesc": "Name (Z to A)",
-  "sortDateOldest": "Date (Oldest first)",
-  "sortDateNewest": "Date (Newest first)",
-  "sortSizeSmallest": "Size (Smallest first)",
-  "sortSizeLargest": "Size (Largest first)",
-  "searchAppsHint": "Search apps...",
-  "clearSearch": "Clear search",
-  "search": "Search",
-  "showAllItems": "Show all items",
-  "showOnlySelectedItems": "Show only selected items",
-  "filterNoItems": "Filter (no items selected)",
-  "selectedSummary": "{count} selected • {total} total",
-  "@selectedSummary": {"placeholders": {"count": {"type": "int"}, "total": {"type": "String"}}},
-  "downloadSelected": "Download Selected",
-  "installSelected": "Install Selected",
-  "clearSelection": "Clear selection",
-  "errorLoadingApps": "Error loading apps",
-  "retry": "Retry",
-  "availableApps": "Available Apps",
-  "underConstruction": "Under construction",
-  "multiSelect": "Multi-select",
-  "refresh": "Refresh",
-  "showingSelectedOnly": "Showing selected items only",
-
-  "deviceTitle": "Device",
-  "leftController": "Left Controller",
-  "rightController": "Right Controller",
-  "headset": "Headset",
-  "deviceActionsTooltip": "Device actions",
-  "statusLabel": "Status",
-  "controllerStatusNotConnected": "Not connected",
-  "controllerStatusActive": "Active",
-  "controllerStatusDisabled": "Disabled",
-  "controllerStatusSearching": "Searching",
-  "controllerStatusUnknown": "Unknown",
-  "batteryLabel": "Battery",
-  "powerOffDevice": "Power off device",
-  "powerOffConfirm": "Are you sure you want to power off the device?",
-  "powerOffMenu": "Power off...",
-  "rebootMenu": "Reboot...",
-  "rebootOptions": "Reboot options",
-  "rebootNormal": "Normal",
-  "rebootBootloader": "Bootloader",
-  "rebootRecovery": "Recovery",
-  "rebootFastboot": "Fastboot",
-  "rebootDevice": "Reboot device",
-  "rebootNowConfirm": "Reboot the device now?",
-  "rebootToBootloader": "Reboot to bootloader",
-  "rebootToBootloaderConfirm": "Reboot the device to bootloader?",
-  "rebootToRecovery": "Reboot to recovery",
-  "rebootToRecoveryConfirm": "Reboot the device to recovery?",
-  "rebootToFastboot": "Reboot to fastboot",
-  "rebootToFastbootConfirm": "Reboot the device to fastboot?",
-  "commonConfirm": "Confirm",
-
-  "delete": "Delete",
-  "restore": "Restore",
-  "mute": "Mute",
-  "unmute": "Unmute",
-  "close": "Close",
-  "pause": "Pause",
-
-  "checkingTrailerAvailability": "Checking trailer availability...",
-  "trailerAvailable": "Trailer available",
-  "noTrailer": "No trailer",
-
-  "backupsTitle": "Backups",
-  "openBackupsFolder": "Open Backups Folder",
-  "openDownloadsFolder": "Open Downloads Folder",
-  "downloadsTitle": "Downloads",
-  "deleteAllDownloads": "Delete all downloads",
-  "deleteAllDownloadsTitle": "Delete All Downloads",
-  "deleteAllDownloadsConfirm": "Are you sure you want to delete all downloads?",
-  "deleteAllDownloadsResult": "Deleted {removed}, skipped {skipped}",
-  "@deleteAllDownloadsResult": {"placeholders": {"removed": {"type": "String"}, "skipped": {"type": "String"}}},
-  "deleteDownloadTitle": "Delete Download",
-  "deleteDownloadConfirm": "Are you sure you want to delete \"{name}\"?",
-  "@deleteDownloadConfirm": {"placeholders": {"name": {"type": "String"}}},
-  "downloadDeletedTitle": "Download deleted",
-  "noBackupsFound": "No backups found.",
-  "noDownloadsFound": "No downloads found.",
-  "unsupportedPlatform": "Platform not supported",
-  "folderPathCopied": "Folder path copied to clipboard",
-  "unableToOpenFolder": "Unable to open folder: {path}",
-  "@unableToOpenFolder": {"placeholders": {"path": {"type": "String"}}},
-  "openFolderTooltip": "Open Folder",
-  "unknownTime": "Unknown time",
-  "partAPK": "APK",
-  "partPrivate": "Private",
-  "partShared": "Shared",
-  "partOBB": "OBB",
-  "noPartsDetected": "No parts detected",
-  "deleteBackupTitle": "Delete Backup",
-  "deleteBackupConfirm": "Are you sure you want to delete \"{name}\"?",
-  "@deleteBackupConfirm": {"placeholders": {"name": {"type": "String"}}},
-  "backupDeletedTitle": "Backup deleted",
-
-  "fatalErrorTitle": "Fatal Error",
-  "exitApplication": "Exit Application",
-  "errorCopied": "Error message copied to clipboard",
-  "copyError": "Copy Error",
-
-  "selectAppDirectoryTitle": "Select app directory",
-  "selectApkFileTitle": "Select APK file",
-  "selectedInvalidDir": "Selected path is not a valid app directory",
-  "selectedInvalidApk": "Selected path is not a valid APK file",
-  "singleApk": "Single APK",
-  "appDirectory": "App Directory",
-  "appDirectoryPath": "App Directory Path",
-  "apkFilePath": "APK File Path",
-  "pathHintDirectory": "Select or enter app directory path",
-  "pathHintApk": "Select or enter APK file path",
-  "directoryRequirements": "The directory should contain an APK file and optionally an OBB data directory, or install.txt file.",
-  "proTipDragDrop": "Pro tip: You can also drag and drop APK files or app directories anywhere in the app to install them.",
-  "addedToQueue": "Added to queue!",
-  "sideloadApp": "Sideload App",
-  "installApk": "Install APK",
-
-  "tasksTitle": "Tasks",
-  "tasksTabActive": "Active",
-  "tasksTabRecent": "Recent",
-  "tasksEmptyActive": "No active tasks",
-  "tasksEmptyRecent": "No recent tasks",
-  "cancelTask": "Cancel Task",
-  "taskTypeDownload": "Download",
-  "taskTypeDownloadInstall": "Download & Install",
-  "taskTypeInstallApk": "Install APK",
-  "taskTypeInstallLocalApp": "Install Local App",
-  "taskTypeUninstall": "Uninstall",
-  "taskTypeBackupApp": "Backup App",
-  "taskTypeRestoreBackup": "Restore Backup",
-  "taskStatusWaiting": "Waiting",
-  "taskStatusRunning": "Running",
-  "taskStatusCompleted": "Completed",
-  "taskStatusFailed": "Failed",
-  "taskStatusCancelled": "Cancelled",
-  "taskUnknown": "Unknown",
-
-  "backupOptionsTitle": "Backup Options",
-  "backupSelectParts": "Select parts to back up:",
-  "backupAppData": "App data",
-  "backupApk": "APK",
-  "backupObbFiles": "OBB files",
-  "backupNameSuffix": "Name suffix (optional)",
-  "backupNameSuffixHint": "e.g. pre-update",
-  "startBackup": "Start Backup",
-
-  "logsSearchTooltip": "Search logs by level, message, target, or span id. Examples: \"error\", \"info\", \"adb\", \"connect\", \"13\"",
-  "logsSearchHint": "Search logs...",
-  "clearCurrentLogs": "Clear current logs",
-  "exportLogs": "Export logs",
-  "openLogsDirectory": "Open logs directory",
-  "videoLink": "Video link",
-  "clearFilters": "Clear filters",
-  "noLogsToDisplay": "No logs to display",
-  "logsAppearHere": "Log messages will appear here as they are generated",
-  "logEntryCopied": "Log entry copied to clipboard",
-  "spanId": "Span ID",
-  "filterBySpanId": "Filter logs by this span ID",
-  "spanTrace": "Span Trace:",
-  "spansLabel": "SPANS",
-  "logsSpanEventsTooltip": "Show/hide span creation and destruction events. Spans track execution flow.", 
-  "logsOpenNotSupported": "Platform not supported. Logs directory path copied to clipboard: {path}",
-  "@logsOpenNotSupported": {"placeholders": {"path": {"type": "String"}}},
-  "logsOpenFailed": "Unable to open logs directory (copied to clipboard): {path}",
-  "@logsOpenFailed": {"placeholders": {"path": {"type": "String"}}},
-
-  "uninstallAppTitle": "Uninstall App",
-  "uninstallConfirmMessage": "Are you sure you want to uninstall \"{app}\"?\n\nThis will permanently delete the app and all its data.",
-  "@uninstallConfirmMessage": {"placeholders": {"app": {"type": "String"}}},
-  "uninstalledDone": "Uninstalled!",
-  "uninstalling": "Uninstalling...",
-
-  "clearLogsTitle": "Clear Logs",
-  "clearLogsMessage": "This will clear all current session logs. This action cannot be undone.",
-  "commonClear": "Clear",
-  "logsCopied": "{count} logs copied to clipboard",
-  "@logsCopied": {"placeholders": {"count": {"type": "int"}}},
-  "emptyValue": "(empty)"
+    "@@locale": "en",
+    "appTitle": "YAAS",
+    "navHome": "Home",
+    "navManage": "Manage",
+    "navDownload": "Download",
+    "navSideload": "Sideload",
+    "navBackups": "Backups",
+    "navSettings": "Settings",
+    "navLogs": "Logs",
+    "navAbout": "About",
+    "navDownloads": "Downloads",
+    "settingsTitle": "Settings",
+    "settingsErrorLoading": "Error loading settings",
+    "settingsResetToDefaults": "Reset to Defaults",
+    "settingsRevertChangesTooltip": "Revert Changes\n(Shift+Click to reset to defaults)",
+    "settingsSaveChanges": "Save Changes",
+    "settingsSectionGeneral": "General",
+    "settingsLanguage": "Language",
+    "settingsNavigationRailLabels": "Navigation rail labels",
+    "settingsNavigationRailLabelsSelected": "Selected page only",
+    "settingsNavigationRailLabelsAll": "All pages",
+    "settingsStartupPage": "Startup page",
+    "settingsSystemDefault": "System default",
+    "languageEnglish": "English",
+    "languageRussian": "Russian",
+    "settingsSectionStorage": "Storage",
+    "settingsDownloadsLocation": "Downloads Location",
+    "settingsBackupsLocation": "Backups Location",
+    "settingsSectionAdb": "ADB",
+    "settingsAdbPath": "ADB Path",
+    "settingsPreferredConnection": "Preferred Connection Type",
+    "settingsConnectionUsb": "USB",
+    "settingsConnectionWireless": "Wireless",
+    "settingsSectionDownloader": "Downloader",
+    "settingsSectionAppearance": "Appearance",
+    "settingsUseSystemColor": "Use system color",
+    "settingsSeedColor": "Accent color",
+    "settingsTheme": "Theme",
+    "themeAuto": "Auto",
+    "themeDark": "Dark",
+    "themeLight": "Light",
+    "colorDeepPurple": "Deep purple",
+    "colorIndigo": "Indigo",
+    "colorBlue": "Blue",
+    "colorCyan": "Cyan",
+    "colorTeal": "Teal",
+    "colorGreen": "Green",
+    "colorLime": "Lime",
+    "colorAmber": "Amber",
+    "colorOrange": "Orange",
+    "colorDeepOrange": "Deep orange",
+    "colorRed": "Red",
+    "colorPink": "Pink",
+    "colorPurple": "Purple",
+    "colorBrown": "Brown",
+    "colorBlueGrey": "Blue grey",
+    "settingsRclonePath": "Rclone Path",
+    "settingsRcloneRemote": "Rclone Remote",
+    "settingsCustomRemoteName": "Custom Remote Name",
+    "settingsCustomInput": "[Custom]",
+    "settingsNoRemotesFound": "No remotes found",
+    "settingsFailedToLoadRemotes": "Failed to list remotes",
+    "settingsBandwidthLimit": "Bandwidth Limit",
+    "settingsBandwidthHelper": "(Not implemented) Value in KiB/s or with B|K|M|G|T|P suffix or more (click for documentation)",
+    "settingsDownloadsCleanup": "Downloads Cleanup",
+    "settingsCleanupDeleteAfterInstall": "Remove after installation",
+    "settingsCleanupKeepOneVersion": "Keep one version",
+    "settingsCleanupKeepTwoVersions": "Keep two versions",
+    "settingsCleanupKeepAllVersions": "Keep all versions",
+    "settingsBrowse": "Browse",
+    "selectLabel": "Select {label}",
+    "@selectLabel": {
+        "placeholders": {
+            "label": {
+                "type": "String",
+                "example": "Downloads Location"
+            }
+        }
+    },
+    "selectLabelDirectory": "Select {label} Directory",
+    "@selectLabelDirectory": {
+        "placeholders": {
+            "label": {
+                "type": "String",
+                "example": "Downloads"
+            }
+        }
+    },
+    "couldNotOpenUrl": "Could not open {url}",
+    "@couldNotOpenUrl": {
+        "placeholders": {
+            "url": {
+                "type": "String",
+                "example": "https://example.com"
+            }
+        }
+    },
+    "statusAdb": "ADB Status: {status}",
+    "@statusAdb": {
+        "placeholders": {
+            "status": {
+                "type": "String",
+                "example": "Server running"
+            }
+        }
+    },
+    "statusAdbServerNotRunning": "ADB server not running",
+    "statusAdbServerStarting": "Starting ADB server",
+    "statusAdbServerStartFailed": "Failed to start ADB server",
+    "statusAdbNoDevices": "No devices found",
+    "statusAdbDevicesAvailable": "Devices available ({count})",
+    "@statusAdbDevicesAvailable": {
+        "placeholders": {
+            "count": {
+                "type": "int"
+            }
+        }
+    },
+    "statusAdbConnected": "Device connected",
+    "statusAdbDeviceUnauthorized": "Device unauthorized",
+    "statusAdbUnknown": "Unknown",
+    "statusDeviceInfo": "Device: {name}\nSerial: {serial}",
+    "@statusDeviceInfo": {
+        "placeholders": {
+            "name": {
+                "type": "String",
+                "example": "Quest"
+            },
+            "serial": {
+                "type": "String",
+                "example": "123456"
+            }
+        }
+    },
+    "storageTooltip": "{available} free of {total}",
+    "@storageTooltip": {
+        "placeholders": {
+            "available": {
+                "type": "String",
+                "example": "10 GB"
+            },
+            "total": {
+                "type": "String",
+                "example": "64 GB"
+            }
+        }
+    },
+    "activeTasks": "{count, plural, one {{count} active task} other {{count} active tasks}}",
+    "@activeTasks": {
+        "placeholders": {
+            "count": {
+                "type": "int"
+            }
+        }
+    },
+    "viewTasks": "View tasks",
+    "refreshAllData": "Refresh all data",
+    "noDeviceConnected": "No device connected",
+    "dragDropDropToInstall": "Drop to Install / Restore",
+    "dragDropNoDevice": "No Device Connected",
+    "dragDropHintConnected": "Drop APK file/app directory to sideload, or backup folder to restore",
+    "dragDropHintDisconnected": "Connect a device to enable drag and drop installation",
+    "dragDropInvalidDir": "Dropped directory is not a valid app directory or backup folder",
+    "dragDropInvalidFile": "Dropped file is not a valid APK file",
+    "connectDeviceToInstall": "Connect a device to install apps",
+    "connectDeviceToRestore": "Connect a device to restore backups",
+    "batteryDumpCopied": "Battery state dump copied to clipboard",
+    "batteryDumpFailed": "Failed to obtain battery state dump",
+    "commonSuccess": "Success",
+    "commonError": "Error",
+    "diagnosticsTitle": "Connection Diagnostics",
+    "diagnosticsAdbServer": "ADB server",
+    "diagnosticsDevices": "Devices",
+    "diagnosticsAuthorization": "Authorization",
+    "diagnosticsActiveDevice": "Active device",
+    "diagnosticsAdbPath": "ADB path",
+    "diagnosticsServerNotRunningDesc": "ADB server is not running. Ensure ADB is installed and accessible in PATH or set the ADB path in Settings.",
+    "diagnosticsServerStartingDesc": "ADB server is starting...",
+    "diagnosticsServerStartFailedDesc": "Failed to start the ADB server. Check the ADB path in Settings and view logs for details.",
+    "diagnosticsServerRunningDesc": "ADB server is running.",
+    "diagnosticsNoDevicesDesc": "No devices detected. Enable ADB/developer mode and connect via USB.",
+    "diagnosticsDevicesAvailableDesc": "Devices detected ({count})",
+    "@diagnosticsDevicesAvailableDesc": {
+        "placeholders": {
+            "count": {
+                "type": "int"
+            }
+        }
+    },
+    "diagnosticsUnauthorizedDesc": "Device is unauthorized. Confirm the authorization prompt on the device.",
+    "diagnosticsAuthorizedDesc": "Device authorized.",
+    "diagnosticsConnectedDesc": "Device connected and ready.",
+    "diagnosticsUnknownDesc": "Unknown state.",
+    "diagnosticsConfiguredPath": "Configured path: {path}",
+    "@diagnosticsConfiguredPath": {
+        "placeholders": {
+            "path": {
+                "type": "String"
+            }
+        }
+    },
+    "diagnosticsUsingSystemPath": "Using system PATH",
+    "commonYes": "Yes",
+    "commonNo": "No",
+    "deviceActions": "Device Actions",
+    "deviceProximitySensor": "Proximity Sensor",
+    "disableProximitySensor": "Disable proximity sensor",
+    "enableProximitySensor": "Enable proximity sensor",
+    "deviceGuardian": "Guardian",
+    "guardianSuspend": "Suspend Guardian",
+    "guardianResume": "Resume Guardian",
+    "copiedToClipboard": "Copied to clipboard",
+    "clickToCopy": "Click to copy",
+    "detailsPackageName": "Package Name:",
+    "detailsVersion": "Version:",
+    "detailsVersionCode": "Version Code:",
+    "detailsIsVr": "Is VR:",
+    "detailsIsLaunchable": "Is Launchable:",
+    "detailsIsSystem": "Is System:",
+    "detailsStorageUsage": "Storage Usage:",
+    "detailsApp": "App:",
+    "detailsData": "Data:",
+    "detailsCache": "Cache:",
+    "detailsTotal": "Total:",
+    "detailsRating": "Rating:",
+    "detailsReviewsTitle": "Recent reviews",
+    "detailsReviewsUnavailable": "Reviews are unavailable for this app.",
+    "detailsReviewsError": "Failed to load reviews.",
+    "detailsReviewsEmpty": "No reviews available yet.",
+    "detailsDeveloperResponse": "Developer response",
+    "detailsReviewHelpful": "Helpful",
+    "detailsReviewHelpfulCount": "{count, plural, one {{count} person found this helpful} other {{count} people found this helpful}}",
+    "@detailsReviewHelpfulCount": {
+        "placeholders": {
+            "count": {
+                "type": "int"
+            }
+        }
+    },
+    "reviewsSortBy": "Sort by",
+    "reviewsSortHelpful": "Most helpful",
+    "reviewsSortNewest": "Newest",
+    "previous": "Previous",
+    "next": "Next",
+    "reviewsReadAll": "Read all reviews",
+    "commonCopy": "Copy",
+    "commonClose": "Close",
+    "commonCancel": "Cancel",
+    "availableVersions": "Available Versions",
+    "installNewerVersion": "Install newer version",
+    "reinstallThisVersion": "Reinstall this version",
+    "holdShiftToReinstall": "Hold Shift to reinstall this version",
+    "cannotDowngrade": "Cannot downgrade to older version",
+    "newerVersion": "Newer version",
+    "sameVersion": "Same version",
+    "olderVersion": "Older version",
+    "update": "Update",
+    "install": "Install",
+    "checkForUpdates": "Check for updates",
+    "noMatchingCloudApp": "No matching app found in cloud repository",
+    "updateFromTo": "Update from {from} to {to}",
+    "@updateFromTo": {
+        "placeholders": {
+            "from": {
+                "type": "String"
+            },
+            "to": {
+                "type": "String"
+            }
+        }
+    },
+    "downgradeAppTitle": "Downgrade App",
+    "downgradeConfirmMessage": "Downgrade to version {versionCode}? This may cause issues.",
+    "@downgradeConfirmMessage": {
+        "placeholders": {
+            "versionCode": {
+                "type": "String"
+            }
+        }
+    },
+    "holdShiftToDowngrade": "Hold Shift to downgrade to this version",
+    "downgradeToThisVersion": "Downgrade to this version",
+    "holdShiftToViewVersions": "Hold Shift to view versions",
+    "noAppsInCategory": "No apps in this category",
+    "appDetails": "App Details",
+    "launch": "Launch",
+    "forceStop": "Force Stop",
+    "backupApp": "Backup App",
+    "backup": "Backup",
+    "uninstall": "Uninstall",
+    "segmentVrApps": "VR Apps ({count})",
+    "@segmentVrApps": {
+        "placeholders": {
+            "count": {
+                "type": "int"
+            }
+        }
+    },
+    "segmentOtherApps": "Other Apps ({count})",
+    "@segmentOtherApps": {
+        "placeholders": {
+            "count": {
+                "type": "int"
+            }
+        }
+    },
+    "segmentSystemApps": "System & Hidden Apps ({count})",
+    "@segmentSystemApps": {
+        "placeholders": {
+            "count": {
+                "type": "int"
+            }
+        }
+    },
+    "noAppsFound": "No apps found",
+    "noAppsAvailable": "No apps available",
+    "copyFullName": "Copy full name",
+    "copyPackageName": "Copy package name",
+    "sizeAndDate": "Size: {size} • Last Updated: {date}",
+    "@sizeAndDate": {
+        "placeholders": {
+            "size": {
+                "type": "String"
+            },
+            "date": {
+                "type": "String"
+            }
+        }
+    },
+    "downloadToComputer": "Download to computer",
+    "downloadAndInstall": "Download and install on device",
+    "downloadAndInstallNotConnected": "Download and install on device (not connected)",
+    "sortBy": "Sort by",
+    "sortNameAsc": "Name (A to Z)",
+    "sortNameDesc": "Name (Z to A)",
+    "sortDateOldest": "Date (Oldest first)",
+    "sortDateNewest": "Date (Newest first)",
+    "sortSizeSmallest": "Size (Smallest first)",
+    "sortSizeLargest": "Size (Largest first)",
+    "searchAppsHint": "Search apps...",
+    "clearSearch": "Clear search",
+    "search": "Search",
+    "showAllItems": "Show all items",
+    "showOnlySelectedItems": "Show only selected items",
+    "filterNoItems": "Filter (no items selected)",
+    "selectedSummary": "{count} selected • {total} total",
+    "@selectedSummary": {
+        "placeholders": {
+            "count": {
+                "type": "int"
+            },
+            "total": {
+                "type": "String"
+            }
+        }
+    },
+    "downloadSelected": "Download Selected",
+    "installSelected": "Install Selected",
+    "clearSelection": "Clear selection",
+    "errorLoadingApps": "Error loading apps",
+    "retry": "Retry",
+    "availableApps": "Available Apps",
+    "underConstruction": "Under construction",
+    "multiSelect": "Multi-select",
+    "refresh": "Refresh",
+    "showingSelectedOnly": "Showing selected items only",
+    "deviceTitle": "Device",
+    "leftController": "Left Controller",
+    "rightController": "Right Controller",
+    "headset": "Headset",
+    "deviceActionsTooltip": "Device actions",
+    "statusLabel": "Status",
+    "controllerStatusNotConnected": "Not connected",
+    "controllerStatusActive": "Active",
+    "controllerStatusDisabled": "Disabled",
+    "controllerStatusSearching": "Searching",
+    "controllerStatusUnknown": "Unknown",
+    "batteryLabel": "Battery",
+    "powerOffDevice": "Power off device",
+    "powerOffConfirm": "Are you sure you want to power off the device?",
+    "powerOffMenu": "Power off...",
+    "rebootMenu": "Reboot...",
+    "rebootOptions": "Reboot options",
+    "rebootNormal": "Normal",
+    "rebootBootloader": "Bootloader",
+    "rebootRecovery": "Recovery",
+    "rebootFastboot": "Fastboot",
+    "rebootDevice": "Reboot device",
+    "rebootNowConfirm": "Reboot the device now?",
+    "rebootToBootloader": "Reboot to bootloader",
+    "rebootToBootloaderConfirm": "Reboot the device to bootloader?",
+    "rebootToRecovery": "Reboot to recovery",
+    "rebootToRecoveryConfirm": "Reboot the device to recovery?",
+    "rebootToFastboot": "Reboot to fastboot",
+    "rebootToFastbootConfirm": "Reboot the device to fastboot?",
+    "commonConfirm": "Confirm",
+    "delete": "Delete",
+    "restore": "Restore",
+    "mute": "Mute",
+    "unmute": "Unmute",
+    "close": "Close",
+    "pause": "Pause",
+    "checkingTrailerAvailability": "Checking trailer availability...",
+    "trailerAvailable": "Trailer available",
+    "noTrailer": "No trailer",
+    "backupsTitle": "Backups",
+    "openBackupsFolder": "Open Backups Folder",
+    "openDownloadsFolder": "Open Downloads Folder",
+    "downloadsTitle": "Downloads",
+    "deleteAllDownloads": "Delete all downloads",
+    "deleteAllDownloadsTitle": "Delete All Downloads",
+    "deleteAllDownloadsConfirm": "Are you sure you want to delete all downloads?",
+    "deleteAllDownloadsResult": "Deleted {removed}, skipped {skipped}",
+    "@deleteAllDownloadsResult": {
+        "placeholders": {
+            "removed": {
+                "type": "String"
+            },
+            "skipped": {
+                "type": "String"
+            }
+        }
+    },
+    "deleteDownloadTitle": "Delete Download",
+    "deleteDownloadConfirm": "Are you sure you want to delete \"{name}\"?",
+    "@deleteDownloadConfirm": {
+        "placeholders": {
+            "name": {
+                "type": "String"
+            }
+        }
+    },
+    "downloadDeletedTitle": "Download deleted",
+    "noBackupsFound": "No backups found.",
+    "noDownloadsFound": "No downloads found.",
+    "unsupportedPlatform": "Platform not supported",
+    "folderPathCopied": "Folder path copied to clipboard",
+    "unableToOpenFolder": "Unable to open folder: {path}",
+    "@unableToOpenFolder": {
+        "placeholders": {
+            "path": {
+                "type": "String"
+            }
+        }
+    },
+    "openFolderTooltip": "Open Folder",
+    "unknownTime": "Unknown time",
+    "partAPK": "APK",
+    "partPrivate": "Private",
+    "partShared": "Shared",
+    "partOBB": "OBB",
+    "noPartsDetected": "No parts detected",
+    "deleteBackupTitle": "Delete Backup",
+    "deleteBackupConfirm": "Are you sure you want to delete \"{name}\"?",
+    "@deleteBackupConfirm": {
+        "placeholders": {
+            "name": {
+                "type": "String"
+            }
+        }
+    },
+    "backupDeletedTitle": "Backup deleted",
+    "fatalErrorTitle": "Fatal Error",
+    "exitApplication": "Exit Application",
+    "errorCopied": "Error message copied to clipboard",
+    "copyError": "Copy Error",
+    "selectAppDirectoryTitle": "Select app directory",
+    "selectApkFileTitle": "Select APK file",
+    "selectedInvalidDir": "Selected path is not a valid app directory",
+    "selectedInvalidApk": "Selected path is not a valid APK file",
+    "singleApk": "Single APK",
+    "appDirectory": "App Directory",
+    "appDirectoryPath": "App Directory Path",
+    "apkFilePath": "APK File Path",
+    "pathHintDirectory": "Select or enter app directory path",
+    "pathHintApk": "Select or enter APK file path",
+    "directoryRequirements": "The directory should contain an APK file and optionally an OBB data directory, or install.txt file.",
+    "proTipDragDrop": "Pro tip: You can also drag and drop APK files or app directories anywhere in the app to install them.",
+    "addedToQueue": "Added to queue!",
+    "sideloadApp": "Sideload App",
+    "installApk": "Install APK",
+    "tasksTitle": "Tasks",
+    "tasksTabActive": "Active",
+    "tasksTabRecent": "Recent",
+    "tasksEmptyActive": "No active tasks",
+    "tasksEmptyRecent": "No recent tasks",
+    "cancelTask": "Cancel Task",
+    "taskTypeDownload": "Download",
+    "taskTypeDownloadInstall": "Download & Install",
+    "taskTypeInstallApk": "Install APK",
+    "taskTypeInstallLocalApp": "Install Local App",
+    "taskTypeUninstall": "Uninstall",
+    "taskTypeBackupApp": "Backup App",
+    "taskTypeRestoreBackup": "Restore Backup",
+    "taskStatusWaiting": "Waiting",
+    "taskStatusRunning": "Running",
+    "taskStatusCompleted": "Completed",
+    "taskStatusFailed": "Failed",
+    "taskStatusCancelled": "Cancelled",
+    "taskUnknown": "Unknown",
+    "backupOptionsTitle": "Backup Options",
+    "backupSelectParts": "Select parts to back up:",
+    "backupAppData": "App data",
+    "backupApk": "APK",
+    "backupObbFiles": "OBB files",
+    "backupNameSuffix": "Name suffix (optional)",
+    "backupNameSuffixHint": "e.g. pre-update",
+    "startBackup": "Start Backup",
+    "logsSearchTooltip": "Search logs by level, message, target, or span id. Examples: \"error\", \"info\", \"adb\", \"connect\", \"13\"",
+    "logsSearchHint": "Search logs...",
+    "clearCurrentLogs": "Clear current logs",
+    "exportLogs": "Export logs",
+    "openLogsDirectory": "Open logs directory",
+    "videoLink": "Video link",
+    "clearFilters": "Clear filters",
+    "noLogsToDisplay": "No logs to display",
+    "logsAppearHere": "Log messages will appear here as they are generated",
+    "logEntryCopied": "Log entry copied to clipboard",
+    "spanId": "Span ID",
+    "filterBySpanId": "Filter logs by this span ID",
+    "spanTrace": "Span Trace:",
+    "spansLabel": "SPANS",
+    "logsSpanEventsTooltip": "Show/hide span creation and destruction events. Spans track execution flow.",
+    "logsOpenNotSupported": "Platform not supported. Logs directory path copied to clipboard: {path}",
+    "@logsOpenNotSupported": {
+        "placeholders": {
+            "path": {
+                "type": "String"
+            }
+        }
+    },
+    "logsOpenFailed": "Unable to open logs directory (copied to clipboard): {path}",
+    "@logsOpenFailed": {
+        "placeholders": {
+            "path": {
+                "type": "String"
+            }
+        }
+    },
+    "uninstallAppTitle": "Uninstall App",
+    "uninstallConfirmMessage": "Are you sure you want to uninstall \"{app}\"?\n\nThis will permanently delete the app and all its data.",
+    "@uninstallConfirmMessage": {
+        "placeholders": {
+            "app": {
+                "type": "String"
+            }
+        }
+    },
+    "uninstalledDone": "Uninstalled!",
+    "uninstalling": "Uninstalling...",
+    "clearLogsTitle": "Clear Logs",
+    "clearLogsMessage": "This will clear all current session logs. This action cannot be undone.",
+    "commonClear": "Clear",
+    "logsCopied": "{count} logs copied to clipboard",
+    "@logsCopied": {
+        "placeholders": {
+            "count": {
+                "type": "int"
+            }
+        }
+    },
+    "emptyValue": "(empty)"
 }

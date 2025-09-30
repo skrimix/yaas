@@ -38,21 +38,21 @@ dependencies:
   rinf: ^8.7.2
   tuple: ^2.0.2
   meta: ^1.16.0
-  flutter_svg: ^2.0.17
-  provider: ^6.1.2
+  flutter_svg: ^2.2.1
+  provider: ^6.1.5+1
   dynamic_color: ^1.6.9
   filesize: ^2.0.1
   proper_filesize: ^1.0.2
-  toastification: ^2.3.0
-  file_picker: ^8.3.5
+  toastification: ^2.3.0 # Updating to >=3.0.0 breaks text color
+  file_picker: ^10.3.3
   intl: ^0.20.2
   desktop_window: ^0.4.2
-  desktop_drop: ^0.6.0
-  url_launcher: ^6.3.1
-  icons_launcher: ^3.0.2
+  desktop_drop: ^0.6.1
+  url_launcher: ^6.3.2
+  icons_launcher: ^3.0.3
   video_player: ^2.10.0
   video_player_media_kit: ^1.0.6
-  package_info_plus: ^8.0.2
+  package_info_plus: ^9.0.0
 
   media_kit_libs_macos_video: any
   media_kit_libs_windows_video: any
@@ -60,7 +60,7 @@ dependencies:
   cached_network_image: ^3.4.1
   flutter_cache_manager: ^3.3.2
   path_provider: ^2.1.5
-  http: ^1.2.2
+  http: ^1.5.0
 
 dev_dependencies:
   flutter_test:
@@ -71,7 +71,7 @@ dev_dependencies:
   # activated in the `analysis_options.yaml` file located at the root of your
   # package. See that file for information about deactivating specific lint
   # rules and activating additional ones.
-  flutter_lints: ^5.0.0
+  flutter_lints: ^6.0.0
 
 # For information on the generic Dart part of this file, see the
 # following page: https://dart.dev/tools/pub/pubspec

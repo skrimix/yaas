@@ -151,47 +151,91 @@ jobs:
           path: ${{ matrix.build-path }}
           if-no-files-found: error
 
-  # publish:
-  #   name: Publish Nightly
-  #   needs: build
-  #   runs-on: ubuntu-latest
-  #   if: ${{ (github.event_name == 'push' && github.ref == 'refs/heads/master') || github.event_name == 'workflow_dispatch' }}
-  #   permissions:
-  #     contents: write
-  #   steps:
-  #     - name: Checkout repository
-  #       uses: actions/checkout@v4
-  #       with:
-  #         fetch-depth: 0
+  publish:
+    name: Publish Nightly
+    needs: build
+    runs-on: ubuntu-latest
+    if: ${{ (github.event_name == 'push' && github.ref == 'refs/heads/master') || github.event_name == 'workflow_dispatch' }}
+    permissions:
+      contents: write
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+      
+      - name: Get short SHA
+        if: matrix.target != 'windows'
+        run: echo "SHORT_SHA=`echo ${{ github.sha }} | cut -c1-8`" >> $GITHUB_ENV
+      
+      - name: Get short SHA (Windows)
+        if: matrix.target == 'windows'
+        shell: pwsh
+        run: echo "SHORT_SHA=`echo ${{ github.sha }} | cut -c1-8`" >> $env:GITHUB_ENV
 
-  #     - name: Download build artifacts
-  #       uses: actions/download-artifact@v4
-  #       with:
-  #         path: release/
-  #         merge-multiple: true
+      - name: Download build artifacts
+        uses: actions/download-artifact@v4
+        with:
+          path: artifacts/
+      
+      - name: Package artifact (Linux)
+        if: matrix.target == 'linux'
+        shell: bash
+        run: |
+          set -euo pipefail
+          mkdir -p release
+          shopt -s globstar nullglob
+          files=(artifacts/build-linux/**/*.AppImage)
+          if (( ${#files[@]} == 0 )); then
+            echo "No AppImage found in artifacts/" >&2
+            exit 1
+          fi
+          cp -v "${files[0]}" "release/YAAS-${SHORT_SHA}-linux-x86_64.AppImage"
 
-  #     - name: Add checksums
-  #       run: |
-  #         (cd release && sha256sum * > SHA256SUMS.txt) || \
-  #         (cd release && shasum -a 256 * > SHA256SUMS.txt)
+      - name: Package artifact (Windows)
+        if: matrix.target == 'windows'
+        shell: pwsh
+        run: |
+          New-Item -ItemType Directory -Force -Path release | Out-Null
+          $src = "artifacts/build-windows"
+          $dst = "release/YAAS-$env:SHORT_SHA-windows-x64.zip"
+          Compress-Archive -Path "$src/*" -DestinationPath $dst -Force
 
-  #     - name: Move 'nightly' tag to this commit
-  #       run: |
-  #         git config user.name "github-actions"
-  #         git config user.email "github-actions@github.com"
-  #         git tag -f nightly ${{ github.sha }}
-  #         git push -f origin nightly
+      - name: Package artifact (macOS)
+        if: matrix.target == 'macos'
+        shell: bash
+        run: |
+          set -euo pipefail
+          mkdir -p release
+          app=$(ls -d artifacts/build-macos/*.app | head -n1)
+          # 'ditto' preserves bundle bits better than plain 'zip'
+          ditto -c -k --sequesterRsrc --keepParent "$app" "release/YAAS-${SHORT_SHA}-macos.zip"
 
-  #     - name: Update CI Nightly pre-release
-  #       uses: ncipollo/release-action@v1
-  #       with:
-  #         tag: nightly
-  #         name: "CI Nightly"
-  #         prerelease: true
-  #         allowUpdates: true
-  #         removeArtifacts: true
-  #         replacesArtifacts: true
-  #         body: |
-  #           Nightly build for ${{ github.sha }}
-  #           Trigger: ${{ github.event_name }}
-  #         artifacts: "release/*"
+      - name: Add checksums
+        shell: bash
+        run: |
+          set -euo pipefail
+          cd release
+          find . -maxdepth 1 -type f -print0 | sort -z | xargs -0 sha256sum > SHA256SUMS.txt
+
+
+      - name: Move 'nightly' tag to this commit
+        run: |
+          git config user.name "github-actions"
+          git config user.email "github-actions@github.com"
+          git tag -f nightly ${{ github.sha }}
+          git push -f origin nightly
+
+      - name: Update CI Nightly pre-release
+        uses: ncipollo/release-action@v1
+        with:
+          tag: nightly
+          name: "CI Nightly"
+          prerelease: true
+          allowUpdates: true
+          removeArtifacts: true
+          replacesArtifacts: true
+          body: |
+            Nightly build for ${{ github.sha }}
+            Trigger: ${{ github.event_name }}
+          artifacts: "release/*"

@@ -86,3 +86,32 @@ Uses Provider pattern with these main states:
 - `SettingsState`: Application settings
 
 State flows from Rust backend to Flutter frontend via Rinf signals.
+
+## Localization (l10n)
+
+The application supports multiple languages using Flutter's localization system:
+
+**Location:**
+- `lib/l10n/app_en.arb`: English translations
+- `lib/l10n/app_ru.arb`: Russian translations
+- `lib/src/l10n/`: Auto-generated localization classes
+
+**Adding New Translation Strings:**
+1. Add the key-value pair to both `app_en.arb` and `app_ru.arb`
+2. Run `flutter gen-l10n` to regenerate localization classes (happens automatically on build)
+3. Use in code via `AppLocalizations.of(context)` (imported as `l10n` in most UI files)
+
+**Usage in UI:**
+```dart
+import '../../src/l10n/app_localizations.dart';
+
+// In build method:
+final l10n = AppLocalizations.of(context);
+Text(l10n.settingsTitle)
+```
+
+**Key Notes:**
+- Always add strings to both language files to maintain translation parity
+- Use descriptive key names following the pattern: `sectionNameContext` (e.g., `settingsCustomColorHint`)
+- Localizations are regenerated automatically during build, but you can run `flutter gen-l10n` manually if needed
+- Never hardcode user-facing strings in UI code - always use l10n

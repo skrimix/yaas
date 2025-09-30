@@ -188,6 +188,13 @@ class AppLocalizationsRu extends AppLocalizations {
   String get settingsCustomInput => '[Другое]';
 
   @override
+  String get settingsCustomColorHint =>
+      'Введите 6-значный HEX-цвет (например, FF5733)';
+
+  @override
+  String get settingsInvalidHexColor => 'Неверный HEX-цвет';
+
+  @override
   String get settingsNoRemotesFound => 'Хранилища не найдены';
 
   @override

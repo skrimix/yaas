@@ -59,6 +59,8 @@
     "settingsRcloneRemote": "Rclone Remote",
     "settingsCustomRemoteName": "Custom Remote Name",
     "settingsCustomInput": "[Custom]",
+    "settingsCustomColorHint": "Enter 6-digit hex color (e.g., FF5733)",
+    "settingsInvalidHexColor": "Invalid hex color",
     "settingsNoRemotesFound": "No remotes found",
     "settingsFailedToLoadRemotes": "Failed to list remotes",
     "settingsBandwidthLimit": "Bandwidth Limit",

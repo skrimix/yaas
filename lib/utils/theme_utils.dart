@@ -21,12 +21,58 @@ const Map<String, MaterialColor> kSeedColorPalette = {
 };
 
 const String kDefaultSeedKey = 'deep_purple';
+const String kCustomColorKey = '__custom__';
 
-MaterialColor seedFromKey(String key) =>
-    kSeedColorPalette[key] ?? kSeedColorPalette[kDefaultSeedKey]!;
+/// Parse hex color string (e.g., "#FF5733" or "FF5733")
+Color? parseHexColor(String hex) {
+  final normalized = hex.replaceAll('#', '').trim();
+  if (normalized.length != 6) return null;
+  final value = int.tryParse(normalized, radix: 16);
+  if (value == null) return null;
+  return Color(0xFF000000 | value);
+}
 
-String normalizeSeedKey(String key) =>
-    kSeedColorPalette.containsKey(key) ? key : kDefaultSeedKey;
+/// Check if a key is a valid hex color
+bool isHexColor(String key) {
+  if (key.startsWith(kCustomColorKey)) {
+    final hex = key.substring(kCustomColorKey.length);
+    return parseHexColor(hex) != null;
+  }
+  return false;
+}
+
+MaterialColor seedFromKey(String key) {
+  // Check if it's a hex color (format: __custom__RRGGBB)
+  if (key.startsWith(kCustomColorKey)) {
+    final hex = key.substring(kCustomColorKey.length);
+    final color = parseHexColor(hex);
+    if (color != null) {
+      final a = (color.a * 255).round();
+      final r = (color.r * 255).round();
+      final g = (color.g * 255).round();
+      final b = (color.b * 255).round();
+      final argb = a << 24 | r << 16 | g << 8 | b;
+      return MaterialColor(argb, {
+        50: color.withValues(alpha: 0.1),
+        100: color.withValues(alpha: 0.2),
+        200: color.withValues(alpha: 0.3),
+        300: color.withValues(alpha: 0.4),
+        400: color.withValues(alpha: 0.5),
+        500: color.withValues(alpha: 0.6),
+        600: color.withValues(alpha: 0.7),
+        700: color.withValues(alpha: 0.8),
+        800: color.withValues(alpha: 0.9),
+        900: color,
+      });
+    }
+  }
+  return kSeedColorPalette[key] ?? kSeedColorPalette[kDefaultSeedKey]!;
+}
+
+String normalizeSeedKey(String key) {
+  if (isHexColor(key)) return key;
+  return kSeedColorPalette.containsKey(key) ? key : kDefaultSeedKey;
+}
 
 String seedLabel(AppLocalizations l10n, String key) {
   switch (key) {

@@ -59,6 +59,8 @@
     "settingsRcloneRemote": "Rclone хранилище",
     "settingsCustomRemoteName": "Другое имя хранилища",
     "settingsCustomInput": "[Другое]",
+    "settingsCustomColorHint": "Введите 6-значный HEX-цвет (например, FF5733)",
+    "settingsInvalidHexColor": "Неверный HEX-цвет",
     "settingsNoRemotesFound": "Хранилища не найдены",
     "settingsFailedToLoadRemotes": "Не удалось перечислить хранилища",
     "settingsBandwidthLimit": "Ограничение скорости",

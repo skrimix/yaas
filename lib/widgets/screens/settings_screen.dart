@@ -52,7 +52,9 @@ class _SettingsScreenState extends State<SettingsScreen> {
   final ValueNotifier<bool> _isShiftPressedNotifier =
       ValueNotifier<bool>(false);
   bool _rcloneRemoteCustom = false;
+  bool _seedColorCustom = false;
   late final List<StartupPageOption> _pageOptions;
+  final TextEditingController _customColorController = TextEditingController();
 
   @override
   void initState() {
@@ -82,6 +84,7 @@ class _SettingsScreenState extends State<SettingsScreen> {
     for (final controller in _textControllers.values) {
       controller.dispose();
     }
+    _customColorController.dispose();
     HardwareKeyboard.instance.removeHandler(_handleKeyEvent);
     _isShiftPressedNotifier.dispose();
     super.dispose();
@@ -423,51 +426,7 @@ class _SettingsScreenState extends State<SettingsScreen> {
               });
             },
           ),
-          Padding(
-            padding: const EdgeInsets.symmetric(
-                vertical: SettingsConstants.verticalSpacing),
-            child: DropdownButtonFormField<String>(
-              initialValue:
-                  app_theme.normalizeSeedKey(_currentFormSettings.seedColorKey),
-              items: app_theme.kSeedColorPalette.keys.map((key) {
-                final color = app_theme.seedFromKey(key);
-                return DropdownMenuItem(
-                  value: key,
-                  child: Row(
-                    children: [
-                      Container(
-                        width: 16,
-                        height: 16,
-                        decoration: BoxDecoration(
-                          color: color,
-                          shape: BoxShape.circle,
-                          border: Border.all(color: Colors.black12),
-                        ),
-                      ),
-                      const SizedBox(width: 8),
-                      Text(app_theme.seedLabel(l10n, key)),
-                    ],
-                  ),
-                );
-              }).toList(),
-              onChanged: settingsState.settings.useSystemColor
-                  ? null
-                  : (value) {
-                      if (value != null) {
-                        settingsState.setSeedColorKey(value);
-                        setState(() {
-                          _currentFormSettings = _currentFormSettings.copyWith(
-                              seedColorKey: value);
-                          _hasChanges = false;
-                        });
-                      }
-                    },
-              decoration: InputDecoration(
-                labelText: l10n.settingsSeedColor,
-                border: const OutlineInputBorder(),
-              ),
-            ),
-          ),
+          _buildSeedColorSelector(l10n, settingsState),
         ],
       ),
       const SizedBox(height: SettingsConstants.sectionSpacing),
@@ -841,6 +800,145 @@ class _SettingsScreenState extends State<SettingsScreen> {
                 ),
                 onChanged: (value) =>
                     _updateSetting(SettingTextField.rcloneRemoteName, value),
+              ),
+            ),
+        ],
+      ),
+    );
+  }
+
+  Widget _buildSeedColorSelector(
+      AppLocalizations l10n, SettingsState settingsState) {
+    final customValue = app_theme.kCustomColorKey;
+    final currentKey = _currentFormSettings.seedColorKey;
+    final isCustomColor = app_theme.isHexColor(currentKey);
+    final shouldUseCustom = _seedColorCustom || isCustomColor;
+    final dropdownValue = shouldUseCustom ? customValue : currentKey;
+
+    // Initialize custom color text field if needed
+    if (isCustomColor && !_seedColorCustom) {
+      final hex = currentKey.substring(app_theme.kCustomColorKey.length);
+      _customColorController.text = hex.toUpperCase();
+      WidgetsBinding.instance.addPostFrameCallback((_) {
+        setState(() {
+          _seedColorCustom = true;
+        });
+      });
+    }
+
+    final items = <DropdownMenuItem<String>>[
+      ...app_theme.kSeedColorPalette.keys.map((key) {
+        final color = app_theme.seedFromKey(key);
+        return DropdownMenuItem(
+          value: key,
+          child: Row(
+            children: [
+              Container(
+                width: 16,
+                height: 16,
+                decoration: BoxDecoration(
+                  color: color,
+                  shape: BoxShape.circle,
+                  border: Border.all(color: Colors.black12),
+                ),
+              ),
+              const SizedBox(width: 8),
+              Text(app_theme.seedLabel(l10n, key)),
+            ],
+          ),
+        );
+      }),
+      DropdownMenuItem(
+        value: customValue,
+        child: Row(
+          children: [
+            Container(
+              width: 16,
+              height: 16,
+              decoration: BoxDecoration(
+                color: isCustomColor
+                    ? app_theme.seedFromKey(currentKey)
+                    : Colors.grey,
+                shape: BoxShape.circle,
+                border: Border.all(color: Colors.black12),
+              ),
+            ),
+            const SizedBox(width: 8),
+            Text(l10n.settingsCustomInput),
+          ],
+        ),
+      ),
+    ];
+
+    return Padding(
+      padding: const EdgeInsets.symmetric(
+          vertical: SettingsConstants.verticalSpacing),
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          DropdownButtonFormField<String>(
+            initialValue: dropdownValue,
+            items: items,
+            onChanged: settingsState.settings.useSystemColor
+                ? null
+                : (value) {
+                    if (value == null) return;
+                    if (value == customValue) {
+                      setState(() {
+                        _seedColorCustom = true;
+                      });
+                    } else {
+                      setState(() {
+                        _seedColorCustom = false;
+                      });
+                      settingsState.setSeedColorKey(value);
+                      setState(() {
+                        _currentFormSettings =
+                            _currentFormSettings.copyWith(seedColorKey: value);
+                        _hasChanges = false;
+                      });
+                    }
+                  },
+            decoration: InputDecoration(
+              labelText: l10n.settingsSeedColor,
+              border: const OutlineInputBorder(),
+            ),
+          ),
+          if (shouldUseCustom)
+            Padding(
+              padding:
+                  const EdgeInsets.only(top: SettingsConstants.verticalSpacing),
+              child: TextField(
+                controller: _customColorController,
+                enabled: !settingsState.settings.useSystemColor,
+                decoration: InputDecoration(
+                  labelText: l10n.settingsCustomInput,
+                  hintText: 'FF5733',
+                  prefixText: '#',
+                  border: const OutlineInputBorder(),
+                  helperText: l10n.settingsCustomColorHint,
+                  errorText: _customColorController.text.isNotEmpty &&
+                          app_theme
+                                  .parseHexColor(_customColorController.text) ==
+                              null
+                      ? l10n.settingsInvalidHexColor
+                      : null,
+                ),
+                onChanged: (value) {
+                  final normalized =
+                      value.replaceAll('#', '').trim().toUpperCase();
+                  if (app_theme.parseHexColor(normalized) != null) {
+                    final customKey = '${app_theme.kCustomColorKey}$normalized';
+                    settingsState.setSeedColorKey(customKey);
+                    setState(() {
+                      _currentFormSettings = _currentFormSettings.copyWith(
+                          seedColorKey: customKey);
+                      _hasChanges = false;
+                    });
+                  } else {
+                    setState(() {});
+                  }
+                },
               ),
             ),
         ],

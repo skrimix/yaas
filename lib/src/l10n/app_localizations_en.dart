@@ -187,6 +187,13 @@ class AppLocalizationsEn extends AppLocalizations {
   String get settingsCustomInput => '[Custom]';
 
   @override
+  String get settingsCustomColorHint =>
+      'Enter 6-digit hex color (e.g., FF5733)';
+
+  @override
+  String get settingsInvalidHexColor => 'Invalid hex color';
+
+  @override
   String get settingsNoRemotesFound => 'No remotes found';
 
   @override

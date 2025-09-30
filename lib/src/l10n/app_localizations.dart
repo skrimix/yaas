@@ -452,6 +452,18 @@ abstract class AppLocalizations {
   /// **'[Custom]'**
   String get settingsCustomInput;
 
+  /// No description provided for @settingsCustomColorHint.
+  ///
+  /// In en, this message translates to:
+  /// **'Enter 6-digit hex color (e.g., FF5733)'**
+  String get settingsCustomColorHint;
+
+  /// No description provided for @settingsInvalidHexColor.
+  ///
+  /// In en, this message translates to:
+  /// **'Invalid hex color'**
+  String get settingsInvalidHexColor;
+
   /// No description provided for @settingsNoRemotesFound.
   ///
   /// In en, this message translates to:

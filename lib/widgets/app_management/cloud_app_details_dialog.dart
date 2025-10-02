@@ -326,9 +326,8 @@ class _CloudAppDetailsDialogState extends State<CloudAppDetailsDialog> {
         ),
         Consumer<DeviceState>(builder: (context, deviceState, _) {
           return FilledButton.icon(
-            onPressed: deviceState.isConnected
-                ? () => _handleInstall(context)
-                : null,
+            onPressed:
+                deviceState.isConnected ? () => _handleInstall(context) : null,
             icon: const Icon(Icons.install_mobile),
             label: Text(deviceState.isConnected
                 ? l10n.downloadAndInstall

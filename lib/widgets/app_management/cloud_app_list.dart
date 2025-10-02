@@ -10,11 +10,16 @@ class CachedAppData {
   final CloudApp app;
   final String formattedSize;
   final String formattedDate;
+  // Precomputed lowercase strings
+  final String fullNameLower;
+  final String packageNameLower;
 
   const CachedAppData({
     required this.app,
     required this.formattedSize,
     required this.formattedDate,
+    required this.fullNameLower,
+    required this.packageNameLower,
   });
 }
 

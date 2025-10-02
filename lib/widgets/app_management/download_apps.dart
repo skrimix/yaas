@@ -68,7 +68,8 @@ class _DownloadAppsState extends State<DownloadApps> {
   }
 
   List<CachedAppData> _sortApps(List<CloudApp> apps) {
-    final newSortKey = '${_sortOption}_${_sortAscending}_${apps.length}';
+    final newSortKey =
+        '${_sortOption}_${_sortAscending}_${identityHashCode(apps)}_${apps.length}';
     if (_sortedApps != null && newSortKey == _lastSortKey) {
       return _sortedApps!;
     }
@@ -78,6 +79,8 @@ class _DownloadAppsState extends State<DownloadApps> {
               app: app,
               formattedSize: _formatSize(app.size.toInt()),
               formattedDate: _formatDate(app.lastUpdated),
+              fullNameLower: app.fullName.toLowerCase(),
+              packageNameLower: app.packageName.toLowerCase(),
             ))
         .toList();
 
@@ -85,9 +88,7 @@ class _DownloadAppsState extends State<DownloadApps> {
       int comparison;
       switch (_sortOption) {
         case SortOption.name:
-          comparison = a.app.fullName
-              .toLowerCase()
-              .compareTo(b.app.fullName.toLowerCase());
+          comparison = a.fullNameLower.compareTo(b.fullNameLower);
           break;
         case SortOption.date:
           comparison = a.app.lastUpdated.compareTo(b.app.lastUpdated);
@@ -120,12 +121,14 @@ class _DownloadAppsState extends State<DownloadApps> {
     context.read<AppState>().setDownloadSearchQuery('');
   }
 
-  int _calculateSearchScore(
-      CloudApp app, String searchQuery, List<String> searchTerms) {
-    final fullNameLower = app.fullName.toLowerCase();
-    final packageNameLower = app.packageName.toLowerCase();
-    final queryLower = searchQuery.toLowerCase();
-
+  int _calculateSearchScore({
+    required String fullNameLower,
+    required String packageNameLower,
+    required String queryLower,
+    required List<String> searchTerms,
+    required RegExp? wordQueryRe,
+    required List<RegExp>? termWordRes,
+  }) {
     int score = 0;
 
     // Exact full name match (highest priority)
@@ -145,24 +148,19 @@ class _DownloadAppsState extends State<DownloadApps> {
       score += 700;
     }
     // Full name contains query as whole word
-    else if (RegExp(r'\b' + RegExp.escape(queryLower) + r'\b')
-        .hasMatch(fullNameLower)) {
+    else if (wordQueryRe?.hasMatch(fullNameLower) == true) {
       score += 600;
     }
     // Package name contains query as whole word
-    else if (RegExp(r'\b' + RegExp.escape(queryLower) + r'\b')
-        .hasMatch(packageNameLower)) {
+    else if (wordQueryRe?.hasMatch(packageNameLower) == true) {
       score += 500;
     }
     // All search terms present in full name
     else if (searchTerms.every((term) => fullNameLower.contains(term))) {
       score += 400;
       // Bonus for terms appearing as whole words
-      for (final term in searchTerms) {
-        if (RegExp(r'\b' + RegExp.escape(term) + r'\b')
-            .hasMatch(fullNameLower)) {
-          score += 50;
-        }
+      for (final re in termWordRes ?? const <RegExp>[]) {
+        if (re.hasMatch(fullNameLower)) score += 50;
       }
     }
     // Full name contains the complete query
@@ -176,7 +174,7 @@ class _DownloadAppsState extends State<DownloadApps> {
 
     // Bonus for shorter names (more specific matches)
     if (score > 0) {
-      score += math.max(0, 100 - app.fullName.length);
+      score += math.max(0, 100 - fullNameLower.length);
     }
 
     return score;
@@ -192,15 +190,21 @@ class _DownloadAppsState extends State<DownloadApps> {
           .where((app) => _selectedFullNames.contains(app.app.fullName))
           .toList();
     } else if (_searchQuery.isNotEmpty) {
-      final searchTerms = _searchQuery.toLowerCase().split(' ');
       final queryLower = _searchQuery.toLowerCase();
+      final searchTerms = queryLower.split(' ');
+      // Precompile regexes once per search
+      final wordQueryRe = RegExp(r'\b' + RegExp.escape(queryLower) + r'\b');
+      final termWordRes = searchTerms
+          .where((t) => t.isNotEmpty)
+          .map((t) => RegExp(r'\b' + RegExp.escape(t) + r'\b'))
+          .toList();
 
       // Filter and score matching apps
       final matchingApps = <({CachedAppData app, int score})>[];
 
       for (final app in sortedApps) {
-        final fullNameLower = app.app.fullName.toLowerCase();
-        final packageNameLower = app.app.packageName.toLowerCase();
+        final fullNameLower = app.fullNameLower;
+        final packageNameLower = app.packageNameLower;
 
         // Check if app matches search criteria
         bool matches = false;
@@ -211,8 +215,14 @@ class _DownloadAppsState extends State<DownloadApps> {
         }
 
         if (matches) {
-          final score =
-              _calculateSearchScore(app.app, _searchQuery, searchTerms);
+          final score = _calculateSearchScore(
+            fullNameLower: fullNameLower,
+            packageNameLower: packageNameLower,
+            queryLower: queryLower,
+            searchTerms: searchTerms,
+            wordQueryRe: wordQueryRe,
+            termWordRes: termWordRes,
+          );
           matchingApps.add((app: app, score: score));
         }
       }

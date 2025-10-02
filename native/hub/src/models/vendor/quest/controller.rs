@@ -1,9 +1,13 @@
+use anyhow::{Context, Result};
 use lazy_regex::regex;
 use rinf::SignalPiece;
-use serde::Serialize;
+use serde::{Deserialize, Serialize};
 use tracing::{debug, trace, warn};
 
-pub static CONTROLLER_INFO_COMMAND: &str = "dumpsys OVRRemoteService | grep Battery";
+/// Preferred command to query Quest controllers state
+pub static CONTROLLER_INFO_COMMAND_JSON: &str = "rstest info --json";
+/// Legacy fallback command (parsing text from dumpsys)
+pub static CONTROLLER_INFO_COMMAND_DUMPSYS: &str = "dumpsys OVRRemoteService | grep Battery";
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Hash, Serialize, SignalPiece)]
 /// Represents the current status of a Quest controller.
@@ -11,6 +15,7 @@ pub enum ControllerStatus {
     Active,
     Disabled,
     Searching,
+    Inactive,
     Unknown,
 }
 
@@ -24,10 +29,22 @@ impl From<&str> for ControllerStatus {
     //  #[instrument(level = "trace")]
     fn from(value: &str) -> Self {
         match value {
+            // Legacy dumpsys strings
             "Active" => Self::Active,
             "Disabled" => Self::Disabled,
             "Searching" => Self::Searching,
-            _ => Self::Unknown,
+            "Inactive" => Self::Inactive,
+            other => {
+                // Accept rstest uppercase variants and prefixes
+                let v = other.trim();
+                match v {
+                    "DISABLED" => Self::Disabled,
+                    "SEARCHING" => Self::Searching,
+                    "CONNECTED_ACTIVE" => Self::Active,
+                    "CONNECTED_INACTIVE" => Self::Inactive,
+                    _ => Self::Unknown,
+                }
+            }
         }
     }
 }
@@ -44,6 +61,47 @@ pub struct ControllerInfo {
 pub struct HeadsetControllersInfo {
     pub left: Option<ControllerInfo>,
     pub right: Option<ControllerInfo>,
+}
+
+// ------------------------ rstest --json parsing ------------------------
+
+#[derive(Debug, Deserialize)]
+#[serde(rename_all = "camelCase")]
+struct RstestControllerItem {
+    #[serde(rename = "type")]
+    controller_type: String,
+    #[serde(default)]
+    battery_level: Option<u8>,
+    #[serde(default)]
+    status: Option<String>,
+}
+
+/// Parses the JSON output of `rstest info --json`.
+/// Returns HeadsetControllersInfo for left/right controllers.
+pub fn parse_rstest_json(json: &str) -> Result<HeadsetControllersInfo> {
+    let mut result = HeadsetControllersInfo::default();
+
+    let items: Vec<RstestControllerItem> = serde_json::from_str(json)
+        .with_context(|| "Failed to deserialize rstest info --json output")?;
+
+    for item in items.into_iter() {
+        let status = item.status.as_deref().map(ControllerStatus::from).unwrap_or_default();
+        let info = ControllerInfo { battery_level: item.battery_level, status };
+        match item.controller_type.as_str() {
+            "LeftHand" | "Left" => result.left = Some(info),
+            "RightHand" | "Right" => result.right = Some(info),
+            other => warn!("unexpected controller type '{}'", other),
+        }
+    }
+
+    if result.left.is_none() {
+        warn!("left controller info not found in rstest json");
+    }
+    if result.right.is_none() {
+        warn!("right controller info not found in rstest json");
+    }
+
+    Ok(result)
 }
 
 // #[instrument(level = "debug")]
@@ -105,6 +163,106 @@ mod tests {
     use test_log::test;
 
     use super::*;
+
+    const SAMPLE_JSON_1: &str = r#"
+[
+        {
+                "batteryLevel" : 90,
+                "brightnessLevel" : "GOOD",
+                "errors" : "",
+                "firmwareVersion" : "1.9.2",
+                "hardwareRevision" : "0x08",
+                "id" : "56c5083b9f13da12",
+                "imuModel" : "ICM42686",
+                "lastConnectedTimestamp" : 15.827976419000001,
+                "model" : "JEDI",
+                "modelId" : 1,
+                "serial" : "1WMHCLE0MS1204",
+                "status" : "DISABLED",
+                "trackingStatus" : "NONE",
+                "type" : "LeftHand"
+        },
+        {
+                "batteryLevel" : 40,
+                "brightnessLevel" : "GOOD",
+                "errors" : "",
+                "firmwareVersion" : "1.9.2",
+                "hardwareRevision" : "0x08",
+                "id" : "c93fff8c9460a480",
+                "imuModel" : "ICM42686",
+                "lastConnectedTimestamp" : 773005.87873876607,
+                "model" : "JEDI",
+                "modelId" : 1,
+                "serial" : "1WMHCR30LQ1205",
+                "status" : "CONNECTED_ACTIVE",
+                "trackingStatus" : "NONE",
+                "type" : "RightHand"
+        }
+]
+"#;
+
+    const SAMPLE_JSON_2: &str = r#"
+[
+        {
+                "batteryLevel" : 90,
+                "brightnessLevel" : "GOOD",
+                "errors" : "",
+                "firmwareVersion" : "1.9.2",
+                "hardwareRevision" : "0x08",
+                "id" : "56c5083b9f13da12",
+                "imuModel" : "ICM42686",
+                "lastConnectedTimestamp" : 15.827976419000001,
+                "model" : "JEDI",
+                "modelId" : 1,
+                "serial" : "1WMHCLE0MS1204",
+                "status" : "SEARCHING",
+                "trackingStatus" : "NONE",
+                "type" : "LeftHand"
+        },
+        {
+                "batteryLevel" : 50,
+                "brightnessLevel" : "GOOD",
+                "errors" : "",
+                "firmwareVersion" : "1.9.2",
+                "hardwareRevision" : "0x08",
+                "id" : "c93fff8c9460a480",
+                "imuModel" : "ICM42686",
+                "lastConnectedTimestamp" : 797709.79250015109,
+                "model" : "JEDI",
+                "modelId" : 1,
+                "serial" : "1WMHCR30LQ1205",
+                "status" : "CONNECTED_ACTIVE",
+                "trackingStatus" : "NONE",
+                "type" : "RightHand"
+        }
+]
+"#;
+
+    #[test]
+    fn test_parse_rstest_json_sample1() {
+        let parsed = parse_rstest_json(SAMPLE_JSON_1).expect("json parse should succeed");
+        assert_eq!(
+            parsed.left,
+            Some(ControllerInfo { battery_level: Some(90), status: ControllerStatus::Disabled })
+        );
+        assert_eq!(
+            parsed.right,
+            Some(ControllerInfo { battery_level: Some(40), status: ControllerStatus::Active })
+        );
+    }
+
+    #[test]
+    fn test_parse_rstest_json_sample2() {
+        let parsed = parse_rstest_json(SAMPLE_JSON_2).expect("json parse should succeed");
+        assert_eq!(
+            parsed.left,
+            Some(ControllerInfo { battery_level: Some(90), status: ControllerStatus::Searching })
+        );
+        assert_eq!(
+            parsed.right,
+            Some(ControllerInfo { battery_level: Some(50), status: ControllerStatus::Active })
+        );
+    }
 
     #[test]
     fn test_quest_parse_dumpsys_controller_both() {

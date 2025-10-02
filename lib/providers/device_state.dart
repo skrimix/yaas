@@ -5,10 +5,14 @@ import '../src/l10n/app_localizations.dart';
 class DeviceState extends ChangeNotifier {
   AdbDevice? _device;
   AdbDevice? get device => _device;
+  Map<String, InstalledPackage> _installedByPackage = const {};
 
   DeviceState() {
     DeviceChangedEvent.rustSignalStream.listen((event) {
       _device = event.message.device;
+      // Build a quick lookup map for installed packages by package name.
+      final pkgs = _device?.installedPackages ?? const <InstalledPackage>[];
+      _installedByPackage = {for (final p in pkgs) p.packageName: p};
       notifyListeners();
     });
   }
@@ -48,4 +52,10 @@ class DeviceState extends ChangeNotifier {
   int controllerBatteryLevel(ControllerInfo? controller) {
     return controller?.batteryLevel ?? 0;
   }
+
+  // Installed apps helpers
+  Map<String, InstalledPackage> get installedByPackage => _installedByPackage;
+
+  InstalledPackage? findInstalled(String packageName) =>
+      _installedByPackage[packageName];
 }

@@ -288,11 +288,69 @@ class _DownloadAppsState extends State<DownloadApps> {
     ).sendSignalToRust();
   }
 
+  
+
   void _download(String appFullName) {
     TaskRequest(
       taskType: TaskType.download,
       params: TaskParams(cloudAppFullName: appFullName),
     ).sendSignalToRust();
+  }
+
+  Future<bool> _confirmDowngrades(
+    BuildContext context,
+    List<({InstalledPackage installed, CloudApp target})> items,
+  ) async {
+    if (items.isEmpty) return true;
+    final l10n = AppLocalizations.of(context);
+    final list = items
+        .map((e) =>
+            l10n.downgradeItemFormat(e.installed.displayName, '${e.installed.versionCode}', '${e.target.versionCode}'))
+        .join('\n');
+    final res = await showDialog<bool>(
+      context: context,
+      builder: (context) => AlertDialog(
+        title: Text(l10n.downgradeAppsTitle),
+        content: SingleChildScrollView(
+          child: Column(
+            crossAxisAlignment: CrossAxisAlignment.start,
+            children: [
+              Text(l10n.downgradeMultipleConfirmMessage),
+              const SizedBox(height: 8),
+              Container(
+                width: double.infinity,
+                padding: const EdgeInsets.all(12),
+                decoration: BoxDecoration(
+                  color: Theme.of(context).colorScheme.surfaceContainer,
+                  borderRadius: BorderRadius.circular(8),
+                  border: Border.all(
+                    color: Theme.of(context).colorScheme.outlineVariant,
+                  ),
+                ),
+                child: Text(list, softWrap: true),
+              ),
+            ],
+          ),
+        ),
+        actions: [
+          TextButton(
+            onPressed: () => Navigator.of(context).pop(false),
+            child: Text(l10n.commonCancel),
+          ),
+          FilledButton(
+            style: ButtonStyle(
+              backgroundColor:
+                  WidgetStatePropertyAll(Theme.of(context).colorScheme.error),
+              foregroundColor:
+                  WidgetStatePropertyAll(Theme.of(context).colorScheme.onError),
+            ),
+            onPressed: () => Navigator.of(context).pop(true),
+            child: Text(l10n.commonConfirm),
+          ),
+        ],
+      ),
+    );
+    return res ?? false;
   }
 
   Widget _buildSortButton() {
@@ -556,7 +614,19 @@ class _DownloadAppsState extends State<DownloadApps> {
             builder: (context, deviceState, _) {
               return FilledButton.icon(
                 onPressed: deviceState.isConnected
-                    ? () {
+                    ? () async {
+                        // Collect all downgrades first
+                        final downgrades = <({InstalledPackage installed, CloudApp target})>[];
+                        for (final app in selectedApps) {
+                          final installed = deviceState.findInstalled(app.app.packageName);
+                          if (installed != null && installed.versionCode.toInt() > app.app.versionCode) {
+                            downgrades.add((installed: installed, target: app.app));
+                          }
+                        }
+
+                        final proceed = await _confirmDowngrades(context, downgrades);
+                        if (!proceed) return;
+
                         for (final app in selectedApps) {
                           _install(app.app.fullName);
                         }

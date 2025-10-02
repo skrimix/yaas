@@ -184,6 +184,8 @@ class CloudAppListItem extends StatelessWidget {
                 trailing: Row(
                   mainAxisSize: MainAxisSize.min,
                   children: [
+                    _InstalledStatusBadge(app: cachedApp.app),
+                    const SizedBox(width: 8),
                     IconButton(
                       icon: const Icon(Icons.info_outline),
                       tooltip: l10n.appDetails,
@@ -215,9 +217,7 @@ class CloudAppListItem extends StatelessWidget {
                               ? l10n.downloadAndInstall
                               : l10n.downloadAndInstallNotConnected,
                           onPressed: deviceState.isConnected
-                              ? () {
-                                  onInstall(cachedApp.app.fullName);
-                                }
+                              ? () => _handleInstall(context)
                               : null,
                         );
                       },
@@ -230,5 +230,136 @@ class CloudAppListItem extends StatelessWidget {
         ),
       ),
     );
+  }
+
+  Future<void> _handleInstall(BuildContext context) async {
+    final deviceState = context.read<DeviceState>();
+    final installed = deviceState.findInstalled(cachedApp.app.packageName);
+    if (installed != null &&
+        installed.versionCode.toInt() > cachedApp.app.versionCode) {
+      final confirmed = await _confirmDowngrade(
+        context,
+        installed,
+        cachedApp.app,
+      );
+      if (!confirmed) return;
+    }
+    onInstall(cachedApp.app.fullName);
+  }
+
+  Future<bool> _confirmDowngrade(
+    BuildContext context,
+    InstalledPackage installed,
+    CloudApp target,
+  ) async {
+    final l10n = AppLocalizations.of(context);
+    final res = await showDialog<bool>(
+      context: context,
+      builder: (context) => AlertDialog(
+        title: Text(l10n.downgradeAppTitle),
+        content: Text(l10n.downgradeConfirmMessage('${target.versionCode}')),
+        actions: [
+          TextButton(
+            onPressed: () => Navigator.of(context).pop(false),
+            child: Text(l10n.commonCancel),
+          ),
+          FilledButton(
+            style: ButtonStyle(
+              backgroundColor:
+                  WidgetStatePropertyAll(Theme.of(context).colorScheme.error),
+              foregroundColor:
+                  WidgetStatePropertyAll(Theme.of(context).colorScheme.onError),
+            ),
+            onPressed: () => Navigator.of(context).pop(true),
+            child: Text(l10n.commonConfirm),
+          ),
+        ],
+      ),
+    );
+    return res ?? false;
+  }
+}
+
+class _InstalledStatusBadge extends StatelessWidget {
+  const _InstalledStatusBadge({required this.app});
+
+  final CloudApp app;
+
+  @override
+  Widget build(BuildContext context) {
+    return Consumer<DeviceState>(builder: (context, deviceState, _) {
+      final installed = deviceState.findInstalled(app.packageName);
+      if (installed == null) {
+        return const SizedBox.shrink();
+      }
+
+      final theme = Theme.of(context);
+      final scheme = theme.colorScheme;
+      final l10n = AppLocalizations.of(context);
+
+      final int installedCode = installed.versionCode.toInt();
+      final int cloudCode = app.versionCode;
+
+      late final String label;
+      late final IconData icon;
+      late final Color fg;
+      late final Color border;
+
+      if (cloudCode > installedCode) {
+        // Cloud is newer than installed: update available
+        label = l10n.cloudStatusNewerVersion;
+        icon = Icons.arrow_upward_rounded;
+        fg = scheme.primary;
+        border = scheme.primary;
+      } else if (cloudCode < installedCode) {
+        // Installed is newer than cloud
+        label = l10n.cloudStatusOlderVersion;
+        icon = Icons.arrow_downward_rounded;
+        fg = scheme.secondary;
+        border = scheme.secondary;
+      } else {
+        // Same version
+        label = l10n.cloudStatusInstalled;
+        icon = Icons.check_rounded;
+        fg = theme.colorScheme.onSurfaceVariant;
+        border = theme.colorScheme.outline;
+      }
+
+      final tooltip = l10n.cloudStatusTooltip(
+        installed.displayName,
+        '${installed.versionCode}',
+        '${app.versionCode}',
+      );
+
+      return Tooltip(
+        message: tooltip,
+        waitDuration: const Duration(milliseconds: 300),
+        child: Padding(
+          padding: const EdgeInsets.only(top: 6),
+          child: Container(
+            padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 4),
+            decoration: BoxDecoration(
+              color: Colors.transparent,
+              borderRadius: BorderRadius.circular(999),
+              border: Border.all(color: border.withValues(alpha: 0.7)),
+            ),
+            child: Row(
+              mainAxisSize: MainAxisSize.min,
+              children: [
+                Icon(icon, size: 14, color: fg),
+                const SizedBox(width: 6),
+                Text(
+                  label,
+                  style: Theme.of(context)
+                      .textTheme
+                      .labelSmall
+                      ?.copyWith(color: fg),
+                ),
+              ],
+            ),
+          ),
+        ),
+      );
+    });
   }
 }

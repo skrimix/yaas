@@ -273,7 +273,7 @@
         }
     },
     "downgradeAppTitle": "Downgrade App",
-    "downgradeConfirmMessage": "Downgrade to version {versionCode}? This may cause issues.",
+    "downgradeConfirmMessage": "Attempt to downgrade to version {versionCode}? This may cause issues.",
     "@downgradeConfirmMessage": {
         "placeholders": {
             "versionCode": {
@@ -333,6 +333,17 @@
     "downloadToComputer": "Download to computer",
     "downloadAndInstall": "Download and install on device",
     "downloadAndInstallNotConnected": "Download and install on device (not connected)",
+    "cloudStatusInstalled": "Installed",
+    "cloudStatusNewerVersion": "Newer version",
+    "cloudStatusOlderVersion": "Older version",
+    "cloudStatusTooltip": "Installed {installedName} ({installedCode}) vs Cloud {cloudCode}",
+    "@cloudStatusTooltip": {
+        "placeholders": {
+            "installedName": {"type": "String"},
+            "installedCode": {"type": "String"},
+            "cloudCode": {"type": "String"}
+        }
+    },
     "sortBy": "Sort by",
     "sortNameAsc": "Name (A to Z)",
     "sortNameDesc": "Name (Z to A)",
@@ -563,5 +574,15 @@
             }
         }
     },
-    "emptyValue": "(empty)"
+        "downgradeAppsTitle": "Downgrade Apps",
+    "downgradeMultipleConfirmMessage": "The following apps will be downgraded. This may cause issues.",
+    "downgradeItemFormat": "{name} ({installedCode} → {cloudCode})",
+    "@downgradeItemFormat": {
+        "placeholders": {
+            "name": {"type": "String"},
+            "installedCode": {"type": "String"},
+            "cloudCode": {"type": "String"}
+        }
+    },
+"emptyValue": "(empty)"
 }

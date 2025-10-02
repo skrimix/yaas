@@ -1133,7 +1133,7 @@ abstract class AppLocalizations {
   /// No description provided for @downgradeConfirmMessage.
   ///
   /// In en, this message translates to:
-  /// **'Downgrade to version {versionCode}? This may cause issues.'**
+  /// **'Attempt to downgrade to version {versionCode}? This may cause issues.'**
   String downgradeConfirmMessage(String versionCode);
 
   /// No description provided for @holdShiftToDowngrade.
@@ -1261,6 +1261,31 @@ abstract class AppLocalizations {
   /// In en, this message translates to:
   /// **'Download and install on device (not connected)'**
   String get downloadAndInstallNotConnected;
+
+  /// No description provided for @cloudStatusInstalled.
+  ///
+  /// In en, this message translates to:
+  /// **'Installed'**
+  String get cloudStatusInstalled;
+
+  /// No description provided for @cloudStatusNewerVersion.
+  ///
+  /// In en, this message translates to:
+  /// **'Newer version'**
+  String get cloudStatusNewerVersion;
+
+  /// No description provided for @cloudStatusOlderVersion.
+  ///
+  /// In en, this message translates to:
+  /// **'Older version'**
+  String get cloudStatusOlderVersion;
+
+  /// No description provided for @cloudStatusTooltip.
+  ///
+  /// In en, this message translates to:
+  /// **'Installed {installedName} ({installedCode}) vs Cloud {cloudCode}'**
+  String cloudStatusTooltip(
+      String installedName, String installedCode, String cloudCode);
 
   /// No description provided for @sortBy.
   ///
@@ -2227,6 +2252,25 @@ abstract class AppLocalizations {
   /// In en, this message translates to:
   /// **'{count} logs copied to clipboard'**
   String logsCopied(int count);
+
+  /// No description provided for @downgradeAppsTitle.
+  ///
+  /// In en, this message translates to:
+  /// **'Downgrade Apps'**
+  String get downgradeAppsTitle;
+
+  /// No description provided for @downgradeMultipleConfirmMessage.
+  ///
+  /// In en, this message translates to:
+  /// **'The following apps will be downgraded. This may cause issues.'**
+  String get downgradeMultipleConfirmMessage;
+
+  /// No description provided for @downgradeItemFormat.
+  ///
+  /// In en, this message translates to:
+  /// **'{name} ({installedCode} → {cloudCode})'**
+  String downgradeItemFormat(
+      String name, String installedCode, String cloudCode);
 
   /// No description provided for @emptyValue.
   ///

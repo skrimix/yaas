@@ -582,7 +582,7 @@ class AppLocalizationsRu extends AppLocalizations {
 
   @override
   String downgradeConfirmMessage(String versionCode) {
-    return 'Откатить до версии $versionCode? Это может вызвать проблемы.';
+    return 'Сделать попытку отката до версии $versionCode? Это может вызвать проблемы.';
   }
 
   @override
@@ -658,6 +658,21 @@ class AppLocalizationsRu extends AppLocalizations {
   @override
   String get downloadAndInstallNotConnected =>
       'Скачать и установить на устройство (не подключено)';
+
+  @override
+  String get cloudStatusInstalled => 'Установлено';
+
+  @override
+  String get cloudStatusNewerVersion => 'Версия новее';
+
+  @override
+  String get cloudStatusOlderVersion => 'Версия старше';
+
+  @override
+  String cloudStatusTooltip(
+      String installedName, String installedCode, String cloudCode) {
+    return 'Установлено $installedName ($installedCode) vs Облако $cloudCode';
+  }
 
   @override
   String get sortBy => 'Сортировать по';
@@ -1167,6 +1182,19 @@ class AppLocalizationsRu extends AppLocalizations {
   @override
   String logsCopied(int count) {
     return 'Скопировано логов: $count';
+  }
+
+  @override
+  String get downgradeAppsTitle => 'Откат приложений';
+
+  @override
+  String get downgradeMultipleConfirmMessage =>
+      'Будут откатены следующие приложения. Это может вызвать проблемы.';
+
+  @override
+  String downgradeItemFormat(
+      String name, String installedCode, String cloudCode) {
+    return '$name ($installedCode → $cloudCode)';
   }
 
   @override

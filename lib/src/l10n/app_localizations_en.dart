@@ -573,7 +573,7 @@ class AppLocalizationsEn extends AppLocalizations {
 
   @override
   String downgradeConfirmMessage(String versionCode) {
-    return 'Downgrade to version $versionCode? This may cause issues.';
+    return 'Attempt to downgrade to version $versionCode? This may cause issues.';
   }
 
   @override
@@ -647,6 +647,21 @@ class AppLocalizationsEn extends AppLocalizations {
   @override
   String get downloadAndInstallNotConnected =>
       'Download and install on device (not connected)';
+
+  @override
+  String get cloudStatusInstalled => 'Installed';
+
+  @override
+  String get cloudStatusNewerVersion => 'Newer version';
+
+  @override
+  String get cloudStatusOlderVersion => 'Older version';
+
+  @override
+  String cloudStatusTooltip(
+      String installedName, String installedCode, String cloudCode) {
+    return 'Installed $installedName ($installedCode) vs Cloud $cloudCode';
+  }
 
   @override
   String get sortBy => 'Sort by';
@@ -1155,6 +1170,19 @@ class AppLocalizationsEn extends AppLocalizations {
   @override
   String logsCopied(int count) {
     return '$count logs copied to clipboard';
+  }
+
+  @override
+  String get downgradeAppsTitle => 'Downgrade Apps';
+
+  @override
+  String get downgradeMultipleConfirmMessage =>
+      'The following apps will be downgraded. This may cause issues.';
+
+  @override
+  String downgradeItemFormat(
+      String name, String installedCode, String cloudCode) {
+    return '$name ($installedCode → $cloudCode)';
   }
 
   @override

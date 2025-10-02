@@ -266,7 +266,7 @@
         }
     },
     "downgradeAppTitle": "Откат приложения",
-    "downgradeConfirmMessage": "Откатить до версии {versionCode}? Это может вызвать проблемы.",
+    "downgradeConfirmMessage": "Сделать попытку отката до версии {versionCode}? Это может вызвать проблемы.",
     "@downgradeConfirmMessage": {
         "placeholders": {
             "versionCode": {
@@ -326,6 +326,17 @@
     "downloadToComputer": "Скачать на компьютер",
     "downloadAndInstall": "Скачать и установить на устройство",
     "downloadAndInstallNotConnected": "Скачать и установить на устройство (не подключено)",
+    "cloudStatusInstalled": "Установлено",
+    "cloudStatusNewerVersion": "Версия новее",
+    "cloudStatusOlderVersion": "Версия старше",
+    "cloudStatusTooltip": "Установлено {installedName} ({installedCode}) vs Облако {cloudCode}",
+    "@cloudStatusTooltip": {
+        "placeholders": {
+            "installedName": {"type": "String"},
+            "installedCode": {"type": "String"},
+            "cloudCode": {"type": "String"}
+        }
+    },
     "sortBy": "Сортировать по",
     "sortNameAsc": "Имя (A → Z)",
     "sortNameDesc": "Имя (Z → A)",
@@ -556,5 +567,15 @@
             }
         }
     },
-    "emptyValue": "(пусто)"
+        "downgradeAppsTitle": "Откат приложений",
+    "downgradeMultipleConfirmMessage": "Будут откатены следующие приложения. Это может вызвать проблемы.",
+    "downgradeItemFormat": "{name} ({installedCode} → {cloudCode})",
+    "@downgradeItemFormat": {
+        "placeholders": {
+            "name": {"type": "String"},
+            "installedCode": {"type": "String"},
+            "cloudCode": {"type": "String"}
+        }
+    },
+"emptyValue": "(пусто)"
 }

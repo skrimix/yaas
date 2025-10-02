@@ -288,8 +288,6 @@ class _DownloadAppsState extends State<DownloadApps> {
     ).sendSignalToRust();
   }
 
-  
-
   void _download(String appFullName) {
     TaskRequest(
       taskType: TaskType.download,
@@ -304,8 +302,8 @@ class _DownloadAppsState extends State<DownloadApps> {
     if (items.isEmpty) return true;
     final l10n = AppLocalizations.of(context);
     final list = items
-        .map((e) =>
-            l10n.downgradeItemFormat(e.installed.displayName, '${e.installed.versionCode}', '${e.target.versionCode}'))
+        .map((e) => l10n.downgradeItemFormat(e.installed.displayName,
+            '${e.installed.versionCode}', '${e.target.versionCode}'))
         .join('\n');
     final res = await showDialog<bool>(
       context: context,
@@ -575,10 +573,10 @@ class _DownloadAppsState extends State<DownloadApps> {
     );
   }
 
-  Widget _buildSelectionSummary(List<CachedAppData> apps) {
+  Widget _buildSelectionSummary(List<CachedAppData> allApps) {
     if (_selectedFullNames.isEmpty) return const SizedBox.shrink();
 
-    final selectedApps = apps
+    final selectedApps = allApps
         .where((app) => _selectedFullNames.contains(app.app.fullName))
         .toList();
     final totalSize =
@@ -616,15 +614,21 @@ class _DownloadAppsState extends State<DownloadApps> {
                 onPressed: deviceState.isConnected
                     ? () async {
                         // Collect all downgrades first
-                        final downgrades = <({InstalledPackage installed, CloudApp target})>[];
+                        final downgrades =
+                            <({InstalledPackage installed, CloudApp target})>[];
                         for (final app in selectedApps) {
-                          final installed = deviceState.findInstalled(app.app.packageName);
-                          if (installed != null && installed.versionCode.toInt() > app.app.versionCode) {
-                            downgrades.add((installed: installed, target: app.app));
+                          final installed =
+                              deviceState.findInstalled(app.app.packageName);
+                          if (installed != null &&
+                              installed.versionCode.toInt() >
+                                  app.app.versionCode) {
+                            downgrades
+                                .add((installed: installed, target: app.app));
                           }
                         }
 
-                        final proceed = await _confirmDowngrades(context, downgrades);
+                        final proceed =
+                            await _confirmDowngrades(context, downgrades);
                         if (!proceed) return;
 
                         for (final app in selectedApps) {
@@ -750,7 +754,7 @@ class _DownloadAppsState extends State<DownloadApps> {
                     onInstall: _install,
                   ),
                 ),
-                _buildSelectionSummary(filteredAndSortedApps),
+                _buildSelectionSummary(_sortApps(cloudAppsState.apps)),
               ],
             ),
           ),

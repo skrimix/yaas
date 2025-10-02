@@ -312,7 +312,7 @@ class _DownloadAppsState extends State<DownloadApps> {
     if (items.isEmpty) return true;
     final l10n = AppLocalizations.of(context);
     final list = items
-        .map((e) => l10n.downgradeItemFormat(e.installed.displayName,
+        .map((e) => l10n.downgradeItemFormat(e.installed.label,
             '${e.installed.versionCode}', '${e.target.versionCode}'))
         .join('\n');
     final res = await showDialog<bool>(

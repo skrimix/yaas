@@ -83,6 +83,7 @@ State flows from Rust backend to Flutter frontend via Rinf signals.
   - Run with `just test` (use `just test-all` to include ignored tests).
 - Flutter: Place tests under `test/`; run with `flutter test` when added.
 - Aim for meaningful coverage around parsing, signals, and provider logic.
+- Never leave comments about changed or removed parts, only describe the final state of things.
 
 ## Commit & Pull Request Guidelines
 - Commits: Imperative, concise, scoped when helpful. Examples:

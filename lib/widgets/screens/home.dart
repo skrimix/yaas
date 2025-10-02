@@ -135,9 +135,8 @@ class Home extends StatelessWidget {
                                           )
                                         : null,
                                   ),
-                                  isDimmed:
-                                      deviceState.leftController?.status !=
-                                          ControllerStatus.active,
+                                  isDimmed: deviceState.leftController?.status
+                                      is! ControllerStatusActive,
                                   l10n: l10n,
                                 ),
                                 const SizedBox(width: 12),
@@ -180,9 +179,8 @@ class Home extends StatelessWidget {
                                           )
                                         : null,
                                   ),
-                                  isDimmed:
-                                      deviceState.rightController?.status !=
-                                          ControllerStatus.active,
+                                  isDimmed: deviceState.rightController?.status
+                                      is! ControllerStatusActive,
                                   l10n: l10n,
                                 ),
                               ],

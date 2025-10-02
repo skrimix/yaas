@@ -747,6 +747,9 @@ class AppLocalizationsEn extends AppLocalizations {
   String get controllerStatusActive => 'Active';
 
   @override
+  String get controllerStatusInactive => 'Inactive';
+
+  @override
   String get controllerStatusDisabled => 'Disabled';
 
   @override

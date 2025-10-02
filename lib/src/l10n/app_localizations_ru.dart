@@ -758,6 +758,9 @@ class AppLocalizationsRu extends AppLocalizations {
   String get controllerStatusActive => 'Активно';
 
   @override
+  String get controllerStatusInactive => 'Неактивно';
+
+  @override
   String get controllerStatusDisabled => 'Отключено';
 
   @override

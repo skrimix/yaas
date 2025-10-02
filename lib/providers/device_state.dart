@@ -29,15 +29,19 @@ class DeviceState extends ChangeNotifier {
       BuildContext context, ControllerInfo? controller) {
     final l10n = AppLocalizations.of(context);
     if (controller == null) return l10n.controllerStatusNotConnected;
-    switch (controller.status) {
-      case ControllerStatus.active:
-        return l10n.controllerStatusActive;
-      case ControllerStatus.disabled:
-        return l10n.controllerStatusDisabled;
-      case ControllerStatus.searching:
-        return l10n.controllerStatusSearching;
-      default:
-        return l10n.controllerStatusUnknown;
+    final ControllerStatus status = controller.status;
+    if (status is ControllerStatusActive) {
+      return l10n.controllerStatusActive;
+    } else if (status is ControllerStatusDisabled) {
+      return l10n.controllerStatusDisabled;
+    } else if (status is ControllerStatusSearching) {
+      return l10n.controllerStatusSearching;
+    } else if (status is ControllerStatusInactive) {
+      return l10n.controllerStatusInactive;
+    } else if (status is ControllerStatusUnknown) {
+      return status.value;
+    } else {
+      return l10n.controllerStatusUnknown;
     }
   }
 

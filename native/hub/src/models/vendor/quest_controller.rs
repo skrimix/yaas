@@ -9,19 +9,19 @@ pub static CONTROLLER_INFO_COMMAND_JSON: &str = "rstest info --json";
 /// Legacy fallback command (parsing text from dumpsys)
 pub static CONTROLLER_INFO_COMMAND_DUMPSYS: &str = "dumpsys OVRRemoteService | grep Battery";
 
-#[derive(Debug, Clone, Copy, PartialEq, Eq, Hash, Serialize, SignalPiece)]
+#[derive(Debug, Clone, PartialEq, Eq, Hash, Serialize, SignalPiece)]
 /// Represents the current status of a Quest controller.
 pub enum ControllerStatus {
     Active,
     Disabled,
     Searching,
     Inactive,
-    Unknown,
+    Unknown(String),
 }
 
 impl Default for ControllerStatus {
     fn default() -> Self {
-        Self::Unknown
+        Self::Unknown(String::new())
     }
 }
 
@@ -42,21 +42,21 @@ impl From<&str> for ControllerStatus {
                     "SEARCHING" => Self::Searching,
                     "CONNECTED_ACTIVE" => Self::Active,
                     "CONNECTED_INACTIVE" => Self::Inactive,
-                    _ => Self::Unknown,
+                    _ => Self::Unknown(v.to_string()),
                 }
             }
         }
     }
 }
 
-#[derive(Debug, Default, Clone, Copy, PartialEq, Eq, Hash, Serialize, SignalPiece)]
+#[derive(Debug, Default, Clone, PartialEq, Eq, Hash, Serialize, SignalPiece)]
 /// Info about a Quest controller status.
 pub struct ControllerInfo {
     pub battery_level: Option<u8>,
     pub status: ControllerStatus,
 }
 
-#[derive(Debug, Default, Clone, Copy, PartialEq, Eq, Hash, Serialize, SignalPiece)]
+#[derive(Debug, Default, Clone, PartialEq, Eq, Hash, Serialize, SignalPiece)]
 /// Holds info about both controllers connected to the headset.
 pub struct HeadsetControllersInfo {
     pub left: Option<ControllerInfo>,

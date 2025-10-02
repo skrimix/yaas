@@ -368,6 +368,7 @@
     "statusLabel": "Статус",
     "controllerStatusNotConnected": "Не подключено",
     "controllerStatusActive": "Активно",
+    "controllerStatusInactive": "Неактивно",
     "controllerStatusDisabled": "Отключено",
     "controllerStatusSearching": "Поиск",
     "controllerStatusUnknown": "Неизвестно",

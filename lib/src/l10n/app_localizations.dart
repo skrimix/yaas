@@ -1454,6 +1454,12 @@ abstract class AppLocalizations {
   /// **'Active'**
   String get controllerStatusActive;
 
+  /// No description provided for @controllerStatusInactive.
+  ///
+  /// In en, this message translates to:
+  /// **'Inactive'**
+  String get controllerStatusInactive;
+
   /// No description provided for @controllerStatusDisabled.
   ///
   /// In en, this message translates to:

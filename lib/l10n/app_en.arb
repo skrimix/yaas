@@ -375,6 +375,7 @@
     "statusLabel": "Status",
     "controllerStatusNotConnected": "Not connected",
     "controllerStatusActive": "Active",
+    "controllerStatusInactive": "Inactive",
     "controllerStatusDisabled": "Disabled",
     "controllerStatusSearching": "Searching",
     "controllerStatusUnknown": "Unknown",

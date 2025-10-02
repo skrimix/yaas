@@ -23,8 +23,9 @@ use crate::{
     models::{
         DeviceType, InstalledPackage, SPACE_INFO_COMMAND, SpaceInfo, parse_list_apps_dex,
         signals::adb::command::RebootMode,
-        vendor::quest::controller::{
-            self, HeadsetControllersInfo, CONTROLLER_INFO_COMMAND_DUMPSYS, CONTROLLER_INFO_COMMAND_JSON,
+        vendor::quest_controller::{
+            self, CONTROLLER_INFO_COMMAND_DUMPSYS, CONTROLLER_INFO_COMMAND_JSON,
+            HeadsetControllersInfo,
         },
     },
     utils::{
@@ -256,7 +257,7 @@ impl AdbDevice {
 
         // Get controller battery levels using rstest first, then fall back to dumpsys
         let controllers = match self.shell_checked(CONTROLLER_INFO_COMMAND_JSON).await {
-            Ok(json) => match controller::parse_rstest_json(&json) {
+            Ok(json) => match quest_controller::parse_rstest_json(&json) {
                 Ok(info) => info,
                 Err(e) => {
                     warn!(error = %e, "Failed to parse rstest json, falling back to dumpsys");
@@ -264,7 +265,7 @@ impl AdbDevice {
                         .shell(CONTROLLER_INFO_COMMAND_DUMPSYS)
                         .await
                         .context("Failed to get controller info via dumpsys")?;
-                    controller::parse_dumpsys(&dump)
+                    quest_controller::parse_dumpsys(&dump)
                 }
             },
             Err(e) => {
@@ -273,7 +274,7 @@ impl AdbDevice {
                     .shell(CONTROLLER_INFO_COMMAND_DUMPSYS)
                     .await
                     .context("Failed to get controller info via dumpsys")?;
-                controller::parse_dumpsys(&dump)
+                quest_controller::parse_dumpsys(&dump)
             }
         };
         trace!(?controllers, "Parsed controller info");

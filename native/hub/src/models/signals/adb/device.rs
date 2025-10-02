@@ -2,7 +2,7 @@ use rinf::{RustSignal, SignalPiece};
 use serde::Serialize;
 
 use crate::models::{
-    DeviceType, InstalledPackage, SpaceInfo, vendor::quest::controller::HeadsetControllersInfo,
+    DeviceType, InstalledPackage, SpaceInfo, vendor::quest_controller::HeadsetControllersInfo,
 };
 
 #[derive(Serialize, SignalPiece)]

@@ -1,4 +1,2 @@
-/// Meta Quest-specific models.
-pub mod quest {
-    pub mod controller;
-}
+/// Quest-specific models.
+pub mod quest_controller;

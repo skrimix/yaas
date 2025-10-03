@@ -400,12 +400,12 @@ impl Downloader {
             )
             .await?;
 
-        // Try to write release metadata for the downloaded directory
-        if let Err(e) = self.write_release_metadata(&app_full_name, &dst_dir).await {
+        // Try to write download metadata for the downloaded directory
+        if let Err(e) = self.write_download_metadata(&app_full_name, &dst_dir).await {
             warn!(
                 error = e.as_ref() as &dyn Error,
                 dir = %dst_dir.display(),
-                "Failed to write release.json metadata"
+                "Failed to write download metadata"
             );
         }
         // Notify UI that downloads may have changed
@@ -470,7 +470,7 @@ async fn fetch_app_reviews(
 }
 
 #[derive(serde::Serialize)]
-struct ReleaseMetadata {
+struct DownloadMetadata {
     #[serde(default)]
     format_version: u32,
     full_name: String,
@@ -485,17 +485,16 @@ struct ReleaseMetadata {
     #[serde(skip_serializing_if = "Option::is_none")]
     size: Option<u64>,
     downloaded_at: String,
-    source_remote: String,
 }
 
 impl Downloader {
     #[instrument(skip(self), fields(app_full_name = %app_full_name, dir = %dst_dir.display()), err)]
-    async fn write_release_metadata(&self, app_full_name: &str, dst_dir: &PathBuf) -> Result<()> {
+    async fn write_download_metadata(&self, app_full_name: &str, dst_dir: &PathBuf) -> Result<()> {
         use time::{OffsetDateTime, format_description::well_known::Rfc3339};
         let cached = self.get_app_by_full_name(app_full_name).await;
         let now = OffsetDateTime::now_utc().format(&Rfc3339).unwrap_or_else(|_| "".to_string());
 
-        let meta = ReleaseMetadata {
+        let meta = DownloadMetadata {
             format_version: 1,
             full_name: app_full_name.to_string(),
             app_name: cached.as_ref().map(|a| a.app_name.clone()),
@@ -504,15 +503,14 @@ impl Downloader {
             last_updated: cached.as_ref().map(|a| a.last_updated.clone()),
             size: cached.as_ref().map(|a| a.size),
             downloaded_at: now,
-            source_remote: self.storage.read().await.remote_name().to_string(),
         };
 
         let json = serde_json::to_string_pretty(&meta)?;
-        let release_path = dst_dir.join("release.json");
-        tokio::fs::write(&release_path, json)
+        let download_path = dst_dir.join("metadata.json");
+        tokio::fs::write(&download_path, json)
             .await
-            .with_context(|| format!("Failed to write {}", release_path.display()))?;
-        info!(path = %release_path.display(), "Wrote release metadata");
+            .with_context(|| format!("Failed to write {}", download_path.display()))?;
+        info!(path = %download_path.display(), "Wrote download metadata");
         Ok(())
     }
 }

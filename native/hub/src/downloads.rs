@@ -162,28 +162,10 @@ impl DownloadsCatalog {
             return Ok(None);
         }
 
-        // release.json is optional, use it when available
-        let release_path = dir.join("release.json");
-        let mut package_name: Option<String> = None;
-        let mut version_code: Option<u32> = None;
-        let mut ts_millis: u64 = 0;
-        if release_path.exists()
-            && let Ok(text) = fs::read_to_string(&release_path).await
-        {
-            #[derive(serde::Deserialize)]
-            struct ReleaseMetaPartial {
-                downloaded_at: Option<String>,
-                package_name: Option<String>,
-                version_code: Option<u32>,
-            }
-            if let Ok(meta) = serde_json::from_str::<ReleaseMetaPartial>(&text) {
-                package_name = meta.package_name;
-                version_code = meta.version_code;
-                if let Some(dt) = meta.downloaded_at {
-                    ts_millis = rfc3339_to_millis(&dt);
-                }
-            }
-        }
+        let meta = read_download_metadata(dir).await?;
+        let package_name = meta.package_name;
+        let version_code = meta.version_code;
+        let mut ts_millis = meta.downloaded_at.unwrap_or(0);
 
         if ts_millis == 0
             && let Ok(meta) = fs::metadata(dir).await
@@ -244,6 +226,56 @@ async fn dir_size(dir: &Path) -> Result<u64> {
     }
     Span::current().record("size", total);
     Ok(total)
+}
+
+struct DownloadMetadata {
+    downloaded_at: Option<u64>,
+    package_name: Option<String>,
+    version_code: Option<u32>,
+}
+
+async fn read_download_metadata(dir: &Path) -> Result<DownloadMetadata> {
+    #[derive(serde::Deserialize)]
+    struct DownloadMetaPartial {
+        downloaded_at: Option<String>,
+        #[serde(alias = "PackageName")]
+        package_name: Option<String>,
+        #[serde(alias = "VersionCode")]
+        version_code: Option<u32>,
+    }
+
+    let meta_path = dir.join("metadata.json");
+    let meta_path_alt = dir.join("release.json");
+    let mut package_name: Option<String> = None;
+    let mut version_code: Option<u32> = None;
+    let mut ts_millis: Option<u64> = None;
+    if meta_path.exists()
+        && let Ok(text) = fs::read_to_string(&meta_path).await
+        && let Ok(meta) = serde_json::from_str::<DownloadMetaPartial>(&text)
+    {
+        package_name = meta.package_name;
+        version_code = meta.version_code;
+        if let Some(dt) = meta.downloaded_at {
+            ts_millis = Some(rfc3339_to_millis(&dt));
+        }
+    } else if meta_path_alt.exists()
+        && let Ok(text) = fs::read_to_string(&meta_path_alt).await
+        && let Ok(meta) = serde_json::from_str::<DownloadMetaPartial>(&text)
+    {
+        package_name = meta.package_name;
+        version_code = meta.version_code;
+        if let Some(dt) = meta.downloaded_at {
+            ts_millis = Some(rfc3339_to_millis(&dt));
+
+            // Only our metadata has downloaded_at, rename to metadata.json to avoid conflicts with QL
+            let new_path = dir.join("metadata.json");
+            if let Err(e) = fs::rename(&meta_path_alt, &new_path).await {
+                warn!(error = %e, "Failed to rename our release.json to metadata.json");
+            }
+        }
+    }
+
+    Ok(DownloadMetadata { downloaded_at: ts_millis, package_name, version_code })
 }
 
 impl DownloadsCatalog {
@@ -400,9 +432,10 @@ impl DownloadsCatalog {
             if !meta.is_dir() {
                 continue;
             }
-            // Only delete directories that contain release.json
-            let release_path = dir.join("release.json");
-            if !release_path.exists() {
+            // Only delete directories that contain metadata.json or release.json
+            let meta_path = dir.join("metadata.json");
+            let meta_path_alt = dir.join("release.json");
+            if !meta_path.exists() && !meta_path_alt.exists() {
                 continue;
             }
             if dir.exists() {

@@ -333,8 +333,4 @@ impl RcloneStorage {
         let remotes = self.client.remotes().await?;
         Ok(remotes.into_iter().filter(|r| regex.is_match(r)).collect())
     }
-
-    pub fn remote_name(&self) -> &str {
-        &self.remote
-    }
 }

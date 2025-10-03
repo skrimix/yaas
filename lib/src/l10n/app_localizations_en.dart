@@ -646,7 +646,7 @@ class AppLocalizationsEn extends AppLocalizations {
   String get clearFavoritesTitle => 'Clear Favorites';
 
   @override
-  String get clearFavoritesConfirm => 'Remove all favorite apps?';
+  String get clearFavoritesConfirm => 'Remove all apps from favorites?';
 
   @override
   String sizeAndDate(String size, String date) {

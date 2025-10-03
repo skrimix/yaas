@@ -657,7 +657,7 @@ class AppLocalizationsRu extends AppLocalizations {
   String get clearFavoritesTitle => 'Очистить избранное';
 
   @override
-  String get clearFavoritesConfirm => 'Удалить все избранные приложения?';
+  String get clearFavoritesConfirm => 'Удалить все приложения из избранного?';
 
   @override
   String sizeAndDate(String size, String date) {
@@ -749,7 +749,7 @@ class AppLocalizationsRu extends AppLocalizations {
   String get addSelectedToFavorites => 'Добавить в избранное';
 
   @override
-  String get removeSelectedFromFavorites => 'Убрать выбранные из избранного';
+  String get removeSelectedFromFavorites => 'Убрать из избранного';
 
   @override
   String get clearSelection => 'Очистить выбор';

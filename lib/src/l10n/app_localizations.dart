@@ -1265,7 +1265,7 @@ abstract class AppLocalizations {
   /// No description provided for @clearFavoritesConfirm.
   ///
   /// In en, this message translates to:
-  /// **'Remove all favorite apps?'**
+  /// **'Remove all apps from favorites?'**
   String get clearFavoritesConfirm;
 
   /// No description provided for @sizeAndDate.

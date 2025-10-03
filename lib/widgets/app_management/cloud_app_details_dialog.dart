@@ -58,7 +58,8 @@ class _CloudAppDetailsDialogState extends State<CloudAppDetailsDialog> {
     _sort = _lastSort;
     _sub = AppDetailsResponse.rustSignalStream.listen((event) {
       final message = event.message;
-      if (message.packageName != widget.cachedApp.app.packageName) {
+      if (message.packageName != widget.cachedApp.app.packageName &&
+          message.packageName != widget.cachedApp.app.originalPackageName) {
         return;
       }
 
@@ -103,8 +104,9 @@ class _CloudAppDetailsDialogState extends State<CloudAppDetailsDialog> {
       });
     });
 
-    GetAppDetailsRequest(packageName: widget.cachedApp.app.packageName)
-        .sendSignalToRust();
+    GetAppDetailsRequest(
+      packageName: widget.cachedApp.app.originalPackageName,
+    ).sendSignalToRust();
   }
 
   @override
@@ -206,7 +208,8 @@ class _CloudAppDetailsDialogState extends State<CloudAppDetailsDialog> {
                         children: [
                           // Left: Thumbnail + hover overlay + trailer player
                           _CloudAppMedia(
-                            packageName: widget.cachedApp.app.packageName,
+                            originalPackageName:
+                                widget.cachedApp.app.originalPackageName,
                             width: 450,
                             height: 270,
                           ),
@@ -942,12 +945,12 @@ String _formatEpochSeconds(int seconds) {
 
 class _CloudAppMedia extends StatefulWidget {
   const _CloudAppMedia({
-    required this.packageName,
+    required this.originalPackageName,
     required this.width,
     required this.height,
   });
 
-  final String packageName;
+  final String originalPackageName;
   final double width;
   final double height;
 
@@ -1047,8 +1050,8 @@ class _CloudAppMediaState extends State<_CloudAppMedia> {
   Widget build(BuildContext context) {
     final l10n = AppLocalizations.of(context);
     final media = context.watch<CloudAppsState>();
-    final thumbUrl = media.thumbnailUrlFor(widget.packageName);
-    final trailerUrl = media.trailerUrlFor(widget.packageName);
+    final thumbUrl = media.thumbnailUrlFor(widget.originalPackageName);
+    final trailerUrl = media.trailerUrlFor(widget.originalPackageName);
 
     final borderRadius = BorderRadius.circular(8);
 

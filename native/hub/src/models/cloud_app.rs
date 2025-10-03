@@ -1,5 +1,6 @@
 use std::str::FromStr;
 
+use lazy_regex::regex;
 use rinf::SignalPiece;
 use serde::{Deserialize, Deserializer, Serialize};
 /// Custom helper used only during deserialization from CSV/remote list.
@@ -28,12 +29,20 @@ fn parse_size_mb_to_bytes(size_mb_str: &str) -> Result<u64, String> {
     Ok((size_mb * 1000.0 * 1000.0) as u64)
 }
 
+/// Strips known rename markers from a package name to derive the original.
+fn normalize_package_name(name: &str) -> String {
+    let re = regex!(r"(^mr\.)|(^mrf\.)|(\.jjb)");
+    re.replace_all(name, "").into_owned()
+}
+
 /// A cloud app from the local device.
 #[derive(Serialize, Debug, Clone, SignalPiece)]
 pub struct CloudApp {
     pub app_name: String,
     pub full_name: String,
     pub package_name: String,
+    /// Package name normalized to original by removing known renames
+    pub original_package_name: String,
     pub version_code: u32,
     pub last_updated: String,
     pub size: u64,
@@ -47,10 +56,12 @@ impl<'de> Deserialize<'de> for CloudApp {
         // Delegate to helper with serde field attributes, then convert
         let helper = CloudAppCsvHelper::deserialize(deserializer)?;
         let size = parse_size_mb_to_bytes(&helper.size).map_err(serde::de::Error::custom)?;
+        let original = normalize_package_name(&helper.package_name);
         Ok(CloudApp {
             app_name: helper.app_name,
             full_name: helper.full_name,
             package_name: helper.package_name,
+            original_package_name: original,
             version_code: helper.version_code,
             last_updated: helper.last_updated,
             size,

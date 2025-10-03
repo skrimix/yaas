@@ -14,21 +14,12 @@ class CloudAppsState extends ChangeNotifier {
   String get mediaBaseUrl => _mediaBaseUrl;
   String? get mediaCacheDir => _mediaCacheDir;
 
-  String _fixPackageName(String packageName) {
-    if (packageName.startsWith('mr.')) {
-      return packageName.substring(3);
-    }
-    return packageName;
-  }
-
   String thumbnailUrlFor(String packageName) {
-    final slug = _fixPackageName(packageName);
-    return '${_mediaBaseUrl}thumbnails/$slug.jpg';
+    return '${_mediaBaseUrl}thumbnails/$packageName.jpg';
   }
 
   String trailerUrlFor(String packageName) {
-    final slug = _fixPackageName(packageName);
-    return '${_mediaBaseUrl}videos/$slug.mp4';
+    return '${_mediaBaseUrl}videos/$packageName.mp4';
   }
 
   CloudAppsState() {

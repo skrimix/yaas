@@ -211,6 +211,13 @@ class AppLocalizationsRu extends AppLocalizations {
   String get settingsDownloadsCleanup => 'Очистка загрузок';
 
   @override
+  String get settingsWriteLegacyReleaseJson => 'Писать legacy release.json';
+
+  @override
+  String get settingsWriteLegacyReleaseJsonHelp =>
+      'Также сохранять release.json в старом формате для совместимости со старыми инструментами';
+
+  @override
   String get settingsCleanupDeleteAfterInstall => 'Удалять после установки';
 
   @override

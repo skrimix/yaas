@@ -42,6 +42,9 @@ pub struct Settings {
     pub backups_location: String, // TODO: implement
     pub bandwidth_limit: String,
     pub cleanup_policy: DownloadCleanupPolicy, // TODO: implement
+    /// Also write legacy release.json metadata alongside download.json
+    #[serde(default)]
+    pub write_legacy_release_json: bool,
     #[serde(default)]
     pub locale_code: String,
     #[serde(default)]
@@ -81,6 +84,7 @@ impl Default for Settings {
                 .to_string(),
             bandwidth_limit: "".to_string(),
             cleanup_policy: DownloadCleanupPolicy::DeleteAfterInstall,
+            write_legacy_release_json: false,
             locale_code: "system".to_string(),
             navigation_rail_label_visibility: NavigationRailLabelVisibility::Selected,
             startup_page_key: "home".to_string(),

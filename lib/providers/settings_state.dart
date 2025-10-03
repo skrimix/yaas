@@ -13,6 +13,7 @@ class SettingsState extends ChangeNotifier {
     backupsLocation: '',
     bandwidthLimit: '',
     cleanupPolicy: DownloadCleanupPolicy.deleteAfterInstall,
+    writeLegacyReleaseJson: false,
     localeCode: 'system',
     navigationRailLabelVisibility: NavigationRailLabelVisibility.selected,
     startupPageKey: 'home',

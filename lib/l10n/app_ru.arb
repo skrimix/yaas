@@ -66,6 +66,8 @@
     "settingsBandwidthLimit": "Ограничение скорости",
     "settingsBandwidthHelper": "(В разработке) Значение в КиБ/с или с суффиксами B|K|M|G|T|P и др. (нажмите для справки)",
     "settingsDownloadsCleanup": "Очистка загрузок",
+    "settingsWriteLegacyReleaseJson": "Писать legacy release.json",
+    "settingsWriteLegacyReleaseJsonHelp": "Также сохранять release.json в старом формате для совместимости со старыми инструментами",
     "settingsCleanupDeleteAfterInstall": "Удалять после установки",
     "settingsCleanupKeepOneVersion": "Хранить одну версию",
     "settingsCleanupKeepTwoVersions": "Хранить две версии",

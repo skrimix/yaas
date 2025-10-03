@@ -627,6 +627,19 @@ class _SettingsScreenState extends State<SettingsScreen> {
               }
             },
           ),
+          const SizedBox(height: SettingsConstants.verticalSpacing),
+          SwitchListTile(
+            title: Text(l10n.settingsWriteLegacyReleaseJson),
+            subtitle: Text(l10n.settingsWriteLegacyReleaseJsonHelp),
+            value: _currentFormSettings.writeLegacyReleaseJson,
+            onChanged: (v) {
+              setState(() {
+                _currentFormSettings =
+                    _currentFormSettings.copyWith(writeLegacyReleaseJson: v);
+                _checkForChanges();
+              });
+            },
+          ),
         ],
       ),
     ];

@@ -6,6 +6,7 @@ use rand::seq::IndexedRandom;
 use rclone::RcloneStorage;
 use reqwest::header::{ACCEPT, HeaderMap, HeaderValue};
 use rinf::{DartSignal, RustSignal};
+use time::{OffsetDateTime, format_description::well_known::Rfc3339};
 use tokio::{
     fs::File,
     sync::{Mutex, RwLock},
@@ -38,6 +39,7 @@ pub struct Downloader {
     storage: RwLock<RcloneStorage>,
     download_dir: RwLock<PathBuf>,
     current_load_token: RwLock<CancellationToken>,
+    write_legacy_release_json: RwLock<bool>,
 }
 
 impl Downloader {
@@ -92,6 +94,7 @@ impl Downloader {
             storage: RwLock::new(storage),
             download_dir: RwLock::new(PathBuf::from(settings.downloads_location)),
             current_load_token: RwLock::new(CancellationToken::new()),
+            write_legacy_release_json: RwLock::new(settings.write_legacy_release_json),
         });
 
         tokio::spawn({
@@ -149,6 +152,10 @@ impl Downloader {
                         info!(new_dir = %new_download_dir.display(), "Download directory changed");
                         *download_dir = new_download_dir;
                     }
+
+                    // Update legacy release.json toggle
+                    let mut legacy_flag = handle.write_legacy_release_json.write().await;
+                    *legacy_flag = settings.write_legacy_release_json;
                 }
 
                 panic!("Settings stream closed for Downloader");
@@ -490,7 +497,6 @@ struct DownloadMetadata {
 impl Downloader {
     #[instrument(skip(self), fields(app_full_name = %app_full_name, dir = %dst_dir.display()), err)]
     async fn write_download_metadata(&self, app_full_name: &str, dst_dir: &PathBuf) -> Result<()> {
-        use time::{OffsetDateTime, format_description::well_known::Rfc3339};
         let cached = self.get_app_by_full_name(app_full_name).await;
         let now = OffsetDateTime::now_utc().format(&Rfc3339).unwrap_or_else(|_| "".to_string());
 
@@ -511,6 +517,47 @@ impl Downloader {
             .await
             .with_context(|| format!("Failed to write {}", download_path.display()))?;
         info!(path = %download_path.display(), "Wrote download metadata");
+
+        // Optionally write legacy release.json file for compatibility
+        if *self.write_legacy_release_json.read().await {
+            if let Some(app) = cached.as_ref() {
+                #[derive(serde::Serialize)]
+                struct LegacyReleaseJson<'a> {
+                    #[serde(rename = "GameName")]
+                    game_name: &'a str,
+                    #[serde(rename = "ReleaseName")]
+                    release_name: &'a str,
+                    #[serde(rename = "PackageName")]
+                    package_name: &'a str,
+                    #[serde(rename = "VersionCode")]
+                    version_code: u32,
+                    #[serde(rename = "LastUpdated")]
+                    last_updated: &'a str,
+                    #[serde(rename = "GameSize")]
+                    game_size: u64,
+                }
+
+                let size_mb = app.size / 1_000_000;
+                let legacy = LegacyReleaseJson {
+                    game_name: &app.app_name,
+                    release_name: app_full_name,
+                    package_name: &app.package_name,
+                    version_code: app.version_code,
+                    last_updated: &app.last_updated,
+                    game_size: size_mb,
+                };
+
+                let legacy_json = serde_json::to_string_pretty(&legacy)?;
+                let legacy_path = dst_dir.join("release.json");
+                tokio::fs::write(&legacy_path, legacy_json)
+                    .await
+                    .with_context(|| format!("Failed to write {}", legacy_path.display()))?;
+                info!(path = %legacy_path.display(), "Wrote legacy release.json metadata");
+            } else {
+                // Not fatal; just log for visibility
+                warn!(app_full_name, "Could not write legacy release.json: app not found in cache");
+            }
+        }
         Ok(())
     }
 }

@@ -210,6 +210,13 @@ class AppLocalizationsEn extends AppLocalizations {
   String get settingsDownloadsCleanup => 'Downloads Cleanup';
 
   @override
+  String get settingsWriteLegacyReleaseJson => 'Write legacy release.json';
+
+  @override
+  String get settingsWriteLegacyReleaseJsonHelp =>
+      'Also write release.json in legacy format for compatibility with older tools';
+
+  @override
   String get settingsCleanupDeleteAfterInstall => 'Remove after installation';
 
   @override

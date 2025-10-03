@@ -494,6 +494,18 @@ abstract class AppLocalizations {
   /// **'Downloads Cleanup'**
   String get settingsDownloadsCleanup;
 
+  /// No description provided for @settingsWriteLegacyReleaseJson.
+  ///
+  /// In en, this message translates to:
+  /// **'Write legacy release.json'**
+  String get settingsWriteLegacyReleaseJson;
+
+  /// No description provided for @settingsWriteLegacyReleaseJsonHelp.
+  ///
+  /// In en, this message translates to:
+  /// **'Also write release.json in legacy format for compatibility with older tools'**
+  String get settingsWriteLegacyReleaseJsonHelp;
+
   /// No description provided for @settingsCleanupDeleteAfterInstall.
   ///
   /// In en, this message translates to:

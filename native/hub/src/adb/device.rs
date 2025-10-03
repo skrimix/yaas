@@ -812,7 +812,6 @@ impl AdbDevice {
                         token.to_string()
                     }
                 })
-                .filter(|token| !token.starts_with('-') || token == "-r") // Allow -r flag for uninstall
                 .collect();
 
             if tokens[0] == "7z" {
@@ -823,7 +822,9 @@ impl AdbDevice {
 
             ensure!(tokens.len() >= 2, "Line {line_num}: ADB command missing operation");
             let adb_command = &tokens[1];
-            let adb_args = &tokens[2..];
+            let adb_args_raw = &tokens[2..];
+            let adb_args =
+                adb_args_raw.iter().filter(|arg| !arg.starts_with('-')).collect::<Vec<_>>();
 
             match adb_command.as_str() {
                 "install" => {
@@ -834,7 +835,7 @@ impl AdbDevice {
                             format!("Line {line_num}: adb install: missing APK path")
                         })?,
                     );
-                    debug!(apk_path = %apk_path.display(), "Line {line_num}: installing APK");
+                    debug!(apk_path = %apk_path.display(), "Line {line_num}: adb install: installing APK");
                     self.install_apk(&apk_path, backups_location).await.with_context(|| {
                         format!(
                             "Line {line_num}: adb install: failed to install APK '{}'",
@@ -860,6 +861,7 @@ impl AdbDevice {
                     }
                 }
                 "shell" => {
+                    let adb_args = adb_args_raw;
                     ensure!(!adb_args.is_empty(), "Line {line_num}: adb shell: missing command");
                     // Handle special case for 'pm uninstall'
                     if adb_args.len() == 3 && adb_args[0] == "pm" && adb_args[1] == "uninstall" {
@@ -868,20 +870,16 @@ impl AdbDevice {
                         if let Err(e) = self.uninstall_package(package).await {
                             warn!(
                                 error = e.as_ref() as &dyn Error,
-                                "Line {line_num}: adb shell: failed to uninstall package \
-                                 '{package}'"
+                                "Line {line_num}: failed to uninstall package '{package}'"
                             );
                         }
                     } else {
                         let shell_cmd = adb_args.join(" ");
-                        debug!(shell_cmd, "Line {line_num}: executing command");
+                        debug!(shell_cmd, "Line {line_num}: executing shell command");
                         let output = self.shell(&shell_cmd).await.with_context(|| {
-                            format!(
-                                "Line {line_num}: adb shell: failed to execute command \
-                                 '{shell_cmd}'"
-                            )
+                            format!("Line {line_num}: failed to execute command '{shell_cmd}'")
                         })?;
-                        debug!(output, "adb shell: command output");
+                        debug!(output, "Line {line_num}: shell command output");
                     }
                 }
                 "push" => {
@@ -890,7 +888,7 @@ impl AdbDevice {
                         "Line {line_num}: adb push: wrong number of arguments: expected 2, got {}",
                         adb_args.len()
                     );
-                    let source = script_dir.join(&adb_args[0]);
+                    let source = script_dir.join(adb_args[0]);
                     let dest = UnixPath::new(&adb_args[1]);
                     debug!(source = %source.display(), dest = %dest.display(), "Line {line_num}: pushing directory");
                     if let Err(e) = self.push_any(&source, dest).await {
@@ -909,7 +907,7 @@ impl AdbDevice {
                         adb_args.len()
                     );
                     let source = UnixPath::new(&adb_args[0]);
-                    let dest = script_dir.join(&adb_args[1]);
+                    let dest = script_dir.join(adb_args[1]);
                     debug!(source = %source.display(), dest = %dest.display(), "Line {line_num}: pulling directory");
                     if let Err(e) = self.pull_any(source, &dest).await {
                         warn!(

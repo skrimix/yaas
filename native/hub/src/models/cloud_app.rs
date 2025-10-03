@@ -31,7 +31,7 @@ fn parse_size_mb_to_bytes(size_mb_str: &str) -> Result<u64, String> {
 
 /// Strips known rename markers from a package name to derive the original.
 fn normalize_package_name(name: &str) -> String {
-    let re = regex!(r"(^mr\.)|(^mrf\.)|(\.jjb)");
+    let re = regex!(r"(^mr\.)|(^mrf\.)|(\.mrf\.)|(\.jjb)");
     re.replace_all(name, "").into_owned()
 }
 

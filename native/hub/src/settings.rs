@@ -216,17 +216,11 @@ impl SettingsHandler {
             .context("Failed to get backups directory parent")?;
         ensure!(
             downloads_parent.exists(),
-            format!(
-                "Downloads directory parent ({}) does not exist",
-                downloads_parent.to_string_lossy()
-            )
+            format!("Downloads directory parent ({}) does not exist", downloads_parent.display())
         );
         ensure!(
             backups_parent.exists(),
-            format!(
-                "Backups directory parent ({}) does not exist",
-                backups_parent.to_string_lossy()
-            )
+            format!("Backups directory parent ({}) does not exist", backups_parent.display())
         );
         fs::create_dir_all(&settings.downloads_location)
             .context("Failed to create downloads directory")?;

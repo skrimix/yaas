@@ -834,6 +834,7 @@ impl AdbDevice {
                             format!("Line {line_num}: adb install: missing APK path")
                         })?,
                     );
+                    debug!(apk_path = %apk_path.display(), "Line {line_num}: installing APK");
                     self.install_apk(&apk_path, backups_location).await.with_context(|| {
                         format!(
                             "Line {line_num}: adb install: failed to install APK '{}'",
@@ -849,33 +850,38 @@ impl AdbDevice {
                         adb_args.len()
                     );
                     let package = &adb_args[0];
-                    let _ = self.uninstall_package(package).await.inspect_err(|e| {
+                    debug!(package, "Line {line_num}: uninstalling package");
+                    if let Err(e) = self.uninstall_package(package).await {
                         warn!(
                             error = e.as_ref() as &dyn Error,
                             "Line {line_num}: adb uninstall: failed to uninstall package \
                              '{package}'"
-                        )
-                    });
+                        );
+                    }
                 }
                 "shell" => {
                     ensure!(!adb_args.is_empty(), "Line {line_num}: adb shell: missing command");
                     // Handle special case for 'pm uninstall'
                     if adb_args.len() == 3 && adb_args[0] == "pm" && adb_args[1] == "uninstall" {
                         let package = &adb_args[2];
-                        self.uninstall_package(package).await.with_context(|| {
-                            format!(
+                        debug!(package, "Line {line_num}: uninstalling package");
+                        if let Err(e) = self.uninstall_package(package).await {
+                            warn!(
+                                error = e.as_ref() as &dyn Error,
                                 "Line {line_num}: adb shell: failed to uninstall package \
                                  '{package}'"
-                            )
-                        })?;
+                            );
+                        }
                     } else {
                         let shell_cmd = adb_args.join(" ");
-                        self.shell(&shell_cmd).await.with_context(|| {
+                        debug!(shell_cmd, "Line {line_num}: executing command");
+                        let output = self.shell(&shell_cmd).await.with_context(|| {
                             format!(
                                 "Line {line_num}: adb shell: failed to execute command \
                                  '{shell_cmd}'"
                             )
                         })?;
+                        debug!(output, "adb shell: command output");
                     }
                 }
                 "push" => {
@@ -886,15 +892,15 @@ impl AdbDevice {
                     );
                     let source = script_dir.join(&adb_args[0]);
                     let dest = UnixPath::new(&adb_args[1]);
-                    // Ignore errors
-                    let _ = self.push_any(&source, dest).await.inspect_err(|e| {
+                    debug!(source = %source.display(), dest = %dest.display(), "Line {line_num}: pushing directory");
+                    if let Err(e) = self.push_any(&source, dest).await {
                         warn!(
                             error = e.as_ref() as &dyn Error,
                             "Line {line_num}: adb push: failed to push '{}' to '{}'",
                             source.display(),
                             dest.display()
                         )
-                    });
+                    }
                 }
                 "pull" => {
                     ensure!(
@@ -904,15 +910,15 @@ impl AdbDevice {
                     );
                     let source = UnixPath::new(&adb_args[0]);
                     let dest = script_dir.join(&adb_args[1]);
-                    // Ignore errors
-                    let _ = self.pull_any(source, &dest).await.inspect_err(|e| {
+                    debug!(source = %source.display(), dest = %dest.display(), "Line {line_num}: pulling directory");
+                    if let Err(e) = self.pull_any(source, &dest).await {
                         warn!(
                             error = e.as_ref() as &dyn Error,
                             "Line {line_num}: adb pull: failed to pull '{}' to '{}'",
                             adb_args[0],
                             adb_args[1]
                         )
-                    });
+                    }
                 }
                 _ => bail!("Line {line_num}: Unsupported ADB command '{command}'"),
             }

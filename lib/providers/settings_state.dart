@@ -19,6 +19,7 @@ class SettingsState extends ChangeNotifier {
     useSystemColor: false,
     seedColorKey: 'deep_purple',
     themePreference: ThemePreference.dark,
+    favoritePackages: const [],
   );
 
   bool _isLoading = false;
@@ -160,5 +161,60 @@ class SettingsState extends ChangeNotifier {
       return true;
     }
     return false;
+  }
+
+  // Favorites
+  Set<String> get favoritePackages => _settings.favoritePackages.toSet();
+
+  bool isFavorite(String originalPackageName) =>
+      _settings.favoritePackages.contains(originalPackageName);
+
+  void toggleFavorite(String originalPackageName, {bool? value}) {
+    final current = _settings.favoritePackages.toList(growable: true);
+    final isFav = current.contains(originalPackageName);
+    final shouldFav = value ?? !isFav;
+    if (shouldFav && !isFav) {
+      current.add(originalPackageName);
+    } else if (!shouldFav && isFav) {
+      current.removeWhere((p) => p == originalPackageName);
+    } else {
+      return;
+    }
+    _settings =
+        _settings.copyWith(favoritePackages: List.unmodifiable(current));
+    notifyListeners();
+    // Persist via Rust settings handler
+    SaveSettingsRequest(settings: _settings).sendSignalToRust();
+  }
+
+  void addFavoritesBulk(Iterable<String> originalPackageNames) {
+    final set = _settings.favoritePackages.toSet();
+    bool changed = false;
+    for (final name in originalPackageNames) {
+      if (set.add(name)) changed = true;
+    }
+    if (!changed) return;
+    _settings = _settings.copyWith(favoritePackages: List.unmodifiable(set));
+    notifyListeners();
+    SaveSettingsRequest(settings: _settings).sendSignalToRust();
+  }
+
+  void removeFavoritesBulk(Iterable<String> originalPackageNames) {
+    final set = _settings.favoritePackages.toSet();
+    bool changed = false;
+    for (final name in originalPackageNames) {
+      if (set.remove(name)) changed = true;
+    }
+    if (!changed) return;
+    _settings = _settings.copyWith(favoritePackages: List.unmodifiable(set));
+    notifyListeners();
+    SaveSettingsRequest(settings: _settings).sendSignalToRust();
+  }
+
+  void clearFavorites() {
+    if (_settings.favoritePackages.isEmpty) return;
+    _settings = _settings.copyWith(favoritePackages: const []);
+    notifyListeners();
+    SaveSettingsRequest(settings: _settings).sendSignalToRust();
   }
 }

@@ -645,6 +645,21 @@ class AppLocalizationsRu extends AppLocalizations {
   String get copyPackageName => 'Скопировать имя пакета';
 
   @override
+  String get addToFavorites => 'Добавить в избранное';
+
+  @override
+  String get removeFromFavorites => 'Убрать из избранного';
+
+  @override
+  String get clearFavorites => 'Очистить избранное';
+
+  @override
+  String get clearFavoritesTitle => 'Очистить избранное';
+
+  @override
+  String get clearFavoritesConfirm => 'Удалить все избранные приложения?';
+
+  @override
   String sizeAndDate(String size, String date) {
     return 'Размер: $size • Обновлено: $date';
   }
@@ -705,6 +720,12 @@ class AppLocalizationsRu extends AppLocalizations {
   String get search => 'Поиск';
 
   @override
+  String get showFavoritesOnly => 'Показывать только избранные';
+
+  @override
+  String get showingFavoritesOnly => 'Показаны только избранные';
+
+  @override
   String get showAllItems => 'Показать все';
 
   @override
@@ -723,6 +744,12 @@ class AppLocalizationsRu extends AppLocalizations {
 
   @override
   String get installSelected => 'Установить выбранные';
+
+  @override
+  String get addSelectedToFavorites => 'Добавить в избранное';
+
+  @override
+  String get removeSelectedFromFavorites => 'Убрать выбранные из избранного';
 
   @override
   String get clearSelection => 'Очистить выбор';

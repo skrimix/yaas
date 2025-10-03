@@ -2,6 +2,7 @@ import 'package:flutter/material.dart';
 import 'package:provider/provider.dart';
 import '../../providers/device_state.dart';
 import '../../src/bindings/bindings.dart';
+import '../../providers/settings_state.dart';
 import '../../src/l10n/app_localizations.dart';
 import '../../utils/utils.dart';
 import 'cloud_app_details_dialog.dart';
@@ -190,6 +191,28 @@ class CloudAppListItem extends StatelessWidget {
                   mainAxisSize: MainAxisSize.min,
                   children: [
                     _InstalledStatusBadge(app: cachedApp.app),
+                    const SizedBox(width: 8),
+                    Consumer<SettingsState>(
+                      builder: (context, settings, _) {
+                        final original = cachedApp.app.originalPackageName;
+                        final fav = settings.isFavorite(original);
+                        return IconButton(
+                          icon: Icon(
+                            fav
+                                ? Icons.star_rounded
+                                : Icons.star_outline_rounded,
+                            color: fav
+                                ? Theme.of(context).colorScheme.tertiary
+                                : null,
+                          ),
+                          tooltip: fav
+                              ? l10n.removeFromFavorites
+                              : l10n.addToFavorites,
+                          onPressed: () =>
+                              settings.toggleFavorite(original, value: !fav),
+                        );
+                      },
+                    ),
                     const SizedBox(width: 8),
                     IconButton(
                       icon: const Icon(Icons.info_outline),

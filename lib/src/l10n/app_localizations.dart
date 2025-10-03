@@ -1238,6 +1238,36 @@ abstract class AppLocalizations {
   /// **'Copy package name'**
   String get copyPackageName;
 
+  /// No description provided for @addToFavorites.
+  ///
+  /// In en, this message translates to:
+  /// **'Add to favorites'**
+  String get addToFavorites;
+
+  /// No description provided for @removeFromFavorites.
+  ///
+  /// In en, this message translates to:
+  /// **'Remove from favorites'**
+  String get removeFromFavorites;
+
+  /// No description provided for @clearFavorites.
+  ///
+  /// In en, this message translates to:
+  /// **'Clear favorites'**
+  String get clearFavorites;
+
+  /// No description provided for @clearFavoritesTitle.
+  ///
+  /// In en, this message translates to:
+  /// **'Clear Favorites'**
+  String get clearFavoritesTitle;
+
+  /// No description provided for @clearFavoritesConfirm.
+  ///
+  /// In en, this message translates to:
+  /// **'Remove all favorite apps?'**
+  String get clearFavoritesConfirm;
+
   /// No description provided for @sizeAndDate.
   ///
   /// In en, this message translates to:
@@ -1347,6 +1377,18 @@ abstract class AppLocalizations {
   /// **'Search'**
   String get search;
 
+  /// No description provided for @showFavoritesOnly.
+  ///
+  /// In en, this message translates to:
+  /// **'Show favorites only'**
+  String get showFavoritesOnly;
+
+  /// No description provided for @showingFavoritesOnly.
+  ///
+  /// In en, this message translates to:
+  /// **'Showing favorites only'**
+  String get showingFavoritesOnly;
+
   /// No description provided for @showAllItems.
   ///
   /// In en, this message translates to:
@@ -1382,6 +1424,18 @@ abstract class AppLocalizations {
   /// In en, this message translates to:
   /// **'Install Selected'**
   String get installSelected;
+
+  /// No description provided for @addSelectedToFavorites.
+  ///
+  /// In en, this message translates to:
+  /// **'Favorite Selected'**
+  String get addSelectedToFavorites;
+
+  /// No description provided for @removeSelectedFromFavorites.
+  ///
+  /// In en, this message translates to:
+  /// **'Unfavorite Selected'**
+  String get removeSelectedFromFavorites;
 
   /// No description provided for @clearSelection.
   ///

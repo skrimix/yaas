@@ -57,6 +57,9 @@ pub struct Settings {
     /// Preferred theme mode (dark is default)
     #[serde(default)]
     pub theme_preference: ThemePreference,
+    /// List of favorited apps (by original package name)
+    #[serde(default)]
+    pub favorite_packages: Vec<String>,
 }
 
 impl Default for Settings {
@@ -84,6 +87,7 @@ impl Default for Settings {
             use_system_color: false,
             seed_color_key: "deep_purple".to_string(),
             theme_preference: ThemePreference::Dark,
+            favorite_packages: Vec::new(),
         }
     }
 }

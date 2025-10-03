@@ -192,6 +192,27 @@ class _SettingsScreenState extends State<SettingsScreen> {
     });
   }
 
+  Future<bool> _confirmClearFavorites(AppLocalizations l10n) async {
+    final res = await showDialog<bool>(
+      context: context,
+      builder: (context) => AlertDialog(
+        title: Text(l10n.clearFavoritesTitle),
+        content: Text(l10n.clearFavoritesConfirm),
+        actions: [
+          TextButton(
+            onPressed: () => Navigator.of(context).pop(false),
+            child: Text(l10n.commonCancel),
+          ),
+          FilledButton(
+            onPressed: () => Navigator.of(context).pop(true),
+            child: Text(l10n.commonConfirm),
+          ),
+        ],
+      ),
+    );
+    return res ?? false;
+  }
+
   Future<void> _pickPath(SettingTextField field, bool isDirectory,
       String currentValue, String label) async {
     String? path;
@@ -485,6 +506,24 @@ class _SettingsScreenState extends State<SettingsScreen> {
               }
             },
           ),
+          const Divider(height: 24),
+          Consumer<SettingsState>(builder: (context, settings, _) {
+            final hasFavorites = settings.favoritePackages.isNotEmpty;
+            return Align(
+              alignment: Alignment.centerLeft,
+              child: FilledButton.tonalIcon(
+                onPressed: hasFavorites
+                    ? () async {
+                        final confirmed = await _confirmClearFavorites(l10n);
+                        if (!confirmed) return;
+                        settings.clearFavorites();
+                      }
+                    : null,
+                icon: const Icon(Icons.star_outline),
+                label: Text(l10n.clearFavorites),
+              ),
+            );
+          }),
         ],
       ),
       const SizedBox(height: SettingsConstants.sectionSpacing),

@@ -9,6 +9,7 @@ import '../../providers/cloud_apps_state.dart';
 import '../../providers/app_state.dart';
 import '../../src/bindings/bindings.dart';
 import '../../providers/device_state.dart';
+import '../../providers/settings_state.dart';
 import 'cloud_app_list.dart';
 
 enum SortOption {
@@ -36,6 +37,7 @@ class _DownloadAppsState extends State<DownloadApps> {
   final Set<String> _selectedFullNames = {};
   bool _showCheckboxes = false;
   bool _showOnlySelected = false;
+  bool _showOnlyFavorites = false;
   String? _lastSearchQuery;
   Timer? _searchDebounceTimer;
   bool _initialized = false;
@@ -249,6 +251,15 @@ class _DownloadAppsState extends State<DownloadApps> {
       }
     });
     context.read<AppState>().setDownloadShowOnlySelected(_showOnlySelected);
+  }
+
+  void _toggleShowOnlyFavorites() {
+    setState(() {
+      _showOnlyFavorites = !_showOnlyFavorites;
+      if (_showOnlyFavorites) {
+        _resetSearch();
+      }
+    });
   }
 
   void _toggleSelection(String fullName) {
@@ -653,6 +664,32 @@ class _DownloadAppsState extends State<DownloadApps> {
             },
           ),
           const SizedBox(width: 8),
+          Consumer<SettingsState>(
+            builder: (context, settings, _) {
+              final names = selectedApps
+                  .map((a) => a.app.originalPackageName)
+                  .toList(growable: false);
+              final favs = settings.favoritePackages;
+              final allInFavorites =
+                  names.isNotEmpty && names.every((pkg) => favs.contains(pkg));
+
+              return FilledButton.icon(
+                onPressed: () {
+                  if (allInFavorites) {
+                    settings.removeFavoritesBulk(names);
+                  } else {
+                    settings.addFavoritesBulk(names);
+                  }
+                  _clearSelection();
+                },
+                icon: Icon(allInFavorites ? Icons.star_outline : Icons.star),
+                label: Text(allInFavorites
+                    ? l10n.removeSelectedFromFavorites
+                    : l10n.addSelectedToFavorites),
+              );
+            },
+          ),
+          const SizedBox(width: 8),
           IconButton(
             onPressed: _clearSelection,
             icon: const Icon(Icons.close),
@@ -696,7 +733,13 @@ class _DownloadAppsState extends State<DownloadApps> {
           );
         }
 
-        final filteredAndSortedApps = _filterAndSortApps(cloudAppsState.apps);
+        var filteredAndSortedApps = _filterAndSortApps(cloudAppsState.apps);
+        if (_showOnlyFavorites) {
+          final favs = context.watch<SettingsState>().favoritePackages;
+          filteredAndSortedApps = filteredAndSortedApps
+              .where((a) => favs.contains(a.app.originalPackageName))
+              .toList();
+        }
 
         return Scaffold(
           body: SafeArea(
@@ -713,6 +756,15 @@ class _DownloadAppsState extends State<DownloadApps> {
                       const Spacer(),
                       if (!_showOnlySelected) _buildSearchButton(),
                       if (_showCheckboxes) _buildFilterButton(),
+                      IconButton(
+                        icon: Icon(
+                          _showOnlyFavorites ? Icons.star : Icons.star_border,
+                        ),
+                        tooltip: _showOnlyFavorites
+                            ? l10n.showAllItems
+                            : l10n.showFavoritesOnly,
+                        onPressed: _toggleShowOnlyFavorites,
+                      ),
                       IconButton(
                         icon: Icon(_showCheckboxes
                             ? Icons.check_box
@@ -747,6 +799,29 @@ class _DownloadAppsState extends State<DownloadApps> {
                               .bodyMedium
                               ?.copyWith(
                                 color: Theme.of(context).colorScheme.primary,
+                              ),
+                        ),
+                      ],
+                    ),
+                  ),
+                if (_showOnlyFavorites)
+                  Padding(
+                    padding: const EdgeInsets.fromLTRB(16, 0, 16, 8),
+                    child: Row(
+                      children: [
+                        Icon(
+                          Icons.star,
+                          size: 16,
+                          color: Theme.of(context).colorScheme.tertiary,
+                        ),
+                        const SizedBox(width: 8),
+                        Text(
+                          l10n.showingFavoritesOnly,
+                          style: Theme.of(context)
+                              .textTheme
+                              .bodyMedium
+                              ?.copyWith(
+                                color: Theme.of(context).colorScheme.tertiary,
                               ),
                         ),
                       ],

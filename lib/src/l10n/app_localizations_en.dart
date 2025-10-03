@@ -634,6 +634,21 @@ class AppLocalizationsEn extends AppLocalizations {
   String get copyPackageName => 'Copy package name';
 
   @override
+  String get addToFavorites => 'Add to favorites';
+
+  @override
+  String get removeFromFavorites => 'Remove from favorites';
+
+  @override
+  String get clearFavorites => 'Clear favorites';
+
+  @override
+  String get clearFavoritesTitle => 'Clear Favorites';
+
+  @override
+  String get clearFavoritesConfirm => 'Remove all favorite apps?';
+
+  @override
   String sizeAndDate(String size, String date) {
     return 'Size: $size • Last Updated: $date';
   }
@@ -694,6 +709,12 @@ class AppLocalizationsEn extends AppLocalizations {
   String get search => 'Search';
 
   @override
+  String get showFavoritesOnly => 'Show favorites only';
+
+  @override
+  String get showingFavoritesOnly => 'Showing favorites only';
+
+  @override
   String get showAllItems => 'Show all items';
 
   @override
@@ -712,6 +733,12 @@ class AppLocalizationsEn extends AppLocalizations {
 
   @override
   String get installSelected => 'Install Selected';
+
+  @override
+  String get addSelectedToFavorites => 'Favorite Selected';
+
+  @override
+  String get removeSelectedFromFavorites => 'Unfavorite Selected';
 
   @override
   String get clearSelection => 'Clear selection';

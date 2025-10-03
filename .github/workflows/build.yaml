@@ -209,6 +209,10 @@ jobs:
 
           if [ -d "artifacts/build-macos" ]; then
             app=$(ls -d artifacts/build-macos/*.app | head -n1)
+            
+            # executable bit fixup
+            chmod +x "$app/Contents/MacOS/YAAS"
+
             (cd "$(dirname "$app")" && \
               zip -yr "$OLDPWD/release/YAAS-${SHORT_SHA}-macos.zip" "$(basename "$app")")
             found=1

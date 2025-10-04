@@ -913,11 +913,14 @@ class _SettingsScreenState extends State<SettingsScreen> {
           if (settingsState.remotesError != null)
             Padding(
               padding: const EdgeInsets.only(bottom: 8),
-              child: _statusText(
-                icon: Icons.error_outline,
-                color: Theme.of(context).colorScheme.error,
-                text:
-                    '${l10n.settingsFailedToLoadRemotes}: ${settingsState.remotesError ?? ''}',
+              child: Tooltip(
+                message: settingsState.remotesError ?? '',
+                child: _statusText(
+                  icon: Icons.error_outline,
+                  color: Theme.of(context).colorScheme.error,
+                  text:
+                      '${l10n.settingsFailedToLoadRemotes}: ${settingsState.remotesError ?? ''}',
+                ),
               ),
             )
           else if (!settingsState.isRemotesLoading && remotes.isEmpty)

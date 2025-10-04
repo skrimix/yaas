@@ -1,4 +1,5 @@
 import 'dart:io';
+import 'dart:math' as math;
 
 import 'package:flutter/material.dart';
 import '../../utils/theme_utils.dart' as app_theme;
@@ -55,6 +56,7 @@ class _SettingsScreenState extends State<SettingsScreen> {
   bool _seedColorCustom = false;
   late final List<StartupPageOption> _pageOptions;
   final TextEditingController _customColorController = TextEditingController();
+  bool _castingStatusRequested = false;
 
   @override
   void initState() {
@@ -579,6 +581,12 @@ class _SettingsScreenState extends State<SettingsScreen> {
             onChanged: null,
             disabledHint: const Text('Not implemented'),
           ),
+          if (Platform.isWindows)
+            Padding(
+              padding:
+                  const EdgeInsets.only(top: SettingsConstants.verticalSpacing),
+              child: _buildCastingToolCard(context),
+            ),
         ],
       ),
       const SizedBox(height: SettingsConstants.sectionSpacing),
@@ -661,6 +669,137 @@ class _SettingsScreenState extends State<SettingsScreen> {
             padding: const EdgeInsets.all(SettingsConstants.padding),
             child: Column(children: children),
           ),
+        ),
+      ],
+    );
+  }
+
+  Widget _buildCastingToolCard(BuildContext context) {
+    // Request status once when this card first builds
+    if (!_castingStatusRequested) {
+      _castingStatusRequested = true;
+      WidgetsBinding.instance.addPostFrameCallback((_) {
+        const GetCastingStatusRequest().sendSignalToRust();
+      });
+    }
+
+    return Column(
+      crossAxisAlignment: CrossAxisAlignment.start,
+      children: [
+        Row(
+          children: [
+            const Icon(Icons.cast),
+            const SizedBox(width: 8),
+            Expanded(
+              child: Text(AppLocalizations.of(context).castingToolTitle),
+            ),
+            FilledButton.tonal(
+              onPressed: () async {
+                final confirmed = await showDialog<bool>(
+                  context: context,
+                  builder: (ctx) => AlertDialog(
+                    title: Text(AppLocalizations.of(context)
+                        .castingToolInstallUpdateTitle),
+                    content: Text(AppLocalizations.of(context)
+                        .castingToolInstallUpdateDesc),
+                    actions: [
+                      TextButton(
+                        onPressed: () => Navigator.pop(ctx, false),
+                        child: Text(AppLocalizations.of(context).commonCancel),
+                      ),
+                      FilledButton(
+                        onPressed: () => Navigator.pop(ctx, true),
+                        child:
+                            Text(AppLocalizations.of(context).commonDownload),
+                      ),
+                    ],
+                  ),
+                );
+                if (confirmed == true) {
+                  const DownloadCastingBundleRequest(url: null)
+                      .sendSignalToRust();
+                  if (!context.mounted) return;
+                  final l10n = AppLocalizations.of(context);
+                  ScaffoldMessenger.of(context).showSnackBar(
+                    SnackBar(content: Text(l10n.castingToolDownloading)),
+                  );
+                }
+              },
+              child:
+                  Text(AppLocalizations.of(context).castingToolDownloadUpdate),
+            ),
+          ],
+        ),
+        const SizedBox(height: 8),
+        StreamBuilder(
+          stream: CastingStatusChanged.rustSignalStream,
+          builder: (context, snapshot) {
+            final msg = snapshot.data?.message;
+            final installed = msg?.installed == true;
+            final path = msg?.exePath ?? '';
+            return Column(
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                Row(
+                  children: [
+                    Icon(installed ? Icons.check_circle : Icons.info_outline,
+                        size: 16,
+                        color: installed
+                            ? Colors.green
+                            : Theme.of(context).colorScheme.secondary),
+                    const SizedBox(width: 6),
+                    Expanded(
+                      child: Text(
+                        installed
+                            ? '${AppLocalizations.of(context).castingToolStatusInstalled}${path.isNotEmpty ? ' • $path' : ''}'
+                            : AppLocalizations.of(context)
+                                .castingToolStatusNotInstalled,
+                        style: Theme.of(context).textTheme.bodySmall,
+                        overflow: TextOverflow.ellipsis,
+                      ),
+                    ),
+                    IconButton(
+                      tooltip: AppLocalizations.of(context).castingToolRefresh,
+                      onPressed: () =>
+                          const GetCastingStatusRequest().sendSignalToRust(),
+                      icon: const Icon(Icons.refresh, size: 18),
+                    ),
+                  ],
+                ),
+                const SizedBox(height: 6),
+                StreamBuilder(
+                  stream: CastingDownloadProgress.rustSignalStream,
+                  builder: (context, snap2) {
+                    final prog = snap2.data?.message;
+                    if (installed || prog == null) {
+                      return const SizedBox.shrink();
+                    }
+                    final total = prog.total?.toInt().toDouble();
+                    final received = prog.received.toInt().toDouble();
+                    final value = total == null || total == 0
+                        ? null
+                        : math.min(1.0, math.max(0.0, received / total));
+                    final percent =
+                        value == null ? null : (value * 100).round();
+                    final l10n = AppLocalizations.of(context);
+                    return Column(
+                      crossAxisAlignment: CrossAxisAlignment.start,
+                      children: [
+                        LinearProgressIndicator(value: value),
+                        const SizedBox(height: 4),
+                        Text(
+                          percent == null
+                              ? l10n.castingToolDownloading
+                              : '${l10n.castingToolDownloading} ($percent%)',
+                          style: Theme.of(context).textTheme.bodySmall,
+                        ),
+                      ],
+                    );
+                  },
+                ),
+              ],
+            );
+          },
         ),
       ],
     );

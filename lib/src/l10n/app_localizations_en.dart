@@ -329,6 +329,48 @@ class AppLocalizationsEn extends AppLocalizations {
   String get dragDropInvalidFile => 'Dropped file is not a valid APK file';
 
   @override
+  String get deviceCasting => 'Casting';
+
+  @override
+  String get deviceStartCasting => 'Cast';
+
+  @override
+  String get castingWirelessUnsupported =>
+      'Casting is not supported for wireless devices yet. Connect via USB.';
+
+  @override
+  String get castingRequiresDownloadTitle => 'Meta Quest Casting required';
+
+  @override
+  String get castingRequiresDownloadPrompt =>
+      'This action needs the Meta Quest Casting tool. Download it now?';
+
+  @override
+  String get castingToolTitle => 'Meta Quest Casting';
+
+  @override
+  String get castingToolDownloadUpdate => 'Download / Update';
+
+  @override
+  String get castingToolInstallUpdateTitle => 'Install / Update Casting';
+
+  @override
+  String get castingToolInstallUpdateDesc =>
+      'This will download the Meta Quest Casting tool and install it into the app data directory.';
+
+  @override
+  String get castingToolDownloading => 'Downloading Casting tool...';
+
+  @override
+  String get castingToolStatusInstalled => 'Installed';
+
+  @override
+  String get castingToolStatusNotInstalled => 'Not installed';
+
+  @override
+  String get castingToolRefresh => 'Refresh';
+
+  @override
   String get connectDeviceToInstall => 'Connect a device to install apps';
 
   @override
@@ -533,6 +575,9 @@ class AppLocalizationsEn extends AppLocalizations {
 
   @override
   String get commonCancel => 'Cancel';
+
+  @override
+  String get commonDownload => 'Download';
 
   @override
   String get availableVersions => 'Available Versions';

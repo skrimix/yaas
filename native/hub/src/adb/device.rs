@@ -53,6 +53,8 @@ pub struct AdbDevice {
     pub device_type: DeviceType,
     /// Unique device serial number
     pub serial: String,
+    /// True if connected over TCP/IP (adb over network)
+    pub is_wireless: bool,
     /// Device battery level (0-100)
     pub battery_level: u8,
     /// Information about connected controllers
@@ -94,11 +96,14 @@ impl AdbDevice {
             product,
             device_type,
             serial,
+            is_wireless: false,
             battery_level: 0,
             controllers: HeadsetControllersInfo::default(),
             space_info: SpaceInfo::default(),
             installed_packages: Vec::new(),
         };
+        // Heuristic: wireless adb usually uses host:port as serial
+        device.is_wireless = device.serial.contains(':');
         device.refresh().await.context("Failed to refresh device info")?;
         Ok(device)
     }

@@ -360,6 +360,158 @@ impl AdbHandler {
                     }
                 }
             }
+            AdbCommand::StartCasting => {
+                #[cfg(not(target_os = "windows"))]
+                {
+                    send_toast(
+                        "Casting is Windows-only".to_string(),
+                        "The Meta Quest Casting tool is available only on Windows.".to_string(),
+                        true,
+                        None,
+                    );
+                    AdbCommandCompletedEvent {
+                        command_type: AdbCommandType::StartCasting,
+                        command_key: key.clone(),
+                        success: false,
+                    }
+                    .send_signal_to_dart();
+                    Ok(())
+                }
+                #[cfg(target_os = "windows")]
+                {
+                    use std::path::PathBuf;
+
+                    use tokio::process::Command as TokioCommand;
+                    let device = self.current_device().await?;
+                    if device.is_wireless {
+                        // TODO: Support wireless devices for casting
+                        send_toast(
+                            "Casting not supported for wireless".to_string(),
+                            "Please connect the headset via USB to start casting.".to_string(),
+                            true,
+                            None,
+                        );
+                        AdbCommandCompletedEvent {
+                            command_type: AdbCommandType::StartCasting,
+                            command_key: key.clone(),
+                            success: false,
+                        }
+                        .send_signal_to_dart();
+                        return Ok(());
+                    }
+
+                    // Resolve Casting.exe path (installed under app data directory)
+                    let exe_path: PathBuf = std::env::current_dir()
+                        .unwrap_or_default()
+                        .join("Casting")
+                        .join("Casting.exe");
+                    if !exe_path.is_file() {
+                        send_toast(
+                            "Casting tool not installed".to_string(),
+                            "Open Settings and download the Meta Quest Casting tool.".to_string(),
+                            true,
+                            None,
+                        );
+                        AdbCommandCompletedEvent {
+                            command_type: AdbCommandType::StartCasting,
+                            command_key: key.clone(),
+                            success: false,
+                        }
+                        .send_signal_to_dart();
+                        return Ok(());
+                    }
+
+                    // Ensure caches directory exists: %APPDATA%/odh/casting
+                    let caches_dir = dirs::data_dir()
+                        .unwrap_or_else(|| PathBuf::from("."))
+                        .join("odh")
+                        .join("casting");
+                    if let Err(e) = tokio::fs::create_dir_all(&caches_dir).await {
+                        send_toast(
+                            "Failed to prepare caches dir".to_string(),
+                            format!("{}", e),
+                            true,
+                            None,
+                        );
+                        AdbCommandCompletedEvent {
+                            command_type: AdbCommandType::StartCasting,
+                            command_key: key.clone(),
+                            success: false,
+                        }
+                        .send_signal_to_dart();
+                        return Ok(());
+                    }
+
+                    // Resolve adb path
+                    let adb_path_buf = match crate::utils::resolve_binary_path(
+                        self.adb_path.read().await.as_deref(),
+                        "adb",
+                    ) {
+                        Ok(p) => p,
+                        Err(e) => {
+                            let e = e.context("ADB binary not found");
+                            send_toast(
+                                "ADB binary not found".to_string(),
+                                format!("{:#}", e),
+                                true,
+                                None,
+                            );
+                            AdbCommandCompletedEvent {
+                                command_type: AdbCommandType::StartCasting,
+                                command_key: key.clone(),
+                                success: false,
+                            }
+                            .send_signal_to_dart();
+                            return Ok(());
+                        }
+                    };
+
+                    // Build command
+                    let mut cmd = TokioCommand::new(&exe_path);
+                    cmd.current_dir(exe_path.parent().unwrap_or_else(|| std::path::Path::new(".")));
+                    cmd.arg("--adb").arg(adb_path_buf);
+                    cmd.arg("--application-caches-dir").arg(&caches_dir);
+                    cmd.arg("--exit-on-close");
+                    cmd.arg("--launch-surface").arg("MQDH");
+                    let target_json = format!("{{\"id\":\"{}\"}}", device.serial);
+                    cmd.arg("--target-device").arg(target_json);
+                    cmd.arg("--features").args([
+                        "input_forwarding",
+                        "input_forwarding_gaze_click",
+                        "input_forwarding_text_input_forwarding",
+                        "image_stabilization",
+                        "update_device_fov_via_openxr_api",
+                        "panel_streaming",
+                    ]);
+
+                    match cmd.spawn() {
+                        Ok(_child) => {
+                            AdbCommandCompletedEvent {
+                                command_type: AdbCommandType::StartCasting,
+                                command_key: key.clone(),
+                                success: true,
+                            }
+                            .send_signal_to_dart();
+                            Ok(())
+                        }
+                        Err(e) => {
+                            send_toast(
+                                "Failed to launch Casting".to_string(),
+                                format!("{:#}", e),
+                                true,
+                                None,
+                            );
+                            AdbCommandCompletedEvent {
+                                command_type: AdbCommandType::StartCasting,
+                                command_key: key.clone(),
+                                success: false,
+                            }
+                            .send_signal_to_dart();
+                            Ok(())
+                        }
+                    }
+                }
+            }
 
             AdbCommand::ForceStopApp(package_name) => {
                 ensure_valid_package(&package_name)?;

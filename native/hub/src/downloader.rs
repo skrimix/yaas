@@ -427,7 +427,7 @@ async fn fetch_app_details(package_name: String) -> Result<Option<AppApiResponse
     let url = format!("https://qloader.5698452.xyz/api/v1/oculusgames/{}", package_name);
     debug!(%url, "Fetching app details from QLoader API");
 
-    let client = reqwest::Client::builder().user_agent("YAAS/1.0").build()?;
+    let client = reqwest::Client::builder().user_agent(crate::USER_AGENT).build()?;
 
     let resp = client.get(&url).send().await?;
     if resp.status() == reqwest::StatusCode::NOT_FOUND {
@@ -453,7 +453,7 @@ async fn fetch_app_reviews(
     offset: u32,
     sort_by: &str,
 ) -> Result<ReviewsResponse> {
-    let client = reqwest::Client::builder().user_agent("YAAS/1.0").build()?;
+    let client = reqwest::Client::builder().user_agent(crate::USER_AGENT).build()?;
     let url = "https://reviews.5698452.xyz";
 
     let mut headers = HeaderMap::new();

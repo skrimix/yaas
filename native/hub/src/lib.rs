@@ -26,6 +26,7 @@ rinf::write_interface!();
 pub mod adb;
 pub mod apk;
 pub mod backups_list;
+pub mod casting;
 pub mod downloader;
 pub mod downloads_catalog;
 pub mod logging;
@@ -37,6 +38,8 @@ pub mod utils;
 pub mod built_info {
     include!(concat!(env!("OUT_DIR"), "/built.rs"));
 }
+
+pub const USER_AGENT: &str = concat!("YAAS/", env!("CARGO_PKG_VERSION"));
 
 #[tokio::main(flavor = "multi_thread")]
 async fn main() {
@@ -113,6 +116,9 @@ async fn main() {
     // Backups-related requests
     let _backups_handler =
         backups_list::BackupsListHandler::start(WatchStream::new(settings_handler.subscribe()));
+
+    // Casting-related requests (Windows-only functionality exposed via signals)
+    casting::CastingManager::start();
 
     // Log-related requests from Flutter
     SignalLayer::start_request_handler(app_dir.join("logs"));

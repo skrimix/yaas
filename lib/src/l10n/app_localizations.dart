@@ -680,6 +680,84 @@ abstract class AppLocalizations {
   /// **'Dropped file is not a valid APK file'**
   String get dragDropInvalidFile;
 
+  /// No description provided for @deviceCasting.
+  ///
+  /// In en, this message translates to:
+  /// **'Casting'**
+  String get deviceCasting;
+
+  /// No description provided for @deviceStartCasting.
+  ///
+  /// In en, this message translates to:
+  /// **'Cast'**
+  String get deviceStartCasting;
+
+  /// No description provided for @castingWirelessUnsupported.
+  ///
+  /// In en, this message translates to:
+  /// **'Casting is not supported for wireless devices yet. Connect via USB.'**
+  String get castingWirelessUnsupported;
+
+  /// No description provided for @castingRequiresDownloadTitle.
+  ///
+  /// In en, this message translates to:
+  /// **'Meta Quest Casting required'**
+  String get castingRequiresDownloadTitle;
+
+  /// No description provided for @castingRequiresDownloadPrompt.
+  ///
+  /// In en, this message translates to:
+  /// **'This action needs the Meta Quest Casting tool. Download and install it now?'**
+  String get castingRequiresDownloadPrompt;
+
+  /// No description provided for @castingToolTitle.
+  ///
+  /// In en, this message translates to:
+  /// **'Meta Quest Casting'**
+  String get castingToolTitle;
+
+  /// No description provided for @castingToolDownloadUpdate.
+  ///
+  /// In en, this message translates to:
+  /// **'Download / Update'**
+  String get castingToolDownloadUpdate;
+
+  /// No description provided for @castingToolInstallUpdateTitle.
+  ///
+  /// In en, this message translates to:
+  /// **'Install / Update Casting'**
+  String get castingToolInstallUpdateTitle;
+
+  /// No description provided for @castingToolInstallUpdateDesc.
+  ///
+  /// In en, this message translates to:
+  /// **'Downloads the Meta Quest Casting tool from GitHub and installs it into the app data directory.'**
+  String get castingToolInstallUpdateDesc;
+
+  /// No description provided for @castingToolDownloading.
+  ///
+  /// In en, this message translates to:
+  /// **'Downloading Casting tool...'**
+  String get castingToolDownloading;
+
+  /// No description provided for @castingToolStatusInstalled.
+  ///
+  /// In en, this message translates to:
+  /// **'Installed'**
+  String get castingToolStatusInstalled;
+
+  /// No description provided for @castingToolStatusNotInstalled.
+  ///
+  /// In en, this message translates to:
+  /// **'Not installed'**
+  String get castingToolStatusNotInstalled;
+
+  /// No description provided for @castingToolRefresh.
+  ///
+  /// In en, this message translates to:
+  /// **'Refresh'**
+  String get castingToolRefresh;
+
   /// No description provided for @connectDeviceToInstall.
   ///
   /// In en, this message translates to:
@@ -1057,6 +1135,12 @@ abstract class AppLocalizations {
   /// In en, this message translates to:
   /// **'Cancel'**
   String get commonCancel;
+
+  /// No description provided for @commonDownload.
+  ///
+  /// In en, this message translates to:
+  /// **'Download'**
+  String get commonDownload;
 
   /// No description provided for @availableVersions.
   ///

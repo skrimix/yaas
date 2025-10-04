@@ -332,6 +332,48 @@ class AppLocalizationsRu extends AppLocalizations {
   String get dragDropInvalidFile => 'Файл не является корректным APK';
 
   @override
+  String get deviceCasting => 'Каст';
+
+  @override
+  String get deviceStartCasting => 'Начать';
+
+  @override
+  String get castingWirelessUnsupported =>
+      'Каст пока не поддерживается для беспроводных устройств. Подключите шлем по USB.';
+
+  @override
+  String get castingRequiresDownloadTitle => 'Требуется Meta Quest Casting';
+
+  @override
+  String get castingRequiresDownloadPrompt =>
+      'Для этой операции нужен инструмент Meta Quest Casting. Скачать и установить сейчас?';
+
+  @override
+  String get castingToolTitle => 'Meta Quest Casting';
+
+  @override
+  String get castingToolDownloadUpdate => 'Скачать / Обновить';
+
+  @override
+  String get castingToolInstallUpdateTitle => 'Установка / Обновление Casting';
+
+  @override
+  String get castingToolInstallUpdateDesc =>
+      'Загрузит инструмент Meta Quest Casting с GitHub и установит его в папку данных приложения.';
+
+  @override
+  String get castingToolDownloading => 'Загружается инструмент Casting...';
+
+  @override
+  String get castingToolStatusInstalled => 'Установлено';
+
+  @override
+  String get castingToolStatusNotInstalled => 'Не установлено';
+
+  @override
+  String get castingToolRefresh => 'Обновить';
+
+  @override
   String get connectDeviceToInstall =>
       'Подключите устройство, чтобы устанавливать приложения';
 
@@ -541,6 +583,9 @@ class AppLocalizationsRu extends AppLocalizations {
 
   @override
   String get commonCancel => 'Отмена';
+
+  @override
+  String get commonDownload => 'Загрузить';
 
   @override
   String get availableVersions => 'Доступные версии';

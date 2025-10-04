@@ -11,6 +11,8 @@ pub enum AdbCommand {
     SetProximitySensor(bool),
     SetGuardianPaused(bool),
     GetBatteryDump,
+    /// Windows-only: Start Meta Quest Casting tool against the current device
+    StartCasting,
 }
 
 #[derive(Serialize, Deserialize, DartSignal)]
@@ -28,6 +30,7 @@ pub enum AdbCommandType {
     Reboot,
     ProximitySensorSet,
     GuardianPausedSet,
+    StartCasting,
 }
 
 #[derive(Debug, Clone, Serialize, Deserialize, SignalPiece)]

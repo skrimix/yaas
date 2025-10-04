@@ -3,6 +3,7 @@ pub mod backups;
 pub mod cloud_apps;
 pub mod downloads_local;
 pub mod logging;
+pub mod casting;
 pub mod settings;
 pub mod storage;
 pub mod system;

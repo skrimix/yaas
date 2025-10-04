@@ -12,13 +12,13 @@ use tracing::{Span, debug, error, info, instrument, trace};
 
 use crate::models::{Settings, signals::backups::*};
 
-/// Handles backup-related requests (list, delete)
+/// Handles backup list-related requests (list, delete)
 #[derive(Debug, Clone)]
-pub struct BackupsHandler {
+pub struct BackupsListHandler {
     backups_dir: Arc<tokio::sync::RwLock<PathBuf>>,
 }
 
-impl BackupsHandler {
+impl BackupsListHandler {
     pub fn start(mut settings_stream: WatchStream<Settings>) -> Arc<Self> {
         let initial_settings = futures::executor::block_on(settings_stream.next())
             .expect("Settings stream closed on backups handler init");

@@ -25,7 +25,7 @@ rinf::write_interface!();
 
 pub mod adb;
 pub mod apk;
-pub mod backups;
+pub mod backups_list;
 pub mod downloader;
 pub mod downloads_catalog;
 pub mod logging;
@@ -112,7 +112,7 @@ async fn main() {
 
     // Backups-related requests
     let _backups_handler =
-        backups::BackupsHandler::start(WatchStream::new(settings_handler.subscribe()));
+        backups_list::BackupsListHandler::start(WatchStream::new(settings_handler.subscribe()));
 
     // Log-related requests from Flutter
     SignalLayer::start_request_handler(app_dir.join("logs"));

@@ -369,13 +369,18 @@ impl AdbHandler {
                         true,
                         None,
                     );
-                    AdbCommandCompletedEvent { command_type: AdbCommandType::StartCasting, command_key: key.clone(), success: false }
-                        .send_signal_to_dart();
+                    AdbCommandCompletedEvent {
+                        command_type: AdbCommandType::StartCasting,
+                        command_key: key.clone(),
+                        success: false,
+                    }
+                    .send_signal_to_dart();
                     Ok(())
                 }
                 #[cfg(target_os = "windows")]
                 {
                     use std::path::PathBuf;
+
                     use tokio::process::Command as TokioCommand;
                     let device = self.current_device().await?;
                     if device.is_wireless {
@@ -386,8 +391,12 @@ impl AdbHandler {
                             true,
                             None,
                         );
-                        AdbCommandCompletedEvent { command_type: AdbCommandType::StartCasting, command_key: key.clone(), success: false }
-                            .send_signal_to_dart();
+                        AdbCommandCompletedEvent {
+                            command_type: AdbCommandType::StartCasting,
+                            command_key: key.clone(),
+                            success: false,
+                        }
+                        .send_signal_to_dart();
                         return Ok(());
                     }
 
@@ -403,8 +412,12 @@ impl AdbHandler {
                             true,
                             None,
                         );
-                        AdbCommandCompletedEvent { command_type: AdbCommandType::StartCasting, command_key: key.clone(), success: false }
-                            .send_signal_to_dart();
+                        AdbCommandCompletedEvent {
+                            command_type: AdbCommandType::StartCasting,
+                            command_key: key.clone(),
+                            success: false,
+                        }
+                        .send_signal_to_dart();
                         return Ok(());
                     }
 
@@ -420,8 +433,12 @@ impl AdbHandler {
                             true,
                             None,
                         );
-                        AdbCommandCompletedEvent { command_type: AdbCommandType::StartCasting, command_key: key.clone(), success: false }
-                            .send_signal_to_dart();
+                        AdbCommandCompletedEvent {
+                            command_type: AdbCommandType::StartCasting,
+                            command_key: key.clone(),
+                            success: false,
+                        }
+                        .send_signal_to_dart();
                         return Ok(());
                     }
 
@@ -439,8 +456,12 @@ impl AdbHandler {
                                 true,
                                 None,
                             );
-                            AdbCommandCompletedEvent { command_type: AdbCommandType::StartCasting, command_key: key.clone(), success: false }
-                                .send_signal_to_dart();
+                            AdbCommandCompletedEvent {
+                                command_type: AdbCommandType::StartCasting,
+                                command_key: key.clone(),
+                                success: false,
+                            }
+                            .send_signal_to_dart();
                             return Ok(());
                         }
                     };
@@ -465,8 +486,12 @@ impl AdbHandler {
 
                     match cmd.spawn() {
                         Ok(_child) => {
-                            AdbCommandCompletedEvent { command_type: AdbCommandType::StartCasting, command_key: key.clone(), success: true }
-                                .send_signal_to_dart();
+                            AdbCommandCompletedEvent {
+                                command_type: AdbCommandType::StartCasting,
+                                command_key: key.clone(),
+                                success: true,
+                            }
+                            .send_signal_to_dart();
                             Ok(())
                         }
                         Err(e) => {
@@ -476,8 +501,12 @@ impl AdbHandler {
                                 true,
                                 None,
                             );
-                            AdbCommandCompletedEvent { command_type: AdbCommandType::StartCasting, command_key: key.clone(), success: false }
-                                .send_signal_to_dart();
+                            AdbCommandCompletedEvent {
+                                command_type: AdbCommandType::StartCasting,
+                                command_key: key.clone(),
+                                success: false,
+                            }
+                            .send_signal_to_dart();
                             Ok(())
                         }
                     }

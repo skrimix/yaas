@@ -1,13 +1,17 @@
-use std::{fs::File, io, path::{Path, PathBuf}};
+use std::{
+    fs::File,
+    io,
+    path::{Path, PathBuf},
+};
 
 use anyhow::{Context, Result, anyhow};
+use futures::StreamExt;
 use rinf::{DartSignal, RustSignal};
 use tokio::{fs, io::AsyncWriteExt};
-use futures::StreamExt;
 use tracing::{info, instrument};
 
 use crate::models::signals::casting::{
-    CastingStatusChanged, CastingDownloadProgress, DownloadCastingBundleRequest,
+    CastingDownloadProgress, CastingStatusChanged, DownloadCastingBundleRequest,
     GetCastingStatusRequest,
 };
 
@@ -15,22 +19,24 @@ const DEFAULT_CASTING_URL: &str =
     "https://github.com/skrimix/yaas/releases/download/files/casting-bundle.zip";
 
 #[cfg(target_os = "windows")]
-fn casting_exe_relative() -> &'static str { "Casting/Casting.exe" }
+fn casting_exe_relative() -> &'static str {
+    "Casting/Casting.exe"
+}
 
 #[cfg(not(target_os = "windows"))]
-fn casting_exe_relative() -> &'static str { "Casting/Casting" }
+fn casting_exe_relative() -> &'static str {
+    "Casting/Casting"
+}
 
-fn casting_exe_path() -> PathBuf { std::env::current_dir().unwrap_or_default().join(casting_exe_relative()) }
+fn casting_exe_path() -> PathBuf {
+    std::env::current_dir().unwrap_or_default().join(casting_exe_relative())
+}
 
 async fn send_status() {
     let exe = casting_exe_path();
     let installed = exe.is_file();
-    CastingStatusChanged {
-        installed,
-        exe_path: exe.to_str().map(|s| s.to_string()),
-        error: None,
-    }
-    .send_signal_to_dart();
+    CastingStatusChanged { installed, exe_path: exe.to_str().map(|s| s.to_string()), error: None }
+        .send_signal_to_dart();
 }
 
 #[instrument(skip_all, err)]
@@ -46,18 +52,12 @@ async fn download_casting_bundle(url: &str) -> Result<()> {
         builder.build()?
     };
 
-    let resp = client
-        .get(url)
-        .send()
-        .await
-        .context("Failed to send HTTP request")?;
+    let resp = client.get(url).send().await.context("Failed to send HTTP request")?;
     if !resp.status().is_success() {
         return bail_status(resp.status().as_u16());
     }
 
-    let mut file = fs::File::create(&target_zip)
-        .await
-        .context("Failed to create bundle file")?;
+    let mut file = fs::File::create(&target_zip).await.context("Failed to create bundle file")?;
     let total = resp.content_length();
     let mut stream = resp.bytes_stream();
     let mut received: u64 = 0;
@@ -81,29 +81,27 @@ async fn download_casting_bundle(url: &str) -> Result<()> {
     Ok(())
 }
 
-fn bail_status(code: u16) -> Result<()> { Err(anyhow!("Download failed with status {code}")) }
+fn bail_status(code: u16) -> Result<()> {
+    Err(anyhow!("Download failed with status {code}"))
+}
 
 fn unzip_to_current_dir(zip_path: &Path) -> Result<()> {
-    let file = File::open(zip_path).with_context(|| format!(
-        "Failed to open downloaded zip: {}",
-        zip_path.display()
-    ))?;
+    let file = File::open(zip_path)
+        .with_context(|| format!("Failed to open downloaded zip: {}", zip_path.display()))?;
     let mut zip = zip::ZipArchive::new(file).context("Invalid ZIP archive")?;
     let cwd = std::env::current_dir().unwrap_or_else(|_| PathBuf::from("."));
     for i in 0..zip.len() {
         let mut entry = zip.by_index(i)?;
         let outpath = cwd.join(entry.mangled_name());
         if entry.is_dir() {
-            std::fs::create_dir_all(&outpath).with_context(|| format!(
-                "Failed creating directory {}",
-                outpath.display()
-            ))?;
+            std::fs::create_dir_all(&outpath)
+                .with_context(|| format!("Failed creating directory {}", outpath.display()))?;
         } else {
-            if let Some(parent) = outpath.parent() { std::fs::create_dir_all(parent)?; }
-            let mut outfile = File::create(&outpath).with_context(|| format!(
-                "Failed creating file {}",
-                outpath.display()
-            ))?;
+            if let Some(parent) = outpath.parent() {
+                std::fs::create_dir_all(parent)?;
+            }
+            let mut outfile = File::create(&outpath)
+                .with_context(|| format!("Failed creating file {}", outpath.display()))?;
             io::copy(&mut entry, &mut outfile)
                 .with_context(|| format!("Failed extracting {}", outpath.display()))?;
         }
@@ -131,7 +129,12 @@ impl CastingManager {
                 let url = req.message.url.unwrap_or_else(|| DEFAULT_CASTING_URL.to_string());
                 match download_casting_bundle(&url).await {
                     Ok(_) => send_status().await,
-                    Err(e) => CastingStatusChanged { installed: false, exe_path: None, error: Some(format!("{:#}", e)) }.send_signal_to_dart(),
+                    Err(e) => CastingStatusChanged {
+                        installed: false,
+                        exe_path: None,
+                        error: Some(format!("{:#}", e)),
+                    }
+                    .send_signal_to_dart(),
                 }
             }
             panic!("DownloadCastingBundleRequest receiver closed");

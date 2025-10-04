@@ -157,8 +157,7 @@ class DeviceActionsCard extends StatelessWidget {
             .firstWhere((e) => e.message.installed == true)
             .then((_) {
           AdbRequest(
-                  command: const AdbCommandStartCasting(),
-                  commandKey: 'cast')
+                  command: const AdbCommandStartCasting(), commandKey: 'cast')
               .sendSignalToRust();
         });
         if (!context.mounted) return;
@@ -220,7 +219,6 @@ class _CastingProgress extends StatelessWidget {
             final value = total == null || total == 0
                 ? null
                 : math.min(1.0, math.max(0.0, received / total));
-            if (value == 1.0) return const SizedBox.shrink();
             final percent = value == null ? null : (value * 100).round();
             return Column(
               crossAxisAlignment: CrossAxisAlignment.start,

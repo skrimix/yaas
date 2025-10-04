@@ -7,7 +7,8 @@ use futures::StreamExt;
 use tracing::{info, instrument};
 
 use crate::models::signals::casting::{
-    CastingStatusChanged, DownloadCastingBundleRequest, GetCastingStatusRequest,
+    CastingStatusChanged, CastingDownloadProgress, DownloadCastingBundleRequest,
+    GetCastingStatusRequest,
 };
 
 const DEFAULT_CASTING_URL: &str =
@@ -57,10 +58,18 @@ async fn download_casting_bundle(url: &str) -> Result<()> {
     let mut file = fs::File::create(&target_zip)
         .await
         .context("Failed to create bundle file")?;
+    let total = resp.content_length();
     let mut stream = resp.bytes_stream();
+    let mut received: u64 = 0;
+    // Emit initial 0%
+    CastingDownloadProgress { received, total }.send_signal_to_dart();
     while let Some(chunk) = stream.next().await.transpose().context("Network error")? {
+        received = received.saturating_add(chunk.len() as u64);
         file.write_all(&chunk).await.context("Failed writing bundle contents")?;
+        CastingDownloadProgress { received, total }.send_signal_to_dart();
     }
+    // Final event after stream ends
+    CastingDownloadProgress { received, total }.send_signal_to_dart();
     file.flush().await.ok();
 
     // Remove existing Casting directory

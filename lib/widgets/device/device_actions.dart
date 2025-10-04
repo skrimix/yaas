@@ -1,6 +1,8 @@
 import 'dart:io' show Platform;
 import 'dart:async';
+import 'dart:math' as math;
 import 'package:flutter/material.dart';
+import 'package:rinf/rinf.dart';
 import '../../src/bindings/bindings.dart';
 import '../../src/l10n/app_localizations.dart';
 import '../common/animated_adb_button.dart';
@@ -94,6 +96,8 @@ class DeviceActionsCard extends StatelessWidget {
               if (Platform.isWindows) ...[
                 const SizedBox(height: 16),
                 _CastingRow(onStart: () => _handleCast(context)),
+                const SizedBox(height: 8),
+                const _CastingProgress(),
               ],
             ],
           ),
@@ -148,6 +152,15 @@ class DeviceActionsCard extends StatelessWidget {
       );
       if (confirm == true) {
         const DownloadCastingBundleRequest(url: null).sendSignalToRust();
+        // Auto-launch when installation finishes
+        CastingStatusChanged.rustSignalStream
+            .firstWhere((e) => e.message.installed == true)
+            .then((_) {
+          AdbRequest(
+                  command: const AdbCommandStartCasting(),
+                  commandKey: 'cast')
+              .sendSignalToRust();
+        });
         if (!context.mounted) return;
         ScaffoldMessenger.of(context).showSnackBar(
           SnackBar(content: Text(l10n.castingToolDownloading)),
@@ -182,6 +195,41 @@ class _CastingRow extends StatelessWidget {
           label: Text(l10n.deviceStartCasting),
         ),
       ],
+    );
+  }
+}
+
+class _CastingProgress extends StatelessWidget {
+  const _CastingProgress();
+
+  @override
+  Widget build(BuildContext context) {
+    final l10n = AppLocalizations.of(context);
+    return StreamBuilder<RustSignalPack<CastingDownloadProgress>>(
+      stream: CastingDownloadProgress.rustSignalStream,
+      builder: (context, snapshot) {
+        final prog = snapshot.data?.message;
+        if (prog == null) return const SizedBox.shrink();
+        final total = prog.total?.toInt().toDouble();
+        final received = prog.received.toInt().toDouble();
+        final value = total == null || total == 0
+            ? null
+            : math.min(1.0, math.max(0.0, received / total));
+        final percent = value == null ? null : (value * 100).round();
+        return Column(
+          crossAxisAlignment: CrossAxisAlignment.start,
+          children: [
+            LinearProgressIndicator(value: value),
+            const SizedBox(height: 4),
+            Text(
+              percent == null
+                  ? l10n.castingToolDownloading
+                  : '${l10n.castingToolDownloading} ($percent%)',
+              style: Theme.of(context).textTheme.bodySmall,
+            ),
+          ],
+        );
+      },
     );
   }
 }

@@ -19,3 +19,11 @@ pub struct DownloadCastingBundleRequest {
     /// Optional override URL; if empty, the default will be used
     pub url: Option<String>,
 }
+
+#[derive(Serialize, Deserialize, RustSignal)]
+pub struct CastingDownloadProgress {
+    /// Bytes received so far
+    pub received: u64,
+    /// Total bytes if known
+    pub total: Option<u64>,
+}

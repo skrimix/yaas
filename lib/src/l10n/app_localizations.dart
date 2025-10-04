@@ -707,7 +707,7 @@ abstract class AppLocalizations {
   /// No description provided for @castingRequiresDownloadPrompt.
   ///
   /// In en, this message translates to:
-  /// **'This action needs the Meta Quest Casting tool. Download and install it now?'**
+  /// **'This action needs the Meta Quest Casting tool. Download it now?'**
   String get castingRequiresDownloadPrompt;
 
   /// No description provided for @castingToolTitle.
@@ -731,7 +731,7 @@ abstract class AppLocalizations {
   /// No description provided for @castingToolInstallUpdateDesc.
   ///
   /// In en, this message translates to:
-  /// **'Downloads the Meta Quest Casting tool from GitHub and installs it into the app data directory.'**
+  /// **'This will download the Meta Quest Casting tool and install it into the app data directory.'**
   String get castingToolInstallUpdateDesc;
 
   /// No description provided for @castingToolDownloading.

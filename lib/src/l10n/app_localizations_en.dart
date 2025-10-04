@@ -343,7 +343,7 @@ class AppLocalizationsEn extends AppLocalizations {
 
   @override
   String get castingRequiresDownloadPrompt =>
-      'This action needs the Meta Quest Casting tool. Download and install it now?';
+      'This action needs the Meta Quest Casting tool. Download it now?';
 
   @override
   String get castingToolTitle => 'Meta Quest Casting';
@@ -356,7 +356,7 @@ class AppLocalizationsEn extends AppLocalizations {
 
   @override
   String get castingToolInstallUpdateDesc =>
-      'Downloads the Meta Quest Casting tool from GitHub and installs it into the app data directory.';
+      'This will download the Meta Quest Casting tool and install it into the app data directory.';
 
   @override
   String get castingToolDownloading => 'Downloading Casting tool...';

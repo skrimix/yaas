@@ -1,4 +1,5 @@
 use std::{
+    env,
     error::Error,
     path::{Path, PathBuf},
 };
@@ -6,7 +7,7 @@ use std::{
 use anyhow::{Context, Result};
 use sysproxy::Sysproxy;
 use tokio::fs;
-use tracing::{debug, error, instrument};
+use tracing::{debug, error, instrument, trace, warn};
 
 #[instrument(ret, level = "debug")]
 pub fn get_sys_proxy() -> Option<String> {
@@ -24,6 +25,82 @@ pub fn get_sys_proxy() -> Option<String> {
         }
     }
     None
+}
+
+/// Resolve an executable path by consulting (in order):
+/// - a custom path (file or directory)
+/// - the directory of the current executable (bundled next to the app)
+/// - `PATH` (via `which`)
+///
+/// The `base_name` must be provided without an extension (e.g. "adb", "rclone").
+#[instrument(level = "debug", ret, skip(custom_path))]
+pub fn resolve_binary_path(custom_path: Option<&str>, base_name: &str) -> Result<PathBuf> {
+    // Build candidate file names with platform-specific extensions
+    #[cfg(target_os = "windows")]
+    fn candidates(base: &str) -> [&str; 2] {
+        [".exe", ""]
+    }
+    #[cfg(not(target_os = "windows"))]
+    fn candidates(_base: &str) -> [&'static str; 1] {
+        [""]
+    }
+
+    // Given a directory, try to locate the binary inside it
+    fn try_in_dir(dir: &Path, base: &str) -> Option<PathBuf> {
+        for ext in candidates(base) {
+            let candidate =
+                if ext.is_empty() { dir.join(base) } else { dir.join(format!("{base}{ext}")) };
+            if candidate.is_file() {
+                return Some(candidate);
+            }
+        }
+        None
+    }
+
+    // 1) Try the user-provided path, if any
+    if let Some(raw) = custom_path.filter(|s| !s.trim().is_empty()) {
+        trace!(raw, "Trying to resolve from custom path");
+        let as_path = PathBuf::from(raw);
+        if as_path.is_file() {
+            return Ok(as_path);
+        }
+        if as_path.is_dir()
+            && let Some(found) = try_in_dir(&as_path, base_name)
+        {
+            return Ok(found);
+        }
+        // First check next to our own executable
+        if let Ok(exe) = env::current_exe()
+            && let Some(dir) = exe.parent()
+            && let Some(found) = try_in_dir(dir, base_name)
+        {
+            return Ok(found);
+        }
+        // Not bundled, try PATH
+        if let Ok(found) = which::which(raw) {
+            return Ok(found);
+        }
+        warn!(raw, "Custom path did not resolve; looking for binary by name");
+    }
+
+    // 2) Next to current executable (bundled)
+    if let Ok(exe) = env::current_exe()
+        && let Some(dir) = exe.parent()
+        && let Some(found) = try_in_dir(dir, base_name)
+    {
+        return Ok(found);
+    }
+
+    // 3) PATH search (plain program name)
+    if let Ok(found) = which::which(base_name) {
+        return Ok(found);
+    }
+
+    // Nothing worked
+    Err(anyhow::anyhow!(
+        "{} binary not found (checked custom path, PATH, and app directory)",
+        base_name
+    ))
 }
 
 /// Finds the first immediate subdirectory in `dir`

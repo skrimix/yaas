@@ -10,7 +10,7 @@ use tokio::{
 use tokio_util::sync::CancellationToken;
 use tracing::{Span, debug, error, info, instrument, trace, warn};
 
-use crate::utils::get_sys_proxy;
+use crate::utils::{get_sys_proxy, resolve_binary_path};
 
 static CONNECTION_TIMEOUT: &str = "5s";
 static IO_IDLE_TIMEOUT: &str = "30s";
@@ -77,8 +77,20 @@ impl RcloneClient {
         bandwidth_limit: String,
     ) -> Self {
         let sys_proxy = get_sys_proxy();
+        let resolved_path =
+            match resolve_binary_path(Some(&rclone_path.to_string_lossy()), "rclone") {
+                Ok(p) => p,
+                Err(e) => {
+                    warn!(
+                        error = e.as_ref() as &dyn Error,
+                        original = %rclone_path.display(),
+                        "Failed to resolve rclone path; using provided value"
+                    );
+                    rclone_path
+                }
+            };
         Span::current().record("sys_proxy", sys_proxy.as_deref());
-        Self { rclone_path, config_path, sys_proxy, bandwidth_limit }
+        Self { rclone_path: resolved_path, config_path, sys_proxy, bandwidth_limit }
     }
 
     #[instrument(skip(self), level = "trace")]

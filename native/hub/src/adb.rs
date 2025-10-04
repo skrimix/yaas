@@ -26,6 +26,7 @@ use crate::{
             system::Toast,
         },
     },
+    utils::resolve_binary_path,
 };
 
 pub mod battery;
@@ -666,34 +667,21 @@ impl AdbHandler {
         if !self.is_server_running().await {
             info!("ADB server not running, attempting to start it");
             self.set_adb_state(AdbState::ServerStarting).await;
-            let adb_path_buf = match self
-                .adb_path
-                .read()
-                .await
-                .as_deref()
-                .and_then(|p| {
-                    which::which(p).ok().or_else(|| {
-                        // Try to find adb relative to current executable
-                        std::env::current_exe()
-                            .ok()
-                            .and_then(|exe| exe.parent().map(|p| p.to_path_buf()))
-                            .and_then(|parent| which::which(parent.join("adb")).ok())
-                    })
-                })
-                .or_else(|| {
-                    warn!(
-                        "Failed to resolve custom ADB path (not set or invalid), searching in PATH"
-                    );
-                    which::which("adb").ok()
-                }) {
-                Some(p) => p,
-                None => {
-                    let e = anyhow!("ADB binary not found in PATH or settings");
-                    Toast::send("ADB binary not found".to_string(), format!("{e:#}"), true, None);
-                    self.set_adb_state(AdbState::ServerStartFailed).await;
-                    return Err(e);
-                }
-            };
+            let adb_path_buf =
+                match resolve_binary_path(self.adb_path.read().await.as_deref(), "adb") {
+                    Ok(p) => p,
+                    Err(e) => {
+                        let e = e.context("ADB binary not found");
+                        Toast::send(
+                            "ADB binary not found".to_string(),
+                            format!("{:#}", e),
+                            true,
+                            None,
+                        );
+                        self.set_adb_state(AdbState::ServerStartFailed).await;
+                        return Err(e);
+                    }
+                };
 
             info!(path = %adb_path_buf.display(), "Found ADB binary, starting server");
             // self.adb_host

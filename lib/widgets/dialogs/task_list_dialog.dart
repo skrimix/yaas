@@ -21,6 +21,7 @@ class _TaskListDialogState extends State<TaskListDialog>
     with SingleTickerProviderStateMixin {
   late final TabController _tabController;
   TaskState? _previousTaskState;
+  final Set<int> _cancellingTaskIds = <int>{};
 
   @override
   void initState() {
@@ -44,6 +45,8 @@ class _TaskListDialogState extends State<TaskListDialog>
         taskState.activeTasks.isEmpty) {
       _tabController.animateTo(1); // Switch to recent tab
     }
+    _cancellingTaskIds
+        .removeWhere((id) => !taskState.activeTasks.any((t) => t.taskId == id));
     _previousTaskState = taskState;
   }
 
@@ -248,20 +251,29 @@ class _TaskListDialogState extends State<TaskListDialog>
           : Row(
               mainAxisSize: MainAxisSize.min,
               children: [
-                // if (task.stepProgress != null)
-                //   Text('${(task.stepProgress! * 100).toInt()}%'),
-                // const SizedBox(width: 4),
-                // TODO: disable button when task is not cancellable
-                IconButton(
-                  visualDensity: VisualDensity.compact,
-                  icon: const Icon(Icons.close),
-                  tooltip: l10n.cancelTask,
-                  onPressed: () {
-                    TaskCancelRequest(
-                            taskId: Uint64.fromBigInt(BigInt.from(task.taskId)))
-                        .sendSignalToRust();
-                  },
-                ),
+                if (_cancellingTaskIds.contains(task.taskId))
+                  const SizedBox(
+                    width: 36,
+                    height: 36,
+                    child: Padding(
+                      padding: EdgeInsets.all(8),
+                      child: CircularProgressIndicator(strokeWidth: 2),
+                    ),
+                  )
+                else
+                  IconButton(
+                    visualDensity: VisualDensity.compact,
+                    icon: const Icon(Icons.close),
+                    tooltip: l10n.cancelTask,
+                    onPressed: () {
+                      setState(() {
+                        _cancellingTaskIds.add(task.taskId);
+                      });
+                      TaskCancelRequest(
+                        taskId: Uint64.fromBigInt(BigInt.from(task.taskId)),
+                      ).sendSignalToRust();
+                    },
+                  ),
               ],
             ),
     );

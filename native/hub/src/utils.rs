@@ -37,17 +37,13 @@ pub fn get_sys_proxy() -> Option<String> {
 pub fn resolve_binary_path(custom_path: Option<&str>, base_name: &str) -> Result<PathBuf> {
     // Build candidate file names with platform-specific extensions
     #[cfg(target_os = "windows")]
-    fn candidates(base: &str) -> [&str; 2] {
-        [".exe", ""]
-    }
+    const CANDIDATES: [&str; 2] = [".exe", ""];
     #[cfg(not(target_os = "windows"))]
-    fn candidates(_base: &str) -> [&'static str; 1] {
-        [""]
-    }
+    const CANDIDATES: [&str; 1] = [""];
 
     // Given a directory, try to locate the binary inside it
     fn try_in_dir(dir: &Path, base: &str) -> Option<PathBuf> {
-        for ext in candidates(base) {
+        for ext in CANDIDATES {
             let candidate =
                 if ext.is_empty() { dir.join(base) } else { dir.join(format!("{base}{ext}")) };
             if candidate.is_file() {

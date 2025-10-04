@@ -1,6 +1,6 @@
 use std::{error::Error, path::PathBuf, sync::Arc};
 
-use anyhow::{Context, Result};
+use anyhow::{Context, Result, ensure};
 use futures::TryStreamExt;
 use rand::seq::IndexedRandom;
 use rclone::RcloneStorage;
@@ -453,6 +453,7 @@ async fn fetch_app_reviews(
     offset: u32,
     sort_by: &str,
 ) -> Result<ReviewsResponse> {
+    ensure!(sort_by == "helpful" || sort_by == "newest", "Invalid sort_by value: {}", sort_by);
     let client = reqwest::Client::builder().user_agent(crate::USER_AGENT).build()?;
     let url = "https://reviews.5698452.xyz";
 

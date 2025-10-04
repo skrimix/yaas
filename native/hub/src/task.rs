@@ -22,7 +22,7 @@ use crate::{
         device::{BackupOptions, SideloadProgress},
     },
     downloader::{Downloader, RcloneTransferStats},
-    downloads::DownloadsCatalog,
+    downloads_catalog::DownloadsCatalog,
     models::{
         Settings,
         signals::{

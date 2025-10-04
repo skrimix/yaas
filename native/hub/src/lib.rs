@@ -27,7 +27,7 @@ pub mod adb;
 pub mod apk;
 pub mod backups;
 pub mod downloader;
-pub mod downloads;
+pub mod downloads_catalog;
 pub mod logging;
 pub mod models;
 pub mod settings;
@@ -102,7 +102,7 @@ async fn main() {
         Downloader::new(settings_handler.clone(), WatchStream::new(settings_handler.subscribe()))
             .await;
     let downloads_catalog =
-        downloads::DownloadsCatalog::start(WatchStream::new(settings_handler.subscribe()));
+        downloads_catalog::DownloadsCatalog::start(WatchStream::new(settings_handler.subscribe()));
     let _task_manager = TaskManager::new(
         adb_handler.clone(),
         downloader.clone(),

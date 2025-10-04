@@ -772,12 +772,13 @@ class _SettingsScreenState extends State<SettingsScreen> {
                   stream: CastingDownloadProgress.rustSignalStream,
                   builder: (context, snap2) {
                     final prog = snap2.data?.message;
-                    if (prog == null) return const SizedBox.shrink();
+                    if (installed || prog == null) return const SizedBox.shrink();
                     final total = prog.total?.toInt().toDouble();
                     final received = prog.received.toInt().toDouble();
                     final value = total == null || total == 0
                         ? null
                         : math.min(1.0, math.max(0.0, received / total));
+                    if (value == 1.0) return const SizedBox.shrink();
                     final percent =
                         value == null ? null : (value * 100).round();
                     final l10n = AppLocalizations.of(context);

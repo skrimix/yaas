@@ -205,29 +205,37 @@ class _CastingProgress extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     final l10n = AppLocalizations.of(context);
-    return StreamBuilder<RustSignalPack<CastingDownloadProgress>>(
-      stream: CastingDownloadProgress.rustSignalStream,
-      builder: (context, snapshot) {
-        final prog = snapshot.data?.message;
-        if (prog == null) return const SizedBox.shrink();
-        final total = prog.total?.toInt().toDouble();
-        final received = prog.received.toInt().toDouble();
-        final value = total == null || total == 0
-            ? null
-            : math.min(1.0, math.max(0.0, received / total));
-        final percent = value == null ? null : (value * 100).round();
-        return Column(
-          crossAxisAlignment: CrossAxisAlignment.start,
-          children: [
-            LinearProgressIndicator(value: value),
-            const SizedBox(height: 4),
-            Text(
-              percent == null
-                  ? l10n.castingToolDownloading
-                  : '${l10n.castingToolDownloading} ($percent%)',
-              style: Theme.of(context).textTheme.bodySmall,
-            ),
-          ],
+    return StreamBuilder<RustSignalPack<CastingStatusChanged>>(
+      stream: CastingStatusChanged.rustSignalStream,
+      builder: (context, statusSnap) {
+        final installed = statusSnap.data?.message.installed == true;
+        if (installed) return const SizedBox.shrink();
+        return StreamBuilder<RustSignalPack<CastingDownloadProgress>>(
+          stream: CastingDownloadProgress.rustSignalStream,
+          builder: (context, snapshot) {
+            final prog = snapshot.data?.message;
+            if (prog == null) return const SizedBox.shrink();
+            final total = prog.total?.toInt().toDouble();
+            final received = prog.received.toInt().toDouble();
+            final value = total == null || total == 0
+                ? null
+                : math.min(1.0, math.max(0.0, received / total));
+            if (value == 1.0) return const SizedBox.shrink();
+            final percent = value == null ? null : (value * 100).round();
+            return Column(
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                LinearProgressIndicator(value: value),
+                const SizedBox(height: 4),
+                Text(
+                  percent == null
+                      ? l10n.castingToolDownloading
+                      : '${l10n.castingToolDownloading} ($percent%)',
+                  style: Theme.of(context).textTheme.bodySmall,
+                ),
+              ],
+            );
+          },
         );
       },
     );

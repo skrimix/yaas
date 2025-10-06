@@ -755,8 +755,7 @@ impl AdbHandler {
         progress_sender: UnboundedSender<SideloadProgress>,
     ) -> Result<()> {
         let device = self.current_device().await?;
-        let device_clone = (*device).clone();
-        let result = device_clone
+        let result = device
             .install_apk_with_progress(apk_path, &backups_location, progress_sender, false)
             .await;
         self.refresh_device().await?;
@@ -767,8 +766,7 @@ impl AdbHandler {
     #[instrument(skip(self))]
     pub async fn uninstall_package(&self, package_name: &str) -> Result<()> {
         let device = self.current_device().await?;
-        let device_clone = (*device).clone();
-        let result = device_clone.uninstall_package(package_name).await;
+        let result = device.uninstall_package(package_name).await;
         self.refresh_device().await?;
         result
     }
@@ -782,8 +780,7 @@ impl AdbHandler {
         progress_sender: UnboundedSender<SideloadProgress>,
     ) -> Result<()> {
         let device = self.current_device().await?;
-        let device_clone = (*device).clone();
-        let result = device_clone.sideload_app(app_path, &backups_location, progress_sender).await;
+        let result = device.sideload_app(app_path, &backups_location, progress_sender).await;
         self.refresh_device().await?;
         result
     }
@@ -798,16 +795,14 @@ impl AdbHandler {
         options: &BackupOptions,
     ) -> Result<Option<std::path::PathBuf>> {
         let device = self.current_device().await?;
-        let device_clone = (*device).clone();
-        device_clone.backup_app(package_name, display_name, backups_location, options).await
+        device.backup_app(package_name, display_name, backups_location, options).await
     }
 
     /// Restores a backup to the currently connected device
     #[instrument(skip(self))]
     pub async fn restore_backup(&self, backup_path: &Path) -> Result<()> {
         let device = self.current_device().await?;
-        let device_clone = (*device).clone();
-        let result = device_clone.restore_backup(backup_path).await;
+        let result = device.restore_backup(backup_path).await;
         self.refresh_device().await?;
         result
     }

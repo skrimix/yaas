@@ -2,6 +2,7 @@ use std::time::Duration;
 
 use rinf::RustSignal;
 use serde::{Deserialize, Serialize};
+use tracing::debug;
 
 #[derive(Serialize, Deserialize, RustSignal)]
 pub struct RustPanic {
@@ -48,7 +49,14 @@ pub struct AppVersionInfo {
 
 impl Toast {
     pub fn send(title: String, description: String, error: bool, duration: Option<Duration>) {
-        Toast { title, description, error, duration: duration.map(|d| d.as_millis() as u32) }
-            .send_signal_to_dart();
+        let duration_ms = duration.map(|d| d.as_millis() as u32);
+        debug!(
+            title = title,
+            description = description,
+            error = error,
+            duration_ms = duration_ms,
+            "Sending toast"
+        );
+        Toast { title, description, error, duration: duration_ms }.send_signal_to_dart();
     }
 }

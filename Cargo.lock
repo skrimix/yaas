@@ -264,12 +264,6 @@ source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "46c5e41b57b8bba42a04676d81cb89e9ee8e859a1a66f80a5a72e1cb76b34d43"
 
 [[package]]
-name = "byteorder"
-version = "1.5.0"
-source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "1fd0f2584146f6f2ef48085050886acf353beff7305ebd1ae69500e27c67f64b"
-
-[[package]]
 name = "bytes"
 version = "1.10.1"
 source = "registry+https://github.com/rust-lang/crates.io-index"
@@ -1319,12 +1313,6 @@ checksum = "112b39cec0b298b6c1999fee3e31427f74f676e4cb9879ed1a121b43661a4154"
 
 [[package]]
 name = "lzma-rust2"
-version = "0.10.2"
-source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "f60b8ad6122c05a4d5e23db8eab1ced778e252b3e29c5e96b4a965fc72476277"
-
-[[package]]
-name = "lzma-rust2"
 version = "0.13.0"
 source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "c60a23ffb90d527e23192f1246b14746e2f7f071cb84476dd879071696c18a4a"
@@ -1332,6 +1320,12 @@ dependencies = [
  "crc",
  "sha2",
 ]
+
+[[package]]
+name = "lzma-rust2"
+version = "0.14.2"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "96d3176655c152883186e161a1031192759660878ac04b2f776290b4f4e770a9"
 
 [[package]]
 name = "matchers"
@@ -1968,18 +1962,17 @@ dependencies = [
 
 [[package]]
 name = "sevenz-rust2"
-version = "0.18.0"
+version = "0.19.1"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "b8f3cc2b52a3f98e75e6a1884e40fc986bf5f1966274aec869a4e6a0a5f72292"
+checksum = "7048af9cb3f23ee3315bccaeeef1da33c1b2cad63b8a26ac5b5498b6ef472902"
 dependencies = [
  "aes",
- "byteorder",
  "bzip2",
  "cbc",
  "crc32fast",
  "getrandom 0.3.3",
  "js-sys",
- "lzma-rust2 0.10.2",
+ "lzma-rust2 0.14.2",
  "ppmd-rust",
  "sha2",
  "wasm-bindgen",

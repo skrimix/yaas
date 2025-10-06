@@ -535,7 +535,8 @@ impl AdbHandler {
 
             AdbCommand::UninstallPackage(package_name) => {
                 ensure_valid_package(&package_name)?;
-                let result = self.uninstall_package(&package_name).await;
+                let device = self.current_device().await?;
+                let result = self.uninstall_package(&device, &package_name).await;
                 AdbCommandCompletedEvent {
                     command_type: AdbCommandType::UninstallPackage,
                     command_key: key.clone(),
@@ -661,7 +662,7 @@ impl AdbHandler {
 
     /// Gets the currently connected device or returns an error if none is connected
     #[instrument(skip(self), level = "trace", err)]
-    async fn current_device(&self) -> Result<Arc<AdbDevice>> {
+    pub async fn current_device(&self) -> Result<Arc<AdbDevice>> {
         self.try_current_device().await.context("No device connected")
     }
 
@@ -750,11 +751,11 @@ impl AdbHandler {
     #[instrument(skip(self, progress_sender))]
     pub async fn install_apk(
         &self,
+        device: &AdbDevice,
         apk_path: &Path,
         backups_location: std::path::PathBuf,
         progress_sender: UnboundedSender<SideloadProgress>,
     ) -> Result<()> {
-        let device = self.current_device().await?;
         let result = device
             .install_apk_with_progress(apk_path, &backups_location, progress_sender, false)
             .await;
@@ -764,8 +765,7 @@ impl AdbHandler {
 
     /// Uninstalls a package from the currently connected device
     #[instrument(skip(self))]
-    pub async fn uninstall_package(&self, package_name: &str) -> Result<()> {
-        let device = self.current_device().await?;
+    pub async fn uninstall_package(&self, device: &AdbDevice, package_name: &str) -> Result<()> {
         let result = device.uninstall_package(package_name).await;
         self.refresh_device().await?;
         result
@@ -775,11 +775,11 @@ impl AdbHandler {
     #[instrument(skip(self, progress_sender))]
     pub async fn sideload_app(
         &self,
+        device: &AdbDevice,
         app_path: &Path,
         backups_location: std::path::PathBuf,
         progress_sender: UnboundedSender<SideloadProgress>,
     ) -> Result<()> {
-        let device = self.current_device().await?;
         let result = device.sideload_app(app_path, &backups_location, progress_sender).await;
         self.refresh_device().await?;
         result
@@ -789,19 +789,18 @@ impl AdbHandler {
     #[instrument(skip(self))]
     pub async fn backup_app(
         &self,
+        device: &AdbDevice,
         package_name: &str,
         display_name: Option<&str>,
         backups_location: &Path,
         options: &BackupOptions,
     ) -> Result<Option<std::path::PathBuf>> {
-        let device = self.current_device().await?;
         device.backup_app(package_name, display_name, backups_location, options).await
     }
 
     /// Restores a backup to the currently connected device
     #[instrument(skip(self))]
-    pub async fn restore_backup(&self, backup_path: &Path) -> Result<()> {
-        let device = self.current_device().await?;
+    pub async fn restore_backup(&self, device: &AdbDevice, backup_path: &Path) -> Result<()> {
         let result = device.restore_backup(backup_path).await;
         self.refresh_device().await?;
         result

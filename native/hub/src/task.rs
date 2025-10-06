@@ -37,20 +37,20 @@ use crate::{
 
 struct ProgressUpdate {
     status: TaskStatus,
-    step_index: u32,
+    step_number: u32,
     step_progress: Option<f32>,
     message: String,
 }
 
 #[derive(Debug)]
 struct InstallStepConfig<'a> {
-    step_index: u32,
+    step_number: u32,
     log_context: &'a str,
 }
 
 #[derive(Debug)]
 struct AdbStepConfig<'a> {
-    step_index: u32,
+    step_number: u32,
     waiting_msg: &'a str,
     running_msg: String,
     log_context: &'a str,
@@ -59,7 +59,7 @@ struct AdbStepConfig<'a> {
 macro_rules! acquire_permit_or_cancel {
     ($semaphore:expr, $token:expr, $semaphore_name:literal) => {{
         if $token.is_cancelled() {
-            warn!(concat!("Task already cancelled before ", $semaphore_name, " semaphore acquisition"));
+            info!(concat!("Task already cancelled before ", $semaphore_name, " semaphore acquisition"));
             return Err(anyhow!(concat!("Task cancelled before ", $semaphore_name)));
         }
 
@@ -67,7 +67,7 @@ macro_rules! acquire_permit_or_cancel {
         tokio::select! {
             permit = $semaphore.acquire() => permit,
             _ = $token.cancelled() => {
-                warn!(concat!("Task cancelled while waiting for ", $semaphore_name, " semaphore"));
+                info!(concat!("Task cancelled while waiting for ", $semaphore_name, " semaphore"));
                 return Err(anyhow!(concat!("Task cancelled while waiting for ", $semaphore_name, " semaphore")));
             }
         }
@@ -109,14 +109,7 @@ impl TaskManager {
         tokio::spawn({
             let handle = handle.clone();
             async move {
-                handle.receive_create_requests().await;
-            }
-        });
-
-        tokio::spawn({
-            let handle = handle.clone();
-            async move {
-                handle.receive_cancel_requests().await;
+                handle.receive_requests().await;
             }
         });
 
@@ -135,36 +128,22 @@ impl TaskManager {
     }
 
     #[instrument(skip(self))]
-    async fn receive_create_requests(self: Arc<Self>) {
-        let receiver = TaskRequest::get_dart_signal_receiver();
-        while let Some(request) = receiver.recv().await {
-            self.clone().enqueue_task(request.message.task_type, request.message.params).await;
-        }
-    }
+    async fn receive_requests(self: Arc<Self>) {
+        let request_receiver = TaskRequest::get_dart_signal_receiver();
+        let cancel_request_receiver = TaskCancelRequest::get_dart_signal_receiver();
 
-    #[instrument(skip(self))]
-    async fn receive_cancel_requests(self: Arc<Self>) {
-        let receiver = TaskCancelRequest::get_dart_signal_receiver();
-        while let Some(request) = receiver.recv().await {
-            let task_id = request.message.task_id;
-            let tasks = self.tasks.lock().await;
-            if let Some((task_type, token)) = tasks.get(&task_id) {
-                info!(
-                    task_id = task_id,
-                    task_type = %task_type,
-                    active_tasks = tasks.len(),
-                    "Received cancellation request for task"
-                );
-                token.cancel();
-                info!(task_id = task_id, "Cancellation signal sent to task");
-            } else {
-                warn!(
-                    task_id = task_id,
-                    active_tasks = tasks.len(),
-                    "Task not found for cancellation - may have already completed"
-                );
+        tokio::select! {
+            Some(request) = request_receiver.recv() => {
+                self.clone().enqueue_task(request.message.task_type, request.message.params).await;
+            }
+            Some(cancel_request) = cancel_request_receiver.recv() => {
+                self.clone().cancel_task(cancel_request.message.task_id).await;
+            }
+            else => {
+                error!("Task request and cancel request channels closed");
             }
         }
+        panic!("Task request and cancel request channels closed");
     }
 
     #[instrument(skip(self), fields(task_type = %task_type))]
@@ -172,7 +151,7 @@ impl TaskManager {
         let id = self.id_counter.fetch_add(1, Ordering::Relaxed);
         let token = CancellationToken::new();
 
-        info!(
+        debug!(
             task_id = id,
             task_type = %task_type,
             "Creating new task"
@@ -216,16 +195,42 @@ impl TaskManager {
         tasks.insert(id, (task_type, token.clone()));
         drop(tasks);
 
-        info!(task_id = id, active_tasks = active_tasks_count + 1, "Task added to queue");
+        debug!(task_id = id, active_tasks = active_tasks_count + 1, "Task added to queue");
 
         tokio::spawn({
-            let manager = self.clone();
+            let handle = self.clone();
             async move {
-                manager.process_task(id, task_type, params, token).await;
+                handle.process_task(id, task_type, params, token).await;
+
+                let mut tasks = handle.tasks.lock().await;
+                tasks.remove(&id);
+                let remaining_tasks = tasks.len();
+                drop(tasks);
+                debug!(task_id = id, remaining_tasks = remaining_tasks, "Task removed from queue");
             }
         });
 
         id
+    }
+
+    #[instrument(skip(self))]
+    async fn cancel_task(self: Arc<Self>, task_id: u64) {
+        let tasks = self.tasks.lock().await;
+        if let Some((task_type, token)) = tasks.get(&task_id) {
+            info!(
+                task_id = task_id,
+                task_type = %task_type,
+                active_tasks = tasks.len(),
+                "Received cancellation request for task"
+            );
+            token.cancel();
+        } else {
+            warn!(
+                task_id = task_id,
+                active_tasks = tasks.len(),
+                "Task not found for cancellation - may have already completed"
+            );
+        }
     }
 
     #[instrument(skip(self, token), fields(task_type = %task_type))]
@@ -238,7 +243,7 @@ impl TaskManager {
     ) {
         let start_time = std::time::Instant::now();
 
-        info!(
+        debug!(
             task_id = id,
             task_type = %task_type,
             "Starting task processing"
@@ -246,7 +251,7 @@ impl TaskManager {
 
         let task_name = match get_task_name(task_type, &params) {
             Ok(name) => {
-                info!(
+                debug!(
                     task_id = id,
                     task_name = %name,
                     "Task name resolved"
@@ -274,12 +279,10 @@ impl TaskManager {
                     duration_ms = duration.as_millis(),
                     "Task failed during initialization"
                 );
-                self.tasks.lock().await.remove(&id);
                 return;
             }
         };
 
-        // Define step-aware progress reporting
         let total_steps: u32 = match task_type {
             TaskType::DownloadInstall => 2,
             _ => 1,
@@ -295,7 +298,7 @@ impl TaskManager {
             //     "Task progress update"
             // ); // TODO: limit logging frequency
             let safe_total = total_steps.max(1) as f32;
-            let completed_steps = u.step_index.saturating_sub(1) as f32;
+            let completed_steps = u.step_number.saturating_sub(1) as f32;
             let sp = u.step_progress.unwrap_or(0.0).clamp(0.0, 1.0);
             let total_progress = (completed_steps + sp) / safe_total;
 
@@ -306,7 +309,7 @@ impl TaskManager {
                 status: u.status,
                 total_progress,
                 message: u.message,
-                current_step: u.step_index,
+                current_step: u.step_number,
                 total_steps,
                 step_progress: u.step_progress,
             });
@@ -314,7 +317,7 @@ impl TaskManager {
 
         update_progress(ProgressUpdate {
             status: TaskStatus::Waiting,
-            step_index: 1,
+            step_number: 1,
             step_progress: None,
             message: "Starting...".into(),
         });
@@ -364,19 +367,19 @@ impl TaskManager {
                 info!(
                     task_id = id,
                     task_name = %task_name,
-                    duration_ms = duration.as_millis(),
                     duration_secs = duration.as_secs_f64(),
                     "Task completed successfully"
                 );
                 update_progress(ProgressUpdate {
                     status: TaskStatus::Completed,
-                    step_index: total_steps,
+                    step_number: total_steps,
                     step_progress: Some(1.0),
                     message: "Done".into(),
                 });
                 Toast::send(task_name, format!("{task_type}: completed"), false, None);
             }
             Err(e) => {
+                // TODO: check error type?
                 if token.is_cancelled() {
                     warn!(
                         task_id = id,
@@ -386,7 +389,7 @@ impl TaskManager {
                     );
                     update_progress(ProgressUpdate {
                         status: TaskStatus::Cancelled,
-                        step_index: total_steps,
+                        step_number: total_steps,
                         step_progress: None,
                         message: "Task cancelled by user".into(),
                     });
@@ -402,7 +405,7 @@ impl TaskManager {
                     );
                     update_progress(ProgressUpdate {
                         status: TaskStatus::Failed,
-                        step_index: total_steps,
+                        step_number: total_steps,
                         step_progress: None,
                         message: format!("Task failed: {e:#}"),
                     });
@@ -415,40 +418,32 @@ impl TaskManager {
                 }
             }
         }
-
-        let final_tasks_count = {
-            let mut tasks = self.tasks.lock().await;
-            tasks.remove(&id);
-            tasks.len()
-        };
-
-        info!(task_id = id, remaining_tasks = final_tasks_count, "Task removed from queue");
     }
 
     #[instrument(skip(self, update_progress, token))]
     async fn run_download_step(
         &self,
         app_full_name: &str,
-        step_index: u32,
+        step_number: u32,
         update_progress: &impl Fn(ProgressUpdate),
         token: CancellationToken,
     ) -> Result<String> {
         update_progress(ProgressUpdate {
             status: TaskStatus::Waiting,
-            step_index,
+            step_number,
             step_progress: None,
             message: "Waiting to start download...".into(),
         });
 
         let _permit = acquire_permit_or_cancel!(self.download_semaphore, token, "download");
-        info!(
+        debug!(
             download_permits_remaining = self.download_semaphore.available_permits(),
             "Acquired download semaphore"
         );
 
         update_progress(ProgressUpdate {
             status: TaskStatus::Running,
-            step_index,
+            step_number,
             step_progress: None,
             message: "Starting download...".into(),
         });
@@ -465,10 +460,12 @@ impl TaskManager {
             )
         };
 
-        info!("Starting download monitoring");
+        debug!("Starting download monitoring");
         let mut download_result: Option<String> = None;
         let mut last_log_time = std::time::Instant::now();
-        let mut last_log_progress = 0.0f32;
+        let mut last_log_progress = 0.0;
+        // Marker for the "bytes" > "total_bytes" case
+        // We cant calculate progress if we get to that point
         let mut unknown_progress = false;
 
         while download_result.is_none() {
@@ -482,9 +479,10 @@ impl TaskManager {
                 }
                 Some(progress) = rx.recv() => {
                     if unknown_progress {
+                        // We can only report the speed, skip everything else
                         update_progress(ProgressUpdate {
                             status: TaskStatus::Running,
-                            step_index,
+                            step_number,
                             step_progress: None,
                             message: format!(
                                 "Downloading (Unknown%) - {}/s",
@@ -506,7 +504,7 @@ impl TaskManager {
                     let progress_percent = step_progress * 100.0;
 
                     if should_log {
-                        info!(
+                        debug!(
                             bytes_downloaded = progress.bytes,
                             total_bytes = progress.total_bytes,
                             speed_bytes_per_sec = progress.speed,
@@ -517,7 +515,7 @@ impl TaskManager {
                         last_log_progress = step_progress;
                     }
 
-                    let (sp, message): (Option<f32>, String) = if progress.bytes <= progress.total_bytes {
+                    let (step_progress, message): (Option<f32>, String) = if progress.bytes <= progress.total_bytes {
                         (Some(step_progress), format!(
                             "Downloading ({:.1}%) - {}/s",
                             progress_percent,
@@ -534,8 +532,8 @@ impl TaskManager {
 
                     update_progress(ProgressUpdate {
                         status: TaskStatus::Running,
-                        step_index,
-                        step_progress: sp,
+                        step_number,
+                        step_progress,
                         message,
                     });
                 }
@@ -545,7 +543,7 @@ impl TaskManager {
         let app_path = download_result.unwrap();
         info!(
             app_path = %app_path,
-            download_permits_released = self.download_semaphore.available_permits() + 1,
+            download_permits = self.download_semaphore.available_permits() + 1,
             "Download completed, releasing download semaphore"
         );
         drop(_permit);
@@ -559,26 +557,27 @@ impl TaskManager {
         cfg: InstallStepConfig<'a>,
         update_progress: &impl Fn(ProgressUpdate),
         token: CancellationToken,
+        // TODO: do we actually need this?
         spawn_install: impl FnOnce(
             mpsc::UnboundedSender<SideloadProgress>,
         ) -> tokio::task::JoinHandle<anyhow::Result<()>>,
     ) -> Result<()> {
         update_progress(ProgressUpdate {
             status: TaskStatus::Waiting,
-            step_index: cfg.step_index,
+            step_number: cfg.step_number,
             step_progress: None,
             message: "Waiting to start installation...".into(),
         });
 
         let _permit = acquire_permit_or_cancel!(self.adb_semaphore, token, "ADB");
-        info!(
+        debug!(
             adb_permits_remaining = self.adb_semaphore.available_permits(),
             "Acquired ADB semaphore for installation"
         );
 
         update_progress(ProgressUpdate {
             status: TaskStatus::Running,
-            step_index: cfg.step_index,
+            step_number: cfg.step_number,
             step_progress: None,
             message: "Installing APK...".into(),
         });
@@ -586,7 +585,7 @@ impl TaskManager {
         let (tx, mut rx) = mpsc::unbounded_channel::<SideloadProgress>();
         let mut install_task = spawn_install(tx);
 
-        info!("Starting {} monitoring", cfg.log_context);
+        debug!("Starting {} monitoring", cfg.log_context);
         let mut install_result = None;
         let mut last_log_time = std::time::Instant::now();
 
@@ -602,7 +601,7 @@ impl TaskManager {
                     // Log progress every 5 seconds
                     let now = std::time::Instant::now();
                     if now.duration_since(last_log_time) > Duration::from_secs(5) {
-                        info!(
+                        debug!(
                             install_progress = step_progress_num,
                             status = %progress.status,
                             context = cfg.log_context,
@@ -613,7 +612,7 @@ impl TaskManager {
 
                     update_progress(ProgressUpdate {
                         status: TaskStatus::Running,
-                        step_index: cfg.step_index,
+                        step_number: cfg.step_number,
                         step_progress: progress.progress,
                         message: progress.status,
                     });
@@ -624,7 +623,7 @@ impl TaskManager {
         install_result.unwrap()?;
 
         info!(
-            adb_permits_released = self.adb_semaphore.available_permits() + 1,
+            adb_permits = self.adb_semaphore.available_permits() + 1,
             context = cfg.log_context,
             "Installation completed, releasing ADB semaphore"
         );
@@ -646,30 +645,30 @@ impl TaskManager {
     {
         update_progress(ProgressUpdate {
             status: TaskStatus::Waiting,
-            step_index: cfg.step_index,
+            step_number: cfg.step_number,
             step_progress: None,
             message: cfg.waiting_msg.into(),
         });
 
         let _permit = acquire_permit_or_cancel!(self.adb_semaphore, token, "ADB");
-        info!(
+        debug!(
             adb_permits_remaining = self.adb_semaphore.available_permits(),
             "Acquired ADB semaphore for {}", cfg.log_context
         );
 
         update_progress(ProgressUpdate {
             status: TaskStatus::Running,
-            step_index: cfg.step_index,
+            step_number: cfg.step_number,
             step_progress: None,
             message: cfg.running_msg,
         });
 
-        info!("Starting {} operation", cfg.log_context);
+        debug!("Starting {} operation", cfg.log_context);
         let result = fut().await?;
-        info!("{} operation completed", cfg.log_context);
+        debug!("{} operation completed", cfg.log_context);
 
         info!(
-            adb_permits_released = self.adb_semaphore.available_permits() + 1,
+            adb_permits = self.adb_semaphore.available_permits() + 1,
             "{} completed, releasing ADB semaphore", cfg.log_context
         );
 
@@ -686,7 +685,7 @@ impl TaskManager {
         let app_full_name =
             params.cloud_app_full_name.context("Missing cloud_app_full_name parameter")?;
 
-        info!(
+        debug!(
             app_name = %app_full_name,
             download_permits_available = self.download_semaphore.available_permits(),
             adb_permits_available = self.adb_semaphore.available_permits(),
@@ -701,20 +700,24 @@ impl TaskManager {
             return Err(anyhow!("Task cancelled after download"));
         }
 
+        let adb_handler = self.adb_handler.clone();
+        let device = adb_handler.current_device().await?;
+
         let backups_location =
             std::path::PathBuf::from(self.settings.read().await.backups_location.clone());
         let app_path_cloned = app_path.clone();
         self.run_install_step(
-            InstallStepConfig { step_index: 2, log_context: "sideload" },
+            InstallStepConfig { step_number: 2, log_context: "sideload" },
             update_progress,
             token.clone(),
             move |tx| {
-                let adb_handler = self.adb_handler.clone();
                 let app_path = app_path_cloned.clone();
                 let backups_location = backups_location.clone();
                 tokio::spawn(
                     async move {
-                        adb_handler.sideload_app(Path::new(&app_path), backups_location, tx).await
+                        adb_handler
+                            .sideload_app(&device, Path::new(&app_path), backups_location, tx)
+                            .await
                     }
                     .instrument(Span::current()),
                 )
@@ -725,7 +728,7 @@ impl TaskManager {
         // Apply downloads cleanup policy
         if let Err(e) = self.cleanup_downloads_after_install(&app_full_name, &app_path).await {
             // Non-fatal: log but do not fail the task
-            warn!(
+            error!(
                 error = e.as_ref() as &dyn Error,
                 "Failed to apply downloads cleanup policy after install"
             );
@@ -744,7 +747,7 @@ impl TaskManager {
         let app_full_name =
             params.cloud_app_full_name.context("Missing cloud_app_full_name parameter")?;
 
-        info!(
+        debug!(
             app_name = %app_full_name,
             download_permits_available = self.download_semaphore.available_permits(),
             "Starting download task"
@@ -764,26 +767,29 @@ impl TaskManager {
     ) -> Result<()> {
         let apk_path = params.apk_path.context("Missing apk_path parameter")?;
 
-        info!(
+        debug!(
             apk_path = %apk_path,
             adb_permits_available = self.adb_semaphore.available_permits(),
             "Starting APK install task"
         );
 
+        let adb_handler = self.adb_handler.clone();
+        let device = adb_handler.current_device().await?;
+
         let backups_location =
             std::path::PathBuf::from(self.settings.read().await.backups_location.clone());
-        let apk_path_cloned = apk_path.clone();
+
         self.run_install_step(
-            InstallStepConfig { step_index: 1, log_context: "apk_install" },
+            InstallStepConfig { step_number: 1, log_context: "apk_install" },
             update_progress,
             token,
             move |tx| {
-                let adb_handler = self.adb_handler.clone();
-                let apk_path = apk_path_cloned.clone();
                 let backups_location = backups_location.clone();
                 tokio::spawn(
                     async move {
-                        adb_handler.install_apk(Path::new(&apk_path), backups_location, tx).await
+                        adb_handler
+                            .install_apk(&device, Path::new(&apk_path), backups_location, tx)
+                            .await
                     }
                     .instrument(Span::current()),
                 )
@@ -803,26 +809,30 @@ impl TaskManager {
     ) -> Result<()> {
         let app_path = params.local_app_path.context("Missing local_app_path parameter")?;
 
-        info!(
+        debug!(
             app_path = %app_path,
             adb_permits_available = self.adb_semaphore.available_permits(),
             "Starting local app install task"
         );
 
+        let adb_handler = self.adb_handler.clone();
+        let device = adb_handler.current_device().await?;
+
         let backups_location =
             std::path::PathBuf::from(self.settings.read().await.backups_location.clone());
         let app_path_cloned = app_path.clone();
         self.run_install_step(
-            InstallStepConfig { step_index: 1, log_context: "sideload_local" },
+            InstallStepConfig { step_number: 1, log_context: "sideload_local" },
             update_progress,
             token,
             move |tx| {
-                let adb_handler = self.adb_handler.clone();
                 let app_path = app_path_cloned.clone();
                 let backups_location = backups_location.clone();
                 tokio::spawn(
                     async move {
-                        adb_handler.sideload_app(Path::new(&app_path), backups_location, tx).await
+                        adb_handler
+                            .sideload_app(&device, Path::new(&app_path), backups_location, tx)
+                            .await
                     }
                     .instrument(Span::current()),
                 )
@@ -842,16 +852,19 @@ impl TaskManager {
     ) -> Result<()> {
         let package_name = params.package_name.context("Missing package_name parameter")?;
 
-        info!(
+        debug!(
             package_name = %package_name,
             adb_permits_available = self.adb_semaphore.available_permits(),
             "Starting uninstall task"
         );
+
         let adb_handler = self.adb_handler.clone();
+        let device = adb_handler.current_device().await?;
+
         let pkg = package_name.clone();
         self.run_adb_one_step(
             AdbStepConfig {
-                step_index: 1,
+                step_number: 1,
                 waiting_msg: "Waiting to start uninstallation...",
                 running_msg: "Uninstalling app...".to_string(),
                 log_context: "uninstall",
@@ -859,9 +872,8 @@ impl TaskManager {
             update_progress,
             token,
             move || {
-                let adb_handler = adb_handler.clone();
                 let package_name = pkg.clone();
-                async move { adb_handler.uninstall_package(&package_name).await }
+                async move { adb_handler.uninstall_package(&device, &package_name).await }
             },
         )
         .await
@@ -883,11 +895,14 @@ impl TaskManager {
 
         ensure!(backup_apk || backup_data || backup_obb, "No parts selected to backup");
 
-        info!(
+        debug!(
             package_name = %package_name,
             adb_permits_available = self.adb_semaphore.available_permits(),
             "Starting backup task"
         );
+
+        let adb_handler = self.adb_handler.clone();
+        let device = adb_handler.current_device().await?;
 
         let parts = [
             if backup_data { Some("data") } else { None },
@@ -900,7 +915,7 @@ impl TaskManager {
         .join(", ");
         let backups_dir = { self.settings.read().await.backups_location.clone() };
         let backups_path = std::path::PathBuf::from(backups_dir);
-        info!(path = %backups_path.display(), "Using backups location");
+        debug!(path = %backups_path.display(), "Using backups location");
 
         // Build options from params
         let options = BackupOptions {
@@ -911,7 +926,6 @@ impl TaskManager {
             require_private_data: true,
         };
 
-        let adb_handler = self.adb_handler.clone();
         let pkg = package_name.clone();
         let display_name = params.display_name.clone();
         let options_moved = options;
@@ -920,7 +934,7 @@ impl TaskManager {
         let maybe_created = self
             .run_adb_one_step(
                 AdbStepConfig {
-                    step_index: 1,
+                    step_number: 1,
                     waiting_msg: "Waiting to start backup...",
                     running_msg: format!("Creating backup ({parts})..."),
                     log_context: "backup",
@@ -928,7 +942,6 @@ impl TaskManager {
                 update_progress,
                 token,
                 move || {
-                    let adb_handler = adb_handler.clone();
                     let package_name = pkg.clone();
                     let display_name = display_name.clone();
                     let backups_path = backups_path_moved.clone();
@@ -936,6 +949,7 @@ impl TaskManager {
                     async move {
                         adb_handler
                             .backup_app(
+                                &device,
                                 &package_name,
                                 display_name.as_deref(),
                                 backups_path.as_path(),
@@ -967,16 +981,19 @@ impl TaskManager {
     ) -> Result<()> {
         let backup_path = params.backup_path.context("Missing backup_path parameter")?;
 
-        info!(
+        debug!(
             backup_path = %backup_path,
             adb_permits_available = self.adb_semaphore.available_permits(),
             "Starting restore task"
         );
+
         let adb_handler = self.adb_handler.clone();
+        let device = adb_handler.current_device().await?;
+
         let backup_path_cloned = backup_path.clone();
         self.run_adb_one_step(
             AdbStepConfig {
-                step_index: 1,
+                step_number: 1,
                 waiting_msg: "Waiting to start restore...",
                 running_msg: "Restoring backup...".to_string(),
                 log_context: "restore",
@@ -984,9 +1001,8 @@ impl TaskManager {
             update_progress,
             token,
             move || {
-                let adb_handler = adb_handler.clone();
                 let path = backup_path_cloned.clone();
-                async move { adb_handler.restore_backup(Path::new(&path)).await }
+                async move { adb_handler.restore_backup(&device, Path::new(&path)).await }
             },
         )
         .await

@@ -7,8 +7,8 @@ pub enum AdbState {
     ServerStarting,
     NoDevices,
     DevicesAvailable(Vec<String>),
-    DeviceUnauthorized { count: u32 },
-    DeviceConnected { count: u32 },
+    DeviceUnauthorized,
+    DeviceConnected,
     ServerStartFailed,
 }
 

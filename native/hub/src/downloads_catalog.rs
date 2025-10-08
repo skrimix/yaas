@@ -39,7 +39,7 @@ impl DownloadsCatalog {
                     info!(dir = %settings.downloads_location, "Downloads location updated");
                     *handler.root.write().await = PathBuf::from(settings.downloads_location);
                 }
-                panic!("Settings stream closed for DownloadsHandler");
+                panic!("Settings stream closed");
             });
         }
 
@@ -62,7 +62,7 @@ impl DownloadsCatalog {
         loop {
             tokio::select! {
                 signal = list_receiver.recv() => {
-                    if let Some(_signal) = signal {
+                    if signal.is_some() {
                         debug!("Received GetDownloadsRequest");
                         match self.list_downloads().await {
                             Ok(mut entries) => {
@@ -75,16 +75,16 @@ impl DownloadsCatalog {
                             }
                         }
                     } else {
-                        panic!("GetDownloadsRequest receiver ended");
+                        panic!("GetDownloadsRequest receiver closed");
                     }
                 }
                 request = get_dir_receiver.recv() => {
-                    if let Some(_request) = request {
+                    if request.is_some() {
                         let dir = self.root.read().await.clone();
                         debug!(dir = %dir.display(), "Sending downloads directory path");
                         GetDownloadsDirectoryResponse { path: dir.to_string_lossy().into_owned() }.send_signal_to_dart();
                     } else {
-                        panic!("GetDownloadsDirectoryRequest receiver ended");
+                        panic!("GetDownloadsDirectoryRequest receiver closed");
                     }
                 }
                 request = delete_receiver.recv() => {
@@ -104,11 +104,11 @@ impl DownloadsCatalog {
                             }
                         }
                     } else {
-                        panic!("DeleteDownloadRequest receiver ended");
+                        panic!("DeleteDownloadRequest receiver closed");
                     }
                 }
                 request = delete_all_receiver.recv() => {
-                    if let Some(_request) = request {
+                    if request.is_some() {
                         debug!("Received DeleteAllDownloadsRequest");
                         match self.delete_all_downloads().await {
                             Ok((removed, skipped)) => {
@@ -121,7 +121,7 @@ impl DownloadsCatalog {
                             }
                         }
                     } else {
-                        panic!("DeleteAllDownloadsRequest receiver ended");
+                        panic!("DeleteAllDownloadsRequest receiver closed");
                     }
                 }
             }

@@ -37,7 +37,7 @@ impl BackupsListHandler {
                     info!(dir = %settings.backups_location, "Backups location updated");
                     *handler.backups_dir.write().await = PathBuf::from(settings.backups_location);
                 }
-                panic!("Settings stream closed for BackupsHandler");
+                panic!("Settings stream closed");
             });
         }
 
@@ -60,7 +60,7 @@ impl BackupsListHandler {
             tokio::select! {
                 // Handle list backup requests
                 signal = list_receiver.recv() => {
-                    if let Some(_signal) = signal {
+                    if signal.is_some() {
                         debug!("Received GetBackupsRequest");
                         match self.list_backups().await {
                             Ok(mut entries) => {
@@ -75,7 +75,7 @@ impl BackupsListHandler {
                             }
                         }
                     } else {
-                        panic!("GetBackupsRequest receiver ended");
+                        panic!("GetBackupsRequest receiver closed");
                     }
                 }
 
@@ -98,19 +98,19 @@ impl BackupsListHandler {
                             }
                         }
                     } else {
-                        panic!("DeleteBackupRequest receiver ended");
+                        panic!("DeleteBackupRequest receiver closed");
                     }
                 }
 
                 // Handle get directory requests
-                _request = get_dir_receiver.recv() => {
-                    if let Some(_request) = _request {
+                request = get_dir_receiver.recv() => {
+                    if request.is_some() {
                         let dir = self.backups_dir.read().await.clone();
                         debug!(dir = %dir.display(), "Sending backups directory path");
                         GetBackupsDirectoryResponse { path: dir.to_string_lossy().into_owned() }
                             .send_signal_to_dart();
                     } else {
-                        panic!("GetBackupsDirectoryRequest receiver ended");
+                        panic!("GetBackupsDirectoryRequest receiver closed");
                     }
                 }
             }

@@ -55,64 +55,71 @@ impl SettingsHandler {
 
         loop {
             tokio::select! {
-                Some(_) = load_receiver.recv() => {
-                    info!("Received LoadSettingsRequest");
-                    let handler = self.clone();
-                    let result = handler.load_settings();
+                request = load_receiver.recv() => {
+                    if request.is_some() {
+                        info!("Received LoadSettingsRequest");
+                        let handler = self.clone();
+                        let result = handler.load_settings();
 
-                    if let Err(e) = result {
-                        error!(error = e.as_ref() as &dyn Error, "Failed to load settings, using defaults");
-                            let settings = handler
-                                .load_default_settings()
-                                .expect("Failed to load default settings"); // TODO: handle error?
-                            handler.on_settings_change(
-                                settings.clone(),
-                                Some(format!("Failed to load settings: {e:#}")),
-                                true,
-                            );
+                        if let Err(e) = result {
+                            error!(error = e.as_ref() as &dyn Error, "Failed to load settings, using defaults");
+                                let settings = handler
+                                    .load_default_settings()
+                                    .expect("Failed to load default settings"); // TODO: handle error?
+                                handler.on_settings_change(
+                                    settings.clone(),
+                                    Some(format!("Failed to load settings: {e:#}")),
+                                    true,
+                                );
                         }
-                },
-                Some(signal_pack) = save_receiver.recv() => {
-                    info!("Received SaveSettingsRequest");
-                    let handler = self.clone();
-                    let settings = signal_pack.message.settings;
-                    let result = handler.save_settings(&settings);
-
-                    if let Err(e) = result {
-                        error!(error = e.as_ref() as &dyn Error, "Failed to save settings");
-                        SettingsSavedEvent {
-                            error: Some(format!("Failed to save settings: {e:#}")),
-                        }
-                        .send_signal_to_dart();
+                    } else {
+                        panic!("LoadSettingsRequest receiver closed");
                     }
-                },
-                Some(_) = reset_receiver.recv() => {
-                    info!("Received ResetSettingsToDefaultsRequest");
-                    let handler = self.clone();
-                    let result = handler.load_default_settings();
+                }
+                request = save_receiver.recv() => {
+                    if let Some(request) = request {
+                        info!("Received SaveSettingsRequest");
+                        let handler = self.clone();
+                        let settings = request.message.settings;
+                        let result = handler.save_settings(&settings);
 
-                    match result {
-                        Ok(settings) => {
-                            // Force notify to ensure UI updates even if values match
-                            handler.on_settings_change(settings.clone(), None, true);
+                        if let Err(e) = result {
+                            error!(error = e.as_ref() as &dyn Error, "Failed to save settings");
+                            SettingsSavedEvent {
+                                error: Some(format!("Failed to save settings: {e:#}")),
+                            }
+                            .send_signal_to_dart();
                         }
-                        Err(e) => {
-                            error!(error = e.as_ref() as &dyn Error, "Failed to reset settings to defaults");
-                            handler.on_settings_change(
-                                handler.watch_tx.borrow().clone(),
-                                Some(format!("Failed to reset to defaults: {e:#}")),
-                                true,
-                            );
-                        }
+                    } else {
+                        panic!("SaveSettingsRequest receiver closed");
                     }
-                },
-                else => {
-                    error!("All settings request channels closed");
-                    break;
+                }
+                request = reset_receiver.recv() => {
+                    if request.is_some() {
+                        info!("Received ResetSettingsToDefaultsRequest");
+                        let handler = self.clone();
+                        let result = handler.load_default_settings();
+
+                        match result {
+                            Ok(settings) => {
+                                // Force notify to ensure UI updates even if values match
+                                handler.on_settings_change(settings.clone(), None, true);
+                            }
+                            Err(e) => {
+                                error!(error = e.as_ref() as &dyn Error, "Failed to reset settings to defaults");
+                                handler.on_settings_change(
+                                    handler.watch_tx.borrow().clone(),
+                                    Some(format!("Failed to reset to defaults: {e:#}")),
+                                    true,
+                                );
+                            }
+                        }
+                    } else {
+                        panic!("ResetSettingsToDefaultsRequest receiver closed");
+                    }
                 }
             }
         }
-        panic!("Settings request receiver loop ended");
     }
 
     /// Handle settings change

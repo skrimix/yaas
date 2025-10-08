@@ -132,18 +132,24 @@ impl TaskManager {
         let request_receiver = TaskRequest::get_dart_signal_receiver();
         let cancel_request_receiver = TaskCancelRequest::get_dart_signal_receiver();
 
-        tokio::select! {
-            Some(request) = request_receiver.recv() => {
-                self.clone().enqueue_task(request.message.task_type, request.message.params).await;
-            }
-            Some(cancel_request) = cancel_request_receiver.recv() => {
-                self.clone().cancel_task(cancel_request.message.task_id).await;
-            }
-            else => {
-                error!("Task request and cancel request channels closed");
+        loop {
+            tokio::select! {
+                request = request_receiver.recv() => {
+                    if let Some(request) = request {
+                        self.clone().enqueue_task(request.message.task_type, request.message.params).await;
+                    } else {
+                        panic!("TaskRequest receiver closed");
+                    }
+                }
+                cancel_request = cancel_request_receiver.recv() => {
+                    if let Some(cancel_request) = cancel_request {
+                        self.clone().cancel_task(cancel_request.message.task_id).await;
+                    } else {
+                        panic!("TaskCancelRequest receiver closed");
+                    }
+                }
             }
         }
-        panic!("Task request and cancel request channels closed");
     }
 
     #[instrument(skip(self), fields(task_type = %task_type))]

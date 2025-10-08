@@ -58,15 +58,10 @@ class StatusBar extends StatelessWidget {
     DeviceState deviceState,
     AppLocalizations l10n,
   ) {
-    return Tooltip(
-      message: l10n.statusDeviceInfo(
+    return _DeviceSwitcherLabel(
+      tooltip: l10n.statusDeviceInfo(
           deviceState.deviceName, deviceState.deviceSerial),
-      child: Row(
-        children: [
-          Text(deviceState.deviceName),
-          const SizedBox(width: 8),
-        ],
-      ),
+      label: '${deviceState.deviceName} · ${deviceState.deviceSerial}',
     );
   }
 
@@ -286,6 +281,230 @@ class _AnimatedRefreshButton extends StatefulWidget {
   State<_AnimatedRefreshButton> createState() => _AnimatedRefreshButtonState();
 }
 
+class _DeviceSwitcherLabel extends StatefulWidget {
+  final String tooltip;
+  final String label;
+
+  const _DeviceSwitcherLabel({required this.tooltip, required this.label});
+
+  @override
+  State<_DeviceSwitcherLabel> createState() => _DeviceSwitcherLabelState();
+}
+
+class _DeviceSwitcherLabelState extends State<_DeviceSwitcherLabel>
+    with SingleTickerProviderStateMixin {
+  final MenuController _menuController = MenuController();
+  late AnimationController _animationController;
+  late Animation<double> _fadeAnimation;
+
+  @override
+  void initState() {
+    super.initState();
+    _animationController = AnimationController(
+      duration: const Duration(milliseconds: 200),
+      vsync: this,
+    );
+    _fadeAnimation = CurvedAnimation(
+      parent: _animationController,
+      curve: Curves.easeOut,
+    );
+  }
+
+  @override
+  void dispose() {
+    _animationController.dispose();
+    super.dispose();
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    final adb = context.watch<AdbStateProvider>();
+    final device = context.watch<DeviceState>();
+    final devices = adb.availableDevices;
+    final current = device.isConnected &&
+            devices.any((e) => e.serial == device.deviceSerial)
+        ? device.deviceSerial
+        : null;
+
+    const double menuWidth = 360;
+    List<Widget> buildMenuItems() {
+      final l10n = AppLocalizations.of(context);
+      final header = <Widget>[
+        SizedBox(
+          width: menuWidth,
+          child: Padding(
+            padding: const EdgeInsets.fromLTRB(12, 10, 12, 6),
+            child: Text(
+              l10n.diagnosticsDevices,
+              style: Theme.of(context).textTheme.titleSmall,
+            ),
+          ),
+        ),
+        SizedBox(width: menuWidth, child: const Divider(height: 8)),
+      ];
+
+      if (devices.isEmpty) {
+        return [
+          ...header,
+          _AnimatedMenuItem(
+            animation: _fadeAnimation,
+            delay: 0,
+            child: SizedBox(
+              width: menuWidth,
+              child: MenuItemButton(
+                onPressed: null,
+                leadingIcon: const Icon(Icons.devices_outlined, size: 18),
+                child: Text(l10n.noDeviceConnected),
+              ),
+            ),
+          ),
+        ];
+      }
+      return [
+        ...header,
+        ...devices.asMap().entries.map((mapEntry) {
+          final index = mapEntry.key;
+          final entry = mapEntry.value;
+          final serial = entry.serial;
+          final isCurrent = serial == current;
+          final isWireless = entry.isWireless;
+          final isUnauthorized =
+              entry.state == signals.AdbBriefState.unauthorized;
+          final titleText = (entry.name != null && entry.name!.isNotEmpty)
+              ? entry.name!
+              : serial;
+          final subtitle = StringBuffer()
+            ..write(serial)
+            ..write(' • ')
+            ..write(isWireless
+                ? l10n.settingsConnectionWireless
+                : l10n.settingsConnectionUsb);
+          if (isUnauthorized) {
+            subtitle.write(' • ');
+            subtitle.write(l10n.statusAdbDeviceUnauthorized);
+          }
+
+          return _AnimatedMenuItem(
+            animation: _fadeAnimation,
+            delay: index,
+            child: SizedBox(
+                width: menuWidth,
+                child: MenuItemButton(
+                  onPressed: isUnauthorized
+                      ? null
+                      : () {
+                          if (serial != current) {
+                            signals.AdbRequest(
+                              command:
+                                  signals.AdbCommandConnectTo(value: serial),
+                              commandKey: 'select-device',
+                            ).sendSignalToRust();
+                          }
+                          if (_menuController.isOpen) _menuController.close();
+                        },
+                  leadingIcon: Icon(
+                    isWireless ? Icons.wifi_tethering : Icons.usb,
+                    size: 18,
+                  ),
+                  trailingIcon:
+                      isCurrent ? const Icon(Icons.check, size: 18) : null,
+                  style: const ButtonStyle(
+                    padding: WidgetStatePropertyAll(
+                      EdgeInsets.symmetric(horizontal: 14, vertical: 10),
+                    ),
+                  ),
+                  child: Column(
+                    crossAxisAlignment: CrossAxisAlignment.start,
+                    mainAxisSize: MainAxisSize.min,
+                    children: [
+                      Text(titleText),
+                      const SizedBox(height: 2),
+                      Text(
+                        subtitle.toString(),
+                        style: Theme.of(context).textTheme.bodySmall?.copyWith(
+                            color:
+                                Theme.of(context).colorScheme.onSurfaceVariant),
+                      ),
+                    ],
+                  ),
+                )),
+          );
+        }),
+      ];
+    }
+
+    return Padding(
+      padding: const EdgeInsets.only(right: 8),
+      child: Tooltip(
+        message: widget.tooltip,
+        child: MenuAnchor(
+          controller: _menuController,
+          style: MenuStyle(
+            backgroundColor:
+                WidgetStatePropertyAll(Theme.of(context).colorScheme.surface),
+            elevation: const WidgetStatePropertyAll(8),
+            shape: WidgetStatePropertyAll(
+                RoundedRectangleBorder(borderRadius: BorderRadius.circular(8))),
+            alignment: Alignment.topCenter,
+          ),
+          alignmentOffset: const Offset(-menuWidth / 2, 12),
+          menuChildren: buildMenuItems(),
+          builder: (context, controller, child) {
+            // Trigger animation when menu opens
+            if (controller.isOpen &&
+                _animationController.status == AnimationStatus.dismissed) {
+              WidgetsBinding.instance.addPostFrameCallback((_) {
+                _animationController.forward();
+              });
+            } else if (!controller.isOpen) {
+              _animationController.reverse();
+            }
+
+            return Material(
+              shape: RoundedRectangleBorder(
+                borderRadius: BorderRadius.circular(6),
+              ),
+              clipBehavior: Clip.antiAlias,
+              elevation: 8,
+              surfaceTintColor: Colors.white,
+              child: InkWell(
+                splashFactory: InkSplash.splashFactory,
+                onTap: () {
+                  controller.isOpen ? controller.close() : controller.open();
+                },
+                child: Padding(
+                  padding: const EdgeInsets.only(left: 4),
+                  child: Row(
+                    mainAxisSize: MainAxisSize.min,
+                    children: [
+                      // Icon(Icons.devices_outlined,
+                      //     size: 16,
+                      //     color:
+                      //         Theme.of(context).colorScheme.onSurfaceVariant),
+                      // const SizedBox(width: 6),
+                      Text(
+                        widget.label,
+                        style: TextStyle(
+                          color: Theme.of(context).colorScheme.onSurface,
+                        ),
+                      ),
+                      const SizedBox(width: 4),
+                      Icon(Icons.arrow_drop_down,
+                          size: 18,
+                          color:
+                              Theme.of(context).colorScheme.onSurfaceVariant),
+                    ],
+                  ),
+                ),
+              ),
+            );
+          },
+        ),
+      ),
+    );
+  }
+}
+
 class _AnimatedRefreshButtonState extends State<_AnimatedRefreshButton>
     with TickerProviderStateMixin {
   late AnimationController _rotationController;
@@ -436,6 +655,41 @@ class _AnimatedRefreshButtonState extends State<_AnimatedRefreshButton>
           padding: EdgeInsets.zero,
           iconSize: 16,
         ),
+      ),
+    );
+  }
+}
+
+class _AnimatedMenuItem extends StatelessWidget {
+  final Animation<double> animation;
+  final int delay;
+  final Widget child;
+
+  const _AnimatedMenuItem({
+    required this.animation,
+    required this.delay,
+    required this.child,
+  });
+
+  @override
+  Widget build(BuildContext context) {
+    final delayedAnimation = CurvedAnimation(
+      parent: animation,
+      curve: Interval(
+        delay * 0.05,
+        1.0,
+        curve: Curves.easeOut,
+      ),
+    );
+
+    return FadeTransition(
+      opacity: delayedAnimation,
+      child: SlideTransition(
+        position: Tween<Offset>(
+          begin: const Offset(0, -0.2),
+          end: Offset.zero,
+        ).animate(delayedAnimation),
+        child: child,
       ),
     );
   }

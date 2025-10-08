@@ -1,4 +1,4 @@
-use std::{error::Error, path::Path, sync::Arc, time::Duration};
+use std::{collections::HashMap, error::Error, path::Path, sync::Arc, time::Duration};
 
 use anyhow::{Context, Result, anyhow, bail, ensure};
 use derive_more::Debug;
@@ -21,7 +21,11 @@ use crate::{
         Settings,
         signals::{
             adb::{
-                command::*, device::DeviceChangedEvent, dump::BatteryDumpResponse, state::AdbState,
+                command::*,
+                device::DeviceChangedEvent,
+                devices_list::{AdbDeviceBrief, AdbDevicesList},
+                dump::BatteryDumpResponse,
+                state::AdbState,
             },
             system::Toast,
         },
@@ -53,8 +57,12 @@ pub struct AdbHandler {
     adb_state: RwLock<AdbState>,
     /// Currently connected device (if any)
     device: RwLock<Option<Arc<AdbDevice>>>,
+    /// Serializes connect/disconnect operations to avoid races
+    device_op_mutex: Mutex<()>,
     /// Cancellation token for running tasks
     cancel_token: RwLock<CancellationToken>,
+    /// Cache of serial -> friendly name
+    names_cache: RwLock<HashMap<String, String>>,
 }
 
 impl AdbHandler {
@@ -80,7 +88,9 @@ impl AdbHandler {
             adb_path: RwLock::new(adb_path),
             adb_state: RwLock::new(AdbState::default()),
             device: None.into(),
+            device_op_mutex: Mutex::new(()),
             cancel_token: RwLock::new(CancellationToken::new()),
+            names_cache: RwLock::new(HashMap::new()),
         });
         tokio::spawn(
             {
@@ -132,7 +142,7 @@ impl AdbHandler {
                         }
                     }
 
-                    panic!("Settings stream closed for AdbHandler");
+                    panic!("Settings stream closed");
                 }
             }
             .instrument(info_span!("task_handle_settings_updates")),
@@ -202,7 +212,7 @@ impl AdbHandler {
         // Cancel all tasks
         self.cancel_token.read().await.cancel();
         // Disconnect from device
-        let _ = self.disconnect_device().await;
+        let _ = self.disconnect_device(None).await;
         // Kill ADB server
         let _ = self.kill_adb_server().await;
         // Restart ADB server
@@ -233,7 +243,7 @@ impl AdbHandler {
     #[instrument(skip(self, sender), err)]
     async fn run_device_tracker(
         self: Arc<AdbHandler>,
-        sender: tokio::sync::mpsc::UnboundedSender<DeviceBrief>,
+        sender: tokio::sync::mpsc::UnboundedSender<Vec<DeviceBrief>>,
     ) -> Result<()> {
         loop {
             debug!("Starting track_devices loop");
@@ -244,9 +254,9 @@ impl AdbHandler {
 
             while let Some(device_result) = stream.next().await {
                 match device_result {
-                    Ok(device) => {
+                    Ok(device_list) => {
                         got_update = true;
-                        if sender.send(device).is_err() {
+                        if sender.send(device_list).is_err() {
                             bail!("Device update receiver dropped");
                         }
                     }
@@ -279,33 +289,32 @@ impl AdbHandler {
     #[instrument(skip(self, receiver), err)]
     async fn handle_device_updates(
         self: Arc<AdbHandler>,
-        mut receiver: tokio::sync::mpsc::UnboundedReceiver<DeviceBrief>,
+        mut receiver: tokio::sync::mpsc::UnboundedReceiver<Vec<DeviceBrief>>,
     ) -> Result<()> {
-        while let Some(device_update) = receiver.recv().await {
-            debug!(update = ?device_update, "Received device update");
+        while let Some(devices) = receiver.recv().await {
+            debug!(update = ?devices, "Received device list update");
 
-            match (self.try_current_device().await, &device_update.state) {
-                (Some(device), DeviceState::Offline) if device.serial == device_update.serial => {
-                    info!(serial = %device.serial, "Current device went offline, disconnecting");
-                    if let Err(e) = self.disconnect_device().await {
+            if let Some(current) = self.try_current_device().await {
+                let still_present = devices
+                    .iter()
+                    .any(|d| d.serial == current.serial && d.state == DeviceState::Device);
+                if !still_present {
+                    info!(
+                        serial = %current.serial,
+                        "Current device missing from device list or is not in \"device\" state, disconnecting"
+                    );
+                    if let Err(e) = self.disconnect_device(Some(&current.serial)).await {
                         error!(error = e.as_ref() as &dyn Error, "Auto-disconnect failed");
                     }
                 }
-                (None, DeviceState::Device) => {
-                    info!(serial = %device_update.serial, "New device available, auto-connecting");
-                    if let Err(e) = self.connect_device().await {
-                        error!(error = e.as_ref() as &dyn Error, "Auto-connect failed");
-                        Toast::send(
-                            "Failed to connect to device".to_string(),
-                            format!("{e:#}"),
-                            true,
-                            None,
-                        );
-                    }
-                }
-                // TODO: handle other state combinations
-                _ => {
-                    trace!("Device update does not require action");
+            }
+
+            if self.try_current_device().await.is_none()
+                && devices.iter().any(|d| d.state == DeviceState::Device)
+            {
+                info!("Found available device, auto-connecting");
+                if let Err(e) = self.connect_device(None, true).await {
+                    error!(error = e.as_ref() as &dyn Error, "Auto-connect failed");
                 }
             }
 
@@ -321,14 +330,14 @@ impl AdbHandler {
         let receiver = AdbRequest::get_dart_signal_receiver();
         info!("Listening for ADB commands");
         while let Some(request) = receiver.recv().await {
-            info!(command = ?request.message.command, key = %request.message.command_key, "Received ADB command");
+            debug!(command = ?request.message.command, key = %request.message.command_key, "Received ADB command");
             if let Err(e) =
                 self.execute_command(request.message.command_key, request.message.command).await
             {
                 error!(error = e.as_ref() as &dyn Error, "ADB command execution failed");
             }
         }
-        error!("ADB command receiver channel closed");
+        panic!("AdbRequest receiver closed");
     }
 
     /// Executes a received ADB command with the given parameters
@@ -338,10 +347,9 @@ impl AdbHandler {
             Toast::send(title, description, error, duration);
         }
 
-        let device = self.current_device().await?;
-
         let result = match command.clone() {
             AdbCommand::LaunchApp(package_name) => {
+                let device = self.current_device().await?;
                 ensure_valid_package(&package_name)?;
                 let result = device.launch(&package_name).await;
                 AdbCommandCompletedEvent {
@@ -514,6 +522,7 @@ impl AdbHandler {
             }
 
             AdbCommand::ForceStopApp(package_name) => {
+                let device = self.current_device().await?;
                 ensure_valid_package(&package_name)?;
                 let result = device.force_stop(&package_name).await;
                 AdbCommandCompletedEvent {
@@ -565,6 +574,7 @@ impl AdbHandler {
 
             // Power and device actions (parameterized)
             AdbCommand::Reboot(mode) => {
+                let device = self.current_device().await?;
                 let result = device.reboot_with_mode(mode).await;
                 AdbCommandCompletedEvent {
                     command_type: AdbCommandType::Reboot,
@@ -576,6 +586,7 @@ impl AdbHandler {
             }
 
             AdbCommand::SetProximitySensor(enabled) => {
+                let device = self.current_device().await?;
                 let result = device.set_proximity_sensor(enabled).await;
                 AdbCommandCompletedEvent {
                     command_type: AdbCommandType::ProximitySensorSet,
@@ -587,6 +598,7 @@ impl AdbHandler {
             }
 
             AdbCommand::SetGuardianPaused(paused) => {
+                let device = self.current_device().await?;
                 let result = device.set_guardian_paused(paused).await;
                 AdbCommandCompletedEvent {
                     command_type: AdbCommandType::GuardianPausedSet,
@@ -597,59 +609,90 @@ impl AdbHandler {
                 result.map(|_| ()).context("Failed to set guardian paused state")
             }
 
-            AdbCommand::GetBatteryDump => match device.battery_dump().await {
-                Ok(raw) => {
-                    let human = battery::humanize_battery_dump(&raw);
-                    BatteryDumpResponse { command_key: key.clone(), dump: human }
-                        .send_signal_to_dart();
-                    Ok(())
+            AdbCommand::GetBatteryDump => {
+                let device = self.current_device().await?;
+                match device.battery_dump().await {
+                    Ok(raw) => {
+                        let human = battery::humanize_battery_dump(&raw);
+                        BatteryDumpResponse { command_key: key.clone(), dump: human }
+                            .send_signal_to_dart();
+                        Ok(())
+                    }
+                    Err(e) => {
+                        let error_msg = format!("Failed to get battery dump: {e:#}");
+                        Toast::send("Battery Dump Failed".to_string(), error_msg, true, None);
+                        Err(e.context("Failed to get battery dump"))
+                    }
                 }
-                Err(e) => {
-                    let error_msg = format!("Failed to get battery dump: {e:#}");
-                    Toast::send("Battery Dump Failed".to_string(), error_msg, true, None);
-                    Err(e.context("Failed to get battery dump"))
+            }
+
+            AdbCommand::ConnectTo(serial) => {
+                // Skip if already connected to the requested device
+                if let Some(current) = self.try_current_device().await
+                    && current.serial == serial
+                {
+                    AdbCommandCompletedEvent {
+                        command_type: AdbCommandType::ConnectTo,
+                        command_key: key.clone(),
+                        success: true,
+                    }
+                    .send_signal_to_dart();
+                    return Ok(());
                 }
-            },
+
+                let result = self.connect_device(Some(&serial), true).await;
+
+                AdbCommandCompletedEvent {
+                    command_type: AdbCommandType::ConnectTo,
+                    command_key: key.clone(),
+                    success: result.is_ok(),
+                }
+                .send_signal_to_dart();
+
+                match result {
+                    Ok(_) => {
+                        self.refresh_adb_state().await;
+                        Ok(())
+                    }
+                    Err(e) => {
+                        let error_msg = format!("{serial}: {e:#}");
+                        Toast::send("Device Connect Failed".to_string(), error_msg, true, None);
+                        Err(e.context("Failed to connect to selected device"))
+                    }
+                }
+            }
         };
 
         result.context("Command execution failed")
     }
 
-    /// Updates the current device state and notifies Dart of the change
-    /// # Arguments
-    /// * `device` - Optional new device state
-    /// * `update_current` - Whether to update the current device if it exists
-    #[instrument(skip(self, device))]
-    async fn set_device(&self, device: Option<AdbDevice>, update_current: bool) -> Result<()> {
-        fn report_device_change(device: &Option<AdbDevice>) {
-            let proto_device = device.clone().map(|d| d.into());
-            DeviceChangedEvent { device: proto_device }.send_signal_to_dart();
-        }
+    /// Atomically set the current device if the expected serial matches.
+    ///
+    /// - If `expect_serial` is `Some(s)`, the set happens only when the current device's serial is `s`.
+    /// - If `expect_serial` is `None`, the set happens only when there is no current device.
+    ///
+    /// Returns `true` if the device was set, `false` if the expectation failed.
+    #[instrument(skip(self, device), ret)]
+    async fn set_device(
+        &self,
+        device: Option<AdbDevice>,
+        expect_serial: Option<&str>,
+    ) -> Result<bool> {
+        let device_clone = device.clone();
 
         let mut current_device = self.device.write().await;
+        let current_serial = current_device.as_ref().map(|d| d.serial.as_str());
 
-        if update_current {
-            if device.is_none() {
-                error!("Attempted to pass None as a device update");
-                return Err(anyhow!("Attempted to pass None as a device update"));
-            }
-
-            if let (Some(current), Some(new)) = (current_device.as_ref(), &device)
-                && current.serial != new.serial
-            {
-                debug!(
-                    current = %current.serial,
-                    new = %new.serial,
-                    "Ignoring device update for different device"
-                );
-                return Ok(());
-            }
+        if current_serial != expect_serial {
+            trace!(current = ?current_serial, expect = ?expect_serial, "Compare-and-set failed for set_device");
+            return Ok(false);
         }
 
         debug!(device = ?device.as_ref().map(|d| &d.serial), "Setting new device data");
-        *current_device = device.clone().map(Arc::new);
-        report_device_change(&device);
-        Ok(())
+        *current_device = device.map(Arc::new);
+
+        DeviceChangedEvent { device: device_clone.map(|d| d.into()) }.send_signal_to_dart();
+        Ok(true)
     }
 
     /// Attempts to get the currently connected device    ///
@@ -667,51 +710,160 @@ impl AdbHandler {
     }
 
     /// Connects to an ADB device
+    ///
+    /// # Arguments
+    /// * `serial` - Optional serial number to target. If None, connects to the first available device.
+    /// * `prefer_usb` - If true, prefers USB devices over wireless. Otherwise, prefers wireless. Ignored if `serial` is provided.
     #[instrument(skip(self), err, ret)]
-    async fn connect_device(&self) -> Result<AdbDevice> {
-        // TODO: wait for device to be ready (boot_completed)
-        info!("Attempting to connect to any device");
+    async fn connect_device(&self, serial: Option<&str>, prefer_usb: bool) -> Result<AdbDevice> {
+        // TODO: replace `prefer_usb` with an enum from settings when added
         let adb_host = self.adb_host.clone();
-        let devices = adb_host
+        let mut devices = adb_host
             .devices::<Vec<_>>()
             .await?
             .into_iter()
             .filter(|d| d.state == DeviceState::Device)
             .collect::<Vec<_>>();
 
-        // TODO: handle multiple devices
-        let first_device = devices.first().context("No available device found")?;
-        info!(serial = %first_device.serial, "Found device, connecting...");
+        // Select target device based on serial parameter
+        let target_device = if let Some(target_serial) = serial {
+            if let Some(current) = self.try_current_device().await
+                && current.serial == target_serial
+            {
+                info!(serial = %target_serial, "Device already connected, skipping");
+                return Ok((*current).clone());
+            }
+
+            info!(%target_serial, "Attempting to connect to specific device");
+            devices
+                .into_iter()
+                .find(|d| d.serial == target_serial)
+                .with_context(|| format!("Requested device {target_serial} not available"))?
+        } else {
+            info!(prefer_usb, "Attempting to connect to first available device");
+
+            if devices.is_empty() {
+                bail!("No devices available");
+            }
+
+            // Sort devices by USB/wireless preference
+            devices.sort_by_key(|d| {
+                let is_usb = !d.serial.contains(':');
+                if prefer_usb { !is_usb } else { is_usb }
+            });
+
+            devices.first().cloned().context("No devices available")?
+        };
+
+        // Serialize connect/disconnect operations to avoid races
+        let _op_guard = self.device_op_mutex.lock().await;
+
+        if let Some(target) = serial
+            && let Some(current) = self.try_current_device().await
+            && current.serial == target
+        {
+            info!(serial = %target, "Device already connected, skipping");
+            return Ok((*current).clone());
+        }
+
+        info!(serial = %target_device.serial, "Found device, connecting...");
 
         let inner_device = forensic_adb::Device::new(
             adb_host,
-            first_device.serial.clone(),
-            first_device.info.clone(),
+            target_device.serial.clone(),
+            target_device.info.clone(),
         )
         .await
         .context("Failed to connect to device")?;
 
         let device = AdbDevice::new(inner_device).await?;
-        info!(serial = %device.serial, "Device connected successfully");
+        let prev = self.try_current_device().await;
 
         // Clean up old APKs (might be leftovers from interrupted installs)
         device.clean_temp_apks().await?;
 
-        self.set_device(Some(device.clone()), false).await?;
+        let set_ok = if let Some(prev_dev) = &prev {
+            debug!(from = %prev_dev.serial, to = %device.serial, "Switching connected device");
+            self.set_device(Some(device.clone()), Some(&prev_dev.serial)).await?
+        } else {
+            debug!(to = %device.serial, "Setting first connected device");
+            self.set_device(Some(device.clone()), None).await?
+        };
+
+        if !set_ok {
+            bail!("Failed to switch device: current changed concurrently");
+        }
+
+        match prev {
+            Some(prev_dev) if prev_dev.serial != device.serial => {
+                let new_name = device.name.as_deref().unwrap_or("Unknown");
+                Toast::send(
+                    "Switched device".to_string(),
+                    format!("{} ({})", new_name, device.serial),
+                    false,
+                    Some(Duration::from_secs(3)),
+                );
+            }
+            None => {
+                Toast::send(
+                    "Connected to device".to_string(),
+                    format!(
+                        "{} ({})",
+                        device.name.as_ref().unwrap_or(&"Unknown".to_string()),
+                        device.serial
+                    ),
+                    false,
+                    Some(Duration::from_secs(3)),
+                );
+            }
+            _ => {}
+        }
+
         self.refresh_adb_state().await;
         Ok(device)
     }
 
     /// Disconnects the current ADB device
+    ///
+    /// # Arguments
+    /// * `serial` - Optional serial number to target. If None, disconnects current device.
+    ///              If Some, only disconnects if the current device matches this serial.
     #[instrument(skip(self), err)]
-    async fn disconnect_device(&self) -> Result<()> {
-        ensure!(
-            self.device.read().await.is_some(),
-            "Cannot disconnect from a device when none is connected"
-        );
-        info!("Disconnecting from device");
-        self.set_device(None, false).await?;
-        self.refresh_adb_state().await;
+    async fn disconnect_device(&self, serial: Option<&str>) -> Result<()> {
+        let _op_guard = self.device_op_mutex.lock().await;
+
+        let current = self.try_current_device().await;
+        let Some(current) = current else {
+            bail!("Cannot disconnect from a device when none is connected");
+        };
+
+        if let Some(target_serial) = serial
+            && current.serial != target_serial
+        {
+            debug!(
+                current = %current.serial,
+                target = %target_serial,
+                "Ignoring disconnect request for different device"
+            );
+            return Ok(());
+        }
+
+        info!(serial = %current.serial, "Disconnecting from device");
+        let name = current.name.clone();
+        let serial_owned = current.serial.clone();
+
+        let cleared = self.set_device(None, Some(&serial_owned)).await?;
+
+        if cleared {
+            Toast::send(
+                "Disconnected from device".to_string(),
+                format!("{} ({})", name.unwrap_or_else(|| "Unknown".to_string()), serial_owned),
+                true,
+                Some(Duration::from_secs(3)),
+            );
+            self.refresh_adb_state().await;
+        }
+
         Ok(())
     }
 
@@ -742,7 +894,8 @@ impl AdbHandler {
         debug!(serial = %device.serial, "Refreshing device data");
         let mut device_clone = (*device).clone();
         device_clone.refresh().await?;
-        self.set_device(Some(device_clone), true).await?;
+
+        let _ = self.set_device(Some(device_clone), Some(&device.serial)).await?;
         debug!("Device data refreshed successfully");
         Ok(())
     }
@@ -934,32 +1087,32 @@ impl AdbHandler {
     /// Refreshes the ADB state based on the current device and server status
     #[instrument(skip(self))]
     async fn refresh_adb_state(&self) {
-        let mut adb_state_lock = self.adb_state.write().await;
-        let current_state = adb_state_lock.clone();
+        let mut devices_list: Vec<DeviceBrief> = vec![];
+        let current_state = self.adb_state.read().await.clone();
         let new_state = if !self.is_server_running().await {
+            self.emit_devices_list(&[] as &[DeviceBrief]).await;
             match current_state {
                 AdbState::ServerStartFailed => AdbState::ServerStartFailed,
                 AdbState::ServerStarting => AdbState::ServerStarting,
                 _ => AdbState::ServerNotRunning,
             }
-        } else if self.try_current_device().await.is_some() {
-            // Get full list for count
-            match self.get_adb_devices().await {
-                Ok(devices) => {
-                    let count = devices.len() as u32;
-                    AdbState::DeviceConnected { count }
-                }
-                Err(_) => AdbState::DeviceConnected { count: 1 },
-            }
         } else {
             match self.get_adb_devices().await {
                 Ok(devices) => {
-                    if devices.is_empty() {
+                    self.emit_devices_list(&devices).await;
+
+                    devices_list = devices.clone();
+
+                    // Choose state based on presence
+                    let device_serials =
+                        devices.iter().map(|d| d.serial.clone()).collect::<Vec<_>>();
+                    if self.try_current_device().await.is_some() {
+                        AdbState::DeviceConnected
+                    } else if devices.is_empty() {
                         AdbState::NoDevices
                     } else if devices.iter().all(|d| d.state == DeviceState::Unauthorized) {
-                        AdbState::DeviceUnauthorized { count: devices.len() as u32 }
+                        AdbState::DeviceUnauthorized
                     } else {
-                        let device_serials = devices.iter().map(|d| d.serial.clone()).collect();
                         AdbState::DevicesAvailable(device_serials)
                     }
                 }
@@ -968,6 +1121,7 @@ impl AdbHandler {
                         error = e.as_ref() as &dyn Error,
                         "Failed to get ADB devices for state refresh"
                     );
+                    self.emit_devices_list(&[] as &[DeviceBrief]).await;
                     // Preserve failure/start states if they were set
                     match current_state {
                         AdbState::ServerStartFailed => AdbState::ServerStartFailed,
@@ -978,6 +1132,7 @@ impl AdbHandler {
             }
         };
 
+        let mut adb_state_lock = self.adb_state.write().await;
         if *adb_state_lock != new_state {
             debug!(old_state = ?*adb_state_lock, new_state = ?new_state, "ADB state changed");
             *adb_state_lock = new_state.clone();
@@ -985,5 +1140,102 @@ impl AdbHandler {
         } else {
             trace!(state = ?new_state, "ADB state unchanged");
         }
+
+        if let Err(e) = self.resolve_device_names(&devices_list).await {
+            warn!(error = e.as_ref() as &dyn Error, "Resolving device names failed");
+        }
+    }
+
+    /// Emits the AdbDevicesList signal using the provided devices and cached names
+    async fn emit_devices_list(&self, devices: &[DeviceBrief]) {
+        let current = self.try_current_device().await;
+        if let Some(dev) = &current
+            && dev.name.is_some()
+        {
+            self.names_cache.write().await.insert(dev.serial.clone(), dev.name.clone().unwrap());
+        }
+
+        let cache = self.names_cache.read().await;
+        let list = devices
+            .iter()
+            .map(|d| {
+                let is_wireless = d.serial.contains(':');
+                let name = cache.get(&d.serial).cloned();
+                AdbDeviceBrief {
+                    serial: d.serial.clone(),
+                    is_wireless,
+                    state: d.state.clone().into(),
+                    name,
+                }
+            })
+            .collect::<Vec<_>>();
+        AdbDevicesList { value: list }.send_signal_to_dart();
+    }
+
+    /// Resolves and caches friendly names for ready devices missing entries, then re-emits list
+    #[instrument(skip(self), err)]
+    async fn resolve_device_names(&self, devices: &[DeviceBrief]) -> Result<()> {
+        let cache = self.names_cache.read().await;
+        let current = self.try_current_device().await;
+        let current_serial = current.as_ref().map(|d| d.serial.clone());
+        let to_resolve = devices
+            .iter()
+            .filter(|d| d.state == DeviceState::Device)
+            .filter(|d| Some(d.serial.as_str()) != current_serial.as_deref())
+            .filter(|d| !cache.contains_key(&d.serial))
+            .cloned()
+            .collect::<Vec<_>>();
+        drop(cache);
+
+        if to_resolve.is_empty() {
+            return Ok(());
+        }
+
+        let adb_host = self.adb_host.clone();
+        let all = adb_host.devices::<Vec<_>>().await?;
+        let mut resolved: HashMap<String, String> = HashMap::new();
+        for d in to_resolve {
+            if let Some(entry) = all.iter().find(|e| e.serial == d.serial) {
+                let device = forensic_adb::Device::new(
+                    adb_host.clone(),
+                    entry.serial.clone(),
+                    entry.info.clone(),
+                )
+                .await?;
+                if let Ok(name) = Self::query_identity(&device).await {
+                    resolved.insert(entry.serial.clone(), name);
+                }
+            }
+        }
+
+        if !resolved.is_empty() {
+            self.names_cache.write().await.extend(resolved);
+            self.emit_devices_list(devices).await;
+        }
+
+        Ok(())
+    }
+
+    async fn query_identity(device: &forensic_adb::Device) -> Result<String> {
+        let man = tokio::time::timeout(
+            Duration::from_millis(800),
+            device.execute_host_shell_command("getprop ro.product.manufacturer"),
+        )
+        .await
+        .context("\"getprop ro.product.manufacturer\" timeout")??
+        .trim()
+        .to_string();
+        let model = tokio::time::timeout(
+            Duration::from_millis(800),
+            device.execute_host_shell_command("getprop ro.product.model"),
+        )
+        .await
+        .context("\"getprop ro.product.model\" timeout")??
+        .trim()
+        .to_string();
+        if man.is_empty() && model.is_empty() {
+            bail!("empty identity");
+        }
+        Ok(if man.is_empty() { model } else { format!("{man} {model}") })
     }
 }

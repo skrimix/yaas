@@ -158,7 +158,7 @@ impl Downloader {
                     *legacy_flag = settings.write_legacy_release_json;
                 }
 
-                panic!("Settings stream closed for Downloader");
+                panic!("Settings stream closed");
             }
         }.instrument(info_span!("task_handle_settings_updates")),
         );

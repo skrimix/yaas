@@ -2,14 +2,13 @@ use rinf::{RustSignal, SignalPiece};
 use serde::Serialize;
 
 use crate::models::{
-    DeviceType, InstalledPackage, SpaceInfo, vendor::quest_controller::HeadsetControllersInfo,
+    InstalledPackage, SpaceInfo, vendor::quest_controller::HeadsetControllersInfo,
 };
 
 #[derive(Serialize, SignalPiece)]
 pub struct AdbDevice {
-    pub name: String,
+    pub name: Option<String>,
     pub product: String,
-    pub device_type: DeviceType,
     pub serial: String,
     pub is_wireless: bool,
     pub battery_level: u8,
@@ -28,7 +27,6 @@ impl From<crate::adb::device::AdbDevice> for AdbDevice {
         AdbDevice {
             name: device.name,
             product: device.product,
-            device_type: device.device_type,
             serial: device.serial,
             is_wireless: device.is_wireless,
             battery_level: device.battery_level,

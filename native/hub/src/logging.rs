@@ -88,16 +88,11 @@ impl SignalLayer {
             async move {
                 let directory_receiver = GetLogsDirectoryRequest::get_dart_signal_receiver();
 
-                loop {
-                    let request = directory_receiver.recv().await;
-                    if let Some(_request) = request {
-                        let logs_path = logs_dir.to_string_lossy().to_string();
-                        GetLogsDirectoryResponse { path: logs_path }.send_signal_to_dart();
-                    } else {
-                        error!("Log directory request channel closed unexpectedly");
-                        break;
-                    }
+                while directory_receiver.recv().await.is_some() {
+                    let logs_path = logs_dir.to_string_lossy().to_string();
+                    GetLogsDirectoryResponse { path: logs_path }.send_signal_to_dart();
                 }
+                panic!("GetLogsDirectoryRequest receiver closed");
             }
             .instrument(info_span!("task_log_request_handler")),
         );

@@ -5,32 +5,23 @@ import '../src/l10n/app_localizations.dart';
 class AdbStateProvider extends ChangeNotifier {
   AdbState _state = const AdbStateServerNotRunning();
   AdbState get state => _state;
-  int get devicesCount {
-    if (_state is AdbStateDevicesAvailable) {
-      return (_state as AdbStateDevicesAvailable).value.length;
-    } else if (_state is AdbStateDeviceConnected) {
-      return (_state as AdbStateDeviceConnected).count;
-    } else if (_state is AdbStateDeviceUnauthorized) {
-      return (_state as AdbStateDeviceUnauthorized).count;
-    }
-    return 0;
-  }
+  List<AdbDeviceBrief> _devicesList = const [];
+  int get devicesCount => _devicesList.length;
 
   AdbStateProvider() {
     AdbState.rustSignalStream.listen((event) {
       _state = event.message;
       notifyListeners();
     });
+    AdbDevicesList.rustSignalStream.listen((event) {
+      _devicesList = List.unmodifiable(event.message.value);
+      notifyListeners();
+    });
   }
 
   bool get isConnected => _state is AdbStateDeviceConnected;
 
-  List<String> get availableDevices {
-    if (_state is AdbStateDevicesAvailable) {
-      return (_state as AdbStateDevicesAvailable).value;
-    }
-    return [];
-  }
+  List<AdbDeviceBrief> get availableDevices => _devicesList;
 
   /// Gets the connection status color based on the current ADB state
   /// - Server not running/no devices: red

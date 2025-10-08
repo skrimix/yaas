@@ -13,6 +13,8 @@ pub enum AdbCommand {
     GetBatteryDump,
     /// Windows-only: Start Meta Quest Casting tool against the current device
     StartCasting,
+    /// Connect to a specific device by its serial
+    ConnectTo(String),
 }
 
 #[derive(Serialize, Deserialize, DartSignal)]
@@ -31,6 +33,7 @@ pub enum AdbCommandType {
     ProximitySensorSet,
     GuardianPausedSet,
     StartCasting,
+    ConnectTo,
 }
 
 #[derive(Debug, Clone, Serialize, Deserialize, SignalPiece)]

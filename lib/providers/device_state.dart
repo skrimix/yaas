@@ -19,7 +19,12 @@ class DeviceState extends ChangeNotifier {
 
   bool get isConnected => _device != null;
 
-  String get deviceName => _device?.name ?? 'N/A';
+  String get deviceName {
+    final device = _device;
+    if (device == null) return 'N/A';
+    return device.name ?? 'Unknown (${device.product})';
+  }
+
   String get deviceSerial => _device?.serial ?? 'N/A';
   bool get isWireless => _device?.isWireless ?? false;
   String get productName => _device?.product ?? 'N/A';

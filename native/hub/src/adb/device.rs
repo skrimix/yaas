@@ -21,7 +21,7 @@ use crate::{
     adb::{PACKAGE_NAME_REGEX, ensure_valid_package},
     apk::get_apk_info,
     models::{
-        DeviceType, InstalledPackage, SPACE_INFO_COMMAND, SpaceInfo, parse_list_apps_dex,
+        InstalledPackage, SPACE_INFO_COMMAND, SpaceInfo, parse_list_apps_dex,
         signals::adb::command::RebootMode,
         vendor::quest_controller::{
             self, CONTROLLER_INFO_COMMAND_DUMPSYS, CONTROLLER_INFO_COMMAND_JSON,
@@ -46,11 +46,9 @@ pub struct AdbDevice {
     #[debug(skip)]
     pub inner: Device,
     /// Human-readable device name
-    pub name: String,
+    pub name: Option<String>,
     /// Product identifier from device
     pub product: String,
-    /// Type of device (e.g. Quest, Quest2, etc.)
-    pub device_type: DeviceType,
     /// Unique device serial number
     pub serial: String,
     /// True if connected over TCP/IP (adb over network)
@@ -68,7 +66,7 @@ pub struct AdbDevice {
 
 impl Display for AdbDevice {
     fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
-        write!(f, "{} ({})", self.name, self.serial)
+        write!(f, "{} ({})", self.name.as_ref().unwrap_or(&"Unknown".to_string()), self.serial)
     }
 }
 
@@ -80,32 +78,54 @@ impl AdbDevice {
     #[instrument(skip(inner), err)]
     pub async fn new(inner: Device) -> Result<Self> {
         let serial = inner.serial.clone();
+        // Heuristic: wireless adb usually uses host:port as serial
+        let is_wireless = serial.contains(':');
         let product = inner
             .info
             .get("product")
             .ok_or_else(|| anyhow!("No product name found in device info"))?
             .to_string();
-        let device_type = DeviceType::from_product_name(&product);
-        let name = match device_type {
-            DeviceType::Unknown => format!("Unknown ({product})"),
-            _ => device_type.to_string(),
-        };
         let mut device = Self {
             inner,
-            name,
+            name: None,
             product,
-            device_type,
             serial,
-            is_wireless: false,
+            is_wireless,
             battery_level: 0,
             controllers: HeadsetControllersInfo::default(),
             space_info: SpaceInfo::default(),
             installed_packages: Vec::new(),
         };
-        // Heuristic: wireless adb usually uses host:port as serial
-        device.is_wireless = device.serial.contains(':');
+
+        // Refresh identity first to use manufacturer + model if available
+        if let Err(e) = device.refresh_identity().await {
+            warn!(error = %e, "Failed to refresh device identity, using fallback name");
+        }
         device.refresh().await.context("Failed to refresh device info")?;
         Ok(device)
+    }
+
+    /// Refresh basic identity (name) using `ro.product.manufacturer` and `ro.product.model`
+    #[instrument(skip(self), err)]
+    async fn refresh_identity(&mut self) -> Result<()> {
+        let manufacturer = self
+            .shell_checked("getprop ro.product.manufacturer")
+            .await
+            .context("Failed to read ro.product.manufacturer")?
+            .trim()
+            .to_string();
+        let model = self
+            .shell_checked("getprop ro.product.model")
+            .await
+            .context("Failed to read ro.product.model")?
+            .trim()
+            .to_string();
+        if !manufacturer.is_empty() && !model.is_empty() {
+            self.name = Some(format!("{} {}", manufacturer, model));
+        } else if !model.is_empty() {
+            self.name = Some(model);
+        }
+        Ok(())
     }
 
     /// Refreshes device information (packages, battery, space)

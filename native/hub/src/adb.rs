@@ -45,14 +45,6 @@ pub fn ensure_valid_package(package_name: &str) -> Result<()> {
     Ok(())
 }
 
-/// Formats IPv6 with brackets for clearer logs and `host:port` concatenation.
-fn display_ip(ip: IpAddr) -> String {
-    match ip {
-        IpAddr::V4(v4) => v4.to_string(),
-        IpAddr::V6(v6) => format!("[{}]", v6),
-    }
-}
-
 /// Handles ADB device connections and commands
 #[derive(Debug)]
 pub struct AdbHandler {
@@ -958,7 +950,7 @@ impl AdbHandler {
                                 .map(|a| a.to_ip_addr())
                             {
                                 debug!(
-                                    ip = %display_ip(addr), port,
+                                    target = %display_target(addr, port),
                                     fullname = %resolved.get_fullname(),
                                     "Found Wireless ADB service, attempting connect"
                                 );
@@ -968,7 +960,7 @@ impl AdbHandler {
                                 tokio::spawn(async move {
                                     if let Err(e) = this.try_connect_wireless_adb(addr, port).await
                                     {
-                                        warn!(error = e.as_ref() as &dyn Error, ip = %display_ip(addr), port, "mDNS auto-connect failed");
+                                        warn!(error = e.as_ref() as &dyn Error, target = %display_target(addr, port), "mDNS auto-connect failed");
                                     }
                                 });
                             }
@@ -1001,7 +993,7 @@ impl AdbHandler {
     }
 
     /// Attempts to connect to a Wireless ADB target discovered via mDNS.
-    #[instrument(skip(self), fields(ip = %display_ip(addr), port), err)]
+    #[instrument(skip(self), fields(target = %display_target(addr, port)), err)]
     async fn try_connect_wireless_adb(&self, addr: IpAddr, port: u16) -> Result<()> {
         self.ensure_server_running().await.ok();
 
@@ -1393,5 +1385,13 @@ impl AdbHandler {
             bail!("empty identity");
         }
         Ok(if man.is_empty() { model } else { format!("{man} {model}") })
+    }
+}
+
+/// Formats wireless ADB target address for logging
+fn display_target(addr: IpAddr, port: u16) -> String {
+    match addr {
+        IpAddr::V4(_) => format!("{}:{}", addr, port),
+        IpAddr::V6(_) => format!("[{}]:{}", addr, port),
     }
 }

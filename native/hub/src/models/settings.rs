@@ -18,14 +18,16 @@ pub enum NavigationRailLabelVisibility {
     All,
 }
 
-#[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize, SignalPiece)]
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize, SignalPiece, Default)]
 pub enum ConnectionType {
+    #[default]
     Usb,
     Wireless,
 }
 
-#[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize, SignalPiece)]
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize, SignalPiece, Default)]
 pub enum DownloadCleanupPolicy {
+    #[default]
     DeleteAfterInstall,
     KeepOneVersion,
     KeepTwoVersions,
@@ -33,6 +35,7 @@ pub enum DownloadCleanupPolicy {
 }
 
 #[derive(Debug, Clone, Serialize, Deserialize, PartialEq, Eq, SignalPiece)]
+#[serde(default)]
 pub struct Settings {
     pub rclone_path: String,
     pub rclone_remote_name: String,
@@ -43,26 +46,20 @@ pub struct Settings {
     pub bandwidth_limit: String,
     pub cleanup_policy: DownloadCleanupPolicy, // TODO: implement
     /// Also write legacy release.json metadata alongside download.json
-    #[serde(default)]
     pub write_legacy_release_json: bool,
-    #[serde(default)]
     pub locale_code: String,
-    #[serde(default)]
     pub navigation_rail_label_visibility: NavigationRailLabelVisibility,
-    #[serde(default)]
     pub startup_page_key: String,
     /// Whether to use system/dynamic color when available
-    #[serde(default)]
     pub use_system_color: bool,
     /// Seed color key from a fixed palette (e.g. "deep_purple")
-    #[serde(default)]
     pub seed_color_key: String,
     /// Preferred theme mode (dark is default)
-    #[serde(default)]
     pub theme_preference: ThemePreference,
     /// List of favorited apps (by original package name)
-    #[serde(default)]
     pub favorite_packages: Vec<String>,
+    /// Discover and auto-connect ADB over Wi‑Fi devices via mDNS
+    pub mdns_auto_connect: bool,
 }
 
 impl Default for Settings {
@@ -71,7 +68,7 @@ impl Default for Settings {
             rclone_path: "rclone".to_string(),
             rclone_remote_name: "FFA-90".to_string(), // TODO: implement first time setup
             adb_path: "adb".to_string(),
-            preferred_connection_type: ConnectionType::Usb,
+            preferred_connection_type: ConnectionType::default(),
             downloads_location: dirs::download_dir()
                 .expect("Failed to get download directory")
                 .join("YAAS")
@@ -82,16 +79,17 @@ impl Default for Settings {
                 .join("YAAS_backups")
                 .to_string_lossy()
                 .to_string(),
-            bandwidth_limit: "".to_string(),
-            cleanup_policy: DownloadCleanupPolicy::DeleteAfterInstall,
+            bandwidth_limit: String::new(),
+            cleanup_policy: DownloadCleanupPolicy::default(),
             write_legacy_release_json: false,
             locale_code: "system".to_string(),
-            navigation_rail_label_visibility: NavigationRailLabelVisibility::Selected,
+            navigation_rail_label_visibility: NavigationRailLabelVisibility::default(),
             startup_page_key: "home".to_string(),
             use_system_color: false,
             seed_color_key: "deep_purple".to_string(),
             theme_preference: ThemePreference::Dark,
             favorite_packages: Vec::new(),
+            mdns_auto_connect: true,
         }
     }
 }

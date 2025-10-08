@@ -556,6 +556,19 @@ class _SettingsScreenState extends State<SettingsScreen> {
             isDirectory: false,
             currentValue: _currentFormSettings.adbPath,
           ),
+          const SizedBox(height: SettingsConstants.verticalSpacing),
+          SwitchListTile(
+            title: Text(l10n.settingsMdnsAutoConnect),
+            subtitle: Text(l10n.settingsMdnsAutoConnectHelp),
+            value: _currentFormSettings.mdnsAutoConnect,
+            onChanged: (v) {
+              setState(() {
+                _currentFormSettings =
+                    _currentFormSettings.copyWith(mdnsAutoConnect: v);
+                _checkForChanges();
+              });
+            },
+          ),
           // TODO: implement
           // _buildDropdownSetting<ConnectionType>(
           //   label: l10n.settingsPreferredConnection,

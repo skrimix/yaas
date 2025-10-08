@@ -175,6 +175,15 @@ impl SettingsHandler {
 
         // TODO: Validate settings
 
+        // If paths came from defaults, ensure those directories exist.
+        let defaults = Settings::default();
+        if settings.downloads_location == defaults.downloads_location {
+            let _ = fs::create_dir_all(&settings.downloads_location);
+        }
+        if settings.backups_location == defaults.backups_location {
+            let _ = fs::create_dir_all(&settings.backups_location);
+        }
+
         debug!(settings = ?settings, "Loaded application settings successfully");
         self.on_settings_change(settings.clone(), None, true);
         Ok(settings)

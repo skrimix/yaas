@@ -106,6 +106,13 @@ class AppLocalizationsEn extends AppLocalizations {
   String get settingsConnectionWireless => 'Wireless';
 
   @override
+  String get settingsMdnsAutoConnect => 'Auto-connect ADB over Wi‑Fi';
+
+  @override
+  String get settingsMdnsAutoConnectHelp =>
+      'Discover devices via mDNS on the local network and attempt \'adb connect\' automatically. Takes effect after restart.';
+
+  @override
   String get settingsSectionDownloader => 'Downloader';
 
   @override

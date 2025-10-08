@@ -290,6 +290,18 @@ abstract class AppLocalizations {
   /// **'Wireless'**
   String get settingsConnectionWireless;
 
+  /// No description provided for @settingsMdnsAutoConnect.
+  ///
+  /// In en, this message translates to:
+  /// **'Auto-connect ADB over Wi‑Fi'**
+  String get settingsMdnsAutoConnect;
+
+  /// No description provided for @settingsMdnsAutoConnectHelp.
+  ///
+  /// In en, this message translates to:
+  /// **'Discover devices via mDNS on the local network and attempt \'adb connect\' automatically. Takes effect after restart.'**
+  String get settingsMdnsAutoConnectHelp;
+
   /// No description provided for @settingsSectionDownloader.
   ///
   /// In en, this message translates to:

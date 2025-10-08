@@ -32,6 +32,8 @@
     "settingsPreferredConnection": "Предпочтительный тип подключения",
     "settingsConnectionUsb": "USB",
     "settingsConnectionWireless": "Беспроводной",
+    "settingsMdnsAutoConnect": "Автоподключение ADB по Wi‑Fi",
+    "settingsMdnsAutoConnectHelp": "Обнаруживать устройства через mDNS в локальной сети и автоматически выполнять 'adb connect'. Изменение вступит в силу после перезапуска.",
     "settingsSectionDownloader": "Загрузчик",
     "settingsSectionAppearance": "Оформление",
     "settingsUseSystemColor": "Использовать системный цвет",

@@ -107,6 +107,13 @@ class AppLocalizationsRu extends AppLocalizations {
   String get settingsConnectionWireless => 'Беспроводной';
 
   @override
+  String get settingsMdnsAutoConnect => 'Автоподключение ADB по Wi‑Fi';
+
+  @override
+  String get settingsMdnsAutoConnectHelp =>
+      'Обнаруживать устройства через mDNS в локальной сети и автоматически выполнять \'adb connect\'. Изменение вступит в силу после перезапуска.';
+
+  @override
   String get settingsSectionDownloader => 'Загрузчик';
 
   @override

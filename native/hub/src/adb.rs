@@ -1,10 +1,11 @@
-use std::{collections::HashMap, error::Error, path::Path, sync::Arc, time::Duration};
+use std::{collections::HashMap, error::Error, net::IpAddr, path::Path, sync::Arc, time::Duration};
 
 use anyhow::{Context, Result, anyhow, bail, ensure};
 use derive_more::Debug;
 use device::AdbDevice;
 use forensic_adb::{DeviceBrief, DeviceState};
 use lazy_regex::{Lazy, Regex, lazy_regex};
+use mdns_sd::{ServiceDaemon, ServiceEvent};
 use rinf::{DartSignal, RustSignal};
 use tokio::{
     process::Command,
@@ -44,6 +45,14 @@ pub fn ensure_valid_package(package_name: &str) -> Result<()> {
     Ok(())
 }
 
+/// Formats IPv6 with brackets for clearer logs and `host:port` concatenation.
+fn display_ip(ip: IpAddr) -> String {
+    match ip {
+        IpAddr::V4(v4) => v4.to_string(),
+        IpAddr::V6(v6) => format!("[{}]", v6),
+    }
+}
+
 /// Handles ADB device connections and commands
 #[derive(Debug)]
 pub struct AdbHandler {
@@ -63,6 +72,8 @@ pub struct AdbHandler {
     cancel_token: RwLock<CancellationToken>,
     /// Cache of serial -> friendly name
     names_cache: RwLock<HashMap<String, String>>,
+    /// Whether mDNS auto-connect is enabled
+    mdns_auto_connect: bool,
 }
 
 impl AdbHandler {
@@ -73,8 +84,9 @@ impl AdbHandler {
     /// Arc-wrapped AdbHandler that manages ADB device connections
     #[instrument(skip(settings_stream))]
     pub async fn new(mut settings_stream: WatchStream<Settings>) -> Arc<Self> {
-        let adb_path =
-            settings_stream.next().await.expect("Settings stream closed on adb init").adb_path;
+        let first_settings =
+            settings_stream.next().await.expect("Settings stream closed on adb init");
+        let adb_path = first_settings.adb_path;
         let adb_path = if adb_path.is_empty() { None } else { Some(adb_path) };
         let handle = Arc::new(Self {
             adb_host: if cfg!(target_os = "windows") {
@@ -91,6 +103,7 @@ impl AdbHandler {
             device_op_mutex: Mutex::new(()),
             cancel_token: RwLock::new(CancellationToken::new()),
             names_cache: RwLock::new(HashMap::new()),
+            mdns_auto_connect: first_settings.mdns_auto_connect,
         });
         tokio::spawn(
             {
@@ -202,6 +215,22 @@ impl AdbHandler {
                 result
             }
         });
+
+        // mDNS auto-connect for ADB-over-Wi‑Fi targets (applies on startup)
+        if self.mdns_auto_connect {
+            tokio::spawn({
+                let handle = self.clone();
+                let cancel_token = self.cancel_token.read().await.clone();
+                async move {
+                    let result =
+                        cancel_token.run_until_cancelled(handle.run_mdns_auto_connect()).await;
+                    debug!(result = ?result, "mDNS auto-connect task finished");
+                    result
+                }
+            });
+        } else {
+            info!("mDNS auto-connect disabled (enable in Settings, takes effect after restart)");
+        }
     }
 
     /// Restarts the ADB handling
@@ -882,6 +911,133 @@ impl AdbHandler {
                 if let Err(e) = self.refresh_device().await {
                     error!(error = e.as_ref() as &dyn Error, "Periodic device refresh failed");
                 }
+            }
+        }
+    }
+
+    /// Browses for ADB-over-Wi‑Fi services via mDNS and attempts ADB `connect`.
+    #[instrument(skip(self), err)]
+    async fn run_mdns_auto_connect(self: Arc<AdbHandler>) -> Result<()> {
+        if let Err(e) = self.ensure_server_running().await {
+            warn!(error = e.as_ref() as &dyn Error, "ADB server not running prior to mDNS start");
+        }
+
+        const MDNS_SERVICE_TYPES: &[&str] =
+            &["_adb-tls-connect._tcp.local.", "_adb_secure_connect._tcp.local."];
+
+        let mdns = match ServiceDaemon::new() {
+            Ok(d) => d,
+            Err(e) => {
+                warn!(error = &e as &dyn Error, "Failed to start mDNS daemon");
+                return Err(e.into());
+            }
+        };
+
+        let mut workers = Vec::new();
+
+        for ty in MDNS_SERVICE_TYPES {
+            let rx = match mdns.browse(ty) {
+                Ok(rx) => rx,
+                Err(e) => {
+                    warn!(error = &e as &dyn Error, service = %ty, "Failed to start mDNS browse");
+                    continue;
+                }
+            };
+            let this = self.clone();
+
+            let handle = tokio::spawn(async move {
+                debug!("mDNS: browsing `{}`", ty);
+                loop {
+                    match rx.recv_async().await {
+                        Ok(ServiceEvent::ServiceResolved(resolved)) => {
+                            let port = resolved.get_port();
+                            for addr in resolved
+                                .get_addresses()
+                                .iter()
+                                .filter(|a| !a.is_loopback())
+                                .map(|a| a.to_ip_addr())
+                            {
+                                debug!(
+                                    ip = %display_ip(addr), port,
+                                    fullname = %resolved.get_fullname(),
+                                    "Found Wireless ADB service, attempting connect"
+                                );
+
+                                // Fire-and-forget
+                                let this = this.clone();
+                                tokio::spawn(async move {
+                                    if let Err(e) = this.try_connect_wireless_adb(addr, port).await
+                                    {
+                                        warn!(error = e.as_ref() as &dyn Error, ip = %display_ip(addr), port, "mDNS auto-connect failed");
+                                    }
+                                });
+                            }
+                        }
+                        Ok(ServiceEvent::ServiceRemoved(_, fullname)) => {
+                            debug!("mDNS: service removed: {}", fullname);
+                        }
+                        Ok(ServiceEvent::ServiceFound(_, fullname)) => {
+                            trace!("mDNS: service found: {}", fullname);
+                        }
+                        Ok(ServiceEvent::SearchStarted(s)) => trace!("mDNS: search started: {}", s),
+                        Ok(ServiceEvent::SearchStopped(s)) => trace!("mDNS: search stopped: {}", s),
+                        Ok(_) => {}
+                        Err(e) => {
+                            warn!(error = &e as &dyn Error, service = %ty, "mDNS browse channel closed");
+                            break;
+                        }
+                    }
+                }
+            });
+
+            workers.push(handle);
+        }
+
+        for w in workers {
+            let _ = w.await;
+        }
+
+        Ok(())
+    }
+
+    /// Attempts to connect to a Wireless ADB target discovered via mDNS.
+    #[instrument(skip(self), fields(ip = %display_ip(addr), port), err)]
+    async fn try_connect_wireless_adb(&self, addr: IpAddr, port: u16) -> Result<()> {
+        self.ensure_server_running().await.ok();
+
+        let target = match addr {
+            IpAddr::V4(_) => format!("{}:{}", addr, port),
+            IpAddr::V6(_) => format!("[{}]:{}", addr, port),
+        };
+
+        if let Ok(devs) = self.adb_host.devices::<Vec<_>>().await {
+            let already = devs.iter().any(|d| {
+                let s = &d.serial;
+                s.contains(&target)
+            });
+            if already {
+                debug!("Wireless ADB target already connected, skipping");
+                return Ok(());
+            }
+        }
+
+        info!(%target, "Trying ADB connect to wireless target");
+        match tokio::time::timeout(Duration::from_secs(10), self.adb_host.connect_device(&target))
+            .await
+        {
+            Ok(Ok(msg)) => {
+                info!(response = %msg, "ADB connect ok");
+                // Let the tracker pick the device up; still refresh the state quickly.
+                self.refresh_adb_state().await;
+                Ok(())
+            }
+            Ok(Err(e)) => {
+                warn!(error = &e as &dyn Error, %target, "ADB connect failed");
+                Err(e.into())
+            }
+            Err(_) => {
+                warn!(%target, "ADB connect timed out");
+                bail!("connect timeout");
             }
         }
     }

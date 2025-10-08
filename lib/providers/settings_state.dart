@@ -21,6 +21,7 @@ class SettingsState extends ChangeNotifier {
     seedColorKey: 'deep_purple',
     themePreference: ThemePreference.dark,
     favoritePackages: const [],
+    mdnsAutoConnect: true,
   );
 
   bool _isLoading = false;

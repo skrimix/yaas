@@ -32,6 +32,8 @@
     "settingsPreferredConnection": "Preferred Connection Type",
     "settingsConnectionUsb": "USB",
     "settingsConnectionWireless": "Wireless",
+    "settingsMdnsAutoConnect": "Auto-connect ADB over Wi‑Fi",
+    "settingsMdnsAutoConnectHelp": "Discover devices via mDNS on the local network and attempt 'adb connect' automatically. Takes effect after restart.",
     "settingsSectionDownloader": "Downloader",
     "settingsSectionAppearance": "Appearance",
     "settingsUseSystemColor": "Use system color",

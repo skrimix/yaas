@@ -609,5 +609,5 @@
             "cloudCode": {"type": "String"}
         }
     },
-"emptyValue": "(empty)"
+    "emptyValue": "(empty)"
 }

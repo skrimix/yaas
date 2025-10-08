@@ -104,7 +104,7 @@ class AppLocalizationsRu extends AppLocalizations {
   String get settingsConnectionUsb => 'USB';
 
   @override
-  String get settingsConnectionWireless => 'Беспроводное';
+  String get settingsConnectionWireless => 'Беспроводной';
 
   @override
   String get settingsSectionDownloader => 'Загрузчик';

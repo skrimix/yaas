@@ -66,12 +66,23 @@ class ConnectionDiagnosticsDialog extends StatelessWidget {
     required String title,
     required String description,
     Widget? trailing,
+    Widget? additionalContent,
   }) {
     final color = _levelColor(level);
     return ListTile(
       leading: Icon(_levelIcon(level), color: color),
       title: Text(title),
-      subtitle: Text(description),
+      subtitle: additionalContent != null
+          ? Column(
+              crossAxisAlignment: CrossAxisAlignment.start,
+              mainAxisSize: MainAxisSize.min,
+              children: [
+                Text(description),
+                const SizedBox(height: 4),
+                additionalContent,
+              ],
+            )
+          : Text(description),
       trailing: trailing,
       contentPadding: const EdgeInsets.symmetric(horizontal: 8),
       dense: false,
@@ -116,6 +127,28 @@ class ConnectionDiagnosticsDialog extends StatelessWidget {
         return l10n.diagnosticsDevicesAvailableDesc(count <= 0 ? 1 : count);
       }
       return l10n.diagnosticsUnknownDesc;
+    }
+
+    Widget? devicesListWidget() {
+      if (adb.availableDevices.isEmpty) return null;
+      return Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        mainAxisSize: MainAxisSize.min,
+        children: adb.availableDevices.map((device) {
+          final name = device.serial;
+          final state = device.state.name;
+          return Padding(
+            padding: const EdgeInsets.symmetric(vertical: 2),
+            child: Text(
+              '• $name ($state)',
+              style: Theme.of(context)
+                  .textTheme
+                  .bodySmall
+                  ?.copyWith(fontFamily: 'monospace'),
+            ),
+          );
+        }).toList(),
+      );
     }
 
     String authDesc() {
@@ -164,6 +197,7 @@ class ConnectionDiagnosticsDialog extends StatelessWidget {
               level: devicesLevel,
               title: l10n.diagnosticsDevices,
               description: devicesDesc(),
+              additionalContent: devicesListWidget(),
             ),
             _item(
               context,

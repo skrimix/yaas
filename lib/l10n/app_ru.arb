@@ -31,7 +31,7 @@
     "settingsAdbPath": "Путь к ADB",
     "settingsPreferredConnection": "Предпочтительный тип подключения",
     "settingsConnectionUsb": "USB",
-    "settingsConnectionWireless": "Беспроводное",
+    "settingsConnectionWireless": "Беспроводной",
     "settingsSectionDownloader": "Загрузчик",
     "settingsSectionAppearance": "Оформление",
     "settingsUseSystemColor": "Использовать системный цвет",
@@ -602,5 +602,5 @@
             "cloudCode": {"type": "String"}
         }
     },
-"emptyValue": "(пусто)"
+    "emptyValue": "(пусто)"
 }

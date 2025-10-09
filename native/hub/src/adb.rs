@@ -1350,7 +1350,7 @@ impl AdbHandler {
                     entry.info.clone(),
                 )
                 .await?;
-                if let Ok(name) = Self::query_identity(&device).await {
+                if let Ok(name) = AdbDevice::query_identity(&device).await {
                     resolved.insert(entry.serial.clone(), name);
                 }
             }
@@ -1362,29 +1362,6 @@ impl AdbHandler {
         }
 
         Ok(())
-    }
-
-    async fn query_identity(device: &forensic_adb::Device) -> Result<String> {
-        let man = tokio::time::timeout(
-            Duration::from_millis(800),
-            device.execute_host_shell_command("getprop ro.product.manufacturer"),
-        )
-        .await
-        .context("\"getprop ro.product.manufacturer\" timeout")??
-        .trim()
-        .to_string();
-        let model = tokio::time::timeout(
-            Duration::from_millis(800),
-            device.execute_host_shell_command("getprop ro.product.model"),
-        )
-        .await
-        .context("\"getprop ro.product.model\" timeout")??
-        .trim()
-        .to_string();
-        if man.is_empty() && model.is_empty() {
-            bail!("empty identity");
-        }
-        Ok(if man.is_empty() { model } else { format!("{man} {model}") })
     }
 }
 

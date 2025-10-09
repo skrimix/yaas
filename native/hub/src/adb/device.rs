@@ -108,24 +108,40 @@ impl AdbDevice {
     /// Refresh basic identity (name) using `ro.product.manufacturer` and `ro.product.model`
     #[instrument(skip(self), err)]
     async fn refresh_identity(&mut self) -> Result<()> {
-        let manufacturer = self
-            .shell_checked("getprop ro.product.manufacturer")
-            .await
-            .context("Failed to read ro.product.manufacturer")?
-            .trim()
-            .to_string();
-        let model = self
-            .shell_checked("getprop ro.product.model")
-            .await
-            .context("Failed to read ro.product.model")?
-            .trim()
-            .to_string();
-        if !manufacturer.is_empty() && !model.is_empty() {
-            self.name = Some(format!("{} {}", manufacturer, model));
-        } else if !model.is_empty() {
-            self.name = Some(model);
-        }
+        let identity = Self::query_identity(&self.inner).await?;
+        self.name = Some(identity);
         Ok(())
+    }
+
+    /// Queries manufacturer + model from a `forensic_adb::Device` and returns a combined string.
+    /// If manufacturer is empty, returns just model.
+    #[instrument(skip(device), err)]
+    pub async fn query_identity(device: &Device) -> Result<String> {
+        let manufacturer = tokio::time::timeout(
+            Duration::from_millis(800),
+            device.execute_host_shell_command("getprop ro.product.manufacturer"),
+        )
+        .await
+        .context("Timed out reading ro.product.manufacturer")?
+        .context("Failed to read ro.product.manufacturer")?
+        .trim()
+        .to_string();
+        let model = tokio::time::timeout(
+            Duration::from_millis(800),
+            device.execute_host_shell_command("getprop ro.product.model"),
+        )
+        .await
+        .context("Timed out reading ro.product.model")?
+        .context("Failed to read ro.product.model")?
+        .trim()
+        .to_string();
+        if !manufacturer.is_empty() && !model.is_empty() {
+            Ok(format!("{} {}", manufacturer, model))
+        } else if !model.is_empty() {
+            Ok(model)
+        } else {
+            bail!("empty identity");
+        }
     }
 
     /// Refreshes device information (packages, battery, space)

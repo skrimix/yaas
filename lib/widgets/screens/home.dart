@@ -10,6 +10,15 @@ import '../common/no_device_connected_indicator.dart';
 class Home extends StatelessWidget {
   const Home({super.key});
 
+  // Applies a monochrome tint that follows the theme.
+  ColorFilter? _monoIconFilter(BuildContext context) {
+    if (Theme.of(context).brightness == Brightness.dark) {
+      return null;
+    }
+    final scheme = Theme.of(context).colorScheme;
+    return ColorFilter.mode(scheme.onSurfaceVariant, BlendMode.srcIn);
+  }
+
   Widget _buildDeviceStatus(
     BuildContext context, {
     required String title,
@@ -19,10 +28,14 @@ class Home extends StatelessWidget {
     bool isDimmed = false,
     AppLocalizations? l10n,
   }) {
+    final clamped = batteryLevel.clamp(0, 100).toDouble();
+
+    final tooltip = '$title\n'
+        '${status != null ? '${(l10n ?? AppLocalizations.of(context)).statusLabel}: $status\n' : ''}'
+        '${(l10n ?? AppLocalizations.of(context)).batteryLabel}: $batteryLevel%';
+
     return Tooltip(
-      message: '$title\n'
-          '${status != null ? '${(l10n ?? AppLocalizations.of(context)).statusLabel}: $status\n' : ''}'
-          '${(l10n ?? AppLocalizations.of(context)).batteryLabel}: $batteryLevel%',
+      message: tooltip,
       child: Opacity(
         opacity: isDimmed ? 0.5 : 1.0,
         child: Column(
@@ -38,7 +51,7 @@ class Home extends StatelessWidget {
               ),
               child: FractionallySizedBox(
                 alignment: Alignment.centerLeft,
-                widthFactor: batteryLevel / 100,
+                widthFactor: clamped / 100,
                 child: Container(
                   decoration: BoxDecoration(
                     borderRadius: BorderRadius.circular(2),
@@ -125,15 +138,7 @@ class Home extends StatelessWidget {
                                           deviceState.leftController),
                                   icon: SvgPicture.asset(
                                     'assets/svg/controller_l.svg',
-                                    colorFilter: Theme.of(context).brightness ==
-                                            Brightness.light
-                                        ? ColorFilter.mode(
-                                            Theme.of(context)
-                                                .colorScheme
-                                                .onSurfaceVariant,
-                                            BlendMode.srcIn,
-                                          )
-                                        : null,
+                                    colorFilter: _monoIconFilter(context),
                                   ),
                                   isDimmed: deviceState.leftController?.status
                                       is! ControllerStatusActive,
@@ -146,15 +151,7 @@ class Home extends StatelessWidget {
                                   batteryLevel: deviceState.batteryLevel,
                                   icon: SvgPicture.asset(
                                     'assets/svg/headset.svg',
-                                    colorFilter: Theme.of(context).brightness ==
-                                            Brightness.light
-                                        ? ColorFilter.mode(
-                                            Theme.of(context)
-                                                .colorScheme
-                                                .onSurfaceVariant,
-                                            BlendMode.srcIn,
-                                          )
-                                        : null,
+                                    colorFilter: _monoIconFilter(context),
                                   ),
                                   l10n: l10n,
                                 ),
@@ -169,15 +166,7 @@ class Home extends StatelessWidget {
                                           deviceState.rightController),
                                   icon: SvgPicture.asset(
                                     'assets/svg/controller_r.svg',
-                                    colorFilter: Theme.of(context).brightness ==
-                                            Brightness.light
-                                        ? ColorFilter.mode(
-                                            Theme.of(context)
-                                                .colorScheme
-                                                .onSurfaceVariant,
-                                            BlendMode.srcIn,
-                                          )
-                                        : null,
+                                    colorFilter: _monoIconFilter(context),
                                   ),
                                   isDimmed: deviceState.rightController?.status
                                       is! ControllerStatusActive,

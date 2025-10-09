@@ -24,6 +24,9 @@ import 'navigation.dart';
 import 'widgets/common/status_bar.dart';
 
 void main() async {
+  WidgetsFlutterBinding.ensureInitialized();
+  await DesktopWindow.setMinWindowSize(const Size(800, 600));
+
   await initializeRust(messages.assignRustSignal);
 
   VideoPlayerMediaKit.ensureInitialized(
@@ -46,7 +49,6 @@ void main() async {
       child: const YAASApp(),
     ),
   );
-  await DesktopWindow.setMinWindowSize(const Size(800, 600));
 
   messages.Toast.rustSignalStream.listen((message) {
     final toast = message.message;

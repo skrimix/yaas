@@ -466,7 +466,6 @@ class _DeviceSwitcherLabelState extends State<_DeviceSwitcherLabel>
               ),
               clipBehavior: Clip.antiAlias,
               elevation: 8,
-              surfaceTintColor: Colors.white,
               child: InkWell(
                 splashFactory: InkSplash.splashFactory,
                 onTap: () {
@@ -552,9 +551,9 @@ class _AnimatedRefreshButtonState extends State<_AnimatedRefreshButton>
   void _onDeviceStateChanged() {
     if (_isRefreshing && widget.deviceState.device != null) {
       final now = DateTime.now();
-      // Only trigger success animation if device was updated recently after refresh
+      // Trigger success animation if device was updated shortly after refresh
       if (_lastDeviceUpdate != null &&
-          now.difference(_lastDeviceUpdate!).inSeconds < 2) {
+          now.difference(_lastDeviceUpdate!).inSeconds <= 5) {
         _showSuccess();
       }
     }

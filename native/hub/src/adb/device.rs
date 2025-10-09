@@ -51,6 +51,8 @@ pub struct AdbDevice {
     pub product: String,
     /// Unique device serial number
     pub serial: String,
+    /// True device serial number
+    pub true_serial: String,
     /// True if connected over TCP/IP (adb over network)
     pub is_wireless: bool,
     /// Device battery level (0-100)
@@ -75,7 +77,7 @@ impl AdbDevice {
     ///
     /// # Arguments
     /// * `inner` - The underlying forensic_adb Device instance
-    #[instrument(skip(inner), err)]
+    #[instrument(skip(inner), ret, err)]
     pub async fn new(inner: Device) -> Result<Self> {
         let serial = inner.serial.clone();
         // Heuristic: wireless adb usually uses host:port as serial
@@ -85,11 +87,18 @@ impl AdbDevice {
             .get("product")
             .ok_or_else(|| anyhow!("No product name found in device info"))?
             .to_string();
+        let true_serial = inner
+            .execute_host_shell_command("getprop ro.serialno")
+            .await
+            .context("Failed to read ro.serialno")?
+            .trim()
+            .to_string();
         let mut device = Self {
             inner,
             name: None,
             product,
             serial,
+            true_serial,
             is_wireless,
             battery_level: 0,
             controllers: HeadsetControllersInfo::default(),

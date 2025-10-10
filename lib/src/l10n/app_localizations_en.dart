@@ -290,6 +290,11 @@ class AppLocalizationsEn extends AppLocalizations {
   }
 
   @override
+  String statusDeviceInfoWireless(String name, String address, String serial) {
+    return 'Device: $name\nAddress: $address\nSerial: $serial';
+  }
+
+  @override
   String storageTooltip(String available, String total) {
     return '$available free of $total';
   }

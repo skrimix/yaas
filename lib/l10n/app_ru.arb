@@ -134,6 +134,14 @@
             }
         }
     },
+    "statusDeviceInfoWireless": "Устройство: {name}\nАдрес: {address}\nСерийный номер: {serial}",
+    "@statusDeviceInfoWireless": {
+        "placeholders": {
+            "name": {"type": "String"},
+            "address": {"type": "String"},
+            "serial": {"type": "String"}
+        }
+    },
     "storageTooltip": "{available} свободно из {total}",
     "@storageTooltip": {
         "placeholders": {

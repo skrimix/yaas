@@ -139,6 +139,14 @@
             }
         }
     },
+    "statusDeviceInfoWireless": "Device: {name}\nAddress: {address}\nSerial: {serial}",
+    "@statusDeviceInfoWireless": {
+        "placeholders": {
+            "name": {"type": "String", "example": "Quest"},
+            "address": {"type": "String", "example": "192.168.0.10:5555"},
+            "serial": {"type": "String", "example": "1WMHH1234567"}
+        }
+    },
     "storageTooltip": "{available} free of {total}",
     "@storageTooltip": {
         "placeholders": {

@@ -58,10 +58,20 @@ class StatusBar extends StatelessWidget {
     DeviceState deviceState,
     AppLocalizations l10n,
   ) {
+    final isWireless = deviceState.isWireless;
+    final name = deviceState.deviceName;
+    final addr = deviceState.deviceSerial;
+    final trueSerial = deviceState.deviceTrueSerial;
+
+    final tooltip = isWireless
+        ? l10n.statusDeviceInfoWireless(name, addr, trueSerial)
+        : l10n.statusDeviceInfo(name, trueSerial);
+
+    final label = isWireless ? '$name · $addr ($trueSerial)' : '$name · $addr';
+
     return _DeviceSwitcherLabel(
-      tooltip: l10n.statusDeviceInfo(
-          deviceState.deviceName, deviceState.deviceSerial),
-      label: '${deviceState.deviceName} · ${deviceState.deviceSerial}',
+      tooltip: tooltip,
+      label: label,
     );
   }
 
@@ -321,12 +331,14 @@ class _DeviceSwitcherLabelState extends State<_DeviceSwitcherLabel>
     final adb = context.watch<AdbStateProvider>();
     final device = context.watch<DeviceState>();
     final devices = adb.availableDevices;
+    final anyWireless = devices.any((e) => e.isWireless);
     final current = device.isConnected &&
             devices.any((e) => e.serial == device.deviceSerial)
         ? device.deviceSerial
         : null;
 
-    const double menuWidth = 360;
+    // TODO: can we calculate this dynamically?
+    final menuWidth = anyWireless ? 400.0 : 360.0;
     List<Widget> buildMenuItems() {
       final l10n = AppLocalizations.of(context);
       final header = <Widget>[
@@ -375,6 +387,9 @@ class _DeviceSwitcherLabelState extends State<_DeviceSwitcherLabel>
               : serial;
           final subtitle = StringBuffer()
             ..write(serial)
+            ..write(isWireless && entry.trueSerial != null
+                ? ' • ${entry.trueSerial}'
+                : '')
             ..write(' • ')
             ..write(isWireless
                 ? l10n.settingsConnectionWireless
@@ -447,7 +462,7 @@ class _DeviceSwitcherLabelState extends State<_DeviceSwitcherLabel>
                 RoundedRectangleBorder(borderRadius: BorderRadius.circular(8))),
             alignment: Alignment.topCenter,
           ),
-          alignmentOffset: const Offset(-menuWidth / 2, 12),
+          alignmentOffset: Offset(-menuWidth / 2, 12),
           menuChildren: buildMenuItems(),
           builder: (context, controller, child) {
             // Trigger animation when menu opens

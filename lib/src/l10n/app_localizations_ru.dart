@@ -291,6 +291,11 @@ class AppLocalizationsRu extends AppLocalizations {
   }
 
   @override
+  String statusDeviceInfoWireless(String name, String address, String serial) {
+    return 'Устройство: $name\nАдрес: $address\nСерийный номер: $serial';
+  }
+
+  @override
   String storageTooltip(String available, String total) {
     return '$available свободно из $total';
   }

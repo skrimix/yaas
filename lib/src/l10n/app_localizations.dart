@@ -626,6 +626,12 @@ abstract class AppLocalizations {
   /// **'Device: {name}\nSerial: {serial}'**
   String statusDeviceInfo(String name, String serial);
 
+  /// No description provided for @statusDeviceInfoWireless.
+  ///
+  /// In en, this message translates to:
+  /// **'Device: {name}\nAddress: {address}\nSerial: {serial}'**
+  String statusDeviceInfoWireless(String name, String address, String serial);
+
   /// No description provided for @storageTooltip.
   ///
   /// In en, this message translates to:

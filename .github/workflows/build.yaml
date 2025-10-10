@@ -155,6 +155,37 @@ jobs:
         if: matrix.target != 'linux'
         run: flutter build -v ${{ matrix.target }} --release
 
+      - name: Bundle ADB into Windows artifact
+        if: matrix.target == 'windows'
+        shell: pwsh
+        run: |
+          $ErrorActionPreference = 'Stop'
+          $url  = 'https://dl.google.com/android/repository/platform-tools-latest-windows.zip'
+          $zip  = Join-Path $env:RUNNER_TEMP 'platform-tools.zip'
+          $dest = '${{ matrix.build-path }}'
+
+          Write-Host "Downloading platform-tools..."
+          Invoke-WebRequest -Uri $url -OutFile $zip
+
+          Write-Host "Extracting..."
+          $extractDir = Join-Path $env:RUNNER_TEMP 'platform-tools'
+          if (Test-Path $extractDir) { Remove-Item -Recurse -Force $extractDir }
+          Expand-Archive -Path $zip -DestinationPath $env:RUNNER_TEMP -Force
+
+          $pt = Join-Path $env:RUNNER_TEMP 'platform-tools'
+          if (-not (Test-Path $pt)) { $pt = Join-Path $env:RUNNER_TEMP 'platform-tools' }
+
+          Write-Host "Copying adb bundle to $dest"
+          New-Item -ItemType Directory -Force -Path $dest | Out-Null
+          Copy-Item -Force -Path `
+            (Join-Path $pt 'adb.exe'), `
+            (Join-Path $pt 'AdbWinApi.dll'), `
+            (Join-Path $pt 'AdbWinUsbApi.dll') `
+            -Destination $dest
+
+          Write-Host "ADB files bundled:"
+          Get-ChildItem $dest | Where-Object { $_.Name -match '^adb\.exe$|^AdbWin(Api|UsbApi)\.dll$' } | Format-Table Name,Length
+
       - name: Upload Artifact
         uses: actions/upload-artifact@v4
         with:

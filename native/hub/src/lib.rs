@@ -1,6 +1,12 @@
 //! This `hub` crate is the
 //! entry point of the Rust logic.
 
+use std::{
+    panic::{AssertUnwindSafe, catch_unwind},
+    sync::Arc,
+    time::Duration,
+};
+
 use adb::AdbHandler;
 use anyhow::{Context, Result};
 use downloader::Downloader;
@@ -10,6 +16,7 @@ use models::signals::system::{AppVersionInfo, MediaConfigChanged, RustPanic};
 use rinf::RustSignal;
 use settings::SettingsHandler;
 use task::TaskManager;
+use tokio::sync::Notify;
 use tokio_stream::wrappers::WatchStream;
 use tracing::{error, info};
 use tracing_appender::{
@@ -41,17 +48,42 @@ pub mod built_info {
 
 pub const USER_AGENT: &str = concat!("YAAS/", env!("CARGO_PKG_VERSION"));
 
-#[tokio::main(flavor = "multi_thread")]
-async fn main() {
+fn main() {
+    let runtime = tokio::runtime::Builder::new_multi_thread().enable_all().build().unwrap();
+
+    let panic_notify = Arc::new(Notify::new());
+    let hook_notify = panic_notify.clone();
+
+    // Report all our panics to Flutter
     let original_hook = std::panic::take_hook();
     std::panic::set_hook(Box::new(move |panic_info| {
         let backtrace = std::backtrace::Backtrace::force_capture();
         let message = format!("{panic_info}\n{backtrace}");
         error!(message, "Rust panic");
         RustPanic { message }.send_signal_to_dart();
+
+        // Request shutdown, as we're in an unrecoverable state
+        hook_notify.notify_waiters();
+
         original_hook(panic_info);
     }));
 
+    let _ = catch_unwind(AssertUnwindSafe(|| {
+        runtime.block_on(async move {
+            // Initialize everything
+            init().await;
+
+            tokio::select! {
+                _ = rinf::dart_shutdown() => {},
+                _ = panic_notify.notified() => {},
+            }
+        })
+    }));
+
+    runtime.shutdown_timeout(Duration::from_secs(3));
+}
+
+async fn init() {
     // Set working directory to the app's data directory
     let data_dir = dirs::data_dir().expect("Failed to get data directory");
     let app_dir = if cfg!(target_os = "macos") {
@@ -122,9 +154,6 @@ async fn main() {
 
     // Log-related requests from Flutter
     SignalLayer::start_request_handler(app_dir.join("logs"));
-
-    // Keep the main function running until Dart shutdown.
-    rinf::dart_shutdown().await;
 }
 
 fn setup_logging() -> Result<WorkerGuard> {

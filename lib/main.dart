@@ -68,7 +68,6 @@ void main() async {
     final appState = YAASApp.navigatorKey.currentContext?.read<AppState>();
     if (appState != null) {
       appState.setPanicMessage(panic.message.message);
-      finalizeRust(); // Rust side is in an undefined state, shut it down
     }
   });
 

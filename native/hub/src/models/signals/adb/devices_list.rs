@@ -40,6 +40,7 @@ pub struct AdbDeviceBrief {
     pub state: AdbBriefState,
     /// Optional friendly name if available (only for ready devices we can query)
     pub name: Option<String>,
+    pub true_serial: Option<String>,
 }
 
 #[derive(Debug, Clone, Serialize, RustSignal, PartialEq)]

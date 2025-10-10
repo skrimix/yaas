@@ -3,7 +3,7 @@ use std::{collections::HashMap, error::Error, net::IpAddr, path::Path, sync::Arc
 use anyhow::{Context, Result, anyhow, bail, ensure};
 use derive_more::Debug;
 use device::AdbDevice;
-use forensic_adb::{DeviceBrief, DeviceState};
+use forensic_adb::{DeviceBrief, DeviceInfo, DeviceState};
 use lazy_regex::{Lazy, Regex, lazy_regex};
 use mdns_sd::{ServiceDaemon, ServiceEvent};
 use rinf::{DartSignal, RustSignal};
@@ -45,6 +45,12 @@ pub fn ensure_valid_package(package_name: &str) -> Result<()> {
     Ok(())
 }
 
+#[derive(Debug, Clone, Default)]
+pub struct CachedDeviceData {
+    pub name: String,
+    pub true_serial: String,
+}
+
 /// Handles ADB device connections and commands
 #[derive(Debug)]
 pub struct AdbHandler {
@@ -62,8 +68,8 @@ pub struct AdbHandler {
     device_op_mutex: Mutex<()>,
     /// Cancellation token for running tasks
     cancel_token: RwLock<CancellationToken>,
-    /// Cache of serial -> friendly name
-    names_cache: RwLock<HashMap<String, String>>,
+    /// Cache of adb transport_id -> device data
+    device_data_cache: RwLock<HashMap<String, CachedDeviceData>>,
     /// Whether mDNS auto-connect is enabled
     mdns_auto_connect: bool,
 }
@@ -94,7 +100,7 @@ impl AdbHandler {
             device: None.into(),
             device_op_mutex: Mutex::new(()),
             cancel_token: RwLock::new(CancellationToken::new()),
-            names_cache: RwLock::new(HashMap::new()),
+            device_data_cache: RwLock::new(HashMap::new()),
             mdns_auto_connect: first_settings.mdns_auto_connect,
         });
         tokio::spawn(
@@ -234,6 +240,8 @@ impl AdbHandler {
         self.cancel_token.read().await.cancel();
         // Disconnect from device
         let _ = self.disconnect_device(None).await;
+        // Drop cache
+        self.device_data_cache.write().await.clear();
         // Kill ADB server
         let _ = self.kill_adb_server().await;
         // Restart ADB server
@@ -1213,10 +1221,9 @@ impl AdbHandler {
 
     /// Gets the ADB devices
     #[instrument(skip(self), level = "debug", err, ret)]
-    async fn get_adb_devices(&self) -> Result<Vec<DeviceBrief>> {
+    async fn get_adb_devices(&self) -> Result<Vec<DeviceInfo>> {
         let adb_host = self.adb_host.clone();
-        let devices: Vec<DeviceBrief> =
-            adb_host.devices::<Vec<_>>().await?.into_iter().map(|d| d.into()).collect();
+        let devices: Vec<DeviceInfo> = adb_host.devices::<Vec<_>>().await?.into_iter().collect();
         // debug!(count = devices.len(), "Got ADB devices");
         Ok(devices)
     }
@@ -1235,10 +1242,10 @@ impl AdbHandler {
     /// Refreshes the ADB state based on the current device and server status
     #[instrument(skip(self))]
     async fn refresh_adb_state(&self) {
-        let mut devices_list: Vec<DeviceBrief> = vec![];
+        let mut devices_list: Vec<DeviceInfo> = vec![];
         let current_state = self.adb_state.read().await.clone();
         let new_state = if !self.is_server_running().await {
-            self.emit_devices_list(&[] as &[DeviceBrief]).await;
+            self.emit_devices_list(&[] as &[DeviceInfo]).await;
             match current_state {
                 AdbState::ServerStartFailed => AdbState::ServerStartFailed,
                 AdbState::ServerStarting => AdbState::ServerStarting,
@@ -1269,7 +1276,7 @@ impl AdbHandler {
                         error = e.as_ref() as &dyn Error,
                         "Failed to get ADB devices for state refresh"
                     );
-                    self.emit_devices_list(&[] as &[DeviceBrief]).await;
+                    self.emit_devices_list(&[] as &[DeviceInfo]).await;
                     // Preserve failure/start states if they were set
                     match current_state {
                         AdbState::ServerStartFailed => AdbState::ServerStartFailed,
@@ -1289,41 +1296,47 @@ impl AdbHandler {
             trace!(state = ?new_state, "ADB state unchanged");
         }
 
-        if let Err(e) = self.resolve_device_names(&devices_list).await {
+        if let Err(e) = self.resolve_device_data(&devices_list).await {
             warn!(error = e.as_ref() as &dyn Error, "Resolving device names failed");
         }
     }
 
-    /// Emits the AdbDevicesList signal using the provided devices and cached names
-    async fn emit_devices_list(&self, devices: &[DeviceBrief]) {
+    /// Emits the AdbDevicesList signal using the provided devices and cached data
+    async fn emit_devices_list(&self, devices: &[DeviceInfo]) {
         let current = self.try_current_device().await;
         if let Some(dev) = &current
             && dev.name.is_some()
         {
-            self.names_cache.write().await.insert(dev.serial.clone(), dev.name.clone().unwrap());
+            self.device_data_cache.write().await.insert(
+                dev.transport_id.clone(),
+                CachedDeviceData {
+                    name: dev.name.clone().unwrap(),
+                    true_serial: dev.true_serial.clone(),
+                },
+            );
         }
 
-        let cache = self.names_cache.read().await;
+        let cache = self.device_data_cache.read().await;
         let list = devices
             .iter()
             .map(|d| {
-                let is_wireless = d.serial.contains(':');
-                let name = cache.get(&d.serial).cloned();
+                let cached = d.info.get("transport_id").and_then(|s| cache.get(s));
                 AdbDeviceBrief {
                     serial: d.serial.clone(),
-                    is_wireless,
+                    is_wireless: d.serial.contains(':'),
                     state: d.state.clone().into(),
-                    name,
+                    name: cached.map(|d| d.name.clone()),
+                    true_serial: cached.map(|d| d.true_serial.clone()),
                 }
             })
-            .collect::<Vec<_>>();
+            .collect();
         AdbDevicesList { value: list }.send_signal_to_dart();
     }
 
-    /// Resolves and caches friendly names for ready devices missing entries, then re-emits list
+    /// Resolves and caches device data for ready devices missing entries, then re-emits list
     #[instrument(skip(self), err)]
-    async fn resolve_device_names(&self, devices: &[DeviceBrief]) -> Result<()> {
-        let cache = self.names_cache.read().await;
+    async fn resolve_device_data(&self, devices: &[DeviceInfo]) -> Result<()> {
+        let cache = self.device_data_cache.read().await;
         let current = self.try_current_device().await;
         let current_serial = current.as_ref().map(|d| d.serial.clone());
         let to_resolve = devices
@@ -1341,7 +1354,7 @@ impl AdbHandler {
 
         let adb_host = self.adb_host.clone();
         let all = adb_host.devices::<Vec<_>>().await?;
-        let mut resolved: HashMap<String, String> = HashMap::new();
+        let mut resolved: HashMap<String, CachedDeviceData> = HashMap::new();
         for d in to_resolve {
             if let Some(entry) = all.iter().find(|e| e.serial == d.serial) {
                 let device = forensic_adb::Device::new(
@@ -1350,14 +1363,17 @@ impl AdbHandler {
                     entry.info.clone(),
                 )
                 .await?;
-                if let Ok(name) = AdbDevice::query_identity(&device).await {
-                    resolved.insert(entry.serial.clone(), name);
+                if let Ok(name) = AdbDevice::query_identity(&device).await
+                    && let Ok(true_serial) = AdbDevice::query_true_serial(&device).await
+                    && let Some(transport_id) = device.info.get("transport_id").cloned()
+                {
+                    resolved.insert(transport_id, CachedDeviceData { name, true_serial });
                 }
             }
         }
 
         if !resolved.is_empty() {
-            self.names_cache.write().await.extend(resolved);
+            self.device_data_cache.write().await.extend(resolved);
             self.emit_devices_list(devices).await;
         }
 

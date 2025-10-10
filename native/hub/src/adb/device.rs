@@ -53,6 +53,8 @@ pub struct AdbDevice {
     pub serial: String,
     /// True device serial number
     pub true_serial: String,
+    /// ADB transport ID
+    pub transport_id: String,
     /// True if connected over TCP/IP (adb over network)
     pub is_wireless: bool,
     /// Device battery level (0-100)
@@ -87,11 +89,11 @@ impl AdbDevice {
             .get("product")
             .ok_or_else(|| anyhow!("No product name found in device info"))?
             .to_string();
-        let true_serial = inner
-            .execute_host_shell_command("getprop ro.serialno")
-            .await
-            .context("Failed to read ro.serialno")?
-            .trim()
+        let true_serial = Self::query_true_serial(&inner).await?;
+        let transport_id = inner
+            .info
+            .get("transport_id")
+            .ok_or_else(|| anyhow!("No transport_id found in device info"))?
             .to_string();
         let mut device = Self {
             inner,
@@ -99,6 +101,7 @@ impl AdbDevice {
             product,
             serial,
             true_serial,
+            transport_id,
             is_wireless,
             battery_level: 0,
             controllers: HeadsetControllersInfo::default(),
@@ -151,6 +154,17 @@ impl AdbDevice {
         } else {
             bail!("empty identity");
         }
+    }
+
+    /// Queries the true serial number from a `forensic_adb::Device`
+    #[instrument(skip(device), err)]
+    pub async fn query_true_serial(device: &Device) -> Result<String> {
+        Ok(device
+            .execute_host_shell_command("getprop ro.serialno")
+            .await
+            .context("Failed to read ro.serialno")?
+            .trim()
+            .to_string())
     }
 
     /// Refreshes device information (packages, battery, space)

@@ -3,6 +3,7 @@
 
 use std::{
     panic::{AssertUnwindSafe, catch_unwind},
+    path::Path,
     sync::Arc,
     time::Duration,
 };
@@ -28,11 +29,8 @@ use crate::{
     backups_list::BackupsListHandler,
     casting::CastingManager,
     downloads_catalog::DownloadsCatalog,
-    models::{
-        DownloaderConfig,
-        signals::downloader::{
-            availability::DownloaderAvailabilityChanged, setup::RetryDownloaderInitRequest,
-        },
+    models::signals::downloader::{
+        availability::DownloaderAvailabilityChanged, setup::RetryDownloaderInitRequest,
     },
 };
 
@@ -132,8 +130,6 @@ async fn init() {
     }
     .send_signal_to_dart();
 
-    let downloader_config = DownloaderConfig::load_from_path("downloader.json");
-
     let settings_handler = SettingsHandler::new(app_dir.clone());
 
     // Prepare media cache directory and send media configuration to Flutter
@@ -154,18 +150,20 @@ async fn init() {
         WatchStream::new(settings_handler.subscribe()),
     );
 
-    if let Ok(cfg) = downloader_config {
+    if Path::new("downloader.json").exists() {
         let app_dir_cloned = app_dir.clone();
         let settings_handler_cloned = settings_handler.clone();
         let task_manager_cloned = task_manager.clone();
         tokio::spawn(async move {
-            let _ = downloader::init_with_config(
-                cfg,
+            if let Err(e) = downloader::init_from_disk(
                 app_dir_cloned,
                 settings_handler_cloned,
                 task_manager_cloned,
             )
-            .await;
+            .await
+            {
+                error!("Failed to initialize downloader: {:#}", e);
+            }
         });
     } else {
         DownloaderAvailabilityChanged { available: false, initializing: false, error: None }

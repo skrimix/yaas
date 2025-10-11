@@ -57,7 +57,7 @@ impl SettingsHandler {
             tokio::select! {
                 request = load_receiver.recv() => {
                     if request.is_some() {
-                        info!("Received LoadSettingsRequest");
+                        debug!("Received LoadSettingsRequest");
                         let handler = self.clone();
                         let result = handler.load_settings();
 
@@ -78,7 +78,7 @@ impl SettingsHandler {
                 }
                 request = save_receiver.recv() => {
                     if let Some(request) = request {
-                        info!("Received SaveSettingsRequest");
+                        debug!("Received SaveSettingsRequest");
                         let handler = self.clone();
                         let settings = request.message.settings;
                         let result = handler.save_settings(&settings);
@@ -96,7 +96,7 @@ impl SettingsHandler {
                 }
                 request = reset_receiver.recv() => {
                     if request.is_some() {
-                        info!("Received ResetSettingsToDefaultsRequest");
+                        debug!("Received ResetSettingsToDefaultsRequest");
                         let handler = self.clone();
                         let result = handler.load_default_settings();
 

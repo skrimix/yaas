@@ -134,7 +134,7 @@ impl TaskManager {
         drop(guard);
         if let Some(d) = old {
             // TODO: this shouldn't be done from TaskManager
-            d.shutdown().await;
+            d.stop().await;
         }
     }
 

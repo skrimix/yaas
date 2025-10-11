@@ -7,7 +7,7 @@ use std::{
 
 use anyhow::{Context, Result, ensure};
 use rinf::{DartSignal, RustSignal};
-use tracing::{error, info, instrument};
+use tracing::{debug, error, info, instrument};
 
 use crate::{
     downloader,
@@ -34,7 +34,7 @@ pub fn start_setup_handler(
             match receiver.recv().await {
                 Some(req) => {
                     let src = PathBuf::from(req.message.source_path);
-                    info!(path = %src.display(), "Received InstallDownloaderConfigRequest");
+                    debug!(path = %src.display(), "Received InstallDownloaderConfigRequest");
                     let res = install_config(&app_dir, &src).await;
                     match res {
                         Ok(()) => {

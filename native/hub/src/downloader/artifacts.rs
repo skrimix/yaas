@@ -18,9 +18,9 @@ fn is_http_url(value: &str) -> bool {
     v.starts_with("http://") || v.starts_with("https://")
 }
 
-#[instrument(skip(app_dir, cfg), fields(app_dir = %app_dir.display()))]
+#[instrument(skip(cache_dir, cfg), fields(cache_dir = %cache_dir.display()))]
 pub async fn prepare_artifacts(
-    app_dir: &Path,
+    cache_dir: &Path,
     cfg: &DownloaderConfig,
 ) -> Result<(PathBuf, PathBuf)> {
     let bin_src = cfg.rclone_path.resolve_for_current_platform()?;
@@ -38,8 +38,6 @@ pub async fn prepare_artifacts(
         return Ok((PathBuf::from(bin_src), PathBuf::from(conf_src)));
     }
 
-    let cache_dir = app_dir.join("downloader_cache");
-    fs::create_dir_all(&cache_dir).await.ok();
     let bin_dst = cache_dir.join(if cfg!(windows) { "rclone.exe" } else { "rclone" });
     let conf_dst = cache_dir.join("rclone.conf");
 
@@ -50,7 +48,7 @@ pub async fn prepare_artifacts(
         .build()?;
 
     // Metadata for tracking file changes
-    let mut meta = load_meta(&cache_dir).await.unwrap_or_default();
+    let mut meta = load_meta(cache_dir).await.unwrap_or_default();
 
     // Try to update config first
     match download_if_needed(&client, conf_src, &conf_dst, meta.get(conf_src)).await {
@@ -104,7 +102,7 @@ pub async fn prepare_artifacts(
         }
     }
 
-    let _ = save_meta(&cache_dir, &meta).await;
+    let _ = save_meta(cache_dir, &meta).await;
 
     Ok((bin_dst, conf_dst))
 }
@@ -217,6 +215,8 @@ mod tests {
             rclone_config_path: conf.to_string(),
             remote_name_filter_regex: None,
             randomize_remote: true,
+            root_dir: "Quest Games".to_string(),
+            list_path: "FFA.txt".to_string(),
         }
     }
 
@@ -238,6 +238,8 @@ mod tests {
             rclone_config_path: "/tmp/rclone.conf".to_string(),
             remote_name_filter_regex: None,
             randomize_remote: true,
+            root_dir: "Quest Games".to_string(),
+            list_path: "FFA.txt".to_string(),
         };
         let err = prepare_artifacts(dir.path(), &cfg).await.unwrap_err();
         let msg = format!("{:#}", err);
@@ -299,6 +301,8 @@ mod tests {
             rclone_config_path: format!("{}{}", server.uri(), conf_path),
             remote_name_filter_regex: None,
             randomize_remote: true,
+            root_dir: "Quest Games".to_string(),
+            list_path: "FFA.txt".to_string(),
         };
 
         // First run downloads both files

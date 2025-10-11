@@ -111,8 +111,9 @@ async fn install_config(app_dir: &Path, src: &Path) -> Result<()> {
 
 #[cfg(test)]
 mod tests {
-    use super::*;
     use tempfile::tempdir;
+
+    use super::*;
 
     fn valid_config_json() -> String {
         r#"{

@@ -272,6 +272,7 @@ impl RcloneStorage {
     pub fn new(
         rclone_path: PathBuf,
         config_path: PathBuf,
+        root_dir: String,
         remote: String,
         bandwidth_limit: String,
         remote_filter_regex: Option<String>,
@@ -279,7 +280,7 @@ impl RcloneStorage {
         Self {
             client: RcloneClient::new(rclone_path, config_path, bandwidth_limit),
             remote,
-            root_dir: "Quest Games/".to_string(), // TODO: make configurable
+            root_dir,
             remote_filter_regex,
         }
     }

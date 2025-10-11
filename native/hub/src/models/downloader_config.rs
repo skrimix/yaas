@@ -12,10 +12,22 @@ pub struct DownloaderConfig {
     pub remote_name_filter_regex: Option<String>,
     #[serde(default = "default_randomize_remote")]
     pub randomize_remote: bool,
+    #[serde(default = "default_root_dir")]
+    pub root_dir: String,
+    #[serde(default = "default_list_path")]
+    pub list_path: String,
 }
 
 fn default_randomize_remote() -> bool {
     true
+}
+
+fn default_root_dir() -> String {
+    "Quest Games".to_string()
+}
+
+fn default_list_path() -> String {
+    "FFA.txt".to_string()
 }
 
 impl DownloaderConfig {

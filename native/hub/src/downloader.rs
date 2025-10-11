@@ -8,7 +8,7 @@ use reqwest::header::{ACCEPT, HeaderMap, HeaderValue};
 use rinf::{DartSignal, RustSignal};
 use time::{OffsetDateTime, format_description::well_known::Rfc3339};
 use tokio::{
-    fs::File,
+    fs::{self, File},
     sync::{Mutex, RwLock, mpsc::UnboundedSender},
 };
 use tokio_stream::{StreamExt, wrappers::WatchStream};
@@ -40,8 +40,11 @@ pub mod setup;
 
 pub struct Downloader {
     config: Arc<DownloaderConfig>,
+    cache_dir: PathBuf,
     rclone_path: PathBuf,
     rclone_config_path: PathBuf,
+    root_dir: String,
+    list_path: String,
     cloud_apps: Mutex<Vec<CloudApp>>,
     storage: RwLock<RcloneStorage>,
     download_dir: RwLock<PathBuf>,
@@ -54,6 +57,7 @@ impl Downloader {
     #[instrument(skip(settings_stream))]
     pub async fn new(
         config: Arc<DownloaderConfig>,
+        cache_dir: PathBuf,
         rclone_path: PathBuf,
         rclone_config_path: PathBuf,
         settings_handler: Arc<SettingsHandler>,
@@ -65,6 +69,7 @@ impl Downloader {
         let storage = RcloneStorage::new(
             rclone_path.clone(),
             rclone_config_path.clone(),
+            config.root_dir.clone(),
             settings.rclone_remote_name.clone(),
             settings.bandwidth_limit.clone(),
             config.remote_name_filter_regex.clone(),
@@ -87,6 +92,7 @@ impl Downloader {
                 RcloneStorage::new(
                     rclone_path.clone(),
                     rclone_config_path.clone(),
+                    config.root_dir.clone(),
                     remote.to_string(),
                     settings.bandwidth_limit.clone(),
                     config.remote_name_filter_regex.clone(),
@@ -102,10 +108,16 @@ impl Downloader {
             }
         };
 
+        let root_dir = config.root_dir.clone();
+        let list_path = config.list_path.clone();
+
         let handle = Arc::new(Self {
             config,
+            cache_dir,
             rclone_path,
             rclone_config_path,
+            root_dir,
+            list_path,
             cloud_apps: Mutex::new(Vec::new()),
             storage: RwLock::new(storage),
             download_dir: RwLock::new(PathBuf::from(settings.downloads_location)),
@@ -142,6 +154,7 @@ impl Downloader {
                             let new_storage = RcloneStorage::new(
                                 handle.rclone_path.clone(),
                                 handle.rclone_config_path.clone(),
+                                handle.root_dir.clone(),
                                 settings.rclone_remote_name,
                                 settings.bandwidth_limit,
                                 handle.config.remote_name_filter_regex.clone(),
@@ -432,7 +445,7 @@ impl Downloader {
             .read()
             .await
             .clone()
-            .download_file("FFA.txt".to_string(), self.download_dir.read().await.clone())
+            .download_file(self.list_path.clone(), self.cache_dir.clone())
             .await
             .context("Failed to download game list file")?;
 
@@ -509,10 +522,14 @@ pub async fn init_with_config(
     DownloaderAvailabilityChanged { available: false, initializing: true, error: None }
         .send_signal_to_dart();
 
-    match artifacts::prepare_artifacts(&app_dir, &cfg).await {
+    let cache_dir = app_dir.join("downloader_cache");
+    fs::create_dir_all(&cache_dir).await.ok();
+
+    match artifacts::prepare_artifacts(&cache_dir, &cfg).await {
         Ok((rclone_path, rclone_config_path)) => {
             let downloader = Downloader::new(
                 Arc::new(cfg),
+                cache_dir,
                 rclone_path,
                 rclone_config_path,
                 settings_handler.clone(),
@@ -679,15 +696,15 @@ impl Downloader {
 
 #[cfg(test)]
 mod tests {
+    use std::path::Path;
+
+    use tempfile::tempdir;
+
     use super::*;
     use crate::{
-        downloads_catalog::DownloadsCatalog,
+        adb::AdbHandler, downloads_catalog::DownloadsCatalog, models::RclonePath,
         settings::SettingsHandler,
-        adb::AdbHandler,
     };
-    use crate::models::RclonePath;
-    use std::path::Path;
-    use tempfile::tempdir;
 
     fn write_settings(path: &Path, downloads: &Path, backups: &Path) {
         let settings = crate::models::Settings {
@@ -707,6 +724,8 @@ mod tests {
             rclone_config_path: conf.to_string(),
             remote_name_filter_regex: None,
             randomize_remote: randomize,
+            root_dir: "Quest Games".to_string(),
+            list_path: "FFA.txt".to_string(),
         }
     }
 
@@ -724,7 +743,8 @@ mod tests {
 
         let adb = AdbHandler::new(WatchStream::new(settings.subscribe())).await;
         let downloads = DownloadsCatalog::start(WatchStream::new(settings.subscribe()));
-        let task_manager = TaskManager::new(adb, None, downloads, WatchStream::new(settings.subscribe()));
+        let task_manager =
+            TaskManager::new(adb, None, downloads, WatchStream::new(settings.subscribe()));
 
         let cfg = cfg_local("/bin/echo", "/tmp/rclone.conf", false);
 
@@ -748,7 +768,8 @@ mod tests {
         let settings = SettingsHandler::new(app_dir.clone());
         let adb = AdbHandler::new(WatchStream::new(settings.subscribe())).await;
         let downloads = DownloadsCatalog::start(WatchStream::new(settings.subscribe()));
-        let task_manager = TaskManager::new(adb, None, downloads, WatchStream::new(settings.subscribe()));
+        let task_manager =
+            TaskManager::new(adb, None, downloads, WatchStream::new(settings.subscribe()));
 
         // Mismatched URL/local to make prepare_artifacts fail early
         let cfg = DownloaderConfig {
@@ -756,6 +777,8 @@ mod tests {
             rclone_config_path: "/tmp/rclone.conf".to_string(),
             remote_name_filter_regex: None,
             randomize_remote: true,
+            root_dir: "Quest Games".to_string(),
+            list_path: "FFA.txt".to_string(),
         };
 
         let err = init_with_config(cfg, app_dir, settings.clone(), task_manager.clone())

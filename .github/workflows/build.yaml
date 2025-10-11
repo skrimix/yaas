@@ -228,13 +228,13 @@ jobs:
           found=0
 
           if [ -f "artifacts/build-linux/yaas.AppImage" ]; then
-            cp -v "artifacts/build-linux/yaas.AppImage" "release/YAAS-${SHORT_SHA}-linux-x86_64.AppImage"
+            cp -v "artifacts/build-linux/yaas.AppImage" "release/YAAS-linux-x86_64.AppImage"
             found=1
           fi
 
           if [ -d "artifacts/build-windows" ]; then
             (cd artifacts/build-windows && \
-              zip -yr "$OLDPWD/release/YAAS-${SHORT_SHA}-windows-x64.zip" .)
+              zip -yr "$OLDPWD/release/YAAS-windows-x64.zip" .)
             found=1
           fi
 
@@ -245,7 +245,7 @@ jobs:
             chmod +x "$app/Contents/MacOS/YAAS"
 
             (cd "$(dirname "$app")" && \
-              zip -yr "$OLDPWD/release/YAAS-${SHORT_SHA}-macos.zip" "$(basename "$app")")
+              zip -yr "$OLDPWD/release/YAAS-macos.zip" "$(basename "$app")")
             found=1
           fi
 

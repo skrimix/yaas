@@ -1,5 +1,6 @@
 use std::{
     collections::BTreeMap,
+    iter,
     path::PathBuf,
     sync::atomic::{AtomicU64, Ordering},
     time::{Duration, SystemTime, UNIX_EPOCH},
@@ -190,7 +191,6 @@ where
     S: Subscriber + for<'lookup> tracing_subscriber::registry::LookupSpan<'lookup>,
 {
     fn on_event(&self, event: &Event<'_>, ctx: Context<'_, S>) {
-        // TODO: if possible, capture error.sources
         let mut visitor = FieldVisitor::new();
         event.record(&mut visitor);
 
@@ -301,6 +301,23 @@ impl FieldVisitor {
 }
 
 impl tracing::field::Visit for FieldVisitor {
+    fn record_error(
+        &mut self,
+        field: &tracing::field::Field,
+        value: &(dyn std::error::Error + 'static),
+    ) {
+        let parts: Vec<String> =
+            iter::successors(Some(value), |e| e.source()).map(ToString::to_string).collect();
+
+        let top = parts.first().cloned().unwrap_or_default();
+        self.fields.insert(field.name().to_string(), top);
+
+        self.fields.insert(
+            "error_chain".to_string(),
+            parts.iter().rev().cloned().collect::<Vec<_>>().join(": "),
+        );
+    }
+
     fn record_debug(&mut self, field: &tracing::field::Field, value: &dyn std::fmt::Debug) {
         if field.name() == "message" {
             self.message = Some(format!("{:?}", value));

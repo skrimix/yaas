@@ -158,7 +158,7 @@ impl Downloader {
                             debug!("Downloader received settings update");
                             debug!(?settings, "New settings");
 
-                            let new_storage = rclone::RcloneStorage::new(
+                            let new_storage = RcloneStorage::new(
                                 handle.rclone_path.clone(),
                                 handle.rclone_config_path.clone(),
                                 handle.root_dir.clone(),

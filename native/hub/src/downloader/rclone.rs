@@ -1,6 +1,7 @@
 use std::{error::Error, path::PathBuf, process::Stdio};
 
 use anyhow::{Context, Result, anyhow, ensure};
+use lazy_regex::Regex;
 use serde::Deserialize;
 use tokio::{
     io::{AsyncBufReadExt, BufReader},
@@ -64,18 +65,14 @@ impl RcloneTransferOperation {
 #[derive(Debug, Clone, PartialEq, Eq)]
 struct RcloneClient {
     rclone_path: PathBuf,
-    config_path: Option<PathBuf>,
+    config_path: PathBuf,
     sys_proxy: Option<String>,
     bandwidth_limit: String,
 }
 
 impl RcloneClient {
     #[instrument(fields(sys_proxy), ret)]
-    pub fn new(
-        rclone_path: PathBuf,
-        config_path: Option<PathBuf>,
-        bandwidth_limit: String,
-    ) -> Self {
+    pub fn new(rclone_path: PathBuf, config_path: PathBuf, bandwidth_limit: String) -> Self {
         let sys_proxy = get_sys_proxy();
         let resolved_path =
             match resolve_binary_path(Some(&rclone_path.to_string_lossy()), "rclone") {
@@ -107,9 +104,7 @@ impl RcloneClient {
             command.env("https_proxy", proxy);
         }
 
-        if let Some(config_path) = &self.config_path {
-            command.arg("--config").arg(config_path);
-        }
+        command.arg("--config").arg(&self.config_path);
         command.arg("--use-json-log");
 
         command.args(args);
@@ -192,7 +187,7 @@ impl RcloneClient {
             "--retries",
             "3",
             "--transfers",
-            "8", // TODO: make configurable
+            "8",
         ];
 
         if !self.bandwidth_limit.is_empty() {
@@ -269,20 +264,23 @@ pub struct RcloneStorage {
     client: RcloneClient,
     remote: String,
     root_dir: String,
+    remote_filter_regex: Option<String>,
 }
 
 impl RcloneStorage {
     #[instrument]
     pub fn new(
         rclone_path: PathBuf,
-        config_path: Option<PathBuf>,
+        config_path: PathBuf,
         remote: String,
         bandwidth_limit: String,
+        remote_filter_regex: Option<String>,
     ) -> Self {
         Self {
             client: RcloneClient::new(rclone_path, config_path, bandwidth_limit),
             remote,
             root_dir: "Quest Games/".to_string(), // TODO: make configurable
+            remote_filter_regex,
         }
     }
 
@@ -340,9 +338,17 @@ impl RcloneStorage {
 
     #[instrument(skip(self), ret, err)]
     pub async fn remotes(&self) -> Result<Vec<String>> {
-        // TODO: make configurable
-        let regex = lazy_regex::regex!(r"^FFA-\d+$");
         let remotes = self.client.remotes().await?;
-        Ok(remotes.into_iter().filter(|r| regex.is_match(r)).collect())
+        if let Some(pat) = &self.remote_filter_regex {
+            match Regex::new(pat) {
+                Ok(regex) => Ok(remotes.into_iter().filter(|r| regex.is_match(r)).collect()),
+                Err(e) => {
+                    warn!(pattern = %pat, error = &e as &dyn Error, "Invalid remote filter regex, returning all remotes");
+                    Ok(remotes)
+                }
+            }
+        } else {
+            Ok(remotes)
+        }
     }
 }

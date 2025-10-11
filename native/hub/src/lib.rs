@@ -9,11 +9,10 @@ use std::{
 
 use adb::AdbHandler;
 use anyhow::{Context, Result};
-use downloader::Downloader;
 use logging::SignalLayer;
 use mimalloc::MiMalloc;
 use models::signals::system::{AppVersionInfo, MediaConfigChanged, RustPanic};
-use rinf::RustSignal;
+use rinf::{DartSignal, RustSignal};
 use settings::SettingsHandler;
 use task::TaskManager;
 use tokio::sync::Notify;
@@ -24,6 +23,18 @@ use tracing_appender::{
     rolling::{RollingFileAppender, Rotation},
 };
 use tracing_subscriber::{EnvFilter, fmt, layer::SubscriberExt};
+
+use crate::{
+    backups_list::BackupsListHandler,
+    casting::CastingManager,
+    downloads_catalog::DownloadsCatalog,
+    models::{
+        DownloaderConfig,
+        signals::downloader::{
+            availability::DownloaderAvailabilityChanged, setup::RetryDownloaderInitRequest,
+        },
+    },
+};
 
 #[global_allocator]
 static GLOBAL: MiMalloc = MiMalloc;
@@ -121,6 +132,8 @@ async fn init() {
     }
     .send_signal_to_dart();
 
+    let downloader_config = DownloaderConfig::load_from_path("downloader.json");
+
     let settings_handler = SettingsHandler::new(app_dir.clone());
 
     // Prepare media cache directory and send media configuration to Flutter
@@ -133,24 +146,63 @@ async fn init() {
         .send_signal_to_dart();
 
     let adb_handler = AdbHandler::new(WatchStream::new(settings_handler.subscribe())).await;
-    let downloader =
-        Downloader::new(settings_handler.clone(), WatchStream::new(settings_handler.subscribe()))
-            .await;
-    let downloads_catalog =
-        downloads_catalog::DownloadsCatalog::start(WatchStream::new(settings_handler.subscribe()));
-    let _task_manager = TaskManager::new(
+    let downloads_catalog = DownloadsCatalog::start(WatchStream::new(settings_handler.subscribe()));
+    let task_manager = TaskManager::new(
         adb_handler.clone(),
-        downloader.clone(),
+        None,
         downloads_catalog.clone(),
         WatchStream::new(settings_handler.subscribe()),
     );
 
+    if let Ok(cfg) = downloader_config {
+        let app_dir_cloned = app_dir.clone();
+        let settings_handler_cloned = settings_handler.clone();
+        let task_manager_cloned = task_manager.clone();
+        tokio::spawn(async move {
+            let _ = downloader::init_with_config(
+                cfg,
+                app_dir_cloned,
+                settings_handler_cloned,
+                task_manager_cloned,
+            )
+            .await;
+        });
+    } else {
+        DownloaderAvailabilityChanged { available: false, initializing: false, error: None }
+            .send_signal_to_dart();
+    }
+
+    // Start downloader setup handler (install config via drag & drop)
+    downloader::setup::start_setup_handler(
+        app_dir.clone(),
+        settings_handler.clone(),
+        task_manager.clone(),
+    );
+
+    // Downloader init retries
+    tokio::spawn({
+        let app_dir = app_dir.clone();
+        let settings_handler = settings_handler.clone();
+        let task_manager = task_manager.clone();
+        async move {
+            let rx = RetryDownloaderInitRequest::get_dart_signal_receiver();
+            while rx.recv().await.is_some() {
+                let _ = downloader::init_from_disk(
+                    app_dir.clone(),
+                    settings_handler.clone(),
+                    task_manager.clone(),
+                )
+                .await;
+            }
+        }
+    });
+
     // Backups-related requests
     let _backups_handler =
-        backups_list::BackupsListHandler::start(WatchStream::new(settings_handler.subscribe()));
+        BackupsListHandler::start(WatchStream::new(settings_handler.subscribe()));
 
-    // Casting-related requests (Windows-only functionality exposed via signals)
-    casting::CastingManager::start();
+    // Casting-related requests (Windows-only)
+    CastingManager::start();
 
     // Log-related requests from Flutter
     SignalLayer::start_request_handler(app_dir.join("logs"));

@@ -9,7 +9,7 @@ use rinf::{DartSignal, RustSignal};
 use time::{OffsetDateTime, format_description::well_known::Rfc3339};
 use tokio::{
     fs::File,
-    sync::{Mutex, RwLock},
+    sync::{Mutex, RwLock, mpsc::UnboundedSender},
 };
 use tokio_stream::{StreamExt, wrappers::WatchStream};
 use tokio_util::sync::CancellationToken;
@@ -17,49 +17,60 @@ use tracing::{Instrument, Span, debug, error, info, info_span, instrument, warn}
 
 use crate::{
     models::{
-        AppApiResponse, CloudApp, Settings,
+        AppApiResponse, CloudApp, DownloaderConfig, Settings,
         signals::{
             cloud_apps::{
                 details::{AppDetailsResponse, GetAppDetailsRequest},
                 list::{CloudAppsChangedEvent, LoadCloudAppsRequest},
                 reviews::{AppReview, AppReviewsResponse, GetAppReviewsRequest},
             },
+            downloader::availability::DownloaderAvailabilityChanged,
             downloads_local::DownloadsChanged,
             storage::remotes::{GetRcloneRemotesRequest, RcloneRemotesChanged},
         },
     },
     settings::SettingsHandler,
+    task::TaskManager,
 };
 
 mod rclone;
 pub use rclone::RcloneTransferStats;
+pub mod artifacts;
+pub mod setup;
 
 pub struct Downloader {
+    config: Arc<DownloaderConfig>,
+    rclone_path: PathBuf,
+    rclone_config_path: PathBuf,
     cloud_apps: Mutex<Vec<CloudApp>>,
     storage: RwLock<RcloneStorage>,
     download_dir: RwLock<PathBuf>,
     current_load_token: RwLock<CancellationToken>,
     write_legacy_release_json: RwLock<bool>,
+    cancel_token: CancellationToken,
 }
 
 impl Downloader {
     #[instrument(skip(settings_stream))]
     pub async fn new(
+        config: Arc<DownloaderConfig>,
+        rclone_path: PathBuf,
+        rclone_config_path: PathBuf,
         settings_handler: Arc<SettingsHandler>,
         mut settings_stream: WatchStream<Settings>,
     ) -> Arc<Self> {
         let settings =
             settings_stream.next().await.expect("Settings stream closed on downloader init");
 
-        // TODO: this is pretty bad, make configurable and rework
         let storage = RcloneStorage::new(
-            PathBuf::from(settings.rclone_path.clone()),
-            None,
+            rclone_path.clone(),
+            rclone_config_path.clone(),
             settings.rclone_remote_name.clone(),
             settings.bandwidth_limit.clone(),
+            config.remote_name_filter_regex.clone(),
         );
         let storage = match storage.remotes().await {
-            Ok(remotes) => {
+            Ok(remotes) if config.randomize_remote => {
                 let mut rng = rand::rng();
                 let remote = remotes.choose(&mut rng).unwrap_or(&settings.rclone_remote_name);
                 if remote != &settings.rclone_remote_name {
@@ -74,12 +85,14 @@ impl Downloader {
                 }
 
                 RcloneStorage::new(
-                    PathBuf::from(settings.rclone_path.clone()),
-                    None,
+                    rclone_path.clone(),
+                    rclone_config_path.clone(),
                     remote.to_string(),
                     settings.bandwidth_limit.clone(),
+                    config.remote_name_filter_regex.clone(),
                 )
             }
+            Ok(_) => storage,
             Err(e) => {
                 warn!(
                     error = e.as_ref() as &dyn std::error::Error,
@@ -90,11 +103,15 @@ impl Downloader {
         };
 
         let handle = Arc::new(Self {
+            config,
+            rclone_path,
+            rclone_config_path,
             cloud_apps: Mutex::new(Vec::new()),
             storage: RwLock::new(storage),
             download_dir: RwLock::new(PathBuf::from(settings.downloads_location)),
             current_load_token: RwLock::new(CancellationToken::new()),
             write_legacy_release_json: RwLock::new(settings.write_legacy_release_json),
+            cancel_token: CancellationToken::new(),
         });
 
         tokio::spawn({
@@ -108,57 +125,68 @@ impl Downloader {
             let handle = handle.clone();
             async move {
                 info!("Starting to listen for settings changes");
-                while let Some(settings) = settings_stream.next().await {
-                    info!("Downloader received settings update");
-                    debug!(?settings, "New settings");
-
-                    let new_storage = RcloneStorage::new(
-                        PathBuf::from(settings.rclone_path),
-                        None,
-                        settings.rclone_remote_name,
-                        settings.bandwidth_limit,
-                    );
-
-                    if new_storage != *handle.storage.read().await {
-                        info!("Rclone storage config changed, recreating and refreshing app list");
-                        // Cancel any load in progress
-                        handle.current_load_token.read().await.cancel();
-                        let new_token = CancellationToken::new();
-                        *handle.current_load_token.write().await = new_token.clone();
-
-                        *handle.storage.write().await = new_storage;
-
-                        match handle.storage.read().await.remotes().await {
-                            Ok(remotes) => {
-                                RcloneRemotesChanged { remotes, error: None }.send_signal_to_dart();
-                            }
-                            Err(e) => {
-                                error!(error = e.as_ref() as &dyn std::error::Error, "Failed to get rclone remotes after reload");
-                                RcloneRemotesChanged {
-                                    remotes: Vec::new(),
-                                    error: Some(format!("Failed to get rclone remotes: {:#}", e)),
-                                }
-                                .send_signal_to_dart();
-                            }
+                loop {
+                    tokio::select! {
+                        _ = handle.cancel_token.cancelled() => {
+                            info!("Downloader settings listener cancelled; exiting");
+                            return;
                         }
+                        maybe_settings = settings_stream.next() => {
+                            let Some(settings) = maybe_settings else {
+                                info!("Settings stream closed; exiting downloader settings listener");
+                                return;
+                            };
+                            info!("Downloader received settings update");
+                            debug!(?settings, "New settings");
 
-                        // Refresh app list
-                        handle.load_app_list(true, new_token).await;
+                            let new_storage = RcloneStorage::new(
+                                handle.rclone_path.clone(),
+                                handle.rclone_config_path.clone(),
+                                settings.rclone_remote_name,
+                                settings.bandwidth_limit,
+                                handle.config.remote_name_filter_regex.clone(),
+                            );
+
+                            if new_storage != *handle.storage.read().await {
+                                info!("Rclone storage config changed, recreating and refreshing app list");
+                                // Cancel any load in progress
+                                handle.current_load_token.read().await.cancel();
+                                let new_token = CancellationToken::new();
+                                *handle.current_load_token.write().await = new_token.clone();
+
+                                *handle.storage.write().await = new_storage;
+
+                                match handle.storage.read().await.remotes().await {
+                                    Ok(remotes) => {
+                                        RcloneRemotesChanged { remotes, error: None }.send_signal_to_dart();
+                                    }
+                                    Err(e) => {
+                                        error!(error = e.as_ref() as &dyn std::error::Error, "Failed to get rclone remotes after reload");
+                                        RcloneRemotesChanged {
+                                            remotes: Vec::new(),
+                                            error: Some(format!("Failed to get rclone remotes: {:#}", e)),
+                                        }
+                                        .send_signal_to_dart();
+                                    }
+                                }
+
+                                // Refresh app list
+                                handle.load_app_list(true, new_token).await;
+                            }
+
+                            let mut download_dir = handle.download_dir.write().await;
+                            let new_download_dir = PathBuf::from(settings.downloads_location);
+                            if *download_dir != new_download_dir {
+                                info!(new_dir = %new_download_dir.display(), "Download directory changed");
+                                *download_dir = new_download_dir;
+                            }
+
+                            // Update legacy release.json toggle
+                            let mut legacy_flag = handle.write_legacy_release_json.write().await;
+                            *legacy_flag = settings.write_legacy_release_json;
+                        }
                     }
-
-                    let mut download_dir = handle.download_dir.write().await;
-                    let new_download_dir = PathBuf::from(settings.downloads_location);
-                    if *download_dir != new_download_dir {
-                        info!(new_dir = %new_download_dir.display(), "Download directory changed");
-                        *download_dir = new_download_dir;
-                    }
-
-                    // Update legacy release.json toggle
-                    let mut legacy_flag = handle.write_legacy_release_json.write().await;
-                    *legacy_flag = settings.write_legacy_release_json;
                 }
-
-                panic!("Settings stream closed");
             }
         }.instrument(info_span!("task_handle_settings_updates")),
         );
@@ -167,22 +195,41 @@ impl Downloader {
         tokio::spawn({
             let handle = handle.clone();
             async move {
-                match handle.storage.read().await.remotes().await {
-                    Ok(remotes) => {
-                        RcloneRemotesChanged { remotes, error: None }.send_signal_to_dart();
+                tokio::select! {
+                    _ = handle.cancel_token.cancelled() => {
+                        info!("Downloader cancelled before sending initial remotes");
                     }
-                    Err(e) => {
-                        error!(
-                            error = e.as_ref() as &dyn std::error::Error,
-                            "Failed to get rclone remotes on init"
-                        );
-                        RcloneRemotesChanged {
-                            remotes: Vec::new(),
-                            error: Some(format!("Failed to get rclone remotes: {:#}", e)),
+                    res = async {
+                        let storage = handle.storage.read().await.clone();
+                        storage.remotes().await
+                    } => {
+                        match res {
+                            Ok(remotes) => {
+                                RcloneRemotesChanged { remotes, error: None }.send_signal_to_dart();
+                            }
+                            Err(e) => {
+                                error!(
+                                    error = e.as_ref() as &dyn std::error::Error,
+                                    "Failed to get rclone remotes on init"
+                                );
+                                RcloneRemotesChanged {
+                                    remotes: Vec::new(),
+                                    error: Some(format!("Failed to get rclone remotes: {:#}", e)),
+                                }
+                                .send_signal_to_dart();
+                            }
                         }
-                        .send_signal_to_dart();
                     }
                 }
+            }
+        });
+
+        // On init, load cloud apps list in the background
+        tokio::spawn({
+            let handle = handle.clone();
+            async move {
+                let token = handle.current_load_token.read().await.clone();
+                handle.load_app_list(false, token).await;
             }
         });
         handle
@@ -213,6 +260,10 @@ impl Downloader {
         let get_app_reviews_receiver = GetAppReviewsRequest::get_dart_signal_receiver();
         loop {
             tokio::select! {
+                _ = self.cancel_token.cancelled() => {
+                    info!("Downloader command loop cancelled; exiting");
+                    return;
+                }
                 request = load_cloud_apps_receiver.recv() => {
                     if let Some(request) = request {
                         info!(refresh = request.message.refresh, "Received LoadCloudAppsRequest");
@@ -220,7 +271,8 @@ impl Downloader {
                         self.load_app_list(request.message.refresh, token).await;
                         // TODO: add timeout
                     } else {
-                        panic!("LoadCloudAppsRequest receiver closed");
+                        info!("LoadCloudAppsRequest receiver closed; shutting down downloader command loop");
+                        return;
                     }
                 }
                 request = get_rclone_remotes_receiver.recv() => {
@@ -237,7 +289,8 @@ impl Downloader {
                             }
                         }
                     } else {
-                        panic!("GetRcloneRemotesRequest receiver closed");
+                        info!("GetRcloneRemotesRequest receiver closed; shutting down downloader command loop");
+                        return;
                     }
                 }
                 request = get_app_details_receiver.recv() => {
@@ -275,7 +328,8 @@ impl Downloader {
                             }
                         });
                     } else {
-                        panic!("GetAppDetailsRequest receiver closed");
+                        info!("GetAppDetailsRequest receiver closed; shutting down downloader command loop");
+                        return;
                     }
                 }
                 request = get_app_reviews_receiver.recv() => {
@@ -312,11 +366,20 @@ impl Downloader {
                             }
                         });
                     } else {
-                        panic!("GetAppReviewsRequest receiver closed");
+                        info!("GetAppReviewsRequest receiver closed; shutting down downloader command loop");
+                        return;
                     }
                 }
             }
         }
+    }
+
+    pub async fn shutdown(&self) {
+        info!("Shutting down Downloader instance");
+        // Cancel command loop and settings listener
+        self.cancel_token.cancel();
+        // Cancel any ongoing load
+        self.current_load_token.read().await.cancel();
     }
 
     #[instrument(skip(self, cancellation_token))]
@@ -389,7 +452,7 @@ impl Downloader {
     pub async fn download_app(
         &self,
         app_full_name: String,
-        progress_tx: tokio::sync::mpsc::UnboundedSender<RcloneTransferStats>,
+        progress_tx: UnboundedSender<RcloneTransferStats>,
         cancellation_token: CancellationToken,
     ) -> Result<String> {
         let dst_dir = self.download_dir.read().await.join(&app_full_name);
@@ -419,6 +482,57 @@ impl Downloader {
         DownloadsChanged {}.send_signal_to_dart();
 
         Ok(dst_dir.display().to_string())
+    }
+}
+
+/// Initialize the downloader from a config loaded off disk and attach it to the TaskManager.
+/// Sends availability and progress signals appropriately.
+#[tracing::instrument(skip(settings_handler, task_manager))]
+pub async fn init_from_disk(
+    app_dir: PathBuf,
+    settings_handler: Arc<SettingsHandler>,
+    task_manager: Arc<TaskManager>,
+) -> Result<()> {
+    let cfg = DownloaderConfig::load_from_path("downloader.json")?;
+    init_with_config(cfg, app_dir, settings_handler, task_manager).await
+}
+
+/// Initialize the downloader from a provided config and attach it to the TaskManager.
+/// This function emits DownloaderAvailabilityChanged before and after initialization.
+#[tracing::instrument(skip(settings_handler, task_manager))]
+pub async fn init_with_config(
+    cfg: DownloaderConfig,
+    app_dir: PathBuf,
+    settings_handler: Arc<SettingsHandler>,
+    task_manager: Arc<TaskManager>,
+) -> Result<()> {
+    DownloaderAvailabilityChanged { available: false, initializing: true, error: None }
+        .send_signal_to_dart();
+
+    match artifacts::prepare_artifacts(&app_dir, &cfg).await {
+        Ok((rclone_path, rclone_config_path)) => {
+            let downloader = Downloader::new(
+                Arc::new(cfg),
+                rclone_path,
+                rclone_config_path,
+                settings_handler.clone(),
+                WatchStream::new(settings_handler.subscribe()),
+            )
+            .await;
+            task_manager.set_downloader(Some(downloader)).await;
+            DownloaderAvailabilityChanged { available: true, initializing: false, error: None }
+                .send_signal_to_dart();
+            Ok(())
+        }
+        Err(e) => {
+            DownloaderAvailabilityChanged {
+                available: false,
+                initializing: false,
+                error: Some(format!("Failed to prepare downloader: {:#}", e)),
+            }
+            .send_signal_to_dart();
+            Err(e)
+        }
     }
 }
 
@@ -560,5 +674,95 @@ impl Downloader {
             }
         }
         Ok(())
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+    use crate::{
+        downloads_catalog::DownloadsCatalog,
+        settings::SettingsHandler,
+        adb::AdbHandler,
+    };
+    use crate::models::RclonePath;
+    use std::path::Path;
+    use tempfile::tempdir;
+
+    fn write_settings(path: &Path, downloads: &Path, backups: &Path) {
+        let settings = crate::models::Settings {
+            // Force a harmless binary for ADB to avoid starting a real server
+            adb_path: "/bin/true".to_string(),
+            downloads_location: downloads.to_string_lossy().to_string(),
+            backups_location: backups.to_string_lossy().to_string(),
+            ..Default::default()
+        };
+        let json = serde_json::to_string_pretty(&settings).unwrap();
+        std::fs::write(path.join("settings.json"), json).unwrap();
+    }
+
+    fn cfg_local(bin: &str, conf: &str, randomize: bool) -> DownloaderConfig {
+        DownloaderConfig {
+            rclone_path: RclonePath::Single(bin.to_string()),
+            rclone_config_path: conf.to_string(),
+            remote_name_filter_regex: None,
+            randomize_remote: randomize,
+        }
+    }
+
+    #[tokio::test(flavor = "multi_thread")]
+    async fn init_with_config_success_local_paths() {
+        let dir = tempdir().unwrap();
+        let app_dir = dir.path().to_path_buf();
+        let dld = app_dir.join("dl");
+        let bkp = app_dir.join("bk");
+        std::fs::create_dir_all(&dld).unwrap();
+        std::fs::create_dir_all(&bkp).unwrap();
+        write_settings(&app_dir, &dld, &bkp);
+
+        let settings = SettingsHandler::new(app_dir.clone());
+
+        let adb = AdbHandler::new(WatchStream::new(settings.subscribe())).await;
+        let downloads = DownloadsCatalog::start(WatchStream::new(settings.subscribe()));
+        let task_manager = TaskManager::new(adb, None, downloads, WatchStream::new(settings.subscribe()));
+
+        let cfg = cfg_local("/bin/echo", "/tmp/rclone.conf", false);
+
+        init_with_config(cfg, app_dir, settings.clone(), task_manager.clone())
+            .await
+            .expect("init ok");
+
+        assert!(task_manager.__test_has_downloader().await);
+    }
+
+    #[tokio::test(flavor = "multi_thread")]
+    async fn init_with_config_propagates_artifact_error() {
+        let dir = tempdir().unwrap();
+        let app_dir = dir.path().to_path_buf();
+        let dld = app_dir.join("dl");
+        let bkp = app_dir.join("bk");
+        std::fs::create_dir_all(&dld).unwrap();
+        std::fs::create_dir_all(&bkp).unwrap();
+        write_settings(&app_dir, &dld, &bkp);
+
+        let settings = SettingsHandler::new(app_dir.clone());
+        let adb = AdbHandler::new(WatchStream::new(settings.subscribe())).await;
+        let downloads = DownloadsCatalog::start(WatchStream::new(settings.subscribe()));
+        let task_manager = TaskManager::new(adb, None, downloads, WatchStream::new(settings.subscribe()));
+
+        // Mismatched URL/local to make prepare_artifacts fail early
+        let cfg = DownloaderConfig {
+            rclone_path: RclonePath::Single("http://127.0.0.1/rclone".to_string()),
+            rclone_config_path: "/tmp/rclone.conf".to_string(),
+            remote_name_filter_regex: None,
+            randomize_remote: true,
+        };
+
+        let err = init_with_config(cfg, app_dir, settings.clone(), task_manager.clone())
+            .await
+            .unwrap_err();
+        let msg = format!("{:#}", err);
+        assert!(msg.contains("must both be local or both be URLs"));
+        assert!(!task_manager.__test_has_downloader().await);
     }
 }

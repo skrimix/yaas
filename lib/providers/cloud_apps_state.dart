@@ -30,6 +30,9 @@ class CloudAppsState extends ChangeNotifier {
       if (apps != null) {
         _apps = apps;
       }
+      if (_error != null) {
+        _apps = [];
+      }
       notifyListeners();
     });
 

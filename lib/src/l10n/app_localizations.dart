@@ -308,6 +308,30 @@ abstract class AppLocalizations {
   /// **'Downloader'**
   String get settingsSectionDownloader;
 
+  /// No description provided for @preparingDownloader.
+  ///
+  /// In en, this message translates to:
+  /// **'Preparing downloader...'**
+  String get preparingDownloader;
+
+  /// No description provided for @downloadingRcloneFiles.
+  ///
+  /// In en, this message translates to:
+  /// **'Downloading rclone files'**
+  String get downloadingRcloneFiles;
+
+  /// No description provided for @installDownloaderConfig.
+  ///
+  /// In en, this message translates to:
+  /// **'Install downloader config'**
+  String get installDownloaderConfig;
+
+  /// No description provided for @loadingApps.
+  ///
+  /// In en, this message translates to:
+  /// **'Loading apps...'**
+  String get loadingApps;
+
   /// No description provided for @settingsSectionAppearance.
   ///
   /// In en, this message translates to:

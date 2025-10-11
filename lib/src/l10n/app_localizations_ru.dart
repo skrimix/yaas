@@ -117,6 +117,18 @@ class AppLocalizationsRu extends AppLocalizations {
   String get settingsSectionDownloader => 'Загрузчик';
 
   @override
+  String get preparingDownloader => 'Подготовка загрузчика...';
+
+  @override
+  String get downloadingRcloneFiles => 'Загрузка файлов rclone';
+
+  @override
+  String get installDownloaderConfig => 'Установить конфигурацию загрузчика';
+
+  @override
+  String get loadingApps => 'Загрузка списка приложений...';
+
+  @override
   String get settingsSectionAppearance => 'Оформление';
 
   @override

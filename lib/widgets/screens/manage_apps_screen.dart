@@ -13,11 +13,11 @@ import '../common/no_device_connected_indicator.dart';
 import '../dialogs/animated_uninstall_dialog.dart';
 import '../dialogs/backup_options_dialog.dart';
 
-class ManageApps extends StatefulWidget {
-  const ManageApps({super.key});
+class ManageAppsScreen extends StatefulWidget {
+  const ManageAppsScreen({super.key});
 
   @override
-  State<ManageApps> createState() => _ManageAppsState();
+  State<ManageAppsScreen> createState() => _ManageAppsScreenState();
 }
 
 enum AppCategory {
@@ -33,7 +33,7 @@ const hiddenPrefixes = [
   'com.facebook.',
 ];
 
-class _ManageAppsState extends State<ManageApps> {
+class _ManageAppsScreenState extends State<ManageAppsScreen> {
   AppCategory _selectedCategory = AppCategory.vr;
   static const _animationDuration = Duration(milliseconds: 200);
   static const _cardPadding =

@@ -9,10 +9,10 @@ import 'package:file_picker/file_picker.dart';
 import '../../src/bindings/bindings.dart';
 import 'package:url_launcher/url_launcher.dart';
 import '../../providers/settings_state.dart';
+import '../../navigation.dart';
 import '../../src/l10n/app_localizations.dart';
 
 enum SettingTextField {
-  rclonePath,
   rcloneRemoteName,
   adbPath,
   downloadsLocation,
@@ -35,9 +35,7 @@ typedef StartupPageOption = ({
 });
 
 class SettingsScreen extends StatefulWidget {
-  const SettingsScreen({super.key, required this.pageOptions});
-
-  final List<StartupPageOption> pageOptions;
+  const SettingsScreen({super.key});
 
   @override
   State<SettingsScreen> createState() => _SettingsScreenState();
@@ -54,7 +52,6 @@ class _SettingsScreenState extends State<SettingsScreen> {
       ValueNotifier<bool>(false);
   bool _rcloneRemoteCustom = false;
   bool _seedColorCustom = false;
-  late final List<StartupPageOption> _pageOptions;
   final TextEditingController _customColorController = TextEditingController();
   bool _castingStatusRequested = false;
 
@@ -66,7 +63,6 @@ class _SettingsScreenState extends State<SettingsScreen> {
     _settingsState = settingsState;
     _originalSettings = settingsState.settings;
     _currentFormSettings = _originalSettings.copyWith();
-    _pageOptions = List.unmodifiable(widget.pageOptions);
     _originalSettings = settingsState.settings;
     _currentFormSettings = _originalSettings.copyWith();
 
@@ -125,8 +121,6 @@ class _SettingsScreenState extends State<SettingsScreen> {
       }
 
       _currentFormSettings = switch (field) {
-        SettingTextField.rclonePath =>
-          _currentFormSettings.copyWith(rclonePath: value),
         SettingTextField.rcloneRemoteName =>
           _currentFormSettings.copyWith(rcloneRemoteName: value),
         SettingTextField.adbPath =>
@@ -146,7 +140,6 @@ class _SettingsScreenState extends State<SettingsScreen> {
   void _updateAllControllers() {
     for (final setting in SettingTextField.values) {
       _textControllers[setting]?.text = switch (setting) {
-        SettingTextField.rclonePath => _currentFormSettings.rclonePath,
         SettingTextField.rcloneRemoteName =>
           _currentFormSettings.rcloneRemoteName,
         SettingTextField.adbPath => _currentFormSettings.adbPath,
@@ -399,7 +392,7 @@ class _SettingsScreenState extends State<SettingsScreen> {
 
   List<Widget> _buildSettingsSections(
       AppLocalizations l10n, SettingsState settingsState) {
-    return [
+    final sections = <Widget>[
       _buildSection(
         title: l10n.settingsSectionAppearance,
         children: [
@@ -494,7 +487,7 @@ class _SettingsScreenState extends State<SettingsScreen> {
           _buildDropdownSetting<String>(
             label: l10n.settingsStartupPage,
             value: _currentFormSettings.startupPageKey,
-            items: _pageOptions
+            items: _computeStartupPageOptions(settingsState, l10n)
                 .map((page) => DropdownMenuItem(
                       value: page.key,
                       child: Text(page.label(l10n)),
@@ -603,67 +596,97 @@ class _SettingsScreenState extends State<SettingsScreen> {
         ],
       ),
       const SizedBox(height: SettingsConstants.sectionSpacing),
+    ];
+
+    // Downloader section
+    sections.addAll([
+      const SizedBox(height: SettingsConstants.sectionSpacing),
       _buildSection(
         title: l10n.settingsSectionDownloader,
         children: [
-          _buildPathSetting(
-            field: SettingTextField.rclonePath,
-            label: l10n.settingsRclonePath,
-            isDirectory: false,
-            currentValue: _currentFormSettings.rclonePath,
-          ),
-          _buildRcloneRemoteSelector(l10n),
-          // TODO: implement
-          _buildTextSetting(
-            field: SettingTextField.bandwidthLimit,
-            enabled: false,
-            label: l10n.settingsBandwidthLimit,
-            // helperText:
-            //     'Value in KiB/s or with B|K|M|G|T|P suffix (empty for no limit)',
-            helper: InkWell(
-              onTap: () =>
-                  _launchURL('https://rclone.org/docs/#bwlimit-bandwidth-spec'),
-              child: Text(
-                l10n.settingsBandwidthHelper,
-                style: Theme.of(context).textTheme.bodySmall?.copyWith(
-                      color: Theme.of(context).hintColor,
-                    ),
+          if (settingsState.isDownloaderAvailable) ...[
+            _buildRcloneRemoteSelector(l10n),
+            _buildTextSetting(
+              field: SettingTextField.bandwidthLimit,
+              enabled: false,
+              label: l10n.settingsBandwidthLimit,
+              helper: InkWell(
+                onTap: () => _launchURL(
+                    'https://rclone.org/docs/#bwlimit-bandwidth-spec'),
+                child: Text(
+                  l10n.settingsBandwidthHelper,
+                  style: Theme.of(context).textTheme.bodySmall?.copyWith(
+                        color: Theme.of(context).hintColor,
+                      ),
+                ),
               ),
             ),
-          ),
-          _buildDropdownSetting<DownloadCleanupPolicy>(
-            label: l10n.settingsDownloadsCleanup,
-            value: _currentFormSettings.cleanupPolicy,
-            items: DownloadCleanupPolicy.values.map((policy) {
-              return DropdownMenuItem(
-                value: policy,
-                child: Text(_formatCleanupPolicy(l10n, policy)),
-              );
-            }).toList(),
-            onChanged: (value) {
-              if (value != null) {
-                setState(() => _currentFormSettings =
-                    _currentFormSettings.copyWith(cleanupPolicy: value));
-                _checkForChanges();
-              }
-            },
-          ),
-          const SizedBox(height: SettingsConstants.verticalSpacing),
-          SwitchListTile(
-            title: Text(l10n.settingsWriteLegacyReleaseJson),
-            subtitle: Text(l10n.settingsWriteLegacyReleaseJsonHelp),
-            value: _currentFormSettings.writeLegacyReleaseJson,
-            onChanged: (v) {
-              setState(() {
-                _currentFormSettings =
-                    _currentFormSettings.copyWith(writeLegacyReleaseJson: v);
-                _checkForChanges();
-              });
-            },
+            _buildDropdownSetting<DownloadCleanupPolicy>(
+              label: l10n.settingsDownloadsCleanup,
+              value: _currentFormSettings.cleanupPolicy,
+              items: DownloadCleanupPolicy.values.map((policy) {
+                return DropdownMenuItem(
+                  value: policy,
+                  child: Text(_formatCleanupPolicy(l10n, policy)),
+                );
+              }).toList(),
+              onChanged: (value) {
+                if (value != null) {
+                  setState(() => _currentFormSettings =
+                      _currentFormSettings.copyWith(cleanupPolicy: value));
+                  _checkForChanges();
+                }
+              },
+            ),
+            const SizedBox(height: SettingsConstants.verticalSpacing),
+            SwitchListTile(
+              title: Text(l10n.settingsWriteLegacyReleaseJson),
+              subtitle: Text(l10n.settingsWriteLegacyReleaseJsonHelp),
+              value: _currentFormSettings.writeLegacyReleaseJson,
+              onChanged: (v) {
+                setState(() {
+                  _currentFormSettings =
+                      _currentFormSettings.copyWith(writeLegacyReleaseJson: v);
+                  _checkForChanges();
+                });
+              },
+            ),
+          ],
+          Align(
+            alignment: Alignment.centerLeft,
+            child: TextButton.icon(
+              onPressed: () async {
+                final result = await FilePicker.platform.pickFiles(
+                  allowMultiple: false,
+                  type: FileType.custom,
+                  allowedExtensions: const ['json'],
+                );
+                final path = result?.files.single.path;
+                if (path != null) {
+                  InstallDownloaderConfigRequest(sourcePath: path)
+                      .sendSignalToRust();
+                }
+              },
+              icon: const Icon(Icons.file_open),
+              label: Text(l10n.installDownloaderConfig),
+            ),
           ),
         ],
       ),
-    ];
+    ]);
+
+    return sections;
+  }
+
+  List<StartupPageOption> _computeStartupPageOptions(
+      SettingsState settingsState, AppLocalizations l10n) {
+    final all = AppPageRegistry.pages
+        .map((page) => (key: page.key, label: page.label))
+        .toList(growable: false);
+    if (settingsState.isDownloaderAvailable) return all;
+    return all
+        .where((e) => e.key != 'download' && e.key != 'downloads')
+        .toList(growable: false);
   }
 
   Widget _buildSection({

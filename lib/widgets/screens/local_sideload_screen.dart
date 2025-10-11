@@ -8,14 +8,14 @@ import '../../providers/app_state.dart';
 import '../../src/l10n/app_localizations.dart';
 import '../common/no_device_connected_indicator.dart';
 
-class LocalSideload extends StatefulWidget {
-  const LocalSideload({super.key});
+class LocalSideloadScreen extends StatefulWidget {
+  const LocalSideloadScreen({super.key});
 
   @override
-  State<LocalSideload> createState() => _LocalSideloadState();
+  State<LocalSideloadScreen> createState() => _LocalSideloadScreenState();
 }
 
-class _LocalSideloadState extends State<LocalSideload> {
+class _LocalSideloadScreenState extends State<LocalSideloadScreen> {
   final _pathController = TextEditingController();
   bool _isDirectory = false;
   AppState? _appState;

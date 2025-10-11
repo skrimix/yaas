@@ -80,7 +80,7 @@ pub struct TaskManager {
     id_counter: AtomicU64,
     tasks: Mutex<HashMap<u64, (TaskType, CancellationToken)>>,
     adb_handler: Arc<AdbHandler>,
-    downloader: Arc<Downloader>,
+    downloader: RwLock<Option<Arc<Downloader>>>,
     downloads_catalog: Arc<DownloadsCatalog>,
     settings: RwLock<Settings>,
 }
@@ -88,7 +88,7 @@ pub struct TaskManager {
 impl TaskManager {
     pub fn new(
         adb_handler: Arc<AdbHandler>,
-        downloader: Arc<Downloader>,
+        downloader: Option<Arc<Downloader>>,
         downloads_catalog: Arc<DownloadsCatalog>,
         mut settings_stream: WatchStream<Settings>,
     ) -> Arc<Self> {
@@ -101,7 +101,7 @@ impl TaskManager {
             id_counter: AtomicU64::new(0),
             tasks: Mutex::new(HashMap::new()),
             adb_handler,
-            downloader,
+            downloader: RwLock::new(downloader),
             downloads_catalog,
             settings: RwLock::new(initial_settings),
         });
@@ -125,6 +125,17 @@ impl TaskManager {
         });
 
         handle
+    }
+
+    pub async fn set_downloader(&self, downloader: Option<Arc<Downloader>>) {
+        let mut guard = self.downloader.write().await;
+        let old = guard.take();
+        *guard = downloader;
+        drop(guard);
+        if let Some(d) = old {
+            // TODO: this shouldn't be done from TaskManager
+            d.shutdown().await;
+        }
     }
 
     #[instrument(skip(self))]
@@ -434,6 +445,10 @@ impl TaskManager {
         update_progress: &impl Fn(ProgressUpdate),
         token: CancellationToken,
     ) -> Result<String> {
+        ensure!(
+            self.downloader.read().await.is_some(),
+            "Downloader is not configured. Install configuration file to initialize."
+        );
         update_progress(ProgressUpdate {
             status: TaskStatus::Waiting,
             step_number,
@@ -457,7 +472,7 @@ impl TaskManager {
         let (tx, mut rx) = mpsc::unbounded_channel::<RcloneTransferStats>();
 
         let mut download_task = {
-            let downloader = self.downloader.clone();
+            let downloader = self.downloader.read().await.as_ref().unwrap().clone();
             let app_full_name = app_full_name.to_string();
             let token = token.clone();
             tokio::spawn(
@@ -1013,6 +1028,13 @@ impl TaskManager {
         )
         .await
         .map(|_| ())
+    }
+}
+
+#[cfg(test)]
+impl TaskManager {
+    pub async fn __test_has_downloader(&self) -> bool {
+        self.downloader.read().await.is_some()
     }
 }
 

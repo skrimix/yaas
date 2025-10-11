@@ -10,7 +10,7 @@ import '../../providers/app_state.dart';
 import '../../src/bindings/bindings.dart';
 import '../../providers/device_state.dart';
 import '../../providers/settings_state.dart';
-import 'cloud_app_list.dart';
+import '../app_management/cloud_app_list.dart';
 
 enum SortOption {
   name,
@@ -18,14 +18,14 @@ enum SortOption {
   size,
 }
 
-class DownloadApps extends StatefulWidget {
-  const DownloadApps({super.key});
+class DownloadAppsScreen extends StatefulWidget {
+  const DownloadAppsScreen({super.key});
 
   @override
-  State<DownloadApps> createState() => _DownloadAppsState();
+  State<DownloadAppsScreen> createState() => _DownloadAppsScreenState();
 }
 
-class _DownloadAppsState extends State<DownloadApps> {
+class _DownloadAppsScreenState extends State<DownloadAppsScreen> {
   SortOption _sortOption = SortOption.name;
   bool _sortAscending = true;
   List<CachedAppData>? _sortedApps;
@@ -702,16 +702,32 @@ class _DownloadAppsState extends State<DownloadApps> {
 
   @override
   Widget build(BuildContext context) {
+    final settingsState = context.watch<SettingsState>();
     return Consumer<CloudAppsState>(
       builder: (context, cloudAppsState, _) {
         final l10n = AppLocalizations.of(context);
-        if (cloudAppsState.isLoading) {
-          return const Center(
-            child: CircularProgressIndicator(),
+        final showDownloaderInit = settingsState.isDownloaderInitializing;
+        final showDownloaderError =
+            !showDownloaderInit && settingsState.downloaderError != null;
+
+        if (cloudAppsState.isLoading &&
+            !showDownloaderInit &&
+            !showDownloaderError) {
+          return Center(
+            child: Column(
+              mainAxisSize: MainAxisSize.min,
+              children: [
+                const CircularProgressIndicator(),
+                const SizedBox(height: 12),
+                Text(AppLocalizations.of(context).loadingApps),
+              ],
+            ),
           );
         }
 
-        if (cloudAppsState.error != null) {
+        if (cloudAppsState.error != null &&
+            !showDownloaderInit &&
+            !showDownloaderError) {
           return Center(
             child: Column(
               mainAxisSize: MainAxisSize.min,
@@ -745,42 +761,53 @@ class _DownloadAppsState extends State<DownloadApps> {
           body: SafeArea(
             child: Column(
               children: [
-                Padding(
-                  padding: const EdgeInsets.all(16.0),
-                  child: Row(
-                    children: [
-                      Text(
-                        l10n.availableApps,
-                        style: Theme.of(context).textTheme.titleLarge,
-                      ),
-                      const Spacer(),
-                      if (!_showOnlySelected) _buildSearchButton(),
-                      if (_showCheckboxes) _buildFilterButton(),
-                      IconButton(
-                        icon: Icon(
-                          _showOnlyFavorites ? Icons.star : Icons.star_border,
+                if (!showDownloaderInit)
+                  Padding(
+                    padding: const EdgeInsets.all(16.0),
+                    child: Row(
+                      children: [
+                        Text(
+                          l10n.availableApps,
+                          style: Theme.of(context).textTheme.titleLarge,
                         ),
-                        tooltip: _showOnlyFavorites
-                            ? l10n.showAllItems
-                            : l10n.showFavoritesOnly,
-                        onPressed: _toggleShowOnlyFavorites,
-                      ),
-                      IconButton(
-                        icon: Icon(_showCheckboxes
-                            ? Icons.check_box
-                            : Icons.check_box_outline_blank),
-                        tooltip: l10n.multiSelect,
-                        onPressed: _toggleCheckboxVisibility,
-                      ),
-                      _buildSortButton(),
-                      IconButton(
-                        icon: const Icon(Icons.refresh),
-                        tooltip: l10n.refresh,
-                        onPressed: () => cloudAppsState.refresh(),
-                      ),
-                    ],
+                        const Spacer(),
+                        if (!_showOnlySelected) _buildSearchButton(),
+                        if (_showCheckboxes) _buildFilterButton(),
+                        IconButton(
+                          icon: Icon(
+                            _showOnlyFavorites ? Icons.star : Icons.star_border,
+                          ),
+                          tooltip: _showOnlyFavorites
+                              ? l10n.showAllItems
+                              : l10n.showFavoritesOnly,
+                          onPressed: _toggleShowOnlyFavorites,
+                        ),
+                        IconButton(
+                          icon: Icon(_showCheckboxes
+                              ? Icons.check_box
+                              : Icons.check_box_outline_blank),
+                          tooltip: l10n.multiSelect,
+                          onPressed: _toggleCheckboxVisibility,
+                        ),
+                        _buildSortButton(),
+                        IconButton(
+                          icon: const Icon(Icons.refresh),
+                          tooltip: l10n.refresh,
+                          onPressed: () => cloudAppsState.refresh(),
+                        ),
+                      ],
+                    ),
                   ),
-                ),
+                if (showDownloaderInit)
+                  Padding(
+                    padding: const EdgeInsets.fromLTRB(16, 0, 16, 8),
+                    child: _buildInitBanner(settingsState),
+                  ),
+                if (!showDownloaderInit && showDownloaderError)
+                  Padding(
+                    padding: const EdgeInsets.fromLTRB(16, 0, 16, 8),
+                    child: _buildErrorBanner(settingsState.downloaderError!),
+                  ),
                 if (_showOnlySelected && _selectedFullNames.isNotEmpty)
                   Padding(
                     padding: const EdgeInsets.fromLTRB(16, 0, 16, 8),
@@ -845,6 +872,62 @@ class _DownloadAppsState extends State<DownloadApps> {
           ),
         );
       },
+    );
+  }
+
+  Widget _buildInitBanner(SettingsState s) {
+    final l10n = AppLocalizations.of(context);
+    final progress = s.downloaderInitProgress;
+    return Card(
+      child: Padding(
+        padding: const EdgeInsets.all(12.0),
+        child: Row(
+          children: [
+            const SizedBox(
+                width: 16,
+                height: 16,
+                child: CircularProgressIndicator(strokeWidth: 2)),
+            const SizedBox(width: 12),
+            Expanded(
+              child: Column(
+                crossAxisAlignment: CrossAxisAlignment.start,
+                children: [
+                  Text(l10n.preparingDownloader),
+                  const SizedBox(height: 4),
+                  LinearProgressIndicator(value: progress),
+                  const SizedBox(height: 4),
+                  Text(l10n.downloadingRcloneFiles,
+                      style: const TextStyle(fontSize: 12)),
+                ],
+              ),
+            ),
+          ],
+        ),
+      ),
+    );
+  }
+
+  Widget _buildErrorBanner(String error) {
+    return Card(
+      color: Colors.red.withValues(alpha: 0.08),
+      child: Padding(
+        padding: const EdgeInsets.all(12.0),
+        child: Row(
+          children: [
+            const Icon(Icons.error_outline, color: Colors.red),
+            const SizedBox(width: 8),
+            Expanded(child: Text(error)),
+            const SizedBox(width: 12),
+            FilledButton.tonalIcon(
+              onPressed: () {
+                const RetryDownloaderInitRequest().sendSignalToRust();
+              },
+              icon: const Icon(Icons.refresh),
+              label: const Text('Retry'),
+            ),
+          ],
+        ),
+      ),
     );
   }
 }

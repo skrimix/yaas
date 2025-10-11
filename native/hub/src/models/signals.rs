@@ -2,6 +2,7 @@ pub mod adb;
 pub mod backups;
 pub mod casting;
 pub mod cloud_apps;
+pub mod downloader;
 pub mod downloads_local;
 pub mod logging;
 pub mod settings;

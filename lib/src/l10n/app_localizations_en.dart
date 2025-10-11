@@ -116,6 +116,18 @@ class AppLocalizationsEn extends AppLocalizations {
   String get settingsSectionDownloader => 'Downloader';
 
   @override
+  String get preparingDownloader => 'Preparing downloader...';
+
+  @override
+  String get downloadingRcloneFiles => 'Downloading rclone files';
+
+  @override
+  String get installDownloaderConfig => 'Install downloader config';
+
+  @override
+  String get loadingApps => 'Loading apps...';
+
+  @override
   String get settingsSectionAppearance => 'Appearance';
 
   @override

@@ -7,8 +7,8 @@ import '../../src/l10n/app_localizations.dart';
 import '../device/device_actions.dart';
 import '../common/no_device_connected_indicator.dart';
 
-class Home extends StatelessWidget {
-  const Home({super.key});
+class HomeScreen extends StatelessWidget {
+  const HomeScreen({super.key});
 
   // Applies a monochrome tint that follows the theme.
   ColorFilter? _monoIconFilter(BuildContext context) {

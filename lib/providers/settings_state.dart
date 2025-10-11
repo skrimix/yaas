@@ -5,7 +5,6 @@ import '../utils/theme_utils.dart' as app_theme;
 
 class SettingsState extends ChangeNotifier {
   Settings _settings = Settings(
-    rclonePath: '',
     rcloneRemoteName: '',
     adbPath: '',
     preferredConnectionType: ConnectionType.usb,
@@ -28,6 +27,12 @@ class SettingsState extends ChangeNotifier {
   String? _error;
   bool _hasLoaded = false;
   final List<String> _availableStartupKeys = AppPageRegistry.pageKeys;
+  // TODO: move to a separate state object or to app state or put in a struct
+  bool _downloaderAvailable = false;
+  bool _downloaderInitializing = false;
+  String? _downloaderError;
+  int _downloaderInitBytes = 0;
+  int? _downloaderInitTotal;
 
   List<String> _rcloneRemotes = const [];
   bool _isRemotesLoading = true;
@@ -74,6 +79,21 @@ class SettingsState extends ChangeNotifier {
       // (UI will treat as custom when not found)
       notifyListeners();
     });
+
+    DownloaderAvailabilityChanged.rustSignalStream.listen((event) {
+      final msg = event.message;
+      _downloaderAvailable = msg.available;
+      _downloaderInitializing = msg.initializing;
+      _downloaderError = msg.error;
+      notifyListeners();
+    });
+
+    DownloaderInitProgress.rustSignalStream.listen((event) {
+      final p = event.message;
+      _downloaderInitBytes = p.bytes.toInt();
+      _downloaderInitTotal = p.totalBytes?.toInt();
+      notifyListeners();
+    });
   }
 
   Future<void> load() async {
@@ -103,6 +123,15 @@ class SettingsState extends ChangeNotifier {
   List<String> get rcloneRemotes => _rcloneRemotes;
   bool get isRemotesLoading => _isRemotesLoading;
   String? get remotesError => _remotesError;
+  bool get isDownloaderAvailable => _downloaderAvailable;
+  bool get isDownloaderInitializing => _downloaderInitializing;
+  String? get downloaderError => _downloaderError;
+  int get downloaderInitBytes => _downloaderInitBytes;
+  int? get downloaderInitTotal => _downloaderInitTotal;
+  double? get downloaderInitProgress =>
+      _downloaderInitTotal == null || _downloaderInitTotal == 0
+          ? null
+          : _downloaderInitBytes / _downloaderInitTotal!;
   Locale? get locale {
     final code = _settings.localeCode;
     if (code == 'system' || code.isEmpty) return null;

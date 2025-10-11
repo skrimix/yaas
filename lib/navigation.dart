@@ -1,12 +1,12 @@
 import 'package:flutter/material.dart';
 
 import 'src/l10n/app_localizations.dart';
-import 'widgets/app_management/download_apps.dart';
-import 'widgets/app_management/local_sideload.dart';
-import 'widgets/app_management/manage_apps.dart';
+import 'widgets/screens/download_apps_screen.dart';
+import 'widgets/screens/local_sideload_screen.dart';
+import 'widgets/screens/manage_apps_screen.dart';
 import 'widgets/screens/backups_screen.dart';
 import 'widgets/screens/downloads_screen.dart';
-import 'widgets/screens/home.dart';
+import 'widgets/screens/home_screen.dart';
 import 'widgets/screens/logs_screen.dart';
 import 'widgets/screens/settings_screen.dart';
 import 'widgets/screens/about_screen.dart';
@@ -54,19 +54,19 @@ class AppPageRegistry {
         key: 'home',
         icon: Icons.home,
         labelBuilder: (l10n) => l10n.navHome,
-        contentBuilder: () => const Home(),
+        contentBuilder: () => const HomeScreen(),
       ),
       AppPageDefinition(
         key: 'manage',
         icon: Icons.apps,
         labelBuilder: (l10n) => l10n.navManage,
-        contentBuilder: () => const ManageApps(),
+        contentBuilder: () => const ManageAppsScreen(),
       ),
       AppPageDefinition(
         key: 'download',
         icon: Icons.cloud_download,
         labelBuilder: (l10n) => l10n.navDownload,
-        contentBuilder: () => const DownloadApps(),
+        contentBuilder: () => const DownloadAppsScreen(),
       ),
       AppPageDefinition(
         key: 'downloads',
@@ -78,7 +78,7 @@ class AppPageRegistry {
         key: 'sideload',
         icon: Icons.arrow_circle_down,
         labelBuilder: (l10n) => l10n.navSideload,
-        contentBuilder: () => const LocalSideload(),
+        contentBuilder: () => const LocalSideloadScreen(),
       ),
       AppPageDefinition(
         key: 'backups',
@@ -90,11 +90,7 @@ class AppPageRegistry {
         key: 'settings',
         icon: Icons.settings,
         labelBuilder: (l10n) => l10n.navSettings,
-        contentBuilder: () => SettingsScreen(
-          pageOptions: pages
-              .map((page) => (key: page.key, label: page.label))
-              .toList(growable: false),
-        ),
+        contentBuilder: () => const SettingsScreen(),
       ),
       AppPageDefinition(
         key: 'logs',

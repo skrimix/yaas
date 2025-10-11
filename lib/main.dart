@@ -27,8 +27,6 @@ void main() async {
   WidgetsFlutterBinding.ensureInitialized();
   await DesktopWindow.setMinWindowSize(const Size(800, 600));
 
-  await initializeRust(messages.assignRustSignal);
-
   VideoPlayerMediaKit.ensureInitialized(
     macOS: true,
     windows: true,
@@ -49,6 +47,8 @@ void main() async {
       child: const YAASApp(),
     ),
   );
+
+  await initializeRust(messages.assignRustSignal);
 
   messages.Toast.rustSignalStream.listen((message) {
     final toast = message.message;
@@ -227,7 +227,15 @@ class _SinglePageState extends State<SinglePage> {
   Widget build(BuildContext context) {
     final l10n = AppLocalizations.of(context);
     final settingsState = context.watch<SettingsState>();
-    final pageDefinitions = AppPageRegistry.pages;
+    final allPages = AppPageRegistry.pages;
+    final showDownloaderPages = settingsState.isDownloaderAvailable ||
+        settingsState.isDownloaderInitializing ||
+        settingsState.downloaderError != null;
+    final pageDefinitions = showDownloaderPages
+        ? allPages
+        : allPages
+            .where((p) => p.key != 'download' && p.key != 'downloads')
+            .toList();
     final destinations = pageDefinitions
         .map((page) => page.toNavigationDestination(l10n))
         .toList();
@@ -255,6 +263,10 @@ class _SinglePageState extends State<SinglePage> {
       messages.NavigationRailLabelVisibility.selected =>
         NavigationRailLabelType.selected,
     };
+    // Clamp pageIndex if the number of destinations shrank
+    if (pageIndex >= pageDefinitions.length) {
+      pageIndex = 0;
+    }
     return Scaffold(
         body: Row(
       children: [

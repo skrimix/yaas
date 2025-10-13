@@ -53,7 +53,7 @@ pub async fn prepare_artifacts(
     // Try to update config first
     match download_if_needed(&client, conf_src, &conf_dst, meta.get(conf_src)).await {
         Ok(DownloadResult::NotModified) => {
-            info!("rclone config not modified; using cached copy");
+            info!("rclone config not modified, using cached copy");
         }
         Ok(DownloadResult::Downloaded(entry)) => {
             info!(path = %conf_dst.display(), "Updated rclone config cache");
@@ -62,7 +62,7 @@ pub async fn prepare_artifacts(
         Err(e) => {
             warn!(
                 error = e.as_ref() as &dyn std::error::Error,
-                "Failed to update rclone config; using cached copy if available"
+                "Failed to update rclone config, using cached copy if available"
             );
             ensure!(
                 conf_dst.exists(),
@@ -75,7 +75,7 @@ pub async fn prepare_artifacts(
     // Then binary
     match download_if_needed(&client, &bin_src, &bin_dst, meta.get(&bin_src)).await {
         Ok(DownloadResult::NotModified) => {
-            info!("rclone binary not modified; using cached copy");
+            info!("rclone binary not modified, using cached copy");
         }
         Ok(DownloadResult::Downloaded(entry)) => {
             info!(path = %bin_dst.display(), "Updated rclone binary cache");
@@ -92,7 +92,7 @@ pub async fn prepare_artifacts(
         Err(e) => {
             warn!(
                 error = e.as_ref() as &dyn std::error::Error,
-                "Failed to update rclone binary; using cached copy if available"
+                "Failed to update rclone binary, using cached copy if available"
             );
             ensure!(
                 bin_dst.exists(),

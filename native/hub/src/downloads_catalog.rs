@@ -295,11 +295,11 @@ impl DownloadsCatalog {
 
         match policy {
             Policy::KeepAllVersions => {
-                info!("Cleanup policy: keep all versions; nothing to do");
+                info!("Cleanup policy: keep all versions, nothing to do");
                 return Ok(());
             }
             Policy::DeleteAfterInstall => {
-                info!("Cleanup policy: delete after install; removing downloaded directory");
+                info!("Cleanup policy: delete after install, removing downloaded directory");
                 let path = Path::new(installed_path);
                 if !path.exists() {
                     debug!(missing = %path.display(), "Downloaded directory no longer exists");
@@ -334,7 +334,7 @@ impl DownloadsCatalog {
                 if base_name.is_empty() {
                     warn!(
                         installed = installed_full_name,
-                        "Unable to determine base name for cleanup; skipping"
+                        "Unable to determine base name for cleanup, skipping"
                     );
                     return Ok(());
                 }

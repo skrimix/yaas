@@ -81,7 +81,7 @@ pub fn resolve_binary_path(custom_path: Option<&str>, base_name: &str) -> Result
         if let Ok(found) = which::which(raw) {
             return Ok(found);
         }
-        warn!(raw, "Custom path did not resolve; looking for binary by name");
+        warn!(raw, "Custom path did not resolve, looking for binary by name");
     }
 
     // 2) Next to current executable (bundled)

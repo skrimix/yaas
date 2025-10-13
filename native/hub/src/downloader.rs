@@ -147,13 +147,12 @@ impl Downloader {
                 loop {
                     tokio::select! {
                         _ = handle.cancel_token.cancelled() => {
-                            info!("Downloader settings listener cancelled; exiting");
+                            info!("Downloader settings listener cancelled, exiting");
                             return;
                         }
                         maybe_settings = settings_stream.next() => {
                             let Some(settings) = maybe_settings else {
-                                info!("Settings stream closed; exiting downloader settings listener");
-                                return;
+                                panic!("Settings stream closed");
                             };
                             debug!("Downloader received settings update");
                             debug!(?settings, "New settings");
@@ -281,7 +280,7 @@ impl Downloader {
         loop {
             tokio::select! {
                 _ = self.cancel_token.cancelled() => {
-                    info!("Downloader command loop cancelled; exiting");
+                    info!("Downloader command loop cancelled, exiting");
                     return;
                 }
                 request = load_cloud_apps_receiver.recv() => {
@@ -290,7 +289,7 @@ impl Downloader {
                         let token = self.current_load_token.read().await.clone();
                         self.load_app_list(request.message.refresh, token).await;
                     } else {
-                        info!("LoadCloudAppsRequest receiver closed; shutting down downloader command loop");
+                        info!("LoadCloudAppsRequest receiver closed, shutting down downloader command loop");
                         return;
                     }
                 }
@@ -308,7 +307,7 @@ impl Downloader {
                             }
                         }
                     } else {
-                        info!("GetRcloneRemotesRequest receiver closed; shutting down downloader command loop");
+                        info!("GetRcloneRemotesRequest receiver closed, shutting down downloader command loop");
                         return;
                     }
                 }
@@ -348,7 +347,7 @@ impl Downloader {
                             }
                         });
                     } else {
-                        info!("GetAppDetailsRequest receiver closed; shutting down downloader command loop");
+                        info!("GetAppDetailsRequest receiver closed, shutting down downloader command loop");
                         return;
                     }
                 }
@@ -372,7 +371,7 @@ impl Downloader {
                             }
                         });
                     } else {
-                        info!("GetAppReviewsRequest receiver closed; shutting down downloader command loop");
+                        info!("GetAppReviewsRequest receiver closed, shutting down downloader command loop");
                         return;
                     }
                 }

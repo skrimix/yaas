@@ -81,7 +81,7 @@ impl RcloneClient {
                     warn!(
                         error = e.as_ref() as &dyn Error,
                         original = %rclone_path.display(),
-                        "Failed to resolve rclone path; using provided value"
+                        "Failed to resolve rclone path, using provided value"
                     );
                     rclone_path
                 }
@@ -305,7 +305,7 @@ impl RcloneStorage {
             Some(pat) => match Regex::new(pat) {
                 Ok(r) => Some(r),
                 Err(e) => {
-                    warn!(pattern = %pat, error = &e as &dyn Error, "Invalid remote filter regex; ignoring");
+                    warn!(pattern = %pat, error = &e as &dyn Error, "Invalid remote filter regex, ignoring");
                     None
                 }
             },

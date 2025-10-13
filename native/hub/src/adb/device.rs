@@ -1352,7 +1352,7 @@ impl AdbDevice {
         }
 
         if backup_empty {
-            info!("Nothing backed up; cleaning up empty directory");
+            info!("Nothing backed up, cleaning up empty directory");
             let _ = fs::remove_dir_all(&backup_path).await;
             return Ok(None);
         }

@@ -480,6 +480,7 @@ class _DeviceSwitcherLabelState extends State<_DeviceSwitcherLabel>
                 borderRadius: BorderRadius.circular(6),
               ),
               clipBehavior: Clip.antiAlias,
+              color: Theme.of(context).colorScheme.surfaceContainerHigh,
               elevation: 8,
               child: InkWell(
                 splashFactory: InkSplash.splashFactory,

@@ -91,7 +91,7 @@ impl RcloneClient {
     }
 
     #[instrument(skip(self), level = "trace")]
-    fn command(&self, args: &[&str]) -> Command {
+    fn command(&self, args: &[&str], use_json_log: bool) -> Command {
         let mut command = Command::new(&self.rclone_path);
         command.kill_on_drop(true);
 
@@ -105,7 +105,9 @@ impl RcloneClient {
         }
 
         command.arg("--config").arg(&self.config_path);
-        command.arg("--use-json-log");
+        if use_json_log {
+            command.arg("--use-json-log");
+        }
 
         command.args(args);
         trace!(command = ?command, "Constructed rclone command");
@@ -114,7 +116,7 @@ impl RcloneClient {
 
     #[instrument(skip(self), level = "trace")]
     async fn run_to_string(&self, args: &[&str]) -> Result<String> {
-        let output = self.command(args).output().await.context("rclone command failed")?;
+        let output = self.command(args, false).output().await.context("rclone command failed")?;
         if output.status.success() {
             let stdout = String::from_utf8_lossy(&output.stdout).to_string();
             trace!(stdout, "rclone command successful");
@@ -153,7 +155,7 @@ impl RcloneClient {
         operation: RcloneTransferOperation,
         cancellation_token: Option<CancellationToken>,
     ) -> Result<()> {
-        self.transfer_with_stats(source, dest, operation, 0, None, cancellation_token).await
+        self.transfer_internal(source, dest, operation, None, None, cancellation_token).await
     }
 
     #[instrument(skip(self, stats_tx, cancellation_token), err)]
@@ -166,10 +168,29 @@ impl RcloneClient {
         stats_tx: Option<UnboundedSender<RcloneTransferStats>>,
         cancellation_token: Option<CancellationToken>,
     ) -> Result<()> {
-        // TODO: create an internal function that both transfer and transfer_with_stats can use
-        // Disable json log for when not using stats
+        self.transfer_internal(
+            source,
+            dest,
+            operation,
+            Some(total_bytes),
+            stats_tx,
+            cancellation_token,
+        )
+        .await
+    }
+
+    #[instrument(skip(self, stats_tx, cancellation_token))]
+    async fn transfer_internal(
+        &self,
+        source: String,
+        dest: String,
+        operation: RcloneTransferOperation,
+        total_bytes: Option<u64>,
+        stats_tx: Option<UnboundedSender<RcloneTransferStats>>,
+        cancellation_token: Option<CancellationToken>,
+    ) -> Result<()> {
         ensure!(
-            total_bytes > 0 || stats_tx.is_none(),
+            total_bytes.is_some() || stats_tx.is_none(),
             "total_bytes must be provided if stats_tx is provided"
         );
 
@@ -196,12 +217,13 @@ impl RcloneClient {
 
         args.extend_from_slice(&[&source, &dest]);
 
-        let mut child = self.command(&args).stderr(Stdio::piped()).spawn()?;
+        let use_json_log = stats_tx.is_some();
+        let mut child = self.command(&args, use_json_log).stderr(Stdio::piped()).spawn()?;
         let stderr = child.stderr.take().context("Failed to get stderr")?;
         let mut lines = BufReader::new(stderr).lines();
 
         let transfer_future = async {
-            if let Some(stats_tx) = stats_tx {
+            if let (Some(stats_tx), Some(total_bytes)) = (stats_tx, total_bytes) {
                 while let Some(line) = lines.next_line().await? {
                     let line: String = line;
                     match serde_json::from_str::<RcloneStatLine>(&line) {

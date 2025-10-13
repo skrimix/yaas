@@ -1104,8 +1104,9 @@ impl AdbHandler {
         display_name: Option<&str>,
         backups_location: &Path,
         options: &BackupOptions,
+        token: CancellationToken,
     ) -> Result<Option<std::path::PathBuf>> {
-        device.backup_app(package_name, display_name, backups_location, options).await
+        device.backup_app(package_name, display_name, backups_location, options, token).await
     }
 
     /// Restores a backup to the currently connected device

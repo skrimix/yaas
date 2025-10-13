@@ -217,7 +217,7 @@ impl TaskManager {
         tokio::spawn({
             let handle = self.clone();
             async move {
-                handle.process_task(id, task_type, params, token).await;
+                Box::pin(handle.process_task(id, task_type, params, token)).await;
 
                 let mut tasks = handle.tasks.lock().await;
                 tasks.remove(&id);
@@ -969,6 +969,7 @@ impl TaskManager {
         let display_name = params.display_name.clone();
         let options_moved = options;
         let backups_path_moved = backups_path.clone();
+        let token_clone = token.clone();
 
         let maybe_created = self
             .run_adb_one_step(
@@ -993,6 +994,7 @@ impl TaskManager {
                                 display_name.as_deref(),
                                 backups_path.as_path(),
                                 &options,
+                                token_clone,
                             )
                             .await
                     }

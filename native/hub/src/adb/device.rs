@@ -760,6 +760,7 @@ impl AdbDevice {
                                 // Don't lose private data on reinstall, e.g. when the app is not debuggable
                                 require_private_data: true,
                             },
+                            CancellationToken::new(),
                         )
                         .await
                         .context("Failed to backup app for reinstall")?;
@@ -1167,6 +1168,7 @@ impl AdbDevice {
         display_name: Option<&str>,
         backups_location: &Path,
         options: &BackupOptions,
+        token: CancellationToken,
     ) -> Result<Option<PathBuf>> {
         // TODO: add a test for this
 
@@ -1239,14 +1241,32 @@ impl AdbDevice {
                 pkg = package_name,
                 priv_path = private_data_path.display(),
             );
-            let cmd_output = self.shell(&cmd).await?;
+            let cmd_output = await_or_cancel_backup(
+                &token,
+                &backup_path,
+                "run-as private data tar",
+                self.shell(&cmd),
+                async {
+                    let _ = self.shell("rm -rf /sdcard/backup_tmp/").await;
+                },
+            )
+            .await?;
             if !cmd_output.is_empty() {
                 debug!("Command output: {}", cmd_output);
             }
             if options.require_private_data && cmd_output.contains("run-as:") {
                 bail!("Private data backup failed: run-as failed: {}", cmd_output);
             }
-            self.pull_dir(&tmp_pkg, &private_data_backup_path).await?;
+            await_or_cancel_backup(
+                &token,
+                &backup_path,
+                "pull private data",
+                self.pull_dir(&tmp_pkg, &private_data_backup_path),
+                async {
+                    let _ = self.shell("rm -rf /sdcard/backup_tmp/").await;
+                },
+            )
+            .await?;
             let _ = self.shell("rm -rf /sdcard/backup_tmp/").await;
 
             let private_pkg_dir = private_data_backup_path.join(package_name);
@@ -1266,7 +1286,14 @@ impl AdbDevice {
             if self.dir_exists(&shared_data_path).await? {
                 debug!("Backing up shared data");
                 fs::create_dir_all(&shared_data_backup_path).await?;
-                self.pull_dir(&shared_data_path, &shared_data_backup_path).await?;
+                await_or_cancel_backup(
+                    &token,
+                    &backup_path,
+                    "pull shared data",
+                    self.pull_dir(&shared_data_path, &shared_data_backup_path),
+                    async {},
+                )
+                .await?;
 
                 let shared_pkg_dir = shared_data_backup_path.join(package_name);
                 if shared_pkg_dir.is_dir() {
@@ -1288,7 +1315,14 @@ impl AdbDevice {
         if options.backup_apk {
             debug!("Backing up APK");
             let apk_remote = self.get_apk_path(package_name).await?;
-            self.pull(UnixPath::new(&apk_remote), &backup_path).await?;
+            await_or_cancel_backup(
+                &token,
+                &backup_path,
+                "pull APK",
+                self.pull(UnixPath::new(&apk_remote), &backup_path),
+                async {},
+            )
+            .await?;
             backup_empty = false;
         }
 
@@ -1297,7 +1331,14 @@ impl AdbDevice {
             if self.dir_exists(&obb_path).await? {
                 debug!("Backing up OBB");
                 fs::create_dir_all(&obb_backup_path).await?;
-                self.pull_dir(&obb_path, &obb_backup_path).await?;
+                await_or_cancel_backup(
+                    &token,
+                    &backup_path,
+                    "pull OBB",
+                    self.pull_dir(&obb_path, &obb_backup_path),
+                    async {},
+                )
+                .await?;
 
                 let has_obb_files = dir_has_any_files(&obb_backup_path).await?;
                 if !has_obb_files {
@@ -1316,6 +1357,10 @@ impl AdbDevice {
             return Ok(None);
         }
 
+        if token.is_cancelled() {
+            let _ = fs::remove_dir_all(&backup_path).await;
+            bail!("Backup cancelled");
+        }
         // Marker file
         let _ = File::create(backup_path.join(".backup")).await?;
         info!(path = %backup_path.display(), "Backup created successfully");
@@ -1439,6 +1484,31 @@ impl AdbDevice {
         debug!("Cleaning up temporary APKs");
         self.shell("rm -rf /data/local/tmp/*.apk").await?;
         Ok(())
+    }
+}
+
+/// Awaits a future or, if cancellation is requested, deletes the incomplete backup directory and
+/// runs cleanup, then returns a cancellation error.
+#[instrument(skip(token, fut, backup_path, cleanup), fields(op = op_name), err)]
+async fn await_or_cancel_backup<T, F, C>(
+    token: &CancellationToken,
+    backup_path: &Path,
+    op_name: &str,
+    fut: F,
+    cleanup: C,
+) -> Result<T>
+where
+    F: std::future::Future<Output = Result<T>>,
+    C: std::future::Future<Output = ()>,
+{
+    tokio::select! {
+        res = fut => res,
+        _ = token.cancelled() => {
+            cleanup.await;
+            warn!(path = %backup_path.display(), op = op_name, "Backup cancelled, removing incomplete directory");
+            let _ = fs::remove_dir_all(backup_path).await;
+            Err(anyhow!("Backup cancelled during: {op_name}"))
+        }
     }
 }
 

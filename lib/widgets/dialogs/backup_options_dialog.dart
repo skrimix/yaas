@@ -28,14 +28,13 @@ class _BackupOptionsDialogState extends State<BackupOptionsDialog> {
     final name = app.label.isNotEmpty ? app.label : app.packageName;
 
     TaskRequest(
-      taskType: TaskType.backupApp,
-      params: TaskParams(
+      task: TaskBackupApp(
         packageName: app.packageName,
+        displayName: name,
         backupApk: _backupApk,
         backupData: _backupData,
         backupObb: _backupObb,
         backupNameAppend: suffix.isEmpty ? null : suffix,
-        displayName: name,
       ),
     ).sendSignalToRust();
 

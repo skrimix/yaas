@@ -1,11 +1,12 @@
 use core::fmt;
-use std::fmt::Display;
+use std::{fmt::Display, path::Path};
 
+use anyhow::Result;
 use rinf::{DartSignal, RustSignal, SignalPiece};
 use serde::{Deserialize, Serialize};
 
-#[derive(Clone, Copy, Serialize, Deserialize, SignalPiece)]
-pub enum TaskType {
+#[derive(Clone, Copy, Debug, Serialize, Deserialize, SignalPiece)]
+pub enum TaskKind {
     Download,
     DownloadInstall,
     InstallApk,
@@ -13,20 +14,6 @@ pub enum TaskType {
     Uninstall,
     BackupApp,
     RestoreBackup,
-}
-
-impl Display for TaskType {
-    fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
-        match self {
-            TaskType::Download => write!(f, "Download"),
-            TaskType::DownloadInstall => write!(f, "Download & Install"),
-            TaskType::InstallApk => write!(f, "Install APK"),
-            TaskType::InstallLocalApp => write!(f, "Install Local App"),
-            TaskType::Uninstall => write!(f, "Uninstall"),
-            TaskType::BackupApp => write!(f, "Backup App"),
-            TaskType::RestoreBackup => write!(f, "Restore Backup"),
-        }
-    }
 }
 
 #[derive(Clone, Copy, Debug, Serialize, Deserialize, SignalPiece)]
@@ -38,28 +25,90 @@ pub enum TaskStatus {
     Cancelled,
 }
 
-// TODO: make enum?
-#[derive(Clone, Serialize, Deserialize, Debug, SignalPiece)]
-pub struct TaskParams {
-    pub cloud_app_full_name: Option<String>,
-    pub apk_path: Option<String>,
-    pub local_app_path: Option<String>,
-    pub package_name: Option<String>,
-    /// Path to a backup directory (contains a `.backup` marker)
-    pub backup_path: Option<String>,
-    /// Backup options
-    pub backup_apk: Option<bool>,
-    pub backup_data: Option<bool>,
-    pub backup_obb: Option<bool>,
-    pub backup_name_append: Option<String>,
-    /// Human-friendly name to use for task name (e.g. app label)
-    pub display_name: Option<String>,
+/// Task with parameters.
+#[derive(Debug, Clone, Serialize, Deserialize, SignalPiece)]
+pub enum Task {
+    /// Download an app by full name (catalog entry identifier)
+    Download(String),
+    /// Download and then install an app by full name
+    DownloadInstall(String),
+    /// Install an APK from a single-file path
+    InstallApk(String),
+    /// Install a local app (a directory containing APK/manifest)
+    InstallLocalApp(String),
+    /// Uninstall a package. Optional display name is used only for UI.
+    Uninstall { package_name: String, display_name: Option<String> },
+    /// Create a backup for a package with selected parts.
+    BackupApp {
+        package_name: String,
+        display_name: Option<String>,
+        backup_apk: bool,
+        backup_data: bool,
+        backup_obb: bool,
+        backup_name_append: Option<String>,
+    },
+    /// Restore from a backup directory path (contains a `.backup` marker)
+    RestoreBackup(String),
+}
+
+impl Task {
+    pub fn kind_label(&self) -> &'static str {
+        match self {
+            Task::Download(_) => "Download",
+            Task::DownloadInstall(_) => "Download & Install",
+            Task::InstallApk(_) => "Install APK",
+            Task::InstallLocalApp(_) => "Install Local App",
+            Task::Uninstall { .. } => "Uninstall",
+            Task::BackupApp { .. } => "Backup App",
+            Task::RestoreBackup(_) => "Restore Backup",
+        }
+    }
+
+    pub fn task_name(&self) -> Result<String> {
+        Ok(match self {
+            Task::Download(name) | Task::DownloadInstall(name) => name.clone(),
+            Task::InstallApk(apk_path) => {
+                Path::new(apk_path).file_name().unwrap_or_default().to_string_lossy().to_string()
+            }
+            Task::InstallLocalApp(app_path) => {
+                Path::new(app_path).file_name().unwrap_or_default().to_string_lossy().to_string()
+            }
+            Task::Uninstall { package_name, display_name } => {
+                display_name.clone().unwrap_or_else(|| package_name.clone())
+            }
+            Task::BackupApp { package_name, display_name, .. } => {
+                display_name.clone().unwrap_or_else(|| package_name.clone())
+            }
+            Task::RestoreBackup(path) => {
+                Path::new(path).file_name().unwrap_or_default().to_string_lossy().to_string()
+            }
+        })
+    }
+}
+
+impl Display for Task {
+    fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
+        f.write_str(self.kind_label())
+    }
+}
+
+impl From<&Task> for TaskKind {
+    fn from(value: &Task) -> Self {
+        match value {
+            Task::Download(_) => TaskKind::Download,
+            Task::DownloadInstall(_) => TaskKind::DownloadInstall,
+            Task::InstallApk(_) => TaskKind::InstallApk,
+            Task::InstallLocalApp(_) => TaskKind::InstallLocalApp,
+            Task::Uninstall { .. } => TaskKind::Uninstall,
+            Task::BackupApp { .. } => TaskKind::BackupApp,
+            Task::RestoreBackup(_) => TaskKind::RestoreBackup,
+        }
+    }
 }
 
 #[derive(Serialize, Deserialize, DartSignal)]
 pub struct TaskRequest {
-    pub task_type: TaskType,
-    pub params: TaskParams,
+    pub task: Task,
 }
 
 #[derive(Serialize, Deserialize, DartSignal)]
@@ -70,7 +119,7 @@ pub struct TaskCancelRequest {
 #[derive(Serialize, Deserialize, RustSignal)]
 pub struct TaskProgress {
     pub task_id: u64,
-    pub task_type: TaskType,
+    pub task_kind: TaskKind,
     pub task_name: Option<String>,
     pub status: TaskStatus,
     /// Overall progress across all steps in range [0.0, 1.0]

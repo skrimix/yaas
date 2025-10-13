@@ -4,7 +4,7 @@ import '../src/bindings/bindings.dart';
 
 class TaskInfo {
   final int taskId;
-  final TaskType type;
+  final TaskKind kind;
   final String? taskName;
   final TaskStatus status;
   final double totalProgress;
@@ -17,7 +17,7 @@ class TaskInfo {
 
   TaskInfo({
     required this.taskId,
-    required this.type,
+    required this.kind,
     this.taskName,
     required this.status,
     required this.totalProgress,
@@ -41,7 +41,7 @@ class TaskInfo {
   }) {
     return TaskInfo(
       taskId: taskId,
-      type: type,
+      kind: kind,
       taskName: taskName ?? this.taskName,
       status: status ?? this.status,
       totalProgress: totalProgress ?? this.totalProgress,
@@ -111,7 +111,7 @@ class TaskState extends ChangeNotifier {
       } else {
         _tasks[taskId] = TaskInfo(
           taskId: taskId,
-          type: progress.taskType,
+          kind: progress.taskKind,
           taskName: progress.taskName,
           status: progress.status,
           totalProgress: progress.totalProgress,
@@ -123,8 +123,7 @@ class TaskState extends ChangeNotifier {
         );
 
         debugPrint(
-            '[TaskState] New task created: $taskId (${progress.taskName ?? 'Unknown'}) '
-            'type: ${progress.taskType}');
+            '[TaskState] New task created: $taskId (${progress.taskName ?? 'Unknown'}), task kind: ${progress.taskKind}');
       }
 
       _cleanupOldTasks();

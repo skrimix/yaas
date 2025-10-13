@@ -28,9 +28,7 @@ use crate::{
         signals::{
             backups::BackupsChanged,
             system::Toast,
-            task::{
-                TaskCancelRequest, TaskParams, TaskProgress, TaskRequest, TaskStatus, TaskType,
-            },
+            task::{Task, TaskCancelRequest, TaskKind, TaskProgress, TaskRequest, TaskStatus},
         },
     },
 };
@@ -56,6 +54,16 @@ struct AdbStepConfig<'a> {
     log_context: &'a str,
 }
 
+#[derive(Debug)]
+struct BackupStepConfig {
+    package_name: String,
+    display_name: Option<String>,
+    backup_apk: bool,
+    backup_data: bool,
+    backup_obb: bool,
+    backup_name_append: Option<String>,
+}
+
 macro_rules! acquire_permit_or_cancel {
     ($semaphore:expr, $token:expr, $semaphore_name:literal) => {{
         if $token.is_cancelled() {
@@ -78,7 +86,7 @@ pub struct TaskManager {
     adb_semaphore: Semaphore,
     download_semaphore: Semaphore,
     id_counter: AtomicU64,
-    tasks: Mutex<HashMap<u64, (TaskType, CancellationToken)>>,
+    tasks: Mutex<HashMap<u64, (Task, CancellationToken)>>,
     adb_handler: Arc<AdbHandler>,
     downloader: RwLock<Option<Arc<Downloader>>>,
     downloads_catalog: Arc<DownloadsCatalog>,
@@ -147,7 +155,7 @@ impl TaskManager {
             tokio::select! {
                 request = request_receiver.recv() => {
                     if let Some(request) = request {
-                        self.clone().enqueue_task(request.message.task_type, request.message.params).await;
+                        self.clone().enqueue_task(request.message.task).await;
                     } else {
                         panic!("TaskRequest receiver closed");
                     }
@@ -163,53 +171,16 @@ impl TaskManager {
         }
     }
 
-    #[instrument(skip(self), fields(task_type = %task_type))]
-    async fn enqueue_task(self: Arc<Self>, task_type: TaskType, params: TaskParams) -> u64 {
+    #[instrument(skip(self))]
+    async fn enqueue_task(self: Arc<Self>, task: Task) -> u64 {
         let id = self.id_counter.fetch_add(1, Ordering::Relaxed);
         let token = CancellationToken::new();
 
-        debug!(
-            task_id = id,
-            task_type = %task_type,
-            "Creating new task"
-        );
-
-        match &task_type {
-            TaskType::Download | TaskType::DownloadInstall => {
-                if let Some(app_name) = &params.cloud_app_full_name {
-                    debug!(task_id = id, app_name = %app_name, "Task parameters");
-                }
-            }
-            TaskType::InstallApk => {
-                if let Some(apk_path) = &params.apk_path {
-                    debug!(task_id = id, apk_path = %apk_path, "Task parameters");
-                }
-            }
-            TaskType::InstallLocalApp => {
-                if let Some(app_path) = &params.local_app_path {
-                    debug!(task_id = id, app_path = %app_path, "Task parameters");
-                }
-            }
-            TaskType::Uninstall => {
-                if let Some(package_name) = &params.package_name {
-                    debug!(task_id = id, package_name = %package_name, "Task parameters");
-                }
-            }
-            TaskType::BackupApp => {
-                if let Some(package_name) = &params.package_name {
-                    debug!(task_id = id, package_name = %package_name, "Task parameters");
-                }
-            }
-            TaskType::RestoreBackup => {
-                if let Some(path) = &params.backup_path {
-                    debug!(task_id = id, backup_path = %path, "Task parameters");
-                }
-            }
-        }
+        debug!(task_id = id, task = ?task, "Creating new task");
 
         let mut tasks = self.tasks.lock().await;
         let active_tasks_count = tasks.len();
-        tasks.insert(id, (task_type, token.clone()));
+        tasks.insert(id, (task.clone(), token.clone()));
         drop(tasks);
 
         debug!(task_id = id, active_tasks = active_tasks_count + 1, "Task added to queue");
@@ -217,7 +188,7 @@ impl TaskManager {
         tokio::spawn({
             let handle = self.clone();
             async move {
-                Box::pin(handle.process_task(id, task_type, params, token)).await;
+                Box::pin(handle.process_task(id, task, token)).await;
 
                 let mut tasks = handle.tasks.lock().await;
                 tasks.remove(&id);
@@ -233,10 +204,10 @@ impl TaskManager {
     #[instrument(skip(self))]
     async fn cancel_task(self: Arc<Self>, task_id: u64) {
         let tasks = self.tasks.lock().await;
-        if let Some((task_type, token)) = tasks.get(&task_id) {
+        if let Some((task, token)) = tasks.get(&task_id) {
             info!(
                 task_id = task_id,
-                task_type = %task_type,
+                task = %task,
                 active_tasks = tasks.len(),
                 "Received cancellation request for task"
             );
@@ -250,23 +221,12 @@ impl TaskManager {
         }
     }
 
-    #[instrument(skip(self, token), fields(task_type = %task_type))]
-    async fn process_task(
-        &self,
-        id: u64,
-        task_type: TaskType,
-        params: TaskParams,
-        token: CancellationToken,
-    ) {
+    #[instrument(skip(self, token))]
+    async fn process_task(&self, id: u64, task: Task, token: CancellationToken) {
         let start_time = std::time::Instant::now();
+        let task_kind = TaskKind::from(&task);
 
-        debug!(
-            task_id = id,
-            task_type = %task_type,
-            "Starting task processing"
-        );
-
-        let task_name = match get_task_name(task_type, &params) {
+        let task_name = match task.task_name() {
             Ok(name) => {
                 debug!(
                     task_id = id,
@@ -279,7 +239,7 @@ impl TaskManager {
                 error!(task_id = id, error = e.as_ref() as &dyn Error, "Failed to get task name");
                 send_progress(TaskProgress {
                     task_id: id,
-                    task_type,
+                    task_kind,
                     task_name: None,
                     status: TaskStatus::Failed,
                     total_progress: 0.0,
@@ -300,12 +260,13 @@ impl TaskManager {
             }
         };
 
-        let total_steps: u32 = match task_type {
-            TaskType::DownloadInstall => 2,
+        let total_steps: u32 = match &task {
+            Task::DownloadInstall(_) => 2,
             _ => 1,
         };
 
-        let update_progress = |u: ProgressUpdate| {
+        let task_name_clone = task_name.clone();
+        let update_progress = move |u: ProgressUpdate| {
             // debug!(
             //     task_id = id,
             //     status = ?status,
@@ -321,8 +282,8 @@ impl TaskManager {
 
             send_progress(TaskProgress {
                 task_id: id,
-                task_type,
-                task_name: Some(task_name.clone()),
+                task_kind,
+                task_name: Some(task_name_clone.clone()),
                 status: u.status,
                 total_progress,
                 message: u.message,
@@ -341,39 +302,59 @@ impl TaskManager {
 
         Toast::send(
             task_name.clone(),
-            format!("{task_type}: starting"),
+            format!("{}: starting", task.kind_label()),
             false,
             Some(Duration::from_secs(2)),
         );
 
-        let result = match task_type {
-            TaskType::Download => {
+        let result = match &task {
+            Task::Download(app) => {
                 info!(task_id = id, "Executing download task");
-                self.handle_download(params, &update_progress, token.clone()).await
+                self.handle_download(app.clone(), &update_progress, token.clone()).await
             }
-            TaskType::DownloadInstall => {
+            Task::DownloadInstall(app) => {
                 info!(task_id = id, "Executing download and install task");
-                self.handle_download_install(params, &update_progress, token.clone()).await
+                self.handle_download_install(app.clone(), &update_progress, token.clone()).await
             }
-            TaskType::InstallApk => {
+            Task::InstallApk(apk_path) => {
                 info!(task_id = id, "Executing APK install task");
-                self.handle_install_apk(params, &update_progress, token.clone()).await
+                self.handle_install_apk(apk_path.clone(), &update_progress, token.clone()).await
             }
-            TaskType::InstallLocalApp => {
+            Task::InstallLocalApp(app_path) => {
                 info!(task_id = id, "Executing local app install task");
-                self.handle_install_local_app(params, &update_progress, token.clone()).await
+                self.handle_install_local_app(app_path.clone(), &update_progress, token.clone())
+                    .await
             }
-            TaskType::Uninstall => {
+            Task::Uninstall { package_name, .. } => {
                 info!(task_id = id, "Executing uninstall task");
-                self.handle_uninstall(params, &update_progress, token.clone()).await
+                self.handle_uninstall(package_name.clone(), &update_progress, token.clone()).await
             }
-            TaskType::BackupApp => {
+            Task::BackupApp {
+                package_name,
+                display_name,
+                backup_apk,
+                backup_data,
+                backup_obb,
+                backup_name_append,
+            } => {
                 info!(task_id = id, "Executing backup task");
-                self.handle_backup(params, &update_progress, token.clone()).await
+                self.handle_backup(
+                    BackupStepConfig {
+                        package_name: package_name.clone(),
+                        display_name: display_name.clone(),
+                        backup_apk: *backup_apk,
+                        backup_data: *backup_data,
+                        backup_obb: *backup_obb,
+                        backup_name_append: backup_name_append.clone(),
+                    },
+                    &update_progress,
+                    token.clone(),
+                )
+                .await
             }
-            TaskType::RestoreBackup => {
+            Task::RestoreBackup(path) => {
                 info!(task_id = id, "Executing restore backup task");
-                self.handle_restore(params, &update_progress, token.clone()).await
+                self.handle_restore(path.clone(), &update_progress, token.clone()).await
             }
         };
 
@@ -393,7 +374,7 @@ impl TaskManager {
                     step_progress: Some(1.0),
                     message: "Done".into(),
                 });
-                Toast::send(task_name, format!("{task_type}: completed"), false, None);
+                Toast::send(task_name, format!("{}: completed", task.kind_label()), false, None);
             }
             Err(e) => {
                 // TODO: check error type?
@@ -410,7 +391,12 @@ impl TaskManager {
                         step_progress: None,
                         message: "Task cancelled by user".into(),
                     });
-                    Toast::send(task_name, format!("{task_type}: cancelled"), false, None);
+                    Toast::send(
+                        task_name,
+                        format!("{}: cancelled", task.kind_label()),
+                        false,
+                        None,
+                    );
                 } else {
                     error!(
                         task_id = id,
@@ -428,7 +414,7 @@ impl TaskManager {
                     });
                     Toast::send(
                         task_name,
-                        format!("{task_type}: failed"),
+                        format!("{}: failed", task.kind_label()),
                         true,
                         Some(Duration::from_secs(10)),
                     );
@@ -702,16 +688,13 @@ impl TaskManager {
         Ok(result)
     }
 
-    #[instrument(skip(self, params, update_progress, token))]
+    #[instrument(skip(self, update_progress, token))]
     async fn handle_download_install(
         &self,
-        params: TaskParams,
+        app_full_name: String,
         update_progress: &impl Fn(ProgressUpdate),
         token: CancellationToken,
     ) -> Result<()> {
-        let app_full_name =
-            params.cloud_app_full_name.context("Missing cloud_app_full_name parameter")?;
-
         debug!(
             app_name = %app_full_name,
             download_permits_available = self.download_semaphore.available_permits(),
@@ -770,16 +753,13 @@ impl TaskManager {
         Ok(())
     }
 
-    #[instrument(skip(self, params, update_progress, token))]
+    #[instrument(skip(self, update_progress, token))]
     async fn handle_download(
         &self,
-        params: TaskParams,
+        app_full_name: String,
         update_progress: &impl Fn(ProgressUpdate),
         token: CancellationToken,
     ) -> Result<()> {
-        let app_full_name =
-            params.cloud_app_full_name.context("Missing cloud_app_full_name parameter")?;
-
         debug!(
             app_name = %app_full_name,
             download_permits_available = self.download_semaphore.available_permits(),
@@ -791,15 +771,13 @@ impl TaskManager {
         Ok(())
     }
 
-    #[instrument(skip(self, params, update_progress, token))]
+    #[instrument(skip(self, update_progress, token))]
     async fn handle_install_apk(
         &self,
-        params: TaskParams,
+        apk_path: String,
         update_progress: &impl Fn(ProgressUpdate),
         token: CancellationToken,
     ) -> Result<()> {
-        let apk_path = params.apk_path.context("Missing apk_path parameter")?;
-
         debug!(
             apk_path = %apk_path,
             adb_permits_available = self.adb_semaphore.available_permits(),
@@ -833,15 +811,13 @@ impl TaskManager {
         .context("APK installation failed")
     }
 
-    #[instrument(skip(self, params, update_progress, token))]
+    #[instrument(skip(self, update_progress, token))]
     async fn handle_install_local_app(
         &self,
-        params: TaskParams,
+        app_path: String,
         update_progress: &impl Fn(ProgressUpdate),
         token: CancellationToken,
     ) -> Result<()> {
-        let app_path = params.local_app_path.context("Missing local_app_path parameter")?;
-
         debug!(
             app_path = %app_path,
             adb_permits_available = self.adb_semaphore.available_permits(),
@@ -882,15 +858,13 @@ impl TaskManager {
         .context("Local app installation failed")
     }
 
-    #[instrument(skip(self, params, update_progress, token))]
+    #[instrument(skip(self, update_progress, token))]
     async fn handle_uninstall(
         &self,
-        params: TaskParams,
+        package_name: String,
         update_progress: &impl Fn(ProgressUpdate),
         token: CancellationToken,
     ) -> Result<()> {
-        let package_name = params.package_name.context("Missing package_name parameter")?;
-
         debug!(
             package_name = %package_name,
             adb_permits_available = self.adb_semaphore.available_permits(),
@@ -919,23 +893,17 @@ impl TaskManager {
         .map(|_| ())
     }
 
-    #[instrument(skip(self, params, update_progress, token))]
+    #[instrument(skip(self, update_progress, token))]
     async fn handle_backup(
         &self,
-        params: TaskParams,
+        cfg: BackupStepConfig,
         update_progress: &impl Fn(ProgressUpdate),
         token: CancellationToken,
     ) -> Result<()> {
-        let package_name = params.package_name.context("Missing package_name parameter")?;
-
-        let backup_apk = params.backup_apk.unwrap_or(false);
-        let backup_data = params.backup_data.unwrap_or(false);
-        let backup_obb = params.backup_obb.unwrap_or(false);
-
-        ensure!(backup_apk || backup_data || backup_obb, "No parts selected to backup");
+        ensure!(cfg.backup_apk || cfg.backup_data || cfg.backup_obb, "No parts selected to backup");
 
         debug!(
-            package_name = %package_name,
+            package_name = %cfg.package_name,
             adb_permits_available = self.adb_semaphore.available_permits(),
             "Starting backup task"
         );
@@ -944,9 +912,9 @@ impl TaskManager {
         let device = adb_handler.current_device().await?;
 
         let parts = [
-            if backup_data { Some("data") } else { None },
-            if backup_apk { Some("apk") } else { None },
-            if backup_obb { Some("obb") } else { None },
+            if cfg.backup_data { Some("data") } else { None },
+            if cfg.backup_apk { Some("apk") } else { None },
+            if cfg.backup_obb { Some("obb") } else { None },
         ]
         .into_iter()
         .flatten()
@@ -956,17 +924,16 @@ impl TaskManager {
         let backups_path = std::path::PathBuf::from(backups_dir);
         debug!(path = %backups_path.display(), "Using backups location");
 
-        // Build options from params
         let options = BackupOptions {
-            name_append: params.backup_name_append.clone(),
-            backup_apk,
-            backup_data,
-            backup_obb,
-            require_private_data: true,
+            name_append: cfg.backup_name_append,
+            backup_apk: cfg.backup_apk,
+            backup_data: cfg.backup_data,
+            backup_obb: cfg.backup_obb,
+            require_private_data: false,
         };
 
-        let pkg = package_name.clone();
-        let display_name = params.display_name.clone();
+        let pkg = cfg.package_name.clone();
+        let display_name = cfg.display_name.clone();
         let options_moved = options;
         let backups_path_moved = backups_path.clone();
         let token_clone = token.clone();
@@ -1013,15 +980,13 @@ impl TaskManager {
         Ok(())
     }
 
-    #[instrument(skip(self, params, update_progress, token))]
+    #[instrument(skip(self, update_progress, token))]
     async fn handle_restore(
         &self,
-        params: TaskParams,
+        backup_path: String,
         update_progress: &impl Fn(ProgressUpdate),
         token: CancellationToken,
     ) -> Result<()> {
-        let backup_path = params.backup_path.context("Missing backup_path parameter")?;
-
         debug!(
             backup_path = %backup_path,
             adb_permits_available = self.adb_semaphore.available_permits(),
@@ -1049,16 +1014,7 @@ impl TaskManager {
         .await
         .map(|_| ())
     }
-}
 
-#[cfg(test)]
-impl TaskManager {
-    pub async fn __test_has_downloader(&self) -> bool {
-        self.downloader.read().await.is_some()
-    }
-}
-
-impl TaskManager {
     #[instrument(skip(self), fields(app_full_name = %app_full_name, app_path = %app_path), err)]
     async fn cleanup_downloads_after_install(
         &self,
@@ -1072,6 +1028,13 @@ impl TaskManager {
     }
 }
 
+#[cfg(test)]
+impl TaskManager {
+    pub async fn __test_has_downloader(&self) -> bool {
+        self.downloader.read().await.is_some()
+    }
+}
+
 fn send_progress(progress: TaskProgress) {
     // Log significant status changes (not every progress update to avoid spam)
     match progress.status {
@@ -1081,13 +1044,13 @@ fn send_progress(progress: TaskProgress) {
         | TaskStatus::Cancelled => {
             debug!(
                 task_id = progress.task_id,
-                task_type = %progress.task_type,
+                task_kind = ?progress.task_kind,
                 task_name = ?progress.task_name,
                 status = ?progress.status,
                 progress = progress.total_progress,
-                message = %progress.message,
+                progress_message = %progress.message,
                 "Sending progress signal to Dart"
-            ); // FIXME: doesn't show up on logs screen?
+            );
         }
         TaskStatus::Running => {
             // if progress.total_progress == 0.0
@@ -1105,49 +1068,4 @@ fn send_progress(progress: TaskProgress) {
     }
 
     progress.send_signal_to_dart();
-}
-
-fn get_task_name(task_type: TaskType, params: &TaskParams) -> Result<String> {
-    Ok(match task_type {
-        TaskType::Download | TaskType::DownloadInstall => params
-            .cloud_app_full_name
-            .as_ref()
-            .context("Missing cloud_app_full_name parameter")?
-            .clone(),
-        TaskType::InstallApk => {
-            Path::new(&params.apk_path.as_ref().context("Missing apk_path parameter")?)
-                .file_name()
-                .unwrap_or_default()
-                .to_string_lossy()
-                .to_string()
-        }
-        TaskType::InstallLocalApp => {
-            Path::new(&params.local_app_path.as_ref().context("Missing local_app_path parameter")?)
-                .file_name()
-                .unwrap_or_default()
-                .to_string_lossy()
-                .to_string()
-        }
-        TaskType::Uninstall => {
-            if let Some(name) = &params.display_name {
-                name.clone()
-            } else {
-                params.package_name.as_ref().context("Missing package_name parameter")?.clone()
-            }
-        }
-        TaskType::BackupApp => {
-            if let Some(name) = &params.display_name {
-                name.clone()
-            } else {
-                params.package_name.as_ref().context("Missing package_name parameter")?.clone()
-            }
-        }
-        TaskType::RestoreBackup => {
-            Path::new(&params.backup_path.as_ref().context("Missing backup_path parameter")?)
-                .file_name()
-                .unwrap_or_default()
-                .to_string_lossy()
-                .to_string()
-        }
-    })
 }

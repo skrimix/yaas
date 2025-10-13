@@ -432,8 +432,7 @@ class _ManageAppsScreenState extends State<ManageAppsScreen> {
 
   void _installCloudApp(String appFullName) {
     TaskRequest(
-      taskType: TaskType.downloadInstall,
-      params: TaskParams(cloudAppFullName: appFullName),
+      task: TaskDownloadInstall(value: appFullName),
     ).sendSignalToRust();
   }
 

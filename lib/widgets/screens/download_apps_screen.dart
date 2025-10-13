@@ -304,15 +304,13 @@ class _DownloadAppsScreenState extends State<DownloadAppsScreen> {
 
   void _install(String appFullName) {
     TaskRequest(
-      taskType: TaskType.downloadInstall,
-      params: TaskParams(cloudAppFullName: appFullName),
+      task: TaskDownloadInstall(value: appFullName),
     ).sendSignalToRust();
   }
 
   void _download(String appFullName) {
     TaskRequest(
-      taskType: TaskType.download,
-      params: TaskParams(cloudAppFullName: appFullName),
+      task: TaskDownload(value: appFullName),
     ).sendSignalToRust();
   }
 

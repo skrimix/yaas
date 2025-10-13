@@ -35,18 +35,17 @@ class SideloadUtils {
   static void installApp(String path, bool isDirectory) {
     (isDirectory
             ? TaskRequest(
-                taskType: TaskType.installLocalApp,
-                params: TaskParams(localAppPath: path))
+                task: TaskInstallLocalApp(value: path),
+              )
             : TaskRequest(
-                taskType: TaskType.installApk,
-                params: TaskParams(apkPath: path)))
+                task: TaskInstallApk(value: path),
+              ))
         .sendSignalToRust();
   }
 
   static void restoreBackup(String backupPath) {
     TaskRequest(
-      taskType: TaskType.restoreBackup,
-      params: TaskParams(backupPath: backupPath),
+      task: TaskRestoreBackup(value: backupPath),
     ).sendSignalToRust();
   }
 

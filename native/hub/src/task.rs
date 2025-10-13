@@ -578,7 +578,6 @@ impl TaskManager {
         cfg: InstallStepConfig<'a>,
         update_progress: &impl Fn(ProgressUpdate),
         token: CancellationToken,
-        // TODO: do we actually need this?
         spawn_install: impl FnOnce(
             mpsc::UnboundedSender<SideloadProgress>,
             CancellationToken,
@@ -610,6 +609,7 @@ impl TaskManager {
         debug!("Starting {} monitoring", cfg.log_context);
         let mut install_result = None;
         let mut last_log_time = std::time::Instant::now();
+        let mut cancel_requested = false;
 
         while install_result.is_none() {
             tokio::select! {
@@ -617,10 +617,10 @@ impl TaskManager {
                     install_result = Some(result.context("Install task failed")?);
                     info!("{} task completed", cfg.log_context);
                 }
-                _ = token.cancelled() => {
-                    warn!("Cancellation requested for install step; aborting task");
+                _ = token.cancelled(), if !cancel_requested => {
+                    warn!("Cancellation requested for install step, requesting task abort");
+                    cancel_requested = true;
                     install_task.abort();
-                    return Err(anyhow::anyhow!("Task cancelled by user"));
                 }
                 Some(progress) = rx.recv() => {
                     let step_progress_num = progress.progress.unwrap_or(0.0);

@@ -15,6 +15,7 @@ use tokio::{
     io::BufReader,
     sync::mpsc::{self, UnboundedSender},
 };
+use tokio_util::sync::CancellationToken;
 use tracing::{Instrument, Span, debug, error, info, instrument, trace, warn};
 
 use crate::{
@@ -28,9 +29,7 @@ use crate::{
             HeadsetControllersInfo,
         },
     },
-    utils::{
-        decompress_all_7z_in_dir, dir_has_any_files, first_subdirectory, remove_child_dir_if_exists,
-    },
+    utils::{dir_has_any_files, first_subdirectory, remove_child_dir_if_exists},
 };
 
 /// Java tool used for package listing
@@ -835,6 +834,7 @@ impl AdbDevice {
         &self,
         script_path: &Path,
         backups_location: &Path,
+        token: CancellationToken,
     ) -> Result<()> {
         let script_content = tokio::fs::read_to_string(script_path)
             .await
@@ -842,7 +842,7 @@ impl AdbDevice {
         let script_dir = script_path.parent().context("Failed to get script directory")?;
 
         // Unpack all 7z archives if present
-        decompress_all_7z_in_dir(script_dir)
+        crate::utils::decompress_all_7z_in_dir_cancellable(script_dir, token.clone())
             .await
             .context("Failed to decompress .7z archives in install folder")?;
 
@@ -1000,6 +1000,7 @@ impl AdbDevice {
         app_dir: &Path,
         backups_location: &Path,
         progress_sender: UnboundedSender<SideloadProgress>,
+        token: CancellationToken,
     ) -> Result<()> {
         // TODO: add a test for this (smallest APK with generated OBB)
         fn send_progress(
@@ -1028,7 +1029,7 @@ impl AdbDevice {
         {
             send_progress(&progress_sender, "Executing install script", None);
             return self
-                .execute_install_script(&entry.path(), backups_location)
+                .execute_install_script(&entry.path(), backups_location, token.clone())
                 .await
                 .context("Failed to execute install script");
         }

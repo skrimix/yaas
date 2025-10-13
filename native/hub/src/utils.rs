@@ -1,12 +1,17 @@
 use std::{
     env,
     error::Error,
+    fs as stdfs,
+    fs::{File, rename},
+    io,
+    io::{BufWriter, Write},
     path::{Path, PathBuf},
 };
 
 use anyhow::{Context, Result};
 use sysproxy::Sysproxy;
 use tokio::fs;
+use tokio_util::sync::CancellationToken;
 use tracing::{debug, error, instrument, trace, warn};
 
 #[instrument(ret, level = "debug")]
@@ -175,5 +180,96 @@ pub async fn decompress_all_7z_in_dir(dir: &Path) -> Result<()> {
             .await??;
         }
     }
+    Ok(())
+}
+
+/// Like `decompress_all_7z_in_dir` but cancellable via `CancellationToken`.
+/// If the token becomes cancelled, the currently-extracting entry is aborted
+/// and the function returns an error.
+#[instrument(skip(dir, cancel), err)]
+pub async fn decompress_all_7z_in_dir_cancellable(
+    dir: &Path,
+    cancel: CancellationToken,
+) -> Result<()> {
+    if !dir.is_dir() {
+        return Ok(());
+    }
+
+    let mut rd = tokio::fs::read_dir(dir).await?;
+    while let Some(entry) = rd.next_entry().await? {
+        if entry.file_type().await.map(|ft| ft.is_file()).unwrap_or(false)
+            && entry
+                .path()
+                .extension()
+                .and_then(|e| e.to_str())
+                .is_some_and(|e| e.eq_ignore_ascii_case("7z"))
+        {
+            if cancel.is_cancelled() {
+                debug!("Cancellation requested before starting 7z extraction");
+                return Err(anyhow::Error::from(io::Error::new(
+                    io::ErrorKind::Interrupted,
+                    "extraction cancelled",
+                )));
+            }
+
+            let path = entry.path();
+            let dest_dir = dir.to_path_buf();
+            let token = cancel.clone();
+
+            tokio::task::spawn_blocking(move || -> Result<()> {
+                sevenz_rust2::decompress_file_with_extract_fn(
+                    &path,
+                    dest_dir,
+                    |entry, reader, final_path| {
+                        if token.is_cancelled() {
+                            return Err(sevenz_rust2::Error::from(io::Error::new(
+                                io::ErrorKind::Interrupted,
+                                "extraction cancelled",
+                            )));
+                        }
+
+                        if entry.is_directory() {
+                            stdfs::create_dir_all(final_path)?;
+                            return Ok(true);
+                        }
+
+                        if let Some(parent) = final_path.parent() {
+                            stdfs::create_dir_all(parent)?;
+                        }
+
+                        let tmp_path = final_path.with_extension("part");
+                        let out = File::create(&tmp_path).map_err(sevenz_rust2::Error::from)?;
+                        let mut writer = BufWriter::new(out);
+
+                        let mut buf = [0u8; 128 * 1024];
+                        loop {
+                            if token.is_cancelled() {
+                                drop(writer);
+                                let _ = stdfs::remove_file(&tmp_path);
+                                return Err(sevenz_rust2::Error::from(io::Error::new(
+                                    io::ErrorKind::Interrupted,
+                                    "extraction cancelled",
+                                )));
+                            }
+                            let n = match reader.read(&mut buf) {
+                                Ok(0) => break,
+                                Ok(n) => n,
+                                Err(e) => return Err(e.into()),
+                            };
+                            writer.write_all(&buf[..n])?;
+                        }
+                        writer.flush()?;
+
+                        rename(&tmp_path, final_path)?;
+                        Ok(true)
+                    },
+                )
+                .context("Error decompressing 7z archive")?;
+                Ok(())
+            })
+            .await??;
+        }
+    }
+
     Ok(())
 }

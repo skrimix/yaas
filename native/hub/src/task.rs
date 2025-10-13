@@ -581,6 +581,7 @@ impl TaskManager {
         // TODO: do we actually need this?
         spawn_install: impl FnOnce(
             mpsc::UnboundedSender<SideloadProgress>,
+            CancellationToken,
         ) -> tokio::task::JoinHandle<anyhow::Result<()>>,
     ) -> Result<()> {
         update_progress(ProgressUpdate {
@@ -604,7 +605,7 @@ impl TaskManager {
         });
 
         let (tx, mut rx) = mpsc::unbounded_channel::<SideloadProgress>();
-        let mut install_task = spawn_install(tx);
+        let mut install_task = spawn_install(tx, token.clone());
 
         debug!("Starting {} monitoring", cfg.log_context);
         let mut install_result = None;
@@ -615,6 +616,11 @@ impl TaskManager {
                 result = &mut install_task => {
                     install_result = Some(result.context("Install task failed")?);
                     info!("{} task completed", cfg.log_context);
+                }
+                _ = token.cancelled() => {
+                    warn!("Cancellation requested for install step; aborting task");
+                    install_task.abort();
+                    return Err(anyhow::anyhow!("Task cancelled by user"));
                 }
                 Some(progress) = rx.recv() => {
                     let step_progress_num = progress.progress.unwrap_or(0.0);
@@ -731,13 +737,19 @@ impl TaskManager {
             InstallStepConfig { step_number: 2, log_context: "sideload" },
             update_progress,
             token.clone(),
-            move |tx| {
+            move |tx, token| {
                 let app_path = app_path_cloned.clone();
                 let backups_location = backups_location.clone();
                 tokio::spawn(
                     async move {
                         adb_handler
-                            .sideload_app(&device, Path::new(&app_path), backups_location, tx)
+                            .sideload_app(
+                                &device,
+                                Path::new(&app_path),
+                                backups_location,
+                                tx,
+                                token,
+                            )
                             .await
                     }
                     .instrument(Span::current()),
@@ -804,7 +816,7 @@ impl TaskManager {
             InstallStepConfig { step_number: 1, log_context: "apk_install" },
             update_progress,
             token,
-            move |tx| {
+            move |tx, _token| {
                 let backups_location = backups_location.clone();
                 tokio::spawn(
                     async move {
@@ -846,13 +858,19 @@ impl TaskManager {
             InstallStepConfig { step_number: 1, log_context: "sideload_local" },
             update_progress,
             token,
-            move |tx| {
+            move |tx, token| {
                 let app_path = app_path_cloned.clone();
                 let backups_location = backups_location.clone();
                 tokio::spawn(
                     async move {
                         adb_handler
-                            .sideload_app(&device, Path::new(&app_path), backups_location, tx)
+                            .sideload_app(
+                                &device,
+                                Path::new(&app_path),
+                                backups_location,
+                                tx,
+                                token,
+                            )
                             .await
                     }
                     .instrument(Span::current()),

@@ -1088,8 +1088,9 @@ impl AdbHandler {
         app_path: &Path,
         backups_location: std::path::PathBuf,
         progress_sender: UnboundedSender<SideloadProgress>,
+        token: CancellationToken,
     ) -> Result<()> {
-        let result = device.sideload_app(app_path, &backups_location, progress_sender).await;
+        let result = device.sideload_app(app_path, &backups_location, progress_sender, token).await;
         self.refresh_device().await?;
         result
     }

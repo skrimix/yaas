@@ -73,7 +73,7 @@ async fn download_casting_bundle(url: &str) -> Result<()> {
     file.flush().await.ok();
 
     // Remove existing Casting directory
-    crate::utils::remove_child_dir_if_exists(&std::env::current_dir()?, "Casting").await?;
+    crate::utils::remove_child_dir_if_exists(&std::env::current_dir()?, "Casting").await;
     // Extract
     unzip_to_current_dir(&target_zip).context("Failed to extract casting bundle")?;
     // Clean zip

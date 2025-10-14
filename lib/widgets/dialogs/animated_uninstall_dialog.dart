@@ -33,7 +33,7 @@ class _AnimatedUninstallDialogState extends State<AnimatedUninstallDialog>
 
     AdbCommandCompletedEvent.rustSignalStream.listen((event) {
       final signal = event.message;
-      if (signal.commandType == AdbCommandType.uninstallPackage &&
+      if (signal.commandType == AdbCommandKind.uninstallPackage &&
           signal.commandKey == widget.app.packageName) {
         _handleUninstallCompleted(signal.success);
       }

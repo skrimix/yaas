@@ -19,7 +19,7 @@ pub enum NavigationRailLabelVisibility {
 }
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize, SignalPiece, Default)]
-pub enum ConnectionType {
+pub enum ConnectionKind {
     #[default]
     Usb,
     Wireless,
@@ -39,7 +39,7 @@ pub enum DownloadCleanupPolicy {
 pub struct Settings {
     pub rclone_remote_name: String,
     pub adb_path: String,
-    pub preferred_connection_type: ConnectionType, // TODO: implement
+    pub preferred_connection_type: ConnectionKind, // TODO: implement
     pub downloads_location: String,
     pub backups_location: String, // TODO: implement
     pub bandwidth_limit: String,
@@ -66,7 +66,7 @@ impl Default for Settings {
         Self {
             rclone_remote_name: "FFA-90".to_string(), // TODO: implement first time setup
             adb_path: "adb".to_string(),
-            preferred_connection_type: ConnectionType::default(),
+            preferred_connection_type: ConnectionKind::default(),
             downloads_location: dirs::download_dir()
                 .expect("Failed to get download directory")
                 .join("YAAS")

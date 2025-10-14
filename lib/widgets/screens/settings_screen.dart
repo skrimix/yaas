@@ -288,10 +288,10 @@ class _SettingsScreenState extends State<SettingsScreen> {
           l10n.settingsNavigationRailLabelsAll,
       };
 
-  // String _formatConnectionType(AppLocalizations l10n, ConnectionType type) =>
+  // String _formatConnectionKind(AppLocalizations l10n, ConnectionKind type) =>
   //     switch (type) {
-  //       ConnectionType.usb => l10n.settingsConnectionUsb,
-  //       ConnectionType.wireless => l10n.settingsConnectionWireless,
+  //       ConnectionKind.usb => l10n.settingsConnectionUsb,
+  //       ConnectionKind.wireless => l10n.settingsConnectionWireless,
   //     };
 
   @override
@@ -563,13 +563,13 @@ class _SettingsScreenState extends State<SettingsScreen> {
             },
           ),
           // TODO: implement
-          // _buildDropdownSetting<ConnectionType>(
+          // _buildDropdownSetting<ConnectionKind>(
           //   label: l10n.settingsPreferredConnection,
           //   value: _currentFormSettings.preferredConnectionType,
-          //   items: ConnectionType.values.map((type) {
+          //   items: ConnectionKind.values.map((type) {
           //     return DropdownMenuItem(
           //       value: type,
-          //       child: Text(_formatConnectionType(l10n, type)),
+          //       child: Text(_formatConnectionKind(l10n, type)),
           //     );
           //   }).toList(),
           //   onChanged: (value) {
@@ -580,7 +580,7 @@ class _SettingsScreenState extends State<SettingsScreen> {
           //     }
           //   },
           // ),
-          _buildDropdownSetting<ConnectionType?>(
+          _buildDropdownSetting<ConnectionKind?>(
             label: l10n.settingsPreferredConnection,
             value: null,
             items: [],

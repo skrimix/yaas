@@ -43,7 +43,7 @@ class DeviceActionsCard extends StatelessWidget {
                   AnimatedAdbButton(
                     icon: Icons.sensors_off,
                     tooltip: l10n.disableProximitySensor,
-                    commandType: AdbCommandType.proximitySensorSet,
+                    commandType: AdbCommandKind.proximitySensorSet,
                     commandKey: 'disable',
                     onPressed: () => _send('disable',
                         const AdbCommandSetProximitySensor(value: false)),
@@ -52,7 +52,7 @@ class DeviceActionsCard extends StatelessWidget {
                   AnimatedAdbButton(
                     icon: Icons.sensors,
                     tooltip: l10n.enableProximitySensor,
-                    commandType: AdbCommandType.proximitySensorSet,
+                    commandType: AdbCommandKind.proximitySensorSet,
                     commandKey: 'enable',
                     onPressed: () => _send('enable',
                         const AdbCommandSetProximitySensor(value: true)),
@@ -75,7 +75,7 @@ class DeviceActionsCard extends StatelessWidget {
                   AnimatedAdbButton(
                     icon: Icons.pause_circle_filled,
                     tooltip: l10n.guardianSuspend,
-                    commandType: AdbCommandType.guardianPausedSet,
+                    commandType: AdbCommandKind.guardianPausedSet,
                     commandKey: 'suspend',
                     onPressed: () => _send('suspend',
                         const AdbCommandSetGuardianPaused(value: true)),
@@ -84,7 +84,7 @@ class DeviceActionsCard extends StatelessWidget {
                   AnimatedAdbButton(
                     icon: Icons.play_circle_fill,
                     tooltip: l10n.guardianResume,
-                    commandType: AdbCommandType.guardianPausedSet,
+                    commandType: AdbCommandKind.guardianPausedSet,
                     commandKey: 'resume',
                     onPressed: () => _send('resume',
                         const AdbCommandSetGuardianPaused(value: false)),

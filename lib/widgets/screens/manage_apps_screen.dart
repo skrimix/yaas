@@ -658,7 +658,7 @@ class _ManageAppsScreenState extends State<ManageAppsScreen> {
                   AnimatedAdbButton(
                     icon: Icons.play_arrow,
                     tooltip: l10n.launch,
-                    commandType: AdbCommandType.launchApp,
+                    commandType: AdbCommandKind.launchApp,
                     commandKey: app.packageName,
                     onPressed: () {
                       AdbRequest(
@@ -671,7 +671,7 @@ class _ManageAppsScreenState extends State<ManageAppsScreen> {
                   AnimatedAdbButton(
                     icon: Icons.close,
                     tooltip: l10n.forceStop,
-                    commandType: AdbCommandType.forceStopApp,
+                    commandType: AdbCommandKind.forceStopApp,
                     commandKey: app.packageName,
                     onPressed: () {
                       AdbRequest(

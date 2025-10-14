@@ -7,7 +7,7 @@ class SettingsState extends ChangeNotifier {
   Settings _settings = Settings(
     rcloneRemoteName: '',
     adbPath: '',
-    preferredConnectionType: ConnectionType.usb,
+    preferredConnectionType: ConnectionKind.usb,
     downloadsLocation: '',
     backupsLocation: '',
     bandwidthLimit: '',

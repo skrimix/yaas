@@ -382,7 +382,7 @@ impl AdbHandler {
                 ensure_valid_package(&package_name)?;
                 let result = device.launch(&package_name).await;
                 AdbCommandCompletedEvent {
-                    command_type: AdbCommandType::LaunchApp,
+                    command_type: AdbCommandKind::LaunchApp,
                     command_key: key.clone(),
                     success: result.is_ok(),
                 }
@@ -407,7 +407,7 @@ impl AdbHandler {
                         None,
                     );
                     AdbCommandCompletedEvent {
-                        command_type: AdbCommandType::StartCasting,
+                        command_type: AdbCommandKind::StartCasting,
                         command_key: key.clone(),
                         success: false,
                     }
@@ -429,7 +429,7 @@ impl AdbHandler {
                             None,
                         );
                         AdbCommandCompletedEvent {
-                            command_type: AdbCommandType::StartCasting,
+                            command_type: AdbCommandKind::StartCasting,
                             command_key: key.clone(),
                             success: false,
                         }
@@ -450,7 +450,7 @@ impl AdbHandler {
                             None,
                         );
                         AdbCommandCompletedEvent {
-                            command_type: AdbCommandType::StartCasting,
+                            command_type: AdbCommandKind::StartCasting,
                             command_key: key.clone(),
                             success: false,
                         }
@@ -471,7 +471,7 @@ impl AdbHandler {
                             None,
                         );
                         AdbCommandCompletedEvent {
-                            command_type: AdbCommandType::StartCasting,
+                            command_type: AdbCommandKind::StartCasting,
                             command_key: key.clone(),
                             success: false,
                         }
@@ -494,7 +494,7 @@ impl AdbHandler {
                                 None,
                             );
                             AdbCommandCompletedEvent {
-                                command_type: AdbCommandType::StartCasting,
+                                command_type: AdbCommandKind::StartCasting,
                                 command_key: key.clone(),
                                 success: false,
                             }
@@ -524,7 +524,7 @@ impl AdbHandler {
                     match cmd.spawn() {
                         Ok(_child) => {
                             AdbCommandCompletedEvent {
-                                command_type: AdbCommandType::StartCasting,
+                                command_type: AdbCommandKind::StartCasting,
                                 command_key: key.clone(),
                                 success: true,
                             }
@@ -539,7 +539,7 @@ impl AdbHandler {
                                 None,
                             );
                             AdbCommandCompletedEvent {
-                                command_type: AdbCommandType::StartCasting,
+                                command_type: AdbCommandKind::StartCasting,
                                 command_key: key.clone(),
                                 success: false,
                             }
@@ -555,7 +555,7 @@ impl AdbHandler {
                 ensure_valid_package(&package_name)?;
                 let result = device.force_stop(&package_name).await;
                 AdbCommandCompletedEvent {
-                    command_type: AdbCommandType::ForceStopApp,
+                    command_type: AdbCommandKind::ForceStopApp,
                     command_key: key.clone(),
                     success: result.is_ok(),
                 }
@@ -576,7 +576,7 @@ impl AdbHandler {
                 let device = self.current_device().await?;
                 let result = self.uninstall_package(&device, &package_name).await;
                 AdbCommandCompletedEvent {
-                    command_type: AdbCommandType::UninstallPackage,
+                    command_type: AdbCommandKind::UninstallPackage,
                     command_key: key.clone(),
                     success: result.is_ok(),
                 }
@@ -606,7 +606,7 @@ impl AdbHandler {
                 let device = self.current_device().await?;
                 let result = device.reboot_with_mode(mode).await;
                 AdbCommandCompletedEvent {
-                    command_type: AdbCommandType::Reboot,
+                    command_type: AdbCommandKind::Reboot,
                     command_key: key.clone(),
                     success: result.is_ok(),
                 }
@@ -618,7 +618,7 @@ impl AdbHandler {
                 let device = self.current_device().await?;
                 let result = device.set_proximity_sensor(enabled).await;
                 AdbCommandCompletedEvent {
-                    command_type: AdbCommandType::ProximitySensorSet,
+                    command_type: AdbCommandKind::ProximitySensorSet,
                     command_key: key.clone(),
                     success: result.is_ok(),
                 }
@@ -630,7 +630,7 @@ impl AdbHandler {
                 let device = self.current_device().await?;
                 let result = device.set_guardian_paused(paused).await;
                 AdbCommandCompletedEvent {
-                    command_type: AdbCommandType::GuardianPausedSet,
+                    command_type: AdbCommandKind::GuardianPausedSet,
                     command_key: key.clone(),
                     success: result.is_ok(),
                 }
@@ -661,7 +661,7 @@ impl AdbHandler {
                     && current.serial == serial
                 {
                     AdbCommandCompletedEvent {
-                        command_type: AdbCommandType::ConnectTo,
+                        command_type: AdbCommandKind::ConnectTo,
                         command_key: key.clone(),
                         success: true,
                     }
@@ -672,7 +672,7 @@ impl AdbHandler {
                 let result = self.connect_device(Some(&serial), true).await;
 
                 AdbCommandCompletedEvent {
-                    command_type: AdbCommandType::ConnectTo,
+                    command_type: AdbCommandKind::ConnectTo,
                     command_key: key.clone(),
                     success: result.is_ok(),
                 }

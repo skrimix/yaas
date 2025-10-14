@@ -25,7 +25,7 @@ pub struct AdbRequest {
 }
 
 #[derive(Debug, Clone, Serialize, Deserialize, SignalPiece)]
-pub enum AdbCommandType {
+pub enum AdbCommandKind {
     LaunchApp,
     ForceStopApp,
     UninstallPackage,
@@ -47,7 +47,7 @@ pub enum RebootMode {
 
 #[derive(Serialize, Deserialize, RustSignal)]
 pub struct AdbCommandCompletedEvent {
-    pub command_type: AdbCommandType,
+    pub command_type: AdbCommandKind,
     pub command_key: String,
     pub success: bool,
 }

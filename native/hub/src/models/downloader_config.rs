@@ -10,16 +10,12 @@ pub struct DownloaderConfig {
     pub rclone_config_path: String,
     #[serde(default)]
     pub remote_name_filter_regex: Option<String>,
-    #[serde(default = "default_randomize_remote")]
-    pub randomize_remote: bool,
+    #[serde(default)]
+    pub disable_randomize_remote: bool,
     #[serde(default = "default_root_dir")]
     pub root_dir: String,
     #[serde(default = "default_list_path")]
     pub list_path: String,
-}
-
-fn default_randomize_remote() -> bool {
-    true
 }
 
 fn default_root_dir() -> String {
@@ -144,7 +140,7 @@ mod tests {
         }
         assert_eq!(cfg.rclone_config_path, "/tmp/rclone.conf");
         // default_randomize_remote = true when omitted
-        assert!(cfg.randomize_remote);
+        assert!(cfg.disable_randomize_remote);
     }
 
     #[test]

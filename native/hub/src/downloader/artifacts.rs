@@ -214,7 +214,7 @@ mod tests {
             rclone_path: RclonePath::Single(bin.to_string()),
             rclone_config_path: conf.to_string(),
             remote_name_filter_regex: None,
-            randomize_remote: true,
+            disable_randomize_remote: true,
             root_dir: "Quest Games".to_string(),
             list_path: "FFA.txt".to_string(),
         }
@@ -237,7 +237,7 @@ mod tests {
             rclone_path: RclonePath::Single("http://127.0.0.1/rclone".to_string()),
             rclone_config_path: "/tmp/rclone.conf".to_string(),
             remote_name_filter_regex: None,
-            randomize_remote: true,
+            disable_randomize_remote: true,
             root_dir: "Quest Games".to_string(),
             list_path: "FFA.txt".to_string(),
         };
@@ -300,7 +300,7 @@ mod tests {
             rclone_path: RclonePath::Single(format!("{}{}", server.uri(), bin_path)),
             rclone_config_path: format!("{}{}", server.uri(), conf_path),
             remote_name_filter_regex: None,
-            randomize_remote: true,
+            disable_randomize_remote: true,
             root_dir: "Quest Games".to_string(),
             list_path: "FFA.txt".to_string(),
         };

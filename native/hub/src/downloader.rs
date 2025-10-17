@@ -75,7 +75,7 @@ impl Downloader {
             config.remote_name_filter_regex.clone(),
         );
         let storage = match storage.remotes().await {
-            Ok(remotes) if config.randomize_remote => {
+            Ok(remotes) if config.disable_randomize_remote => {
                 use rand::seq::IndexedRandom;
                 let mut rng = rand::rng();
                 let remote = remotes.choose(&mut rng).unwrap_or(&settings.rclone_remote_name);

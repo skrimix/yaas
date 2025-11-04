@@ -443,3 +443,39 @@ pub async fn list_remotes(
     let remotes = client.remotes().await?;
     Ok(filter_remotes_with_pattern(remotes, remote_filter_regex))
 }
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn storage_equality_reflects_bandwidth_limit() {
+        let base = RcloneStorage::new(
+            PathBuf::from("rclone"),
+            PathBuf::from("config"),
+            "root".to_string(),
+            "remote".to_string(),
+            "".to_string(),
+            None,
+        );
+        let same = RcloneStorage::new(
+            PathBuf::from("rclone"),
+            PathBuf::from("config"),
+            "root".to_string(),
+            "remote".to_string(),
+            "".to_string(),
+            None,
+        );
+        let with_limit = RcloneStorage::new(
+            PathBuf::from("rclone"),
+            PathBuf::from("config"),
+            "root".to_string(),
+            "remote".to_string(),
+            "2M".to_string(),
+            None,
+        );
+
+        assert_eq!(base, same, "identical bandwidth limits should be equal");
+        assert_ne!(base, with_limit, "changing bandwidth limit should change storage equality");
+    }
+}

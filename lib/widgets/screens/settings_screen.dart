@@ -607,11 +607,10 @@ class _SettingsScreenState extends State<SettingsScreen> {
             _buildRcloneRemoteSelector(l10n),
             _buildTextSetting(
               field: SettingTextField.bandwidthLimit,
-              enabled: false,
               label: l10n.settingsBandwidthLimit,
               helper: InkWell(
-                onTap: () => _launchURL(
-                    'https://rclone.org/docs/#bwlimit-bandwidth-spec'),
+                onTap: () =>
+                    _launchURL('https://rclone.org/docs/#bwlimit-bwtimetable'),
                 child: Text(
                   l10n.settingsBandwidthHelper,
                   style: Theme.of(context).textTheme.bodySmall?.copyWith(

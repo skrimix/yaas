@@ -527,7 +527,7 @@ abstract class AppLocalizations {
   /// No description provided for @settingsBandwidthHelper.
   ///
   /// In en, this message translates to:
-  /// **'(Not implemented) Value in KiB/s or with B|K|M|G|T|P suffix or more (click for documentation)'**
+  /// **'Value in KiB/s or with B|K|M|G|T|P suffix or more (click for documentation)'**
   String get settingsBandwidthHelper;
 
   /// No description provided for @settingsDownloadsCleanup.

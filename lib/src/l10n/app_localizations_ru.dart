@@ -227,7 +227,7 @@ class AppLocalizationsRu extends AppLocalizations {
 
   @override
   String get settingsBandwidthHelper =>
-      '(В разработке) Значение в КиБ/с или с суффиксами B|K|M|G|T|P и др. (нажмите для справки)';
+      'Значение в КиБ/с или с суффиксами B|K|M|G|T|P и др. (нажмите для справки)';
 
   @override
   String get settingsDownloadsCleanup => 'Очистка загрузок';

@@ -1,10 +1,10 @@
 use anyhow::{Result, ensure};
 use reqwest::header::{ACCEPT, HeaderMap, HeaderValue};
-use tracing::debug;
+use tracing::{debug, instrument};
 
 use crate::models::{AppApiResponse, signals::cloud_apps::reviews::AppReview};
 
-#[tracing::instrument(skip(client), err)]
+#[instrument(skip(client), err)]
 pub async fn fetch_app_details(
     client: &reqwest::Client,
     package_name: String,
@@ -30,7 +30,7 @@ pub struct ReviewsResponse {
     pub total: u32,
 }
 
-#[tracing::instrument(skip(client), err)]
+#[instrument(skip(client), err)]
 pub async fn fetch_app_reviews(
     client: &reqwest::Client,
     app_id: &str,
@@ -39,6 +39,7 @@ pub async fn fetch_app_reviews(
     sort_by: &str,
 ) -> Result<ReviewsResponse> {
     ensure!(sort_by == "helpful" || sort_by == "newest", "Invalid sort_by value: {}", sort_by);
+    debug!(%app_id, %limit, %offset, %sort_by, "Fetching app reviews");
     let url = "https://reviews.5698452.xyz";
 
     let mut headers = HeaderMap::new();

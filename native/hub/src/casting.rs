@@ -4,18 +4,21 @@ use std::{
     path::{Path, PathBuf},
 };
 
-use anyhow::{Context, Result, anyhow};
+use anyhow::{Context, Result, anyhow, bail};
 use futures::StreamExt;
 use rinf::{DartSignal, RustSignal};
 use tokio::{fs, io::AsyncWriteExt};
 use tracing::{info, instrument};
 
-use crate::models::signals::casting::{
-    CastingDownloadProgress, CastingStatusChanged, DownloadCastingBundleRequest,
-    GetCastingStatusRequest,
+use crate::{
+    models::signals::casting::{
+        CastingDownloadProgress, CastingStatusChanged, DownloadCastingBundleRequest,
+        GetCastingStatusRequest,
+    },
+    utils::remove_child_dir_if_exists,
 };
 
-const DEFAULT_CASTING_URL: &str =
+const CASTING_URL: &str =
     "https://github.com/skrimix/yaas/releases/download/files/casting-bundle.zip";
 
 #[cfg(target_os = "windows")]
@@ -40,7 +43,8 @@ async fn send_status() {
 }
 
 #[instrument(skip_all, err)]
-async fn download_casting_bundle(url: &str) -> Result<()> {
+async fn download_casting_bundle() -> Result<()> {
+    let url = CASTING_URL;
     let target_zip = std::env::current_dir()?.join("casting-bundle.zip");
     info!(url, path = %target_zip.display(), "Downloading casting bundle");
 
@@ -61,22 +65,17 @@ async fn download_casting_bundle(url: &str) -> Result<()> {
     let total = resp.content_length();
     let mut stream = resp.bytes_stream();
     let mut received: u64 = 0;
-    // Emit initial 0%
     CastingDownloadProgress { received, total }.send_signal_to_dart();
     while let Some(chunk) = stream.next().await.transpose().context("Network error")? {
         received = received.saturating_add(chunk.len() as u64);
         file.write_all(&chunk).await.context("Failed writing bundle contents")?;
         CastingDownloadProgress { received, total }.send_signal_to_dart();
     }
-    // Final event after stream ends
     CastingDownloadProgress { received, total }.send_signal_to_dart();
     file.flush().await.ok();
 
-    // Remove existing Casting directory
-    crate::utils::remove_child_dir_if_exists(&std::env::current_dir()?, "Casting").await;
-    // Extract
+    remove_child_dir_if_exists(&std::env::current_dir()?, "Casting").await;
     unzip_to_current_dir(&target_zip).context("Failed to extract casting bundle")?;
-    // Clean zip
     let _ = fs::remove_file(&target_zip).await;
     Ok(())
 }
@@ -125,9 +124,8 @@ impl CastingManager {
         // Download/update requests
         tokio::spawn(async move {
             let rx = DownloadCastingBundleRequest::get_dart_signal_receiver();
-            while let Some(req) = rx.recv().await {
-                let url = req.message.url.unwrap_or_else(|| DEFAULT_CASTING_URL.to_string());
-                match download_casting_bundle(&url).await {
+            while rx.recv().await.is_some() {
+                match download_casting_bundle().await {
                     Ok(_) => send_status().await,
                     Err(e) => CastingStatusChanged {
                         installed: false,
@@ -139,5 +137,91 @@ impl CastingManager {
             }
             panic!("DownloadCastingBundleRequest receiver closed");
         });
+    }
+
+    pub async fn start_casting(adb_path: &Path, device_serial: &str, wireless: bool) -> Result<()> {
+        #[cfg(not(target_os = "windows"))]
+        {
+            let _ = adb_path;
+            let _ = device_serial;
+            let _ = wireless;
+            bail!("Casting is Windows-only");
+        }
+        #[cfg(target_os = "windows")]
+        {
+            use std::path::PathBuf;
+
+            use tokio::process::Command as TokioCommand;
+
+            use crate::models::signals::system::Toast;
+
+            if wireless {
+                // TODO: Support wireless devices for casting
+                Toast::send(
+                    "Casting not supported for wireless".to_string(),
+                    "Please connect the headset via USB to start casting.".to_string(),
+                    true,
+                    None,
+                );
+                bail!("Casting not supported for wireless");
+            }
+
+            // Resolve Casting.exe path (installed under app data directory)
+            let exe_path: PathBuf =
+                std::env::current_dir().unwrap_or_default().join("Casting").join("Casting.exe");
+            if !exe_path.is_file() {
+                Toast::send(
+                    "Casting tool not installed".to_string(),
+                    "Open Settings and download the Meta Quest Casting tool.".to_string(),
+                    true,
+                    None,
+                );
+                bail!("Casting tool not installed");
+            }
+
+            // Ensure caches directory exists: %APPDATA%/odh/casting
+            let caches_dir =
+                dirs::data_dir().unwrap_or_else(|| PathBuf::from(".")).join("odh").join("casting");
+            if let Err(e) = tokio::fs::create_dir_all(&caches_dir).await {
+                Toast::send(
+                    "Failed to prepare caches dir".to_string(),
+                    format!("{}", e),
+                    true,
+                    None,
+                );
+                bail!("Failed to prepare caches dir");
+            }
+
+            // Build command
+            let mut cmd = TokioCommand::new(&exe_path);
+            cmd.current_dir(exe_path.parent().unwrap_or_else(|| std::path::Path::new(".")));
+            cmd.arg("--adb").arg(adb_path);
+            cmd.arg("--application-caches-dir").arg(&caches_dir);
+            cmd.arg("--exit-on-close");
+            cmd.arg("--launch-surface").arg("MQDH");
+            let target_json = format!("{{\"id\":\"{}\"}}", device_serial);
+            cmd.arg("--target-device").arg(target_json);
+            cmd.arg("--features").args([
+                "input_forwarding",
+                "input_forwarding_gaze_click",
+                "input_forwarding_text_input_forwarding",
+                "image_stabilization",
+                "update_device_fov_via_openxr_api",
+                "panel_streaming",
+            ]);
+
+            match cmd.spawn() {
+                Ok(_child) => Ok(()),
+                Err(e) => {
+                    Toast::send(
+                        "Failed to launch Casting".to_string(),
+                        format!("{:#}", e),
+                        true,
+                        None,
+                    );
+                    bail!("Failed to launch Casting");
+                }
+            }
+        }
     }
 }

@@ -136,9 +136,9 @@ impl AdbHandler {
             {
                 let handle = self.clone();
                 async move {
-                    info!("Starting to listen for settings changes");
+                    debug!("AdbHandler starting to listen for settings changes");
                     while let Some(settings) = settings_stream.next().await {
-                        info!("AdbHandler received settings update");
+                        debug!("AdbHandler received settings update");
                         debug!(?settings, "New settings");
                         let new_adb_path = settings.adb_path.clone();
                         let new_adb_path =
@@ -153,7 +153,7 @@ impl AdbHandler {
                         }
                     }
 
-                    panic!("Settings stream closed");
+                    panic!("Settings stream closed for AdbHandler");
                 }
             }
             .instrument(info_span!("task_handle_settings_updates")),
@@ -166,7 +166,7 @@ impl AdbHandler {
     #[instrument(skip(self))]
     async fn start_adb_tasks(self: Arc<AdbHandler>) {
         let cancel_token = self.cancel_token.read().await.clone();
-        info!("Starting ADB tasks");
+        debug!("Starting ADB tasks");
 
         // Listen for ADB device updates
         let (sender, receiver) = tokio::sync::mpsc::unbounded_channel();
@@ -416,68 +416,7 @@ impl AdbHandler {
                 }
                 #[cfg(target_os = "windows")]
                 {
-                    use std::path::PathBuf;
-
-                    use tokio::process::Command as TokioCommand;
-                    let device = self.current_device().await?;
-                    if device.is_wireless {
-                        // TODO: Support wireless devices for casting
-                        send_toast(
-                            "Casting not supported for wireless".to_string(),
-                            "Please connect the headset via USB to start casting.".to_string(),
-                            true,
-                            None,
-                        );
-                        AdbCommandCompletedEvent {
-                            command_type: AdbCommandKind::StartCasting,
-                            command_key: key.clone(),
-                            success: false,
-                        }
-                        .send_signal_to_dart();
-                        return Ok(());
-                    }
-
-                    // Resolve Casting.exe path (installed under app data directory)
-                    let exe_path: PathBuf = std::env::current_dir()
-                        .unwrap_or_default()
-                        .join("Casting")
-                        .join("Casting.exe");
-                    if !exe_path.is_file() {
-                        send_toast(
-                            "Casting tool not installed".to_string(),
-                            "Open Settings and download the Meta Quest Casting tool.".to_string(),
-                            true,
-                            None,
-                        );
-                        AdbCommandCompletedEvent {
-                            command_type: AdbCommandKind::StartCasting,
-                            command_key: key.clone(),
-                            success: false,
-                        }
-                        .send_signal_to_dart();
-                        return Ok(());
-                    }
-
-                    // Ensure caches directory exists: %APPDATA%/odh/casting
-                    let caches_dir = dirs::data_dir()
-                        .unwrap_or_else(|| PathBuf::from("."))
-                        .join("odh")
-                        .join("casting");
-                    if let Err(e) = tokio::fs::create_dir_all(&caches_dir).await {
-                        send_toast(
-                            "Failed to prepare caches dir".to_string(),
-                            format!("{}", e),
-                            true,
-                            None,
-                        );
-                        AdbCommandCompletedEvent {
-                            command_type: AdbCommandKind::StartCasting,
-                            command_key: key.clone(),
-                            success: false,
-                        }
-                        .send_signal_to_dart();
-                        return Ok(());
-                    }
+                    use crate::casting::CastingManager;
 
                     // Resolve adb path
                     let adb_path_buf = match crate::utils::resolve_binary_path(
@@ -503,26 +442,14 @@ impl AdbHandler {
                         }
                     };
 
-                    // Build command
-                    let mut cmd = TokioCommand::new(&exe_path);
-                    cmd.current_dir(exe_path.parent().unwrap_or_else(|| std::path::Path::new(".")));
-                    cmd.arg("--adb").arg(adb_path_buf);
-                    cmd.arg("--application-caches-dir").arg(&caches_dir);
-                    cmd.arg("--exit-on-close");
-                    cmd.arg("--launch-surface").arg("MQDH");
-                    let target_json = format!("{{\"id\":\"{}\"}}", device.serial);
-                    cmd.arg("--target-device").arg(target_json);
-                    cmd.arg("--features").args([
-                        "input_forwarding",
-                        "input_forwarding_gaze_click",
-                        "input_forwarding_text_input_forwarding",
-                        "image_stabilization",
-                        "update_device_fov_via_openxr_api",
-                        "panel_streaming",
-                    ]);
+                    let device = self.current_device().await?;
+                    let wireless = device.is_wireless;
+                    let device_serial = &device.serial;
 
-                    match cmd.spawn() {
-                        Ok(_child) => {
+                    match CastingManager::start_casting(&adb_path_buf, device_serial, wireless)
+                        .await
+                    {
+                        Ok(_) => {
                             AdbCommandCompletedEvent {
                                 command_type: AdbCommandKind::StartCasting,
                                 command_key: key.clone(),
@@ -532,12 +459,6 @@ impl AdbHandler {
                             Ok(())
                         }
                         Err(e) => {
-                            send_toast(
-                                "Failed to launch Casting".to_string(),
-                                format!("{:#}", e),
-                                true,
-                                None,
-                            );
                             AdbCommandCompletedEvent {
                                 command_type: AdbCommandKind::StartCasting,
                                 command_key: key.clone(),
@@ -701,7 +622,7 @@ impl AdbHandler {
     /// - If `expect_serial` is `None`, the set happens only when there is no current device.
     ///
     /// Returns `true` if the device was set, `false` if the expectation failed.
-    #[instrument(skip(self, device), ret)]
+    #[instrument(level = "debug", skip(self, device))]
     async fn set_device(
         &self,
         device: Option<AdbDevice>,
@@ -901,7 +822,7 @@ impl AdbHandler {
     async fn run_periodic_refresh(&self) {
         let refresh_interval = Duration::from_secs(60);
         let mut interval = time::interval(refresh_interval);
-        info!(interval = ?refresh_interval, "Starting periodic device refresh");
+        debug!(interval = ?refresh_interval, "Starting periodic device refresh");
 
         loop {
             interval.tick().await;
@@ -1027,7 +948,7 @@ impl AdbHandler {
         {
             Ok(Ok(msg)) => {
                 info!(response = %msg, "ADB connect ok");
-                // Let the tracker pick the device up; still refresh the state quickly.
+                // Let the tracker pick the device up, still refresh the state quickly.
                 self.refresh_adb_state().await;
                 Ok(())
             }

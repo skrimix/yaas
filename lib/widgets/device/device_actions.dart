@@ -151,7 +151,7 @@ class DeviceActionsCard extends StatelessWidget {
         ),
       );
       if (confirm == true) {
-        const DownloadCastingBundleRequest(url: null).sendSignalToRust();
+        const DownloadCastingBundleRequest().sendSignalToRust();
         // Auto-launch when installation finishes
         CastingStatusChanged.rustSignalStream
             .firstWhere((e) => e.message.installed == true)

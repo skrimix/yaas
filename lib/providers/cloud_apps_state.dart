@@ -36,6 +36,22 @@ class CloudAppsState extends ChangeNotifier {
       notifyListeners();
     });
 
+    // Reset state when downloader becomes unavailable, and auto-load when it becomes available
+    DownloaderAvailabilityChanged.rustSignalStream.listen((event) {
+      final msg = event.message;
+      if (!msg.available) {
+        _apps = [];
+        _error = null;
+        _isLoading = false;
+        notifyListeners();
+      } else {
+        // Kick off a load when downloader becomes available and we have nothing yet
+        if (_apps.isEmpty && !_isLoading) {
+          load();
+        }
+      }
+    });
+
     // Receive media config from Rust
     MediaConfigChanged.rustSignalStream.listen((event) {
       final cfg = event.message;

@@ -38,6 +38,7 @@
   "preparingDownloader": "Подготовка загрузчика...",
   "downloadingRcloneFiles": "Загрузка файлов rclone",
   "installDownloaderConfig": "Установить конфигурацию загрузчика",
+  "settingsSelectDownloaderConfig": "Выберите downloader.json",
   "loadingApps": "Загрузка списка приложений...",
     "settingsSectionAppearance": "Оформление",
     "settingsUseSystemColor": "Использовать системный цвет",

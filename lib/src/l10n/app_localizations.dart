@@ -326,6 +326,12 @@ abstract class AppLocalizations {
   /// **'Install downloader config'**
   String get installDownloaderConfig;
 
+  /// No description provided for @settingsSelectDownloaderConfig.
+  ///
+  /// In en, this message translates to:
+  /// **'Select downloader.json'**
+  String get settingsSelectDownloaderConfig;
+
   /// No description provided for @loadingApps.
   ///
   /// In en, this message translates to:

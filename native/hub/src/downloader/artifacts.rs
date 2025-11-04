@@ -1,21 +1,33 @@
 use std::{
-    collections::HashMap,
+    error::Error,
     path::{Path, PathBuf},
     time::Duration,
 };
 
-use anyhow::{Context, Result, ensure};
+use anyhow::{Context, Result, bail, ensure};
 use rinf::RustSignal;
-use serde::{Deserialize, Serialize};
-use tokio::{fs, io::AsyncWriteExt};
-use tokio_stream::StreamExt as _;
-use tracing::{info, instrument, warn};
+use tokio::fs;
+use tracing::{debug, info, instrument, warn};
 
-use super::DownloaderConfig;
+use super::{
+    DownloaderConfig,
+    http_cache::{self, DownloadResult},
+};
+use crate::{
+    archive::{extract_single_from_archive, list_archive_file_paths},
+    downloader::{http_cache::compute_md5_file, repo},
+    models::signals::downloader::progress::DownloaderInitProgress,
+};
 
 fn is_http_url(value: &str) -> bool {
     let v = value.to_ascii_lowercase();
     v.starts_with("http://") || v.starts_with("https://")
+}
+
+fn is_zip_url(value: &str) -> bool {
+    let lower = value.to_ascii_lowercase();
+    let path = lower.split('?').next().unwrap_or(&lower);
+    path.ends_with(".zip")
 }
 
 #[instrument(skip(cache_dir, cfg), fields(cache_dir = %cache_dir.display()))]
@@ -23,179 +35,253 @@ pub async fn prepare_artifacts(
     cache_dir: &Path,
     cfg: &DownloaderConfig,
 ) -> Result<(PathBuf, PathBuf)> {
-    let bin_src = cfg.rclone_path.resolve_for_current_platform()?;
-    let conf_src = cfg.rclone_config_path.as_str();
+    let bin_source = cfg.rclone_path.resolve_for_current_platform()?;
+    let maybe_config_source = cfg.rclone_config_path.as_deref();
 
-    let bin_is_url = is_http_url(&bin_src);
-    let conf_is_url = is_http_url(conf_src);
+    let bin_is_url = is_http_url(&bin_source);
+    let config_is_url = maybe_config_source.map(is_http_url).unwrap_or(false);
+
+    if maybe_config_source.is_none() {
+        let repo = repo::make_repo_from_config(cfg);
+        // If the repo provides its own config we only handle the binary here.
+        if let Some(conf_name) = repo.generated_config_filename() {
+            if !bin_is_url {
+                let conf_dst = cache_dir.join(conf_name);
+                return Ok((PathBuf::from(bin_source), conf_dst));
+            } else {
+                // Remote rclone binary, download it, but skip config (generated later by repo).
+                let bin_dst = cache_dir.join(if cfg!(windows) { "rclone.exe" } else { "rclone" });
+                let client = build_http_client()?;
+                if is_zip_url(&bin_source) {
+                    ensure_remote_rclone_from_zip(&client, &bin_source, cache_dir, &bin_dst)
+                        .await?;
+                } else {
+                    ensure_remote_file(
+                        &client,
+                        &bin_source,
+                        &bin_dst,
+                        cache_dir,
+                        true,
+                        "rclone binary",
+                    )
+                    .await?;
+                }
+                let conf_dst = cache_dir.join(conf_name);
+                return Ok((bin_dst, conf_dst));
+            }
+        }
+    }
+
+    let config_source = match maybe_config_source {
+        Some(v) => v,
+        None => {
+            bail!("rclone_config_path is required for this repository layout")
+        }
+    };
     ensure!(
-        bin_is_url == conf_is_url,
+        bin_is_url == config_is_url,
         "rclone_path and rclone_config_path must both be local or both be URLs"
     );
 
     if !bin_is_url {
         info!("Using local rclone binary and config");
-        return Ok((PathBuf::from(bin_src), PathBuf::from(conf_src)));
+        return Ok((PathBuf::from(bin_source), PathBuf::from(config_source)));
     }
 
     let bin_dst = cache_dir.join(if cfg!(windows) { "rclone.exe" } else { "rclone" });
     let conf_dst = cache_dir.join("rclone.conf");
 
-    let client = reqwest::Client::builder()
-        .user_agent(crate::USER_AGENT)
-        .connect_timeout(Duration::from_secs(10))
-        .timeout(Duration::from_secs(300))
-        .build()?;
+    let client = build_http_client()?;
 
-    // Metadata for tracking file changes
-    let mut meta = load_meta(cache_dir).await.unwrap_or_default();
+    ensure_remote_file(&client, config_source, &conf_dst, cache_dir, false, "rclone config")
+        .await?;
 
-    // Try to update config first
-    match download_if_needed(&client, conf_src, &conf_dst, meta.get(conf_src)).await {
-        Ok(DownloadResult::NotModified) => {
-            info!("rclone config not modified, using cached copy");
-        }
-        Ok(DownloadResult::Downloaded(entry)) => {
-            info!(path = %conf_dst.display(), "Updated rclone config cache");
-            meta.update(conf_src.to_string(), entry);
-        }
-        Err(e) => {
-            warn!(
-                error = e.as_ref() as &dyn std::error::Error,
-                "Failed to update rclone config, using cached copy if available"
-            );
-            ensure!(
-                conf_dst.exists(),
-                "Failed to download rclone config and no cached copy available: {:#}",
-                e
-            );
-        }
+    if is_zip_url(&bin_source) {
+        ensure_remote_rclone_from_zip(&client, &bin_source, cache_dir, &bin_dst).await?;
+    } else {
+        ensure_remote_file(&client, &bin_source, &bin_dst, cache_dir, true, "rclone binary")
+            .await?;
     }
-
-    // Then binary
-    match download_if_needed(&client, &bin_src, &bin_dst, meta.get(&bin_src)).await {
-        Ok(DownloadResult::NotModified) => {
-            info!("rclone binary not modified, using cached copy");
-        }
-        Ok(DownloadResult::Downloaded(entry)) => {
-            info!(path = %bin_dst.display(), "Updated rclone binary cache");
-            // Ensure executable on Unix
-            #[cfg(unix)]
-            {
-                use std::os::unix::fs::PermissionsExt;
-                let mut perms = fs::metadata(&bin_dst).await?.permissions();
-                perms.set_mode(0o755);
-                fs::set_permissions(&bin_dst, perms).await.ok();
-            }
-            meta.update(bin_src.to_string(), entry);
-        }
-        Err(e) => {
-            warn!(
-                error = e.as_ref() as &dyn std::error::Error,
-                "Failed to update rclone binary, using cached copy if available"
-            );
-            ensure!(
-                bin_dst.exists(),
-                "Failed to download rclone binary and no cached copy available: {:#}",
-                e
-            );
-        }
-    }
-
-    let _ = save_meta(cache_dir, &meta).await;
 
     Ok((bin_dst, conf_dst))
 }
 
-#[derive(Debug, Clone, Default, Serialize, Deserialize)]
-struct MetaEntry {
-    etag: Option<String>,
-    last_modified: Option<String>,
+fn init_progress(bytes: u64, total: Option<u64>) {
+    DownloaderInitProgress { bytes, total_bytes: total }.send_signal_to_dart();
 }
 
-#[derive(Debug, Clone, Default, Serialize, Deserialize)]
-struct MetaStore {
-    entries: HashMap<String, MetaEntry>,
+fn build_http_client() -> Result<reqwest::Client> {
+    Ok(reqwest::Client::builder()
+        .user_agent(crate::USER_AGENT)
+        .connect_timeout(Duration::from_secs(10))
+        .timeout(Duration::from_secs(300))
+        .build()?)
 }
 
-impl MetaStore {
-    fn get(&self, url: &str) -> Option<&MetaEntry> {
-        self.entries.get(url)
+#[instrument(skip(client), fields(src = %src, dst = %dst.display(), label = label), err)]
+async fn ensure_remote_file(
+    client: &reqwest::Client,
+    src: &str,
+    dst: &Path,
+    cache_dir: &Path,
+    set_executable: bool,
+    label: &str,
+) -> Result<()> {
+    match http_cache::update_file_cached(client, src, dst, cache_dir, Some(init_progress)).await {
+        Ok(DownloadResult::NotModified) => {
+            debug!("{} not modified, using cached copy", label);
+        }
+        Ok(DownloadResult::Downloaded(_entry)) => {
+            debug!(path = %dst.display(), "Updated {} cache", label);
+            if set_executable {
+                #[cfg(unix)]
+                {
+                    use std::os::unix::fs::PermissionsExt;
+                    let mut perms = fs::metadata(dst).await?.permissions();
+                    perms.set_mode(0o755);
+                    fs::set_permissions(dst, perms).await.ok();
+                }
+            }
+        }
+        Err(e) => {
+            warn!(
+                error = e.as_ref() as &dyn Error,
+                "Failed to update {}, using cached copy if available", label
+            );
+            ensure!(
+                dst.exists(),
+                "Failed to download {} and no cached copy available: {:#}",
+                label,
+                e
+            );
+        }
     }
-    fn update(&mut self, url: String, entry: MetaEntry) {
-        self.entries.insert(url, entry);
-    }
-}
 
-async fn load_meta(dir: &Path) -> Result<MetaStore> {
-    let path = dir.join("meta.json");
-    if !path.exists() {
-        return Ok(MetaStore::default());
-    }
-    let content = fs::read_to_string(&path).await?;
-    let meta: MetaStore = serde_json::from_str(&content)?;
-    Ok(meta)
-}
-
-async fn save_meta(dir: &Path, meta: &MetaStore) -> Result<()> {
-    let path = dir.join("meta.json");
-    let json = serde_json::to_string_pretty(meta)?;
-    fs::write(&path, json).await?;
     Ok(())
 }
 
-enum DownloadResult {
-    NotModified,
-    Downloaded(MetaEntry),
-}
-
-#[instrument(skip(client, prev), fields(url = %url, dst = %dst.display()), err)]
-async fn download_if_needed(
+#[instrument(skip(client), fields(url = %url, bin = %bin_dst.display()), err)]
+async fn ensure_remote_rclone_from_zip(
     client: &reqwest::Client,
     url: &str,
-    dst: &Path,
-    prev: Option<&MetaEntry>,
-) -> Result<DownloadResult> {
-    use reqwest::header::{ETAG, IF_MODIFIED_SINCE, IF_NONE_MATCH, LAST_MODIFIED};
-    let mut req = client.get(url);
-    if let Some(prev) = prev {
-        if let Some(etag) = &prev.etag {
-            req = req.header(IF_NONE_MATCH, etag);
-        }
-        if let Some(lm) = &prev.last_modified {
-            req = req.header(IF_MODIFIED_SINCE, lm);
-        }
-    }
-    let resp = req.send().await?;
-    if resp.status() == reqwest::StatusCode::NOT_MODIFIED {
-        return Ok(DownloadResult::NotModified);
-    }
-    let resp = resp.error_for_status()?;
-    let etag = resp.headers().get(ETAG).and_then(|v| v.to_str().ok()).map(|s| s.to_string());
-    let last_modified =
-        resp.headers().get(LAST_MODIFIED).and_then(|v| v.to_str().ok()).map(|s| s.to_string());
-    // write body to file with progress
-    let tmp = dst.with_extension("tmp");
-    let mut file = fs::File::create(&tmp)
+    cache_dir: &Path,
+    bin_dst: &Path,
+) -> Result<()> {
+    let zip_path = cache_dir.join("rclone.zip");
+    let md5_path = cache_dir.join("rclone.bin.md5");
+
+    match http_cache::update_file_cached(client, url, &zip_path, cache_dir, Some(init_progress))
         .await
-        .with_context(|| format!("Failed to create {}", tmp.display()))?;
-    let mut downloaded: u64 = 0;
-    let total = resp.content_length();
-    let mut stream = resp.bytes_stream();
-    while let Some(item) = stream.next().await {
-        let chunk = item?;
-        file.write_all(&chunk).await?;
-        downloaded += chunk.len() as u64;
-        crate::models::signals::downloader::progress::DownloaderInitProgress {
-            bytes: downloaded,
-            total_bytes: total,
+    {
+        Ok(DownloadResult::NotModified) => {
+            info!("rclone.zip not modified");
+            if bin_dst.exists() && md5_path.exists() {
+                // TODO: maybe we can remove this and similar checks, now that we have a cache dir per config?
+                match (compute_md5_file(bin_dst).await, fs::read_to_string(&md5_path).await) {
+                    (Ok(current), Ok(expected)) if current.trim() == expected.trim() => {
+                        debug!("Existing rclone binary matches stored checksum");
+                        return Ok(());
+                    }
+                    _ => {
+                        warn!("Local rclone binary checksum missing/mismatch, re-extracting");
+                    }
+                }
+            } else if bin_dst.exists() {
+                debug!("Checksum file missing, re-extracting to ensure correctness");
+            }
+
+            info!("Extracting rclone binary from cached zip");
+            extract_rclone_from_zip(&zip_path, cache_dir, bin_dst).await?;
+            // Update checksum after (re)extraction
+            if let Err(e) = write_md5_file(bin_dst, &md5_path).await {
+                warn!(error = %e, "Failed to write rclone MD5 stamp");
+            }
         }
-        .send_signal_to_dart();
+        Ok(DownloadResult::Downloaded(_)) => {
+            info!(path = %zip_path.display(), "Fetched rclone zip, extracting binary");
+            extract_rclone_from_zip(&zip_path, cache_dir, bin_dst).await?;
+            // Persist checksum for future NotModified fast‑path
+            if let Err(e) = write_md5_file(bin_dst, &md5_path).await {
+                warn!(error = %e, "Failed to write rclone MD5 stamp");
+            }
+        }
+        Err(e) => {
+            warn!(
+                error = e.as_ref() as &dyn Error,
+                "Failed to update rclone.zip, attempting to use cached copy",
+            );
+            ensure!(
+                zip_path.exists(),
+                "Failed to download rclone zip and no cached copy available: {:#}",
+                e
+            );
+            if !bin_dst.exists() {
+                extract_rclone_from_zip(&zip_path, cache_dir, bin_dst).await?;
+                if let Err(e) = write_md5_file(bin_dst, &md5_path).await {
+                    warn!(error = %e, "Failed to write rclone MD5 stamp");
+                }
+            }
+        }
     }
-    file.flush().await?;
-    drop(file);
-    fs::rename(&tmp, dst).await.with_context(|| format!("Failed to replace {}", dst.display()))?;
-    Ok(DownloadResult::Downloaded(MetaEntry { etag, last_modified }))
+
+    // Ensure executable bit on Unix
+    #[cfg(unix)]
+    {
+        use std::os::unix::fs::PermissionsExt;
+        let mut perms = fs::metadata(bin_dst).await?.permissions();
+        perms.set_mode(0o755);
+        fs::set_permissions(bin_dst, perms).await.ok();
+    }
+
+    Ok(())
+}
+
+/// Extract rclone binary from the provided zip into `bin_dst` within `cache_dir`.
+async fn extract_rclone_from_zip(zip_path: &Path, cache_dir: &Path, bin_dst: &Path) -> Result<()> {
+    let entries = list_archive_file_paths(zip_path)
+        .await
+        .with_context(|| format!("Failed to list entries of {}", zip_path.display()))?;
+
+    let target_name = if cfg!(windows) { "rclone.exe" } else { "rclone" };
+
+    // Prefer root-level file; otherwise a nested entry like "rclone-v.../rclone"
+    let mut candidates: Vec<&str> = entries
+        .iter()
+        .filter_map(|p| {
+            let last = p.rsplit('/').next().unwrap_or(p.as_str());
+            if last == target_name { Some(p.as_str()) } else { None }
+        })
+        .collect();
+
+    ensure!(!candidates.is_empty(), "No '{}' entry found in {}", target_name, zip_path.display());
+
+    // Pick the shortest path to prefer root-level when present
+    candidates.sort_by_key(|s| s.len());
+    let chosen = candidates[0];
+
+    // Extract only the chosen entry, flattening the path
+    extract_single_from_archive(zip_path, cache_dir, chosen)
+        .await
+        .with_context(|| format!("Failed to extract '{}' from {}", chosen, zip_path.display()))?;
+
+    let extracted_path = cache_dir.join(target_name);
+    if extracted_path != bin_dst {
+        // Replace existing bin_dst if present
+        if bin_dst.exists() {
+            let _ = fs::remove_file(bin_dst).await;
+        }
+        fs::rename(&extracted_path, bin_dst)
+            .await
+            .with_context(|| format!("Failed to place rclone to {}", bin_dst.display()))?;
+    }
+
+    Ok(())
+}
+
+async fn write_md5_file(bin_dst: &Path, md5_path: &Path) -> Result<()> {
+    let md5 = compute_md5_file(bin_dst).await.context("Failed to compute MD5")?;
+    fs::write(md5_path, md5.into_bytes()).await.context("Failed to write MD5 file")?;
+    Ok(())
 }
 
 #[cfg(test)]
@@ -207,16 +293,19 @@ mod tests {
     };
 
     use super::*;
-    use crate::models::RclonePath;
+    use crate::models::{RclonePath, RepoLayoutKind};
 
     fn cfg_local(bin: &str, conf: &str) -> DownloaderConfig {
         DownloaderConfig {
+            id: "test".to_string(),
             rclone_path: RclonePath::Single(bin.to_string()),
-            rclone_config_path: conf.to_string(),
+            rclone_config_path: Some(conf.to_string()),
             remote_name_filter_regex: None,
             disable_randomize_remote: true,
+            layout: RepoLayoutKind::FFA,
             root_dir: "Quest Games".to_string(),
             list_path: "FFA.txt".to_string(),
+            vrp_public_url: "".to_string(),
         }
     }
 
@@ -224,7 +313,8 @@ mod tests {
     async fn prepare_artifacts_returns_local_paths_when_both_local() {
         let dir = tempdir().unwrap();
         let cfg = cfg_local("/bin/echo", "/tmp/rclone.conf");
-        let (bin, conf) = prepare_artifacts(dir.path(), &cfg).await.expect("ok");
+        let (bin, conf) =
+            prepare_artifacts(dir.path(), &cfg).await.expect("Prepare artifacts failed");
         assert_eq!(bin, PathBuf::from("/bin/echo"));
         assert_eq!(conf, PathBuf::from("/tmp/rclone.conf"));
     }
@@ -234,14 +324,18 @@ mod tests {
         let dir = tempdir().unwrap();
         // URL for rclone, local for config
         let cfg = DownloaderConfig {
+            id: "test".to_string(),
             rclone_path: RclonePath::Single("http://127.0.0.1/rclone".to_string()),
-            rclone_config_path: "/tmp/rclone.conf".to_string(),
+            rclone_config_path: Some("/tmp/rclone.conf".to_string()),
             remote_name_filter_regex: None,
             disable_randomize_remote: true,
+            layout: RepoLayoutKind::FFA,
             root_dir: "Quest Games".to_string(),
             list_path: "FFA.txt".to_string(),
+            vrp_public_url: "".to_string(),
         };
-        let err = prepare_artifacts(dir.path(), &cfg).await.unwrap_err();
+        let err =
+            prepare_artifacts(dir.path(), &cfg).await.expect_err("Prepare artifacts should fail");
         let msg = format!("{:#}", err);
         assert!(msg.contains("must both be local or both be URLs"));
     }
@@ -297,29 +391,31 @@ mod tests {
             .await;
 
         let cfg = DownloaderConfig {
+            id: "test".to_string(),
             rclone_path: RclonePath::Single(format!("{}{}", server.uri(), bin_path)),
-            rclone_config_path: format!("{}{}", server.uri(), conf_path),
+            rclone_config_path: Some(format!("{}{}", server.uri(), conf_path)),
             remote_name_filter_regex: None,
             disable_randomize_remote: true,
+            layout: RepoLayoutKind::FFA,
             root_dir: "Quest Games".to_string(),
             list_path: "FFA.txt".to_string(),
+            vrp_public_url: "".to_string(),
         };
 
         // First run downloads both files
-        let (bin, conf) = prepare_artifacts(dir.path(), &cfg).await.expect("first run ok");
+        let (bin, conf) = prepare_artifacts(dir.path(), &cfg).await.expect("First run failed");
         assert!(bin.exists());
         assert!(conf.exists());
 
-        // On Unix, ensure executable bit set for binary
         #[cfg(unix)]
         {
             use std::os::unix::fs::PermissionsExt;
             let mode = tokio::fs::metadata(&bin).await.unwrap().permissions().mode();
-            assert!(mode & 0o111 != 0, "binary should be executable");
+            assert!(mode & 0o111 != 0, "Binary should be executable");
         }
 
-        // Second run: server replies 304; function should still succeed and use cache
-        let (bin2, conf2) = prepare_artifacts(dir.path(), &cfg).await.expect("second run ok");
+        // Second run: server replies 304, function should still succeed and use cache
+        let (bin2, conf2) = prepare_artifacts(dir.path(), &cfg).await.expect("Second run failed");
         assert_eq!(bin2, bin);
         assert_eq!(conf2, conf);
     }

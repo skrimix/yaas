@@ -759,7 +759,7 @@ class _DownloadAppsScreenState extends State<DownloadAppsScreen> {
           body: SafeArea(
             child: Column(
               children: [
-                if (!showDownloaderInit)
+                if (!showDownloaderInit && !showDownloaderError)
                   Padding(
                     padding: const EdgeInsets.all(16.0),
                     child: Row(
@@ -829,7 +829,9 @@ class _DownloadAppsScreenState extends State<DownloadAppsScreen> {
                       ],
                     ),
                   ),
-                if (_showOnlyFavorites)
+                if (_showOnlyFavorites &&
+                    !showDownloaderInit &&
+                    !showDownloaderError)
                   Padding(
                     padding: const EdgeInsets.fromLTRB(16, 0, 16, 8),
                     child: Row(
@@ -852,19 +854,21 @@ class _DownloadAppsScreenState extends State<DownloadAppsScreen> {
                       ],
                     ),
                   ),
-                Expanded(
-                  child: CloudAppList(
-                    apps: filteredAndSortedApps,
-                    showCheckboxes: _showCheckboxes,
-                    selectedFullNames: _selectedFullNames,
-                    scrollController: _scrollController,
-                    isSearching: _searchQuery.isNotEmpty,
-                    onSelectionChanged: _toggleSelection,
-                    onDownload: _download,
-                    onInstall: _install,
+                if (!showDownloaderInit && !showDownloaderError)
+                  Expanded(
+                    child: CloudAppList(
+                      apps: filteredAndSortedApps,
+                      showCheckboxes: _showCheckboxes,
+                      selectedFullNames: _selectedFullNames,
+                      scrollController: _scrollController,
+                      isSearching: _searchQuery.isNotEmpty,
+                      onSelectionChanged: _toggleSelection,
+                      onDownload: _download,
+                      onInstall: _install,
+                    ),
                   ),
-                ),
-                _buildSelectionSummary(_sortApps(cloudAppsState.apps)),
+                if (!showDownloaderInit && !showDownloaderError)
+                  _buildSelectionSummary(_sortApps(cloudAppsState.apps)),
               ],
             ),
           ),

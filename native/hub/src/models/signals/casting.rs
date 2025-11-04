@@ -15,10 +15,7 @@ pub struct CastingStatusChanged {
 pub struct GetCastingStatusRequest {}
 
 #[derive(Serialize, Deserialize, DartSignal)]
-pub struct DownloadCastingBundleRequest {
-    /// Optional override URL; if empty, the default will be used
-    pub url: Option<String>,
-}
+pub struct DownloadCastingBundleRequest {}
 
 #[derive(Serialize, Deserialize, RustSignal)]
 pub struct CastingDownloadProgress {

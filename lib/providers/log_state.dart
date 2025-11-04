@@ -100,8 +100,8 @@ class LogState extends ChangeNotifier {
 
   // Filtering state
   Set<LogLevel> _enabledLevels = {
-    LogLevel.trace,
-    LogLevel.debug,
+    // LogLevel.trace,
+    // LogLevel.debug,
     LogLevel.info,
     LogLevel.warn,
     LogLevel.error,

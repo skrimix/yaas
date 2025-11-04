@@ -1,4 +1,8 @@
-use std::{error::Error, path::PathBuf, process::Stdio};
+use std::{
+    error::Error,
+    path::{Path, PathBuf},
+    process::Stdio,
+};
 
 use anyhow::{Context, Result, anyhow, ensure};
 use lazy_regex::Regex;
@@ -9,7 +13,7 @@ use tokio::{
     sync::mpsc::UnboundedSender,
 };
 use tokio_util::sync::CancellationToken;
-use tracing::{Span, debug, error, info, instrument, trace, warn};
+use tracing::{Span, debug, error, instrument, trace, warn};
 
 use crate::utils::{get_sys_proxy, resolve_binary_path};
 
@@ -95,6 +99,10 @@ impl RcloneClient {
         let mut command = Command::new(&self.rclone_path);
         command.kill_on_drop(true);
 
+        // Make any unexpected prompts fail to avoid hanging
+        command.stdin(Stdio::null());
+
+        // Hide the console window on Windows
         #[cfg(target_os = "windows")]
         command.creation_flags(0x08000000); // CREATE_NO_WINDOW
 
@@ -281,12 +289,38 @@ impl RcloneClient {
     }
 }
 
+fn filter_remotes_with_regex(remotes: Vec<String>, regex: Option<&Regex>) -> Vec<String> {
+    if let Some(re) = regex {
+        remotes.into_iter().filter(|r| re.is_match(r)).collect()
+    } else {
+        remotes
+    }
+}
+
+fn filter_remotes_with_pattern(remotes: Vec<String>, pattern: Option<&str>) -> Vec<String> {
+    if let Some(pat) = pattern {
+        match Regex::new(pat) {
+            Ok(re) => filter_remotes_with_regex(remotes, Some(&re)),
+            Err(e) => {
+                warn!(
+                    pattern = %pat,
+                    error = &e as &dyn Error,
+                    "Invalid remote filter regex, returning unfiltered remotes"
+                );
+                remotes
+            }
+        }
+    } else {
+        remotes
+    }
+}
+
 #[derive(Debug, Clone)]
 pub struct RcloneStorage {
     client: RcloneClient,
     remote: String,
     root_dir: String,
-    // Keep original string for equality; compile once for runtime use
+    // Keep original string for equality, compile once for runtime use
     remote_filter_regex_str: Option<String>,
     remote_filter_regex: Option<Regex>,
 }
@@ -336,7 +370,7 @@ impl RcloneStorage {
         stats_tx: UnboundedSender<RcloneTransferStats>,
         cancellation_token: CancellationToken,
     ) -> Result<PathBuf> {
-        ensure!(dest.parent().is_some(), "destination must have a parent directory");
+        ensure!(dest.parent().is_some(), "Destination must have a parent directory");
         let source = self.format_remote_path(&source);
         let total_bytes =
             self.client.size(&source).await.context("Failed to get remote dir size")?.bytes;
@@ -360,10 +394,14 @@ impl RcloneStorage {
         dest: PathBuf,
         cancellation_token: Option<CancellationToken>,
     ) -> Result<PathBuf> {
-        ensure!(dest.is_dir(), "destination must be a directory");
+        ensure!(dest.is_dir(), "Destination must be a directory");
+        let local_leaf = PathBuf::from(&source)
+            .file_name()
+            .map(|s| s.to_string_lossy().into_owned())
+            .unwrap_or_else(|| source.clone());
         let source = self.format_remote_path(&source);
         let mut dest_path = dest.clone();
-        info!(source = %source, dest = %dest.display(), "Starting file download");
+        debug!(source = %source, dest = %dest.display(), "Starting file download");
         self.client
             .transfer(
                 source.clone(),
@@ -372,19 +410,14 @@ impl RcloneStorage {
                 cancellation_token,
             )
             .await?;
-        dest_path
-            .push(source.split(['/', '\\']).next_back().context("Failed to get source file name")?);
+        dest_path.push(local_leaf);
         Ok(dest_path)
     }
 
     #[instrument(skip(self), ret, err)]
     pub async fn remotes(&self) -> Result<Vec<String>> {
         let remotes = self.client.remotes().await?;
-        if let Some(regex) = &self.remote_filter_regex {
-            Ok(remotes.into_iter().filter(|r| regex.is_match(r)).collect())
-        } else {
-            Ok(remotes)
-        }
+        Ok(filter_remotes_with_regex(remotes, self.remote_filter_regex.as_ref()))
     }
 }
 
@@ -398,3 +431,15 @@ impl PartialEq for RcloneStorage {
 }
 
 impl Eq for RcloneStorage {}
+
+#[instrument(ret, err)]
+pub async fn list_remotes(
+    rclone_path: &Path,
+    config_path: &Path,
+    remote_filter_regex: Option<&str>,
+) -> Result<Vec<String>> {
+    let client =
+        RcloneClient::new(rclone_path.to_path_buf(), config_path.to_path_buf(), String::new());
+    let remotes = client.remotes().await?;
+    Ok(filter_remotes_with_pattern(remotes, remote_filter_regex))
+}

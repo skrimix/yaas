@@ -21,6 +21,7 @@ use tracing::{Instrument, Span, debug, error, info, instrument, trace, warn};
 use crate::{
     adb::{PACKAGE_NAME_REGEX, ensure_valid_package},
     apk::get_apk_info,
+    archive::decompress_all_7z_in_dir,
     models::{
         InstalledPackage, SPACE_INFO_COMMAND, SpaceInfo, parse_list_apps_dex,
         signals::adb::command::RebootMode,
@@ -281,7 +282,6 @@ impl AdbDevice {
     /// Refreshes the list of installed packages on the device
     #[instrument(skip(self), fields(count), err)]
     async fn refresh_package_list(&mut self) -> Result<()> {
-        info!("Refreshing package list");
         self.push_bytes(LIST_APPS_DEX_BYTES, UnixPath::new("/data/local/tmp/list_apps.dex"))
             .await
             .context("Failed to push list_apps.dex")?;
@@ -843,7 +843,7 @@ impl AdbDevice {
         let script_dir = script_path.parent().context("Failed to get script directory")?;
 
         // Unpack all 7z archives if present
-        crate::utils::decompress_all_7z_in_dir_cancellable(script_dir, token.clone())
+        decompress_all_7z_in_dir(script_dir, Some(token.clone()))
             .await
             .context("Failed to decompress .7z archives in install folder")?;
 

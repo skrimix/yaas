@@ -126,6 +126,9 @@ class AppLocalizationsRu extends AppLocalizations {
   String get installDownloaderConfig => 'Установить конфигурацию загрузчика';
 
   @override
+  String get settingsSelectDownloaderConfig => 'Выберите downloader.json';
+
+  @override
   String get loadingApps => 'Загрузка списка приложений...';
 
   @override

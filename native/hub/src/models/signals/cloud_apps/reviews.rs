@@ -4,13 +4,13 @@ use serde::{Deserialize, Serialize};
 #[derive(Serialize, Deserialize, DartSignal)]
 pub struct GetAppReviewsRequest {
     pub app_id: String,
-    /// Optional page size; defaults to 5 if None
+    /// Optional page size, defaults to 5 if None
     #[serde(default)]
     pub limit: Option<u32>,
-    /// Optional offset; defaults to 0 if None
+    /// Optional offset, defaults to 0 if None
     #[serde(default)]
     pub offset: Option<u32>,
-    /// Optional sort criteria; defaults to "helpful" if None. Supported: "helpful", "newest"
+    /// Optional sort criteria, defaults to "helpful" if None. Supported: "helpful", "newest"
     #[serde(default)]
     pub sort_by: Option<String>,
 }

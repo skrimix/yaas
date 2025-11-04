@@ -12,7 +12,7 @@ pub struct LoadCloudAppsRequest {
 pub struct CloudAppsChangedEvent {
     /// Whether a load is in progress
     pub is_loading: bool,
-    /// New app list if it changed; None means no change since last
+    /// New app list if it changed. None means no change since last
     pub apps: Option<Vec<CloudApp>>,
     pub error: Option<String>,
 }

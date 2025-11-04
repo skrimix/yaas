@@ -21,7 +21,8 @@ use crate::{
         AdbHandler,
         device::{BackupOptions, SideloadProgress},
     },
-    downloader::{Downloader, RcloneTransferStats},
+    downloader::RcloneTransferStats,
+    downloader_manager::DownloaderManager,
     downloads_catalog::DownloadsCatalog,
     models::{
         Settings,
@@ -88,7 +89,7 @@ pub struct TaskManager {
     id_counter: AtomicU64,
     tasks: Mutex<HashMap<u64, (Task, CancellationToken)>>,
     adb_handler: Arc<AdbHandler>,
-    downloader: RwLock<Option<Arc<Downloader>>>,
+    downloader_manager: Arc<DownloaderManager>,
     downloads_catalog: Arc<DownloadsCatalog>,
     settings: RwLock<Settings>,
 }
@@ -96,7 +97,7 @@ pub struct TaskManager {
 impl TaskManager {
     pub fn new(
         adb_handler: Arc<AdbHandler>,
-        downloader: Option<Arc<Downloader>>,
+        downloader_manager: Arc<DownloaderManager>,
         downloads_catalog: Arc<DownloadsCatalog>,
         mut settings_stream: WatchStream<Settings>,
     ) -> Arc<Self> {
@@ -109,7 +110,7 @@ impl TaskManager {
             id_counter: AtomicU64::new(0),
             tasks: Mutex::new(HashMap::new()),
             adb_handler,
-            downloader: RwLock::new(downloader),
+            downloader_manager,
             downloads_catalog,
             settings: RwLock::new(initial_settings),
         });
@@ -133,17 +134,6 @@ impl TaskManager {
         });
 
         handle
-    }
-
-    pub async fn set_downloader(&self, downloader: Option<Arc<Downloader>>) {
-        let mut guard = self.downloader.write().await;
-        let old = guard.take();
-        *guard = downloader;
-        drop(guard);
-        if let Some(d) = old {
-            // TODO: this shouldn't be done from TaskManager
-            d.stop().await;
-        }
     }
 
     #[instrument(skip(self))]
@@ -432,7 +422,7 @@ impl TaskManager {
         token: CancellationToken,
     ) -> Result<String> {
         ensure!(
-            self.downloader.read().await.is_some(),
+            self.downloader_manager.is_some().await,
             "Downloader is not configured. Install configuration file to initialize."
         );
         update_progress(ProgressUpdate {
@@ -456,13 +446,14 @@ impl TaskManager {
         });
 
         let (tx, mut rx) = mpsc::unbounded_channel::<RcloneTransferStats>();
+        let (stage_tx, mut stage_rx) = mpsc::unbounded_channel::<String>();
 
         let mut download_task = {
-            let downloader = self.downloader.read().await.as_ref().unwrap().clone();
+            let downloader = self.downloader_manager.get().await.expect("downloader missing");
             let app_full_name = app_full_name.to_string();
             let token = token.clone();
             tokio::spawn(
-                async move { downloader.download_app(app_full_name, tx, token).await }
+                async move { downloader.download_app(app_full_name, tx, stage_tx, token).await }
                     .instrument(Span::current()),
             )
         };
@@ -542,6 +533,14 @@ impl TaskManager {
                         step_number,
                         step_progress,
                         message,
+                    });
+                }
+                Some(stage_msg) = stage_rx.recv() => {
+                    update_progress(ProgressUpdate {
+                        status: TaskStatus::Running,
+                        step_number,
+                        step_progress: None,
+                        message: stage_msg,
                     });
                 }
             }
@@ -1031,7 +1030,7 @@ impl TaskManager {
 #[cfg(test)]
 impl TaskManager {
     pub async fn __test_has_downloader(&self) -> bool {
-        self.downloader.read().await.is_some()
+        self.downloader_manager.is_some().await
     }
 }
 

@@ -6,16 +6,23 @@ use tracing::error;
 
 #[derive(Debug, Clone, Deserialize)]
 pub struct DownloaderConfig {
+    /// ID of the config. Used for cache separation.
+    pub id: String,
     pub rclone_path: RclonePath,
-    pub rclone_config_path: String,
+    #[serde(default)]
+    pub rclone_config_path: Option<String>,
     #[serde(default)]
     pub remote_name_filter_regex: Option<String>,
     #[serde(default)]
     pub disable_randomize_remote: bool,
+    /// Repository layout selector. "ffa" or "vrp-public"
+    pub layout: RepoLayoutKind,
     #[serde(default = "default_root_dir")]
     pub root_dir: String,
     #[serde(default = "default_list_path")]
     pub list_path: String,
+    #[serde(default)]
+    pub vrp_public_url: String,
 }
 
 fn default_root_dir() -> String {
@@ -40,6 +47,15 @@ impl DownloaderConfig {
     }
 }
 
+#[derive(Debug, Clone, Copy, Deserialize, PartialEq, Eq)]
+#[serde(rename_all = "kebab-case")]
+pub enum RepoLayoutKind {
+    #[serde(rename = "ffa")]
+    FFA,
+    #[serde(rename = "vrp-public")]
+    VRPPublic,
+}
+
 #[derive(Debug, Clone, Deserialize)]
 #[serde(untagged)]
 pub enum RclonePath {
@@ -47,7 +63,6 @@ pub enum RclonePath {
     Map(HashMap<String, String>),
 }
 
-// OS
 #[cfg(target_os = "windows")]
 pub const CURRENT_PLATFORM: &str = "windows";
 #[cfg(target_os = "linux")]
@@ -55,7 +70,6 @@ pub const CURRENT_PLATFORM: &str = "linux";
 #[cfg(target_os = "macos")]
 pub const CURRENT_PLATFORM: &str = "macos";
 
-// ARCH (short forms)
 #[cfg(target_arch = "x86_64")]
 pub const CURRENT_ARCH: &str = "x64";
 #[cfg(target_arch = "aarch64")]
@@ -65,13 +79,11 @@ pub const CURRENT_ARCH: &str = "x86";
 #[cfg(target_arch = "arm")]
 pub const CURRENT_ARCH: &str = "arm";
 
-/// Convenience helper combining platform and arch (e.g. "linux-x64").
 pub fn current_platform_arch_key() -> String {
     format!("{}-{}", CURRENT_PLATFORM, CURRENT_ARCH)
 }
 
 impl RclonePath {
-    /// Resolve the rclone path for the current platform.
     pub fn resolve_for_current_platform(&self) -> Result<String> {
         match self {
             RclonePath::Single(s) => Ok(s.clone()),
@@ -128,6 +140,8 @@ mod tests {
         write_file(
             &cfg_path,
             r#"{
+                "id": "test",
+                "layout": "ffa",
                 "rclone_path": "/bin/echo",
                 "rclone_config_path": "/tmp/rclone.conf"
             }"#,
@@ -138,9 +152,9 @@ mod tests {
             RclonePath::Single(ref s) => assert_eq!(s, "/bin/echo"),
             _ => panic!("expected Single path"),
         }
-        assert_eq!(cfg.rclone_config_path, "/tmp/rclone.conf");
-        // default_randomize_remote = true when omitted
-        assert!(cfg.disable_randomize_remote);
+        assert_eq!(cfg.rclone_config_path.as_deref(), Some("/tmp/rclone.conf"));
+        // default_randomize_remote = false when omitted
+        assert!(!cfg.disable_randomize_remote);
     }
 
     #[test]

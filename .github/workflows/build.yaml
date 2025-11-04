@@ -151,9 +151,65 @@ jobs:
           # Rename to a stable filename for the artifact
           cp -v "${files[0]}" "dist/yaas.AppImage"
 
+      # TODO: Any better way to do this?
+      - name: Repack AppImage with 7-Zip (Linux)
+        if: matrix.target == 'linux'
+        shell: bash
+        run: |
+          set -euo pipefail
+          app="dist/yaas.AppImage"
+          chmod +x "$app"
+          # Extract current AppImage contents
+          "$app" --appimage-extract
+          # Fetch 7-Zip static and place into usr/bin of AppDir
+          curl -fsSL -o 7zip-linux.tar.xz "https://github.com/ip7z/7zip/releases/download/25.01/7z2501-linux-x64.tar.xz"
+          tar -xJf 7zip-linux.tar.xz || true
+          found=$(find . -maxdepth 2 -type f -name '7zzs' | head -n1 || true)
+          if [[ -z "$found" ]]; then echo "7zzs not found in archive" >&2; exit 1; fi
+          install -Dm755 "$found" squashfs-root/usr/bin/7zzs
+          rm -f 7zip-linux.tar.xz
+          # Repack into the same stable output path
+          appimagetool squashfs-root "$app"
+          rm -rf squashfs-root
+
       - name: Build the app (Windows/macOS)
         if: matrix.target != 'linux'
         run: flutter build -v ${{ matrix.target }} --release
+
+      - name: Setup 7-Zip (Windows)
+        if: matrix.target == 'windows'
+        uses: milliewalky/setup-7-zip@v2
+
+      - name: Bundle 7-Zip into Windows artifact
+        if: matrix.target == 'windows'
+        shell: pwsh
+        run: |
+          $ErrorActionPreference = 'Stop'
+          $url = 'https://github.com/ip7z/7zip/releases/download/25.01/7z2501-extra.7z'
+          $tmp = Join-Path $env:RUNNER_TEMP '7z-extra.7z'
+          Invoke-WebRequest -Uri $url -OutFile $tmp
+          7z x -y -o"$env:RUNNER_TEMP\sevenzip" "$tmp" | Out-Null
+          $src = Join-Path $env:RUNNER_TEMP 'sevenzip\x64\7za.exe'
+          if (!(Test-Path $src)) { throw "7za.exe not found in extracted archive" }
+          Copy-Item -Force $src '${{ matrix.build-path }}\7za.exe'
+
+      - name: Bundle 7-Zip into macOS app
+        if: matrix.target == 'macos'
+        shell: bash
+        run: |
+          set -euo pipefail
+          app=$(ls -d ${{ matrix.build-path }} | head -n1)
+          echo "App path: $app"
+          curl -fsSL -o 7zip-mac.tar.xz "https://github.com/ip7z/7zip/releases/download/25.01/7z2501-mac.tar.xz"
+          tar -xJf 7zip-mac.tar.xz 7zz || tar -xJf 7zip-mac.tar.xz
+          if [[ ! -f 7zz ]]; then
+            found=$(find . -maxdepth 2 -type f -name '7zz' | head -n1 || true)
+            if [[ -n "$found" ]]; then mv -v "$found" ./7zz; fi
+          fi
+          chmod +x ./7zz
+          # Place next to main binary for simple resolution
+          cp -v ./7zz "$app/Contents/MacOS/7zz"
+          rm -f 7zip-mac.tar.xz ./7zz || true
 
       - name: Bundle ADB into Windows artifact
         if: matrix.target == 'windows'
@@ -254,13 +310,6 @@ jobs:
             find artifacts -maxdepth 5 -type f -print | sed 's/^/  /' || true
             exit 1
           fi
-
-      - name: Add checksums
-        shell: bash
-        run: |
-          set -euo pipefail
-          cd release
-          find . -maxdepth 1 -type f -not -name 'SHA256SUMS.txt' -print0 | sort -z | xargs -0 sha256sum > SHA256SUMS.txt
 
       - name: Move 'nightly' tag to this commit
         run: |

@@ -38,6 +38,7 @@
   "preparingDownloader": "Preparing downloader...",
   "downloadingRcloneFiles": "Downloading rclone files",
   "installDownloaderConfig": "Install downloader config",
+  "settingsSelectDownloaderConfig": "Select downloader.json",
   "loadingApps": "Loading apps...",
     "settingsSectionAppearance": "Appearance",
     "settingsUseSystemColor": "Use system color",

@@ -86,7 +86,6 @@ pub async fn write_download_metadata(
                 .with_context(|| format!("Failed to write {}", legacy_path.display()))?;
             info!(path = %legacy_path.display(), "Wrote legacy release.json metadata");
         } else {
-            // Not fatal; just log for visibility
             warn!(app_full_name, "Could not write legacy release.json: app not found in cache");
         }
     }

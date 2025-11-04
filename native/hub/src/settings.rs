@@ -51,7 +51,7 @@ impl SettingsHandler {
         let save_receiver = SaveSettingsRequest::get_dart_signal_receiver();
         let reset_receiver = ResetSettingsToDefaultsRequest::get_dart_signal_receiver();
 
-        info!("Starting to listen for settings requests");
+        debug!("Starting to listen for settings requests");
 
         loop {
             tokio::select! {
@@ -166,7 +166,7 @@ impl SettingsHandler {
             return self.load_default_settings().context("Failed to load default settings");
         }
 
-        info!(path = %self.settings_file_path.display(), "Loading settings from file");
+        debug!(path = %self.settings_file_path.display(), "Loading settings from file");
         let file_content =
             fs::read_to_string(&self.settings_file_path).context("Failed to read settings file")?;
 

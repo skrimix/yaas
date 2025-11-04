@@ -9,6 +9,7 @@ use std::{
 use anyhow::{Context, Result, ensure};
 use lazy_regex::regex;
 use rinf::{DartSignal, RustSignal};
+use time::{OffsetDateTime, format_description::well_known::Rfc3339};
 use tokio::fs;
 use tokio_stream::{StreamExt, wrappers::WatchStream};
 use tracing::{Span, debug, error, info, instrument, trace, warn};
@@ -80,6 +81,7 @@ impl DownloadsCatalog {
                 }
                 request = get_dir_receiver.recv() => {
                     if request.is_some() {
+                        debug!("Received GetDownloadsDirectoryRequest");
                         let dir = self.root.read().await.clone();
                         debug!(dir = %dir.display(), "Sending downloads directory path");
                         GetDownloadsDirectoryResponse { path: dir.to_string_lossy().into_owned() }.send_signal_to_dart();
@@ -94,7 +96,6 @@ impl DownloadsCatalog {
                         let result = self.delete_download(Path::new(&path)).await;
                         match result {
                             Ok(()) => {
-                                info!(%path, "Deleted download successfully");
                                 DeleteDownloadResponse { path, error: None }.send_signal_to_dart();
                                 DownloadsChanged {}.send_signal_to_dart();
                             }
@@ -194,7 +195,7 @@ fn system_time_to_millis(time: SystemTime) -> u64 {
 
 fn rfc3339_to_millis(s: &str) -> u64 {
     // Parse RFC3339 in UTC
-    match time::OffsetDateTime::parse(s, &time::format_description::well_known::Rfc3339) {
+    match OffsetDateTime::parse(s, &Rfc3339) {
         Ok(dt) => (dt.unix_timestamp_nanos() / 1_000_000) as u64,
         Err(_) => 0,
     }
@@ -324,7 +325,7 @@ impl DownloadsCatalog {
                 let Some(captures) = pattern.captures(installed_full_name) else {
                     warn!(
                         installed = installed_full_name,
-                        "Installed release name does not follow `{{name}} vX+Y` convention; \
+                        "Installed release name does not follow `{{name}} vX+Y` convention, \
                          skipping cleanup"
                     );
                     return Ok(());
@@ -348,7 +349,7 @@ impl DownloadsCatalog {
                             matching.push(entry);
                         }
                     } else {
-                        warn!(name = %entry.name, "Ignoring download with non-standard name during cleanup");
+                        debug!(name = %entry.name, "Ignoring download with non-standard name during cleanup");
                     }
                 }
 
@@ -436,15 +437,16 @@ impl DownloadsCatalog {
             let meta_path = dir.join("metadata.json");
             let meta_path_alt = dir.join("release.json");
             if !meta_path.exists() && !meta_path_alt.exists() {
+                warn!(path = %dir.display(), "No deleting download: no metadata file found");
                 continue;
             }
             if dir.exists() {
                 match fs::remove_dir_all(&dir).await {
                     Ok(()) => {
-                        removed = removed.saturating_add(1);
+                        removed += 1;
                     }
                     Err(_) => {
-                        skipped = skipped.saturating_add(1);
+                        skipped += 1;
                     }
                 }
             }

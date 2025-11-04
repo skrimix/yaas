@@ -1,8 +1,9 @@
 use rinf::RustSignal;
 use serde::Serialize;
 
-#[derive(Debug, Clone, Serialize, RustSignal, PartialEq)]
+#[derive(Debug, Clone, Serialize, RustSignal, PartialEq, Default)]
 pub enum AdbState {
+    #[default]
     ServerNotRunning,
     ServerStarting,
     NoDevices,
@@ -10,10 +11,4 @@ pub enum AdbState {
     DeviceUnauthorized,
     DeviceConnected,
     ServerStartFailed,
-}
-
-impl Default for AdbState {
-    fn default() -> Self {
-        Self::ServerNotRunning
-    }
 }

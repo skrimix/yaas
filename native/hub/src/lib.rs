@@ -3,8 +3,7 @@
 
 use std::{
     panic::{AssertUnwindSafe, catch_unwind},
-    path::Path,
-    sync::Arc,
+    sync::{Arc, OnceLock},
     time::Duration,
 };
 
@@ -13,7 +12,7 @@ use anyhow::{Context, Result};
 use logging::SignalLayer;
 use mimalloc::MiMalloc;
 use models::signals::system::{AppVersionInfo, MediaConfigChanged, RustPanic};
-use rinf::{DartSignal, RustSignal};
+use rinf::RustSignal;
 use settings::SettingsHandler;
 use task::TaskManager;
 use tokio::sync::Notify;
@@ -26,24 +25,25 @@ use tracing_appender::{
 use tracing_subscriber::{EnvFilter, fmt, layer::SubscriberExt};
 
 use crate::{
-    backups_list::BackupsListHandler,
-    casting::CastingManager,
-    downloads_catalog::DownloadsCatalog,
-    models::signals::downloader::{
-        availability::DownloaderAvailabilityChanged, setup::RetryDownloaderInitRequest,
-    },
+    backups_list::BackupsListHandler, casting::CastingManager,
+    downloader_manager::DownloaderManager, downloads_catalog::DownloadsCatalog,
 };
 
 #[global_allocator]
 static GLOBAL: MiMalloc = MiMalloc;
 
+// Keep logging guard alive for the whole process lifetime
+static LOG_GUARD: OnceLock<WorkerGuard> = OnceLock::new();
+
 rinf::write_interface!();
 
 pub mod adb;
 pub mod apk;
+pub mod archive;
 pub mod backups_list;
 pub mod casting;
 pub mod downloader;
+pub mod downloader_manager;
 pub mod downloads_catalog;
 pub mod logging;
 pub mod models;
@@ -105,8 +105,7 @@ async fn init() {
     }
     std::env::set_current_dir(&app_dir).expect("Failed to set current working directory");
 
-    let _guard = setup_logging();
-    if let Err(e) = _guard {
+    if let Err(e) = setup_logging() {
         rinf::debug_print!("Failed to setup logging: {:#}", e);
     }
     // Log and send version/build info
@@ -143,57 +142,14 @@ async fn init() {
 
     let adb_handler = AdbHandler::new(WatchStream::new(settings_handler.subscribe())).await;
     let downloads_catalog = DownloadsCatalog::start(WatchStream::new(settings_handler.subscribe()));
-    let task_manager = TaskManager::new(
+    let downloader_manager = DownloaderManager::new(None);
+    let _task_manager = TaskManager::new(
         adb_handler.clone(),
-        None,
+        downloader_manager.clone(),
         downloads_catalog.clone(),
         WatchStream::new(settings_handler.subscribe()),
     );
-
-    if Path::new("downloader.json").exists() {
-        let app_dir_cloned = app_dir.clone();
-        let settings_handler_cloned = settings_handler.clone();
-        let task_manager_cloned = task_manager.clone();
-        tokio::spawn(async move {
-            if let Err(e) = downloader::init_from_disk(
-                app_dir_cloned,
-                settings_handler_cloned,
-                task_manager_cloned,
-            )
-            .await
-            {
-                error!("Failed to initialize downloader: {:#}", e);
-            }
-        });
-    } else {
-        DownloaderAvailabilityChanged { available: false, initializing: false, error: None }
-            .send_signal_to_dart();
-    }
-
-    // Start downloader setup handler (install config via drag & drop)
-    downloader::setup::start_setup_handler(
-        app_dir.clone(),
-        settings_handler.clone(),
-        task_manager.clone(),
-    );
-
-    // Downloader init retries
-    tokio::spawn({
-        let app_dir = app_dir.clone();
-        let settings_handler = settings_handler.clone();
-        let task_manager = task_manager.clone();
-        async move {
-            let rx = RetryDownloaderInitRequest::get_dart_signal_receiver();
-            while rx.recv().await.is_some() {
-                let _ = downloader::init_from_disk(
-                    app_dir.clone(),
-                    settings_handler.clone(),
-                    task_manager.clone(),
-                )
-                .await;
-            }
-        }
-    });
+    downloader_manager.clone().start(app_dir.clone(), settings_handler.clone());
 
     // Backups-related requests
     let _backups_handler =
@@ -206,7 +162,7 @@ async fn init() {
     SignalLayer::start_request_handler(app_dir.join("logs"));
 }
 
-fn setup_logging() -> Result<WorkerGuard> {
+fn setup_logging() -> Result<()> {
     // Log to file
     std::fs::create_dir_all("logs").context("Failed to create logs directory")?;
     let file_appender = RollingFileAppender::builder()
@@ -216,7 +172,7 @@ fn setup_logging() -> Result<WorkerGuard> {
         .filename_suffix("log")
         .build("logs/yaas_native")
         .context("Failed to initialize file appender")?;
-    let (non_blocking, _guard) = tracing_appender::non_blocking(file_appender);
+    let (non_blocking, guard) = tracing_appender::non_blocking(file_appender);
 
     // Real-time logging to Flutter
     let (signal_layer, log_receiver) = SignalLayer::new();
@@ -235,5 +191,7 @@ fn setup_logging() -> Result<WorkerGuard> {
 
     tracing::subscriber::set_global_default(subscriber)
         .context("Failed to set global subscriber")?;
-    Ok(_guard)
+
+    let _ = LOG_GUARD.set(guard);
+    Ok(())
 }

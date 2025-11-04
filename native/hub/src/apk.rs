@@ -41,7 +41,6 @@ pub fn get_apk_info(apk_path: impl AsRef<Path>) -> Result<ApkInfo> {
     let manifest_bytes = read_zip_file(&mut zip, "AndroidManifest.xml")
         .context("Failed to read AndroidManifest.xml")?;
 
-    // resources.arsc might be missing in some stripped builds; that’s okay.
     let resources_bytes = read_zip_file(&mut zip, "resources.arsc").ok();
 
     let xml = XMLTree::read(&mut Cursor::new(&manifest_bytes))

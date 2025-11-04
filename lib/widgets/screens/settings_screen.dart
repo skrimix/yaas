@@ -50,7 +50,6 @@ class _SettingsScreenState extends State<SettingsScreen> {
   SettingsState? _settingsState;
   final ValueNotifier<bool> _isShiftPressedNotifier =
       ValueNotifier<bool>(false);
-  bool _rcloneRemoteCustom = false;
   bool _seedColorCustom = false;
   final TextEditingController _customColorController = TextEditingController();
   bool _castingStatusRequested = false;
@@ -657,6 +656,7 @@ class _SettingsScreenState extends State<SettingsScreen> {
             child: TextButton.icon(
               onPressed: () async {
                 final result = await FilePicker.platform.pickFiles(
+                  dialogTitle: l10n.settingsSelectDownloaderConfig,
                   allowMultiple: false,
                   type: FileType.custom,
                   allowedExtensions: const ['json'],
@@ -752,8 +752,7 @@ class _SettingsScreenState extends State<SettingsScreen> {
                   ),
                 );
                 if (confirmed == true) {
-                  const DownloadCastingBundleRequest(url: null)
-                      .sendSignalToRust();
+                  const DownloadCastingBundleRequest().sendSignalToRust();
                   if (!context.mounted) return;
                   final l10n = AppLocalizations.of(context);
                   ScaffoldMessenger.of(context).showSnackBar(
@@ -922,21 +921,13 @@ class _SettingsScreenState extends State<SettingsScreen> {
   Widget _buildRcloneRemoteSelector(AppLocalizations l10n) {
     final settingsState = _settingsState!;
     final remotes = settingsState.rcloneRemotes;
-    const customValue = '__custom__';
-
     final currentRemote = _currentFormSettings.rcloneRemoteName;
     final isCurrentInList = remotes.contains(currentRemote);
-    final shouldUseCustom = _rcloneRemoteCustom ||
-        settingsState.isRemotesLoading ||
-        remotes.isEmpty ||
-        !isCurrentInList;
-    final dropdownValue = shouldUseCustom ? customValue : currentRemote;
+    final dropdownValue = isCurrentInList ? currentRemote : null;
 
     final l10n = AppLocalizations.of(context);
     final items = <DropdownMenuItem<String>>[
       ...remotes.map((r) => DropdownMenuItem(value: r, child: Text(r))),
-      DropdownMenuItem(
-          value: customValue, child: Text(l10n.settingsCustomInput)),
     ];
 
     return Padding(
@@ -976,18 +967,8 @@ class _SettingsScreenState extends State<SettingsScreen> {
                   items: items,
                   onChanged: (value) {
                     if (value == null) return;
-                    if (value == customValue) {
-                      // Switch to custom mode, keep existing text
-                      setState(() {
-                        _rcloneRemoteCustom = true;
-                      });
-                    } else {
-                      setState(() {
-                        _rcloneRemoteCustom = false;
-                      });
-                      _updateSetting(SettingTextField.rcloneRemoteName, value,
-                          updateController: true);
-                    }
+                    _updateSetting(SettingTextField.rcloneRemoteName, value,
+                        updateController: true);
                   },
                   decoration: InputDecoration(
                     labelText: l10n.settingsRcloneRemote,
@@ -1018,20 +999,6 @@ class _SettingsScreenState extends State<SettingsScreen> {
               ),
             ],
           ),
-          if (dropdownValue == customValue)
-            Padding(
-              padding:
-                  const EdgeInsets.only(top: SettingsConstants.verticalSpacing),
-              child: TextField(
-                controller: _textControllers[SettingTextField.rcloneRemoteName],
-                decoration: InputDecoration(
-                  labelText: l10n.settingsCustomRemoteName,
-                  border: const OutlineInputBorder(),
-                ),
-                onChanged: (value) =>
-                    _updateSetting(SettingTextField.rcloneRemoteName, value),
-              ),
-            ),
         ],
       ),
     );

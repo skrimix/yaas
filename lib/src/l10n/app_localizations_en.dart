@@ -125,6 +125,9 @@ class AppLocalizationsEn extends AppLocalizations {
   String get installDownloaderConfig => 'Install downloader config';
 
   @override
+  String get settingsSelectDownloaderConfig => 'Select downloader.json';
+
+  @override
   String get loadingApps => 'Loading apps...';
 
   @override

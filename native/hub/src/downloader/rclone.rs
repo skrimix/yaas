@@ -21,6 +21,20 @@ static CONNECTION_TIMEOUT: &str = "5s";
 static IO_IDLE_TIMEOUT: &str = "30s";
 
 #[derive(Debug, Clone, Deserialize)]
+#[serde(rename_all = "PascalCase")]
+#[allow(unused)]
+pub struct RcloneLsJsonEntry {
+    pub path: String,
+    pub name: String,
+    pub size: u64,
+    #[serde(default)]
+    pub mime_type: Option<String>,
+    #[serde(default)]
+    pub mod_time: Option<String>,
+    pub is_dir: bool,
+}
+
+#[derive(Debug, Clone, Deserialize)]
 pub struct RcloneSizeOutput {
     // pub count: u64,
     pub bytes: u64,
@@ -145,6 +159,17 @@ impl RcloneClient {
         let remotes: Vec<String> =
             output.lines().map(|line| line.trim().trim_end_matches(':').to_string()).collect();
         Ok(remotes)
+    }
+
+    #[instrument(skip(self), ret, err)]
+    pub async fn lsjson(&self, path: &str) -> Result<Vec<RcloneLsJsonEntry>> {
+        let output = self
+            .run_to_string(&["lsjson", "--fast-list", path])
+            .await
+            .context("rclone lsjson failed")?;
+        let entries: Vec<RcloneLsJsonEntry> =
+            serde_json::from_str(&output).context("Failed to parse rclone lsjson output")?;
+        Ok(entries)
     }
 
     #[instrument(skip(self), ret, err)]
@@ -412,6 +437,12 @@ impl RcloneStorage {
             .await?;
         dest_path.push(local_leaf);
         Ok(dest_path)
+    }
+
+    #[instrument(skip(self), ret, err)]
+    pub async fn list_dir_json(&self, source: String) -> Result<Vec<RcloneLsJsonEntry>> {
+        let remote_path = self.format_remote_path(&source);
+        self.client.lsjson(&remote_path).await
     }
 
     #[instrument(skip(self), ret, err)]

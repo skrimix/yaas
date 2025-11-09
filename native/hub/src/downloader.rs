@@ -552,18 +552,34 @@ impl Downloader {
         info!(app = %app_full_name, dest = %dst_dir.display(), "Starting app download");
 
         let source = self.repo.source_for_download(&app_full_name);
+        let storage = self.storage.read().await.clone();
 
-        self.storage
-            .read()
-            .await
-            .clone()
-            .download_dir_with_stats(
-                source,
-                dst_dir.clone(),
-                progress_tx,
+        match self
+            .repo
+            .pre_download(
+                &storage,
+                &app_full_name,
+                &dst_dir,
+                &self.http_client,
+                &self.cache_dir,
                 cancellation_token.clone(),
             )
-            .await?;
+            .await
+        {
+            Ok(repo::PreDownloadDecision::SkipAlreadyPresent) => {
+                debug!("Pre-download decided to skip transfer");
+            }
+            _ => {
+                storage
+                    .download_dir_with_stats(
+                        source,
+                        dst_dir.clone(),
+                        progress_tx,
+                        cancellation_token.clone(),
+                    )
+                    .await?;
+            }
+        }
 
         // Prepare metadata inputs without holding long locks
         let cached = self.get_app_by_full_name(&app_full_name).await;

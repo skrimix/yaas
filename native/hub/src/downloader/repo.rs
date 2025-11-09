@@ -9,12 +9,13 @@ use async_trait::async_trait;
 use base64::Engine as _;
 use derive_more::Debug;
 use futures::TryStreamExt as _;
+use time::{OffsetDateTime, format_description::well_known::Rfc3339};
 use tokio::{
     fs::{self, File},
     sync::OnceCell,
 };
 use tokio_util::sync::CancellationToken;
-use tracing::{Span, debug, instrument, warn};
+use tracing::{Span, debug, error, instrument, warn};
 
 use super::{http_cache, rclone::RcloneStorage};
 use crate::{
@@ -48,6 +49,21 @@ pub trait Repo: Send + Sync {
     /// Source path under the root directory for download.
     fn source_for_download(&self, app_full_name: &str) -> String;
 
+    /// Optional pre-download check that can decide to skip the transfer.
+    /// Default: proceed with download.
+    #[allow(unused_variables)]
+    async fn pre_download(
+        &self,
+        storage: &RcloneStorage,
+        app_full_name: &str,
+        dst_dir: &Path,
+        http_client: &reqwest::Client,
+        cache_dir: &Path,
+        cancellation_token: CancellationToken,
+    ) -> Result<PreDownloadDecision> {
+        Ok(PreDownloadDecision::Proceed)
+    }
+
     /// Optional post-download hook. Used for any post-processing of the downloaded files.
     #[allow(unused_variables)]
     async fn post_download(
@@ -76,6 +92,12 @@ pub fn make_repo_from_config(cfg: &DownloaderConfig) -> Arc<dyn Repo> {
         RepoLayoutKind::VRPPublic => Arc::new(VRPPublicRepo::from_config(cfg)),
         RepoLayoutKind::FFA => Arc::new(FFARepo {}),
     }
+}
+
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub enum PreDownloadDecision {
+    Proceed,
+    SkipAlreadyPresent,
 }
 
 /// Arguments for building storage, passed to repo implementations.
@@ -338,6 +360,120 @@ impl Repo for VRPPublicRepo {
         self.source_for(app_full_name)
     }
 
+    #[allow(unused_variables)]
+    #[instrument(
+        name = "repo.pre_download",
+        skip(storage, http_client, cancellation_token),
+        fields(layout = %self.id(), app = %app_full_name)
+    )]
+    async fn pre_download(
+        &self,
+        storage: &RcloneStorage,
+        app_full_name: &str,
+        dst_dir: &Path,
+        http_client: &reqwest::Client,
+        cache_dir: &Path,
+        cancellation_token: CancellationToken,
+    ) -> Result<PreDownloadDecision> {
+        let stamp_path = dst_dir.join("vrp_stamp.json");
+        if !stamp_path.is_file() {
+            return Ok(PreDownloadDecision::Proceed);
+        }
+
+        // Check that we have something extracted already
+        let mut has_non_archive = false;
+        if let Ok(mut rd) = fs::read_dir(dst_dir).await {
+            while let Ok(Some(entry)) = rd.next_entry().await {
+                let name = entry.file_name();
+                if let Some(n) = name.to_str()
+                    && !n.ends_with(".7z")
+                    && !n.contains(".7z.")
+                {
+                    has_non_archive = true;
+                    break;
+                }
+            }
+        }
+        if !has_non_archive {
+            return Ok(PreDownloadDecision::Proceed);
+        }
+
+        #[derive(serde::Deserialize, Debug)]
+        struct StampPart {
+            name: String,
+            size: u64,
+            mod_time: String,
+        }
+        #[derive(serde::Deserialize, Debug)]
+        #[allow(unused)]
+        struct Stamp {
+            hash: String,
+            parts: Vec<StampPart>,
+        }
+
+        let stamp: Stamp = match serde_json::from_slice(
+            &fs::read(&stamp_path).await.context("Failed to read vrp_stamp.json")?,
+        ) {
+            Ok(s) => s,
+            Err(e) => {
+                warn!(error = &e as &dyn Error, path = %stamp_path.display(), "Invalid vrp_stamp.json, ignoring");
+                return Ok(PreDownloadDecision::Proceed);
+            }
+        };
+
+        // Compare with current remote listing
+        let source = self.source_for_download(app_full_name);
+        let entries = storage.list_dir_json(source).await.unwrap_or_default();
+        #[derive(Clone)]
+        struct Part {
+            name: String,
+            size: u64,
+            mod_time: Option<OffsetDateTime>,
+        }
+        fn parse_rfc3339_opt(s: &str) -> Option<OffsetDateTime> {
+            time::OffsetDateTime::parse(s, &Rfc3339).ok()
+        }
+        let mut remote_parts: Vec<Part> = entries
+            .into_iter()
+            .filter(|e| !e.is_dir)
+            .map(|e| Part {
+                name: e.name,
+                size: e.size,
+                mod_time: e.mod_time.as_deref().and_then(parse_rfc3339_opt),
+            })
+            .collect();
+        remote_parts.sort_by(|a, b| a.name.cmp(&b.name));
+
+        let mut local_parts: Vec<Part> = stamp
+            .parts
+            .into_iter()
+            .map(|p| Part { name: p.name, size: p.size, mod_time: parse_rfc3339_opt(&p.mod_time) })
+            .collect();
+        local_parts.sort_by(|a, b| a.name.cmp(&b.name));
+
+        if remote_parts.is_empty() || remote_parts.len() != local_parts.len() {
+            return Ok(PreDownloadDecision::Proceed);
+        }
+
+        // Names+sizes must match exactly
+        for (a, b) in remote_parts.iter().zip(local_parts.iter()) {
+            if a.name != b.name || a.size != b.size {
+                return Ok(PreDownloadDecision::Proceed);
+            }
+        }
+        // If modtimes exist on both sides, treat remote newer as a signal to re-download.
+        let remote_is_newer = remote_parts.iter().zip(local_parts.iter()).any(|(a, b)| {
+            match (a.mod_time, b.mod_time) {
+                (Some(ra), Some(lb)) => ra > lb,
+                _ => false,
+            }
+        });
+        if remote_is_newer {
+            return Ok(PreDownloadDecision::Proceed);
+        }
+        Ok(PreDownloadDecision::SkipAlreadyPresent)
+    }
+
     #[instrument(
         name = "repo.post_download",
         skip(http_client, cancellation_token),
@@ -356,53 +492,101 @@ impl Repo for VRPPublicRepo {
             // The downloaded dir should contain <hash>.7z.001 as first segment.
             let hash = VRPPublicRepo::hash_for_release(app_full_name);
             let first_part = dst_dir.join(format!("{}.7z.001", hash));
-            if first_part.is_file() {
-                // Cancellable extraction.
-                if let Some(tx) = &status_tx {
-                    let _ = tx.send("Extracting files...".into());
-                }
-                if let Err(e) = decompress_archive(
-                    &first_part,
-                    dst_dir,
-                    Some(&state.password),
-                    None,
-                    Some(cancellation_token.clone()),
-                )
-                .await
-                {
-                    warn!(
-                        error = e.as_ref() as &dyn Error,
-                        dir = %dst_dir.display(),
-                        first = %first_part.display(),
-                        "VRP-public extraction failed"
-                    );
-                }
-                // If archive created a nested folder with the same full name, flatten it
-                if let Some(tx) = &status_tx {
-                    let _ = tx.send("Finalizing files...".into());
-                }
-                let nested = dst_dir.join(app_full_name);
-                if nested.is_dir() && nested != dst_dir {
-                    if let Ok(mut rd) = fs::read_dir(&nested).await {
-                        while let Ok(Some(entry)) = rd.next_entry().await {
-                            let from = entry.path();
-                            let to = dst_dir.join(entry.file_name());
-                            let _ = fs::rename(&from, &to).await;
-                        }
+            if !first_part.is_file() {
+                return Ok(());
+            }
+
+            // Collect multipart info for a later stamp before deleting
+            let mut parts: Vec<(String, u64, String)> = Vec::new();
+            if let Ok(mut rd) = fs::read_dir(dst_dir).await {
+                while let Ok(Some(entry)) = rd.next_entry().await {
+                    if let Some(name) = entry.file_name().to_str()
+                        && name.starts_with(&format!("{hash}.7z."))
+                        && let Ok(meta) = entry.metadata().await
+                    {
+                        let odt: OffsetDateTime = meta
+                            .modified()
+                            .with_context(|| {
+                                format!(
+                                    "Failed to read modification time for {}",
+                                    entry.path().display()
+                                )
+                            })?
+                            .into();
+                        parts.push((name.to_string(), meta.len(), odt.format(&Rfc3339).unwrap()));
                     }
-                    let _ = fs::remove_dir_all(&nested).await;
                 }
-                // Remove multipart .7z parts after successful extraction
-                if let Some(tx) = &status_tx {
-                    let _ = tx.send("Cleaning up...".into());
-                }
-                if let Ok(mut rd) = fs::read_dir(dst_dir).await {
+            }
+
+            if let Some(tx) = &status_tx {
+                let _ = tx.send("Extracting files...".into());
+            }
+            if let Err(e) = decompress_archive(
+                &first_part,
+                dst_dir,
+                Some(&state.password),
+                None,
+                Some(cancellation_token.clone()),
+            )
+            .await
+            {
+                error!(
+                    error = e.as_ref() as &dyn Error,
+                    dir = %dst_dir.display(),
+                    first = %first_part.display(),
+                    "VRP-public extraction failed"
+                );
+                return Err(e.context("VRP-public extraction failed"));
+            }
+            // If archive created a nested folder with the same full name, flatten it
+            if let Some(tx) = &status_tx {
+                let _ = tx.send("Finalizing files...".into());
+            }
+            let nested = dst_dir.join(app_full_name);
+            if nested.is_dir() && nested != dst_dir {
+                if let Ok(mut rd) = fs::read_dir(&nested).await {
                     while let Ok(Some(entry)) = rd.next_entry().await {
-                        if let Some(name) = entry.file_name().to_str()
-                            && name.starts_with(&format!("{hash}.7z."))
-                        {
-                            let _ = fs::remove_file(entry.path()).await;
-                        }
+                        let from = entry.path();
+                        let to = dst_dir.join(entry.file_name());
+                        let _ = fs::rename(&from, &to).await;
+                    }
+                }
+                let _ = fs::remove_dir_all(&nested).await;
+            }
+            // Write a VRP extraction stamp so we can skip future re-downloads for the same app
+            #[derive(serde::Serialize)]
+            struct StampPart {
+                name: String,
+                size: u64,
+                mod_time: String,
+            }
+            #[derive(serde::Serialize)]
+            struct Stamp {
+                hash: String,
+                parts: Vec<StampPart>,
+            }
+            if !parts.is_empty() {
+                let stamp = Stamp {
+                    hash: hash.clone(),
+                    parts: parts
+                        .into_iter()
+                        .map(|(n, s, m)| StampPart { name: n, size: s, mod_time: m })
+                        .collect(),
+                };
+                if let Ok(json) = serde_json::to_string_pretty(&stamp) {
+                    let _ = fs::write(dst_dir.join("vrp_stamp.json"), json).await;
+                }
+            }
+            // Remove multipart .7z parts after successful extraction
+            if let Some(tx) = &status_tx {
+                let _ = tx.send("Cleaning up...".into());
+            }
+            if let Ok(mut rd) = fs::read_dir(dst_dir).await {
+                while let Ok(Some(entry)) = rd.next_entry().await {
+                    if let Some(name) = entry.file_name().to_str()
+                        && name.starts_with(&format!("{hash}.7z."))
+                    {
+                        let _ = fs::remove_file(entry.path()).await;
                     }
                 }
             }

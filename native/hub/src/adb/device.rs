@@ -1357,10 +1357,6 @@ impl AdbDevice {
             return Ok(None);
         }
 
-        if token.is_cancelled() {
-            let _ = fs::remove_dir_all(&backup_path).await;
-            bail!("Backup cancelled");
-        }
         // Marker file
         let _ = File::create(backup_path.join(".backup")).await?;
         info!(path = %backup_path.display(), "Backup created successfully");

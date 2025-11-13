@@ -532,6 +532,12 @@ class AppLocalizationsRu extends AppLocalizations {
   String get guardianResume => 'Возобновить Guardian';
 
   @override
+  String get deviceWirelessAdb => 'Беспроводной ADB';
+
+  @override
+  String get deviceEnableWirelessAdb => 'Включить ADB по Wi‑Fi';
+
+  @override
   String get copiedToClipboard => 'Скопировано в буфер обмена';
 
   @override

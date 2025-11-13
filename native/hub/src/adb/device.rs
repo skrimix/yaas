@@ -1,6 +1,7 @@
 use std::{
     error::Error,
     fmt::Display,
+    net::{Ipv4Addr, SocketAddrV4},
     path::{Path, PathBuf},
     time::{Duration, Instant},
 };
@@ -14,6 +15,7 @@ use tokio::{
     fs::{self, File},
     io::BufReader,
     sync::mpsc::{self, UnboundedSender},
+    time::sleep,
 };
 use tokio_util::sync::CancellationToken;
 use tracing::{Instrument, Span, debug, error, info, instrument, trace, warn};
@@ -24,7 +26,7 @@ use crate::{
     archive::decompress_all_7z_in_dir,
     models::{
         InstalledPackage, SPACE_INFO_COMMAND, SpaceInfo, parse_list_apps_dex,
-        signals::adb::command::RebootMode,
+        signals::{adb::command::RebootMode, system::Toast},
         vendor::quest_controller::{
             self, CONTROLLER_INFO_COMMAND_DUMPSYS, CONTROLLER_INFO_COMMAND_JSON,
             HeadsetControllersInfo,
@@ -75,6 +77,8 @@ impl Display for AdbDevice {
 }
 
 impl AdbDevice {
+    const WIRELESS_ADB_PORT: u16 = 5555;
+
     /// Creates a new AdbDevice instance and initializes its state
     ///
     /// # Arguments
@@ -1489,6 +1493,63 @@ impl AdbDevice {
         debug!("Cleaning up temporary APKs");
         self.shell("rm -rf /data/local/tmp/*.apk").await?;
         Ok(())
+    }
+
+    #[instrument(level = "debug", skip(self), ret, err)]
+    async fn ip_from_route(&self) -> Result<Option<Ipv4Addr>> {
+        static IP_REGEX: Lazy<Regex> =
+            Lazy::new(|| Regex::new(r"src ((?:\d{1,3}\.){3}\d{1,3})").unwrap());
+
+        let output = self
+            .shell_checked("ip route | grep wlan0")
+            .await
+            .context("'ip route' command failed")?;
+
+        let caps = match IP_REGEX.captures(&output) {
+            Some(caps) => caps,
+            None => return Ok(None),
+        };
+
+        let ip = caps[1].parse().context("Regex matched but IPv4 parsing failed")?;
+
+        Ok(Some(ip))
+    }
+
+    #[instrument(level = "debug", skip(self), ret, err)]
+    async fn enable_tcpip(&self, ip: Ipv4Addr) -> Result<SocketAddrV4> {
+        self.inner.tcpip(Self::WIRELESS_ADB_PORT).await.context("Failed to enable tcpip mode")?;
+
+        Ok(SocketAddrV4::new(ip, Self::WIRELESS_ADB_PORT))
+    }
+
+    #[instrument(level = "debug", skip(self), ret, err)]
+    pub async fn enable_wireless_adb(&self) -> Result<SocketAddrV4> {
+        if let Some(ip) = self.ip_from_route().await? {
+            return self.enable_tcpip(ip).await;
+        }
+
+        Toast::send("Wireless ADB".to_string(), "Turning on Wi-Fi...".to_string(), false, None);
+
+        self.shell_checked("svc wifi enable").await.context("'svc wifi enable' command failed")?;
+
+        const TOTAL_WAIT: Duration = Duration::from_secs(20);
+        const STEP: Duration = Duration::from_millis(500);
+        let started = Instant::now();
+        loop {
+            if let Some(ip) = self.ip_from_route().await? {
+                return self.enable_tcpip(ip).await;
+            }
+
+            if started.elapsed() >= TOTAL_WAIT {
+                bail!(
+                    "Failed to enable Wireless ADB: no IP address after enabling Wi‑Fi and \
+                     polling for {}s",
+                    TOTAL_WAIT.as_secs()
+                );
+            }
+
+            sleep(STEP).await;
+        }
     }
 }
 

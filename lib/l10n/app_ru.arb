@@ -243,6 +243,8 @@
     "deviceGuardian": "Guardian",
     "guardianSuspend": "Приостановить Guardian",
     "guardianResume": "Возобновить Guardian",
+    "deviceWirelessAdb": "Беспроводной ADB",
+    "deviceEnableWirelessAdb": "Включить ADB по Wi‑Fi",
     "copiedToClipboard": "Скопировано в буфер обмена",
     "clickToCopy": "Нажмите, чтобы скопировать",
     "detailsPackageName": "Имя пакета:",

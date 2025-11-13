@@ -1,4 +1,6 @@
-use std::{collections::HashMap, error::Error, net::IpAddr, path::Path, sync::Arc, time::Duration};
+use std::{
+    collections::HashMap, error::Error, net::SocketAddr, path::Path, sync::Arc, time::Duration,
+};
 
 use anyhow::{Context, Result, anyhow, bail, ensure};
 use derive_more::Debug;
@@ -88,8 +90,8 @@ impl AdbHandler {
         let adb_path = if adb_path.is_empty() { None } else { Some(adb_path) };
         let handle = Arc::new(Self {
             adb_host: if cfg!(target_os = "windows") {
-                // This is some retarded stuff, but it fails to connect on a Windows host without this
-                // However, passing this host to `adb start-server` fails too (so we're not using `adb_host.start_server()`)
+                // No idea why, but it fails to connect on a Windows host without this
+                // However, passing this host to `adb start-server` fails too (so we can't use `adb_host.start_server()`)
                 forensic_adb::Host { host: Some("127.0.0.1".to_string()), port: Some(5037) }
             } else {
                 forensic_adb::Host::default()
@@ -611,6 +613,116 @@ impl AdbHandler {
                     }
                 }
             }
+
+            AdbCommand::EnableWirelessAdb => {
+                let device = self.current_device().await?;
+
+                if device.is_wireless {
+                    AdbCommandCompletedEvent {
+                        command_type: AdbCommandKind::WirelessAdbEnable,
+                        command_key: key.clone(),
+                        success: false,
+                    }
+                    .send_signal_to_dart();
+                    bail!("Current device is already wireless")
+                }
+
+                // Step 1: enable Wireless ADB (tcpip mode) and compute target address
+                match device.enable_wireless_adb().await {
+                    Ok(addr) => {
+                        // Report success, things can get kinda random from here
+                        AdbCommandCompletedEvent {
+                            command_type: AdbCommandKind::WirelessAdbEnable,
+                            command_key: key.clone(),
+                            success: true,
+                        }
+                        .send_signal_to_dart();
+
+                        Toast::send(
+                            "Wireless ADB enabled".to_string(),
+                            format!("Trying to connect to {}…", addr),
+                            false,
+                            Some(Duration::from_secs(3)),
+                        );
+
+                        // Step 2: attempt to connect and then switch current device
+                        if let Err(e) = self.try_connect_wireless_adb(addr.into()).await {
+                            warn!(error = e.as_ref() as &dyn Error, target = %display_target(addr.into()), "Wireless ADB connect failed");
+                            Toast::send(
+                                "ADB connect failed".to_string(),
+                                format!("{}", e),
+                                true,
+                                None,
+                            );
+                            return Ok(());
+                        }
+
+                        let serial = addr.to_string();
+                        const MAX_SWITCH_ATTEMPTS: usize = 3;
+
+                        tokio::time::sleep(Duration::from_millis(300)).await;
+
+                        let mut last_err: Option<anyhow::Error> = None;
+                        for attempt in 1..=MAX_SWITCH_ATTEMPTS {
+                            match self.connect_device(Some(&serial), true).await {
+                                Ok(_) => {
+                                    last_err = None;
+                                    break;
+                                }
+                                Err(e) => {
+                                    let e_str = format!("{:#}", e);
+                                    let retryable = e_str.contains("not available");
+
+                                    if attempt < MAX_SWITCH_ATTEMPTS && retryable {
+                                        debug!(
+                                            attempt,
+                                            serial = %serial,
+                                            "Wireless device not yet available, retrying"
+                                        );
+                                        last_err = Some(e);
+                                        tokio::time::sleep(Duration::from_millis(600)).await;
+                                        continue;
+                                    }
+
+                                    last_err = Some(e);
+                                    break;
+                                }
+                            }
+                        }
+
+                        if let Some(e) = last_err {
+                            warn!(
+                                error = e.as_ref() as &dyn Error,
+                                serial = %serial,
+                                "Switch to wireless connection failed"
+                            );
+                            Toast::send(
+                                "Switch to Wireless failed".to_string(),
+                                format!("{}", e),
+                                true,
+                                None,
+                            );
+                        }
+                    }
+                    Err(e) => {
+                        Toast::send(
+                            "Enable Wireless ADB failed".to_string(),
+                            format!("{:#}", e),
+                            true,
+                            None,
+                        );
+
+                        AdbCommandCompletedEvent {
+                            command_type: AdbCommandKind::WirelessAdbEnable,
+                            command_key: key.clone(),
+                            success: false,
+                        }
+                        .send_signal_to_dart();
+                    }
+                }
+
+                Ok(())
+            }
         };
 
         result.context("Command execution failed")
@@ -872,14 +984,15 @@ impl AdbHandler {
                     match rx.recv_async().await {
                         Ok(ServiceEvent::ServiceResolved(resolved)) => {
                             let port = resolved.get_port();
-                            for addr in resolved
+                            for ip in resolved
                                 .get_addresses()
                                 .iter()
                                 .filter(|a| !a.is_loopback())
                                 .map(|a| a.to_ip_addr())
                             {
+                                let addr = SocketAddr::new(ip, port);
                                 debug!(
-                                    target = %display_target(addr, port),
+                                    target = %display_target(addr),
                                     fullname = %resolved.get_fullname(),
                                     "Found Wireless ADB service, attempting connect"
                                 );
@@ -887,9 +1000,8 @@ impl AdbHandler {
                                 // Fire-and-forget
                                 let this = this.clone();
                                 tokio::spawn(async move {
-                                    if let Err(e) = this.try_connect_wireless_adb(addr, port).await
-                                    {
-                                        warn!(error = e.as_ref() as &dyn Error, target = %display_target(addr, port), "mDNS auto-connect failed");
+                                    if let Err(e) = this.try_connect_wireless_adb(addr).await {
+                                        warn!(error = e.as_ref() as &dyn Error, target = %display_target(addr), "mDNS auto-connect failed");
                                     }
                                 });
                             }
@@ -922,44 +1034,61 @@ impl AdbHandler {
     }
 
     /// Attempts to connect to a Wireless ADB target discovered via mDNS.
-    #[instrument(skip(self), fields(target = %display_target(addr, port)), err)]
-    async fn try_connect_wireless_adb(&self, addr: IpAddr, port: u16) -> Result<()> {
+    #[instrument(skip(self), fields(target = %display_target(addr)), err)]
+    async fn try_connect_wireless_adb(&self, addr: SocketAddr) -> Result<()> {
         self.ensure_server_running().await.ok();
 
         let target = match addr {
-            IpAddr::V4(_) => format!("{}:{}", addr, port),
-            IpAddr::V6(_) => format!("[{}]:{}", addr, port),
+            SocketAddr::V4(_) => format!("{}:{}", addr.ip(), addr.port()),
+            SocketAddr::V6(_) => format!("[{}]:{}", addr.ip(), addr.port()),
         };
 
+        // If already connected, exit early
         if let Ok(devs) = self.adb_host.devices::<Vec<_>>().await {
-            let already = devs.iter().any(|d| {
-                let s = &d.serial;
-                s.contains(&target)
-            });
+            let already = devs.iter().any(|d| d.serial.contains(&target));
             if already {
                 debug!("Wireless ADB target already connected, skipping");
                 return Ok(());
             }
         }
 
-        info!(%target, "Trying ADB connect to wireless target");
-        match tokio::time::timeout(Duration::from_secs(10), self.adb_host.connect_device(&target))
-            .await
-        {
-            Ok(Ok(msg)) => {
-                info!(response = %msg, "ADB connect ok");
-                // Let the tracker pick the device up, still refresh the state quickly.
+        // Retry connect for up to 10s with short timeouts.
+        const TOTAL_WAIT: Duration = Duration::from_secs(10);
+        const ATTEMPT_TIMEOUT: Duration = Duration::from_secs(2);
+        const SLEEP_BETWEEN: Duration = Duration::from_millis(400);
+
+        let started = tokio::time::Instant::now();
+        loop {
+            // Check if it got connected via other means meanwhile
+            if let Ok(devs) = self.adb_host.devices::<Vec<_>>().await
+                && devs.iter().any(|d| d.serial.contains(&target))
+            {
+                info!(%target, "Wireless ADB target became connected");
                 self.refresh_adb_state().await;
-                Ok(())
+                return Ok(());
             }
-            Ok(Err(e)) => {
-                warn!(error = &e as &dyn Error, %target, "ADB connect failed");
-                Err(e.into())
+
+            info!(%target, "ADB connect attempt");
+            match tokio::time::timeout(ATTEMPT_TIMEOUT, self.adb_host.connect_device(&target)).await
+            {
+                Ok(Ok(msg)) => {
+                    info!(response = %msg, "ADB connect ok");
+                    self.refresh_adb_state().await;
+                    return Ok(());
+                }
+                Ok(Err(e)) => {
+                    debug!(error = &e as &dyn Error, %target, "ADB connect attempt failed");
+                }
+                Err(_) => {
+                    debug!(%target, "ADB connect attempt timed out");
+                }
             }
-            Err(_) => {
-                warn!(%target, "ADB connect timed out");
-                bail!("connect timeout");
+
+            if started.elapsed() >= TOTAL_WAIT {
+                bail!("Timed out connecting to {}", target);
             }
+
+            tokio::time::sleep(SLEEP_BETWEEN).await;
         }
     }
 
@@ -1313,9 +1442,9 @@ impl AdbHandler {
 }
 
 /// Formats wireless ADB target address for logging
-fn display_target(addr: IpAddr, port: u16) -> String {
+fn display_target(addr: SocketAddr) -> String {
     match addr {
-        IpAddr::V4(_) => format!("{}:{}", addr, port),
-        IpAddr::V6(_) => format!("[{}]:{}", addr, port),
+        SocketAddr::V4(_) => format!("{}:{}", addr.ip(), addr.port()),
+        SocketAddr::V6(_) => format!("[{}]:{}", addr.ip(), addr.port()),
     }
 }

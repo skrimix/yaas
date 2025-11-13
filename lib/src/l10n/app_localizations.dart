@@ -1046,6 +1046,18 @@ abstract class AppLocalizations {
   /// **'Resume Guardian'**
   String get guardianResume;
 
+  /// No description provided for @deviceWirelessAdb.
+  ///
+  /// In en, this message translates to:
+  /// **'Wireless ADB'**
+  String get deviceWirelessAdb;
+
+  /// No description provided for @deviceEnableWirelessAdb.
+  ///
+  /// In en, this message translates to:
+  /// **'Enable ADB over Wi‑Fi'**
+  String get deviceEnableWirelessAdb;
+
   /// No description provided for @copiedToClipboard.
   ///
   /// In en, this message translates to:

@@ -15,6 +15,8 @@ pub enum AdbCommand {
     StartCasting,
     /// Connect to a specific device by its serial
     ConnectTo(String),
+    /// Enable ADB over Wi‑Fi on the current device and connect to it
+    EnableWirelessAdb,
 }
 
 #[derive(Serialize, Deserialize, DartSignal)]
@@ -34,6 +36,7 @@ pub enum AdbCommandKind {
     GuardianPausedSet,
     StartCasting,
     ConnectTo,
+    WirelessAdbEnable,
 }
 
 #[derive(Debug, Clone, Serialize, Deserialize, SignalPiece)]

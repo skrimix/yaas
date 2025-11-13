@@ -526,6 +526,12 @@ class AppLocalizationsEn extends AppLocalizations {
   String get guardianResume => 'Resume Guardian';
 
   @override
+  String get deviceWirelessAdb => 'Wireless ADB';
+
+  @override
+  String get deviceEnableWirelessAdb => 'Enable ADB over Wi‑Fi';
+
+  @override
   String get copiedToClipboard => 'Copied to clipboard';
 
   @override

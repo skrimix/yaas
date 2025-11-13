@@ -3,6 +3,7 @@ import 'dart:async';
 import 'dart:math' as math;
 import 'package:flutter/material.dart';
 import 'package:rinf/rinf.dart';
+import '../../providers/adb_state.dart';
 import '../../src/bindings/bindings.dart';
 import '../../src/l10n/app_localizations.dart';
 import '../common/animated_adb_button.dart';
@@ -90,6 +91,43 @@ class DeviceActionsCard extends StatelessWidget {
                         const AdbCommandSetGuardianPaused(value: false)),
                   ),
                 ],
+              ),
+
+              const SizedBox(height: 16),
+
+              // Wireless ADB (when not already enabled)
+              Builder(
+                builder: (context) {
+                  final device = context.watch<DeviceState>();
+                  final adb = context.watch<AdbStateProvider>();
+                  if (!device.isConnected ||
+                      device.isWireless ||
+                      // Check that we don't have an active wireless connection for this device already
+                      adb.availableDevices.any((d) =>
+                          d.isWireless &&
+                          d.trueSerial == device.deviceTrueSerial &&
+                          d.state == AdbBriefState.device)) {
+                    return const SizedBox.shrink();
+                  }
+                  return Row(
+                    children: [
+                      const Icon(Icons.wifi_tethering),
+                      const SizedBox(width: 8),
+                      Expanded(
+                        child: Text(l10n.deviceWirelessAdb,
+                            style: Theme.of(context).textTheme.titleSmall),
+                      ),
+                      AnimatedAdbButton(
+                        icon: Icons.wifi,
+                        tooltip: l10n.deviceEnableWirelessAdb,
+                        commandType: AdbCommandKind.wirelessAdbEnable,
+                        commandKey: 'enable-wireless',
+                        onPressed: () => _send('enable-wireless',
+                            const AdbCommandEnableWirelessAdb()),
+                      ),
+                    ],
+                  );
+                },
               ),
 
               // Casting (Windows only)

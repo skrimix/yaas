@@ -215,15 +215,24 @@ impl AdbDevice {
     }
 
     /// Executes a shell command and fails if exit code is non-zero.
-    /// Appends `; printf %s $?` and parses the final line as the exit status.
+    /// Appends `; printf '\n%s' $?` and parses the final line as the exit status.
     #[instrument(skip(self), err)]
     async fn shell_checked(&self, command: &str) -> Result<String> {
         let shell_output = self
-            .shell(&format!("{} ; printf %s $?", command))
+            .shell(&format!("{} ; printf '\\n%s' $?", command))
             .await
             .context(format!("Failed to execute checked shell command: {command}"))?;
-        let (output, exit_code) =
-            shell_output.rsplit_once('\n').context("Failed to extract exit code")?;
+        let (output, exit_code) = match shell_output.rsplit_once('\n') {
+            Some(parts) => parts,
+            None => {
+                let trimmed = shell_output.trim();
+                if !trimmed.is_empty() && trimmed.chars().all(|c| c.is_ascii_digit()) {
+                    ("", trimmed)
+                } else {
+                    return Err(anyhow!("Failed to extract exit code"));
+                }
+            }
+        };
         if exit_code != "0" {
             error!(exit_code, output, "Shell command returned non-zero exit code");
             bail!("Command {command} failed with exit code {exit_code}. Output: {output}");

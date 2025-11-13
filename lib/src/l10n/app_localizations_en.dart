@@ -297,6 +297,27 @@ class AppLocalizationsEn extends AppLocalizations {
   String get statusAdbDeviceUnauthorized => 'Device unauthorized';
 
   @override
+  String get statusAdbStateOffline => 'Offline';
+
+  @override
+  String get statusAdbStateBootloader => 'Bootloader';
+
+  @override
+  String get statusAdbStateRecovery => 'Recovery';
+
+  @override
+  String get statusAdbStateNoPermissions => 'No permissions';
+
+  @override
+  String get statusAdbStateSideload => 'Sideload';
+
+  @override
+  String get statusAdbStateAuthorizing => 'Authorizing';
+
+  @override
+  String get statusAdbStateUnknown => 'Unknown';
+
+  @override
   String get statusAdbUnknown => 'Unknown';
 
   @override

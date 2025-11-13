@@ -644,6 +644,48 @@ abstract class AppLocalizations {
   /// **'Device unauthorized'**
   String get statusAdbDeviceUnauthorized;
 
+  /// No description provided for @statusAdbStateOffline.
+  ///
+  /// In en, this message translates to:
+  /// **'Offline'**
+  String get statusAdbStateOffline;
+
+  /// No description provided for @statusAdbStateBootloader.
+  ///
+  /// In en, this message translates to:
+  /// **'Bootloader'**
+  String get statusAdbStateBootloader;
+
+  /// No description provided for @statusAdbStateRecovery.
+  ///
+  /// In en, this message translates to:
+  /// **'Recovery'**
+  String get statusAdbStateRecovery;
+
+  /// No description provided for @statusAdbStateNoPermissions.
+  ///
+  /// In en, this message translates to:
+  /// **'No permissions'**
+  String get statusAdbStateNoPermissions;
+
+  /// No description provided for @statusAdbStateSideload.
+  ///
+  /// In en, this message translates to:
+  /// **'Sideload'**
+  String get statusAdbStateSideload;
+
+  /// No description provided for @statusAdbStateAuthorizing.
+  ///
+  /// In en, this message translates to:
+  /// **'Authorizing'**
+  String get statusAdbStateAuthorizing;
+
+  /// No description provided for @statusAdbStateUnknown.
+  ///
+  /// In en, this message translates to:
+  /// **'Unknown'**
+  String get statusAdbStateUnknown;
+
   /// No description provided for @statusAdbUnknown.
   ///
   /// In en, this message translates to:

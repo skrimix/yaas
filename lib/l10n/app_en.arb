@@ -130,6 +130,13 @@
     },
     "statusAdbConnected": "Device connected",
     "statusAdbDeviceUnauthorized": "Device unauthorized",
+    "statusAdbStateOffline": "Offline",
+    "statusAdbStateBootloader": "Bootloader",
+    "statusAdbStateRecovery": "Recovery",
+    "statusAdbStateNoPermissions": "No permissions",
+    "statusAdbStateSideload": "Sideload",
+    "statusAdbStateAuthorizing": "Authorizing",
+    "statusAdbStateUnknown": "Unknown",
     "statusAdbUnknown": "Unknown",
     "statusDeviceInfo": "Device: {name}\nSerial: {serial}",
     "@statusDeviceInfo": {

@@ -298,6 +298,27 @@ class AppLocalizationsRu extends AppLocalizations {
   String get statusAdbDeviceUnauthorized => 'Устройство не авторизовано';
 
   @override
+  String get statusAdbStateOffline => 'Оффлайн';
+
+  @override
+  String get statusAdbStateBootloader => 'Bootloader';
+
+  @override
+  String get statusAdbStateRecovery => 'Режим восстановления';
+
+  @override
+  String get statusAdbStateNoPermissions => 'Нет разрешений';
+
+  @override
+  String get statusAdbStateSideload => 'Sideload';
+
+  @override
+  String get statusAdbStateAuthorizing => 'Авторизация';
+
+  @override
+  String get statusAdbStateUnknown => 'Неизвестно';
+
+  @override
   String get statusAdbUnknown => 'Неизвестно';
 
   @override

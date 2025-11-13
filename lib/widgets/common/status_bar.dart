@@ -380,8 +380,7 @@ class _DeviceSwitcherLabelState extends State<_DeviceSwitcherLabel>
           final serial = entry.serial;
           final isCurrent = serial == current;
           final isWireless = entry.isWireless;
-          final isUnauthorized =
-              entry.state == signals.AdbBriefState.unauthorized;
+          final isReady = entry.state == signals.AdbBriefState.device;
           final titleText = (entry.name != null && entry.name!.isNotEmpty)
               ? entry.name!
               : serial;
@@ -394,9 +393,31 @@ class _DeviceSwitcherLabelState extends State<_DeviceSwitcherLabel>
             ..write(isWireless
                 ? l10n.settingsConnectionWireless
                 : l10n.settingsConnectionUsb);
-          if (isUnauthorized) {
+          if (!isReady) {
             subtitle.write(' • ');
-            subtitle.write(l10n.statusAdbDeviceUnauthorized);
+            final stateLabel = () {
+              switch (entry.state) {
+                case signals.AdbBriefState.unauthorized:
+                  return l10n.statusAdbDeviceUnauthorized;
+                case signals.AdbBriefState.offline:
+                  return l10n.statusAdbStateOffline;
+                case signals.AdbBriefState.bootloader:
+                  return l10n.statusAdbStateBootloader;
+                case signals.AdbBriefState.recovery:
+                  return l10n.statusAdbStateRecovery;
+                case signals.AdbBriefState.noPermissions:
+                  return l10n.statusAdbStateNoPermissions;
+                case signals.AdbBriefState.sideload:
+                  return l10n.statusAdbStateSideload;
+                case signals.AdbBriefState.authorizing:
+                  return l10n.statusAdbStateAuthorizing;
+                case signals.AdbBriefState.unknown:
+                  return l10n.statusAdbStateUnknown;
+                default:
+                  return '';
+              }
+            }();
+            if (!isReady && stateLabel.isNotEmpty) subtitle.write(stateLabel);
           }
 
           return _AnimatedMenuItem(
@@ -405,7 +426,7 @@ class _DeviceSwitcherLabelState extends State<_DeviceSwitcherLabel>
             child: SizedBox(
                 width: menuWidth,
                 child: MenuItemButton(
-                  onPressed: isUnauthorized
+                  onPressed: !isReady
                       ? null
                       : () {
                           if (serial != current) {

@@ -99,13 +99,13 @@ class _AnimatedAdbButtonState extends State<AnimatedAdbButton>
     widget.onPressed();
 
     // Fallback: stop processing after 10 seconds
-    Future.delayed(const Duration(seconds: 10), () {
-      if (_isProcessing && mounted) {
-        setState(() {
-          _isProcessing = false;
-        });
-      }
-    });
+    // Future.delayed(const Duration(seconds: 10), () {
+    //   if (_isProcessing && mounted) {
+    //     setState(() {
+    //       _isProcessing = false;
+    //     });
+    //   }
+    // });
   }
 
   @override

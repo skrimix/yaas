@@ -1,5 +1,6 @@
 use rinf::SignalPiece;
 use serde::{Deserialize, Serialize};
+use uuid::Uuid;
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize, SignalPiece, Default)]
 #[serde(rename_all = "snake_case")]
@@ -37,6 +38,7 @@ pub enum DownloadCleanupPolicy {
 #[derive(Debug, Clone, Serialize, Deserialize, PartialEq, Eq, SignalPiece)]
 #[serde(default)]
 pub struct Settings {
+    pub installation_id: String,
     pub rclone_remote_name: String,
     pub adb_path: String,
     pub preferred_connection_type: ConnectionKind, // TODO: implement
@@ -64,7 +66,8 @@ pub struct Settings {
 impl Default for Settings {
     fn default() -> Self {
         Self {
-            rclone_remote_name: "FFA-90".to_string(), // TODO: implement first time setup
+            installation_id: Uuid::new_v4().to_string(),
+            rclone_remote_name: "FFA-90".to_string(),
             adb_path: "adb".to_string(),
             preferred_connection_type: ConnectionKind::default(),
             downloads_location: dirs::download_dir()

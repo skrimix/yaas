@@ -30,7 +30,7 @@ impl SettingsHandler {
             Ok(s) => s,
             Err(e) => {
                 warn!(error = e.as_ref() as &dyn Error, "Failed to load settings, using defaults.");
-                handler.load_default_settings().expect("Failed to load default settings")
+                handler.load_default_settings(None).expect("Failed to load default settings")
             }
         };
 
@@ -64,7 +64,7 @@ impl SettingsHandler {
                         if let Err(e) = result {
                             error!(error = e.as_ref() as &dyn Error, "Failed to load settings, using defaults");
                                 let settings = handler
-                                    .load_default_settings()
+                                    .load_default_settings(None)
                                     .expect("Failed to load default settings"); // TODO: handle error?
                                 handler.on_settings_change(
                                     settings.clone(),
@@ -98,7 +98,8 @@ impl SettingsHandler {
                     if request.is_some() {
                         debug!("Received ResetSettingsToDefaultsRequest");
                         let handler = self.clone();
-                        let result = handler.load_default_settings();
+                        let current = handler.watch_tx.borrow();
+                        let result = handler.load_default_settings(Some(current.installation_id.clone()));
 
                         match result {
                             Ok(settings) => {
@@ -163,7 +164,7 @@ impl SettingsHandler {
     fn load_settings(&self) -> Result<Settings> {
         if !self.settings_file_path.exists() {
             info!(path = %self.settings_file_path.display(), "Settings file doesn't exist, using defaults");
-            return self.load_default_settings().context("Failed to load default settings");
+            return self.load_default_settings(None).context("Failed to load default settings");
         }
 
         debug!(path = %self.settings_file_path.display(), "Loading settings from file");
@@ -215,11 +216,16 @@ impl SettingsHandler {
         Ok(())
     }
 
-    /// Load default settings
+    /// Load default settings, optionally retaining provided installation id
     #[instrument(skip(self))]
-    fn load_default_settings(&self) -> Result<Settings> {
+    fn load_default_settings(&self, installation_id: Option<String>) -> Result<Settings> {
         info!("Loading default settings");
-        let settings = Settings::default();
+        let mut settings = Settings::default();
+
+        // Retain installation id if provided
+        if let Some(installation_id) = installation_id {
+            settings.installation_id = installation_id
+        }
 
         // Create default directories if they don't exist (and parents do)
         debug!(path = %settings.downloads_location, "Ensuring downloads directory exists");

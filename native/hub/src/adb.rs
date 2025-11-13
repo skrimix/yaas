@@ -1181,17 +1181,25 @@ impl AdbHandler {
 
                     devices_list = devices.clone();
 
+                    let online_devices = devices
+                        .iter()
+                        .filter(|d| d.state == DeviceState::Device)
+                        .collect::<Vec<_>>();
+                    let online_serials =
+                        online_devices.iter().map(|d| d.serial.clone()).collect::<Vec<_>>();
+
                     // Choose state based on presence
-                    let device_serials =
-                        devices.iter().map(|d| d.serial.clone()).collect::<Vec<_>>();
+
                     if self.try_current_device().await.is_some() {
                         AdbState::DeviceConnected
                     } else if devices.is_empty() {
                         AdbState::NoDevices
                     } else if devices.iter().all(|d| d.state == DeviceState::Unauthorized) {
                         AdbState::DeviceUnauthorized
+                    } else if !online_devices.is_empty() {
+                        AdbState::DevicesAvailable(online_serials)
                     } else {
-                        AdbState::DevicesAvailable(device_serials)
+                        AdbState::NoDevices
                     }
                 }
                 Err(e) => {

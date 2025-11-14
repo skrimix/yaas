@@ -1122,9 +1122,12 @@ impl AdbDevice {
                             let file_progress = progress.current_file_progress.transferred_bytes
                                 as f32
                                 / progress.current_file_progress.total_bytes as f32;
+                            // Show currently transferred file, but don't overflow on final progress when transferred_files==total_files
+                            let current_count =
+                                progress.total_files.min(progress.transferred_files + 1);
                             let status = format!(
                                 "Pushing OBB {}/{} ({:.0}%)",
-                                progress.transferred_files + 1,
+                                current_count,
                                 progress.total_files,
                                 file_progress * 100.0
                             );

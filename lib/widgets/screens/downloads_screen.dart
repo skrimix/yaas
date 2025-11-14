@@ -370,18 +370,9 @@ class _DownloadedNewerBadge extends StatelessWidget {
     }
 
     return Consumer<CloudAppsState>(builder: (context, cloud, _) {
-      // Find the newest cloud version for this package (handle duplicates)
-      int? cloudCode;
-      for (final a in cloud.apps) {
-        if (a.packageName == pkg) {
-          cloudCode = cloudCode == null
-              ? a.versionCode
-              : (a.versionCode > cloudCode ? a.versionCode : cloudCode);
-        }
-      }
+      final int? cloudCode = cloud.newestVersionCodeForPackage(pkg);
       if (cloudCode == null) return const SizedBox.shrink();
 
-      // Compare against the newest downloaded version for this package
       final int downloadedCode = newestDownloadedForPackage ?? code;
       if (cloudCode <= downloadedCode) return const SizedBox.shrink();
 

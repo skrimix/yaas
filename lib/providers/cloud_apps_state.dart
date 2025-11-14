@@ -7,12 +7,17 @@ class CloudAppsState extends ChangeNotifier {
   bool _isLoading = false;
   String _mediaBaseUrl = '';
   String? _mediaCacheDir;
+  final Map<String, int> _maxVersionCodeByPackage = {};
 
   List<CloudApp> get apps => _apps;
   String? get error => _error;
   bool get isLoading => _isLoading;
   String get mediaBaseUrl => _mediaBaseUrl;
   String? get mediaCacheDir => _mediaCacheDir;
+
+  /// Returns the newest known cloud versionCode for a given package.
+  int? newestVersionCodeForPackage(String packageName) =>
+      _maxVersionCodeByPackage[packageName];
 
   String thumbnailUrlFor(String packageName) {
     return '${_mediaBaseUrl}thumbnails/$packageName.jpg';
@@ -28,10 +33,10 @@ class CloudAppsState extends ChangeNotifier {
       _error = event.message.error;
       final apps = event.message.apps;
       if (apps != null) {
-        _apps = apps;
+        _setApps(apps);
       }
       if (_error != null) {
-        _apps = [];
+        _setApps([]);
       }
       notifyListeners();
     });
@@ -40,7 +45,7 @@ class CloudAppsState extends ChangeNotifier {
     DownloaderAvailabilityChanged.rustSignalStream.listen((event) {
       final msg = event.message;
       if (!msg.available) {
-        _apps = [];
+        _setApps([]);
         _error = null;
         _isLoading = false;
         notifyListeners();
@@ -71,6 +76,11 @@ class CloudAppsState extends ChangeNotifier {
     });
   }
 
+  void _setApps(List<CloudApp> newApps) {
+    _apps = newApps;
+    _rebuildIndex();
+  }
+
   void refresh() {
     LoadCloudAppsRequest(refresh: true).sendSignalToRust();
   }
@@ -78,6 +88,16 @@ class CloudAppsState extends ChangeNotifier {
   void load() {
     if (_apps.isEmpty && !_isLoading) {
       LoadCloudAppsRequest(refresh: false).sendSignalToRust();
+    }
+  }
+
+  void _rebuildIndex() {
+    _maxVersionCodeByPackage.clear();
+    for (final app in _apps) {
+      final existing = _maxVersionCodeByPackage[app.packageName];
+      if (existing == null || app.versionCode > existing) {
+        _maxVersionCodeByPackage[app.packageName] = app.versionCode;
+      }
     }
   }
 }

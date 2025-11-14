@@ -381,10 +381,9 @@
     "cloudStatusInstalled": "Installed",
     "cloudStatusNewerVersion": "Newer version",
     "cloudStatusOlderVersion": "Older version",
-    "cloudStatusTooltip": "Installed {installedName} ({installedCode}) vs Cloud {cloudCode}",
+    "cloudStatusTooltip": "Installed {installedCode} - Cloud {cloudCode}",
     "@cloudStatusTooltip": {
         "placeholders": {
-            "installedName": {"type": "String"},
             "installedCode": {"type": "String"},
             "cloudCode": {"type": "String"}
         }

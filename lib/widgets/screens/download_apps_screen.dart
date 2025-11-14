@@ -370,9 +370,10 @@ class _DownloadAppsScreenState extends State<DownloadAppsScreen> {
     return res ?? false;
   }
 
-  Widget _buildSortButton() {
+  Widget _buildSortButton(bool enabled) {
     final l10n = AppLocalizations.of(context);
     return PopupMenuButton<(SortOption, bool)>(
+      enabled: enabled,
       tooltip: l10n.sortBy,
       icon: const Icon(Icons.sort),
       initialValue: (_sortOption, _sortAscending),
@@ -787,7 +788,8 @@ class _DownloadAppsScreenState extends State<DownloadAppsScreen> {
                           tooltip: l10n.multiSelect,
                           onPressed: _toggleCheckboxVisibility,
                         ),
-                        _buildSortButton(),
+                        // TODO: add search result sorting?
+                        _buildSortButton(_searchQuery.isEmpty),
                         IconButton(
                           icon: const Icon(Icons.refresh),
                           tooltip: l10n.refresh,

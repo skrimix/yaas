@@ -779,9 +779,8 @@ class AppLocalizationsEn extends AppLocalizations {
   String get cloudStatusOlderVersion => 'Older version';
 
   @override
-  String cloudStatusTooltip(
-      String installedName, String installedCode, String cloudCode) {
-    return 'Installed $installedName ($installedCode) vs Cloud $cloudCode';
+  String cloudStatusTooltip(String installedCode, String cloudCode) {
+    return 'Installed $installedCode - Cloud $cloudCode';
   }
 
   @override
@@ -1322,7 +1321,7 @@ class AppLocalizationsEn extends AppLocalizations {
   String get downloadedStatusNewerVersion => 'Update available';
 
   @override
-  String get downloadedStatusToolTip => 'Click to go to list';
+  String get downloadedStatusToolTip => 'Click to go to the list';
 
   @override
   String get emptyValue => '(empty)';

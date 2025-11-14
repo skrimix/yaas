@@ -790,9 +790,8 @@ class AppLocalizationsRu extends AppLocalizations {
   String get cloudStatusOlderVersion => 'Версия старше';
 
   @override
-  String cloudStatusTooltip(
-      String installedName, String installedCode, String cloudCode) {
-    return 'Установлено $installedName ($installedCode) vs Облако $cloudCode';
+  String cloudStatusTooltip(String installedCode, String cloudCode) {
+    return 'Установлено$installedCode - Облако $cloudCode';
   }
 
   @override

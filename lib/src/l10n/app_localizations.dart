@@ -1511,9 +1511,8 @@ abstract class AppLocalizations {
   /// No description provided for @cloudStatusTooltip.
   ///
   /// In en, this message translates to:
-  /// **'Installed {installedName} ({installedCode}) vs Cloud {cloudCode}'**
-  String cloudStatusTooltip(
-      String installedName, String installedCode, String cloudCode);
+  /// **'Installed {installedCode} - Cloud {cloudCode}'**
+  String cloudStatusTooltip(String installedCode, String cloudCode);
 
   /// No description provided for @sortBy.
   ///
@@ -2533,7 +2532,7 @@ abstract class AppLocalizations {
   /// No description provided for @downloadedStatusToolTip.
   ///
   /// In en, this message translates to:
-  /// **'Click to go to list'**
+  /// **'Click to go to the list'**
   String get downloadedStatusToolTip;
 
   /// No description provided for @emptyValue.

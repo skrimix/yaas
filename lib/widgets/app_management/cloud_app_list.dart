@@ -357,7 +357,6 @@ class _InstalledStatusBadge extends StatelessWidget {
       }
 
       final tooltip = l10n.cloudStatusTooltip(
-        installed.label,
         '${installed.versionCode}',
         '${app.versionCode}',
       );

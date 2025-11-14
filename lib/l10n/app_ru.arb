@@ -375,10 +375,9 @@
     "cloudStatusInstalled": "Установлено",
     "cloudStatusNewerVersion": "Версия новее",
     "cloudStatusOlderVersion": "Версия старше",
-    "cloudStatusTooltip": "Установлено {installedName} ({installedCode}) vs Облако {cloudCode}",
+    "cloudStatusTooltip": "Установлено{installedCode} - Облако {cloudCode}",
     "@cloudStatusTooltip": {
         "placeholders": {
-            "installedName": {"type": "String"},
             "installedCode": {"type": "String"},
             "cloudCode": {"type": "String"}
         }

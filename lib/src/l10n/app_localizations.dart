@@ -545,7 +545,7 @@ abstract class AppLocalizations {
   /// No description provided for @settingsWriteLegacyReleaseJsonHelp.
   ///
   /// In en, this message translates to:
-  /// **'Also write release.json in legacy format for compatibility with older tools'**
+  /// **'Write release.json in legacy format for compatibility with QLoader'**
   String get settingsWriteLegacyReleaseJsonHelp;
 
   /// No description provided for @settingsCleanupDeleteAfterInstall.

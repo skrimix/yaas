@@ -34,7 +34,7 @@ impl BackupsListHandler {
             let handler = handler.clone();
             tokio::spawn(async move {
                 while let Some(settings) = settings_stream.next().await {
-                    info!(dir = %settings.backups_location, "Backups location updated");
+                    debug!(dir = %settings.backups_location, "Backups location updated");
                     *handler.backups_dir.write().await = PathBuf::from(settings.backups_location);
                 }
                 panic!("Settings stream closed");

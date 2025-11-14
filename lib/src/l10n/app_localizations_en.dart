@@ -236,7 +236,7 @@ class AppLocalizationsEn extends AppLocalizations {
 
   @override
   String get settingsWriteLegacyReleaseJsonHelp =>
-      'Also write release.json in legacy format for compatibility with older tools';
+      'Write release.json in legacy format for compatibility with QLoader';
 
   @override
   String get settingsCleanupDeleteAfterInstall => 'Remove after installation';

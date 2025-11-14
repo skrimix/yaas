@@ -37,7 +37,7 @@ impl DownloadsCatalog {
             let handler = handler.clone();
             tokio::spawn(async move {
                 while let Some(settings) = settings_stream.next().await {
-                    info!(dir = %settings.downloads_location, "Downloads location updated");
+                    debug!(dir = %settings.downloads_location, "Downloads location updated");
                     *handler.root.write().await = PathBuf::from(settings.downloads_location);
                 }
                 panic!("Settings stream closed");

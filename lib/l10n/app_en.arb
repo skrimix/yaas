@@ -74,7 +74,7 @@
     "settingsBandwidthHelper": "Value in KiB/s or with B|K|M|G|T|P suffix or more (click for documentation)",
     "settingsDownloadsCleanup": "Downloads Cleanup",
     "settingsWriteLegacyReleaseJson": "Write legacy release.json",
-    "settingsWriteLegacyReleaseJsonHelp": "Also write release.json in legacy format for compatibility with older tools",
+    "settingsWriteLegacyReleaseJsonHelp": "Write release.json in legacy format for compatibility with QLoader",
     "settingsCleanupDeleteAfterInstall": "Remove after installation",
     "settingsCleanupKeepOneVersion": "Keep one version",
     "settingsCleanupKeepTwoVersions": "Keep two versions",

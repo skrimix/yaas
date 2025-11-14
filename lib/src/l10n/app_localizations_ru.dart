@@ -237,7 +237,7 @@ class AppLocalizationsRu extends AppLocalizations {
 
   @override
   String get settingsWriteLegacyReleaseJsonHelp =>
-      'Также сохранять release.json в старом формате для совместимости со старыми инструментами';
+      'Сохранять release.json в старом формате для совместимости со QLoader';
 
   @override
   String get settingsCleanupDeleteAfterInstall => 'Удалять после установки';

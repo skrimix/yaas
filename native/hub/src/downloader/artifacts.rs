@@ -174,7 +174,7 @@ async fn ensure_remote_rclone_from_zip(
         .await
     {
         Ok(DownloadResult::NotModified) => {
-            info!("rclone.zip not modified");
+            debug!("rclone.zip not modified");
             if bin_dst.exists() && md5_path.exists() {
                 // TODO: maybe we can remove this and similar checks, now that we have a cache dir per config?
                 match (compute_md5_file(bin_dst).await, fs::read_to_string(&md5_path).await) {

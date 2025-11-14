@@ -326,6 +326,7 @@ mod tests {
 
     fn valid_config_json() -> String {
         r#"{
+            "id": "test",
             "layout": "ffa",
             "rclone_path": "/bin/echo",
             "rclone_config_path": "/tmp/rclone.conf",

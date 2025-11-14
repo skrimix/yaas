@@ -7,6 +7,8 @@ import '../../utils/sideload_utils.dart';
 import '../../src/bindings/bindings.dart';
 import '../../src/l10n/app_localizations.dart';
 import '../../providers/device_state.dart';
+import '../../providers/cloud_apps_state.dart';
+import '../../providers/app_state.dart';
 
 const _listPadding = EdgeInsets.only(bottom: 24);
 const _cardMargin = EdgeInsets.symmetric(horizontal: 16, vertical: 2);
@@ -23,6 +25,7 @@ class _DownloadsScreenState extends State<DownloadsScreen> {
   List<DownloadEntry> _entries = const [];
   bool _loading = false;
   String? _error;
+  Map<String, int> _latestDownloadedByPackage = const {};
 
   @override
   void initState() {
@@ -45,6 +48,18 @@ class _DownloadsScreenState extends State<DownloadsScreen> {
         _loading = false;
         _error = msg.error;
         _entries = msg.entries;
+        // Precompute newest downloaded version per package (for update checking)
+        final latest = <String, int>{};
+        for (final e in _entries) {
+          final pkg = e.packageName;
+          final code = e.versionCode;
+          if (pkg == null || pkg.isEmpty || code == null) continue;
+          final prev = latest[pkg];
+          if (prev == null || code > prev) {
+            latest[pkg] = code;
+          }
+        }
+        _latestDownloadedByPackage = latest;
       });
     });
     GetDownloadsRequest().sendSignalToRust();
@@ -100,6 +115,9 @@ class _DownloadsScreenState extends State<DownloadsScreen> {
                               itemCount: _entries.length,
                               itemBuilder: (context, index) => _DownloadTile(
                                 entry: _entries[index],
+                                newestDownloadedForPackage:
+                                    _latestDownloadedByPackage[
+                                        _entries[index].packageName ?? ''],
                                 onInstall: () => SideloadUtils.installApp(
                                     _entries[index].path, true),
                                 onOpenFolder: () =>
@@ -232,12 +250,14 @@ class _DownloadsScreenState extends State<DownloadsScreen> {
 
 class _DownloadTile extends StatelessWidget {
   final DownloadEntry entry;
+  final int? newestDownloadedForPackage;
   final VoidCallback onInstall;
   final VoidCallback onOpenFolder;
   final VoidCallback onDelete;
 
   const _DownloadTile({
     required this.entry,
+    required this.newestDownloadedForPackage,
     required this.onInstall,
     required this.onOpenFolder,
     required this.onDelete,
@@ -259,6 +279,11 @@ class _DownloadTile extends StatelessWidget {
             mainAxisSize: MainAxisSize.min,
             crossAxisAlignment: CrossAxisAlignment.center,
             children: [
+              _DownloadedNewerBadge(
+                entry: entry,
+                newestDownloadedForPackage: newestDownloadedForPackage,
+              ),
+              const SizedBox(width: 8),
               IconButton(
                 tooltip: l10n.delete,
                 icon: const Icon(Icons.delete_outline),
@@ -326,5 +351,81 @@ class _DownloadTile extends StatelessWidget {
             : '$pkg • v$ver';
 
     return meta.isEmpty ? '$tsStr • $sizeStr' : '$meta • $tsStr • $sizeStr';
+  }
+}
+
+class _DownloadedNewerBadge extends StatelessWidget {
+  const _DownloadedNewerBadge(
+      {required this.entry, required this.newestDownloadedForPackage});
+
+  final DownloadEntry entry;
+  final int? newestDownloadedForPackage;
+
+  @override
+  Widget build(BuildContext context) {
+    final pkg = entry.packageName;
+    final code = entry.versionCode;
+    if (pkg == null || pkg.isEmpty || code == null) {
+      return const SizedBox.shrink();
+    }
+
+    return Consumer<CloudAppsState>(builder: (context, cloud, _) {
+      // Find the newest cloud version for this package (handle duplicates)
+      int? cloudCode;
+      for (final a in cloud.apps) {
+        if (a.packageName == pkg) {
+          cloudCode = cloudCode == null
+              ? a.versionCode
+              : (a.versionCode > cloudCode ? a.versionCode : cloudCode);
+        }
+      }
+      if (cloudCode == null) return const SizedBox.shrink();
+
+      // Compare against the newest downloaded version for this package
+      final int downloadedCode = newestDownloadedForPackage ?? code;
+      if (cloudCode <= downloadedCode) return const SizedBox.shrink();
+
+      final theme = Theme.of(context);
+      final scheme = theme.colorScheme;
+      final l10n = AppLocalizations.of(context);
+
+      return Tooltip(
+        message: l10n.downloadedStatusToolTip,
+        waitDuration: const Duration(milliseconds: 300),
+        child: InkWell(
+          borderRadius: BorderRadius.circular(999),
+          onTap: () {
+            final appState = context.read<AppState>();
+            appState.setDownloadSearchQuery(pkg);
+            appState.requestNavigationTo('download');
+          },
+          child: Padding(
+            padding: const EdgeInsets.only(top: 6),
+            child: Container(
+              padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 4),
+              decoration: BoxDecoration(
+                color: Colors.transparent,
+                borderRadius: BorderRadius.circular(999),
+                border:
+                    Border.all(color: scheme.secondary.withValues(alpha: 0.7)),
+              ),
+              child: Row(
+                mainAxisSize: MainAxisSize.min,
+                children: [
+                  Icon(Icons.arrow_upward_rounded,
+                      size: 14, color: scheme.secondary),
+                  const SizedBox(width: 6),
+                  Text(
+                    l10n.downloadedStatusNewerVersion,
+                    style: theme.textTheme.labelSmall
+                        ?.copyWith(color: scheme.secondary),
+                  ),
+                ],
+              ),
+            ),
+          ),
+        ),
+      );
+    });
   }
 }

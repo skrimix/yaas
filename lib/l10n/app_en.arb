@@ -633,5 +633,7 @@
             "cloudCode": {"type": "String"}
         }
     },
+    "downloadedStatusNewerVersion": "Update available",
+    "downloadedStatusToolTip": "Click to go to the list",
     "emptyValue": "(empty)"
 }

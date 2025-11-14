@@ -1331,5 +1331,11 @@ class AppLocalizationsRu extends AppLocalizations {
   }
 
   @override
+  String get downloadedStatusNewerVersion => 'Доступно обновление';
+
+  @override
+  String get downloadedStatusToolTip => 'Нажмите для перехода к списку';
+
+  @override
   String get emptyValue => '(пусто)';
 }

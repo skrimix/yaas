@@ -2524,6 +2524,18 @@ abstract class AppLocalizations {
   String downgradeItemFormat(
       String name, String installedCode, String cloudCode);
 
+  /// No description provided for @downloadedStatusNewerVersion.
+  ///
+  /// In en, this message translates to:
+  /// **'Update available'**
+  String get downloadedStatusNewerVersion;
+
+  /// No description provided for @downloadedStatusToolTip.
+  ///
+  /// In en, this message translates to:
+  /// **'Click to go to list'**
+  String get downloadedStatusToolTip;
+
   /// No description provided for @emptyValue.
   ///
   /// In en, this message translates to:

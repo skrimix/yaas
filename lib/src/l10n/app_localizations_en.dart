@@ -1319,5 +1319,11 @@ class AppLocalizationsEn extends AppLocalizations {
   }
 
   @override
+  String get downloadedStatusNewerVersion => 'Update available';
+
+  @override
+  String get downloadedStatusToolTip => 'Click to go to list';
+
+  @override
   String get emptyValue => '(empty)';
 }

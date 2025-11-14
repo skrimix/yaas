@@ -226,6 +226,7 @@ class _SinglePageState extends State<SinglePage> {
   @override
   Widget build(BuildContext context) {
     final l10n = AppLocalizations.of(context);
+    final appState = context.watch<AppState>();
     final settingsState = context.watch<SettingsState>();
     final allPages = AppPageRegistry.pages;
     final showDownloaderPages = settingsState.isDownloaderAvailable ||
@@ -255,6 +256,25 @@ class _SinglePageState extends State<SinglePage> {
         });
       }
       _startupApplied = true;
+    }
+
+    // Handle external navigation requests
+    final requestedPageKey = appState.takeNavigationRequest();
+    if (requestedPageKey != null) {
+      final targetIndex =
+          _indexForStartupPage(requestedPageKey, pageDefinitions);
+      if (targetIndex != null) {
+        if (targetIndex != pageIndex) {
+          WidgetsBinding.instance.addPostFrameCallback((_) {
+            if (!mounted) return;
+            setState(() {
+              pageIndex = targetIndex;
+            });
+          });
+        }
+      } else {
+        print("ERROR: Requested page key \"$requestedPageKey\" not found");
+      }
     }
 
     final labelType =

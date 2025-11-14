@@ -627,5 +627,7 @@
             "cloudCode": {"type": "String"}
         }
     },
+    "downloadedStatusNewerVersion": "Доступно обновление",
+    "downloadedStatusToolTip": "Нажмите для перехода к списку",
     "emptyValue": "(пусто)"
 }

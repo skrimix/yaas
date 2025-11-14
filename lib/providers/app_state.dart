@@ -67,6 +67,22 @@ class AppState extends ChangeNotifier {
     notifyListeners();
   }
 
+  // Navigation requests (e.g., jump to a specific page)
+  String? _navRequestPageKey;
+
+  /// Request navigation to a page by its key from [AppPageRegistry].
+  void requestNavigationTo(String pageKey) {
+    _navRequestPageKey = pageKey;
+    notifyListeners();
+  }
+
+  /// Consume and clear any pending navigation request. Does not notify.
+  String? takeNavigationRequest() {
+    final key = _navRequestPageKey;
+    _navRequestPageKey = null;
+    return key;
+  }
+
   // Manage Apps page state
   int _manageAppsCategoryIndex = 0; // 0: vr, 1: other, 2: system
   int get manageAppsCategoryIndex => _manageAppsCategoryIndex;

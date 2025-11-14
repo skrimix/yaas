@@ -8,8 +8,7 @@ members = ["./native/*"]
 resolver = "2"
 
 [profile.release]
-# TODO: enable optimizations
-#lto = true 
+lto = true 
 debug = true
 strip = "debuginfo"
 split-debuginfo = "packed"

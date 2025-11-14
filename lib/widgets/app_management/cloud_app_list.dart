@@ -239,14 +239,17 @@ class CloudAppListItem extends StatelessWidget {
                     const SizedBox(width: 8),
                     Consumer<DeviceState>(
                       builder: (context, deviceState, _) {
-                        return IconButton(
-                          icon: const Icon(Icons.install_mobile),
-                          tooltip: deviceState.isConnected
+                        return Tooltip(
+                          message: deviceState.isConnected
                               ? l10n.downloadAndInstall
                               : l10n.downloadAndInstallNotConnected,
-                          onPressed: deviceState.isConnected
-                              ? () => _handleInstall(context)
-                              : null,
+                          child: OutlinedButton.icon(
+                            icon: const Icon(Icons.install_mobile),
+                            label: Text(l10n.install),
+                            onPressed: deviceState.isConnected
+                                ? () => _handleInstall(context)
+                                : null,
+                          ),
                         );
                       },
                     ),

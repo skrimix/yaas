@@ -298,6 +298,7 @@ class _ManageAppsScreenState extends State<ManageAppsScreen> {
   void _showUninstallDialog(BuildContext context, InstalledPackage app) async {
     showDialog(
       context: context,
+      barrierDismissible: false,
       builder: (context) => AnimatedUninstallDialog(app: app),
     );
   }

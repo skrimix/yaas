@@ -1,3 +1,5 @@
+import 'dart:async';
+
 import 'package:flutter/material.dart';
 import '../../src/bindings/bindings.dart';
 import '../../src/l10n/app_localizations.dart';
@@ -21,6 +23,9 @@ class _AnimatedUninstallDialogState extends State<AnimatedUninstallDialog>
 
   bool _isUninstalling = false;
   bool _showSuccess = false;
+  bool _showCloseButton = false;
+
+  Timer? _closeButtonTimer;
 
   @override
   void initState() {
@@ -42,12 +47,17 @@ class _AnimatedUninstallDialogState extends State<AnimatedUninstallDialog>
 
   @override
   void dispose() {
+    _closeButtonTimer?.cancel();
     _controller.dispose();
     super.dispose();
   }
 
   void _handleUninstallCompleted(bool success) {
     if (!mounted) return;
+
+    if (success) {
+      _closeButtonTimer?.cancel();
+    }
 
     setState(() {
       _isUninstalling = false;
@@ -70,6 +80,15 @@ class _AnimatedUninstallDialogState extends State<AnimatedUninstallDialog>
 
     setState(() {
       _isUninstalling = true;
+      _showCloseButton = false;
+    });
+
+    _closeButtonTimer?.cancel();
+    _closeButtonTimer = Timer(const Duration(seconds: 1), () {
+      if (!mounted || _showSuccess) return;
+      setState(() {
+        _showCloseButton = true;
+      });
     });
 
     AdbRequest(
@@ -91,7 +110,17 @@ class _AnimatedUninstallDialogState extends State<AnimatedUninstallDialog>
   Widget build(BuildContext context) {
     final l10n = AppLocalizations.of(context);
     return AlertDialog(
-      title: Text(l10n.uninstallAppTitle),
+      title: Row(
+        children: [
+          Expanded(child: Text(l10n.uninstallAppTitle)),
+          if (_showCloseButton)
+            IconButton(
+              icon: const Icon(Icons.close),
+              tooltip: l10n.commonClose,
+              onPressed: () => Navigator.of(context).pop(),
+            ),
+        ],
+      ),
       content: Text(l10n.uninstallConfirmMessage(widget.app.label)),
       actions: [
         TextButton(

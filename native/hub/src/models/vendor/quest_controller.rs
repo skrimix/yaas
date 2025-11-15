@@ -63,8 +63,6 @@ pub struct HeadsetControllersInfo {
     pub right: Option<ControllerInfo>,
 }
 
-// ------------------------ rstest --json parsing ------------------------
-
 #[derive(Debug, Deserialize)]
 #[serde(rename_all = "camelCase")]
 struct RstestControllerItem {

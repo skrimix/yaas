@@ -9,4 +9,8 @@ pub use installed_package::*;
 mod settings;
 pub use settings::*;
 pub mod signals;
-pub mod vendor;
+
+pub mod vendor {
+    /// Quest-specific models.
+    pub mod quest_controller;
+}

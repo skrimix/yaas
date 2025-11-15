@@ -21,7 +21,7 @@ use tokio_util::sync::CancellationToken;
 use tracing::{Instrument, Span, debug, error, info, instrument, trace, warn};
 
 use crate::{
-    adb::{PACKAGE_NAME_REGEX, ensure_valid_package},
+    adb::{PACKAGE_NAME_REGEX, battery_dump, ensure_valid_package},
     apk::get_apk_info,
     archive::decompress_all_7z_in_dir,
     models::{
@@ -202,10 +202,15 @@ impl AdbDevice {
         Ok(())
     }
 
-    /// Returns raw `dumpsys battery` output from the device
+    /// Returns humanized `dumpsys battery` output from the device
     #[instrument(skip(self), err)]
     pub async fn battery_dump(&self) -> Result<String> {
-        self.shell_checked("dumpsys battery").await.context("'dumpsys battery' command failed")
+        Ok(battery_dump::humanize_dump(
+            &self
+                .shell_checked("dumpsys battery")
+                .await
+                .context("'dumpsys battery' command failed")?,
+        ))
     }
 
     /// Executes a shell command on the device

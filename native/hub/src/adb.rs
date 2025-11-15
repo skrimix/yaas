@@ -36,7 +36,7 @@ use crate::{
     utils::resolve_binary_path,
 };
 
-pub mod battery;
+pub mod battery_dump;
 pub mod device;
 
 pub static PACKAGE_NAME_REGEX: Lazy<Regex> = lazy_regex!(r"^(?:[A-Za-z]{1}[\w]*\.)+[A-Za-z][\w]*$");
@@ -564,9 +564,8 @@ impl AdbHandler {
             AdbCommand::GetBatteryDump => {
                 let device = self.current_device().await?;
                 match device.battery_dump().await {
-                    Ok(raw) => {
-                        let human = battery::humanize_battery_dump(&raw);
-                        BatteryDumpResponse { command_key: key.clone(), dump: human }
+                    Ok(dump) => {
+                        BatteryDumpResponse { command_key: key.clone(), dump }
                             .send_signal_to_dart();
                         Ok(())
                     }

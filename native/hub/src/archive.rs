@@ -65,6 +65,48 @@ where
     Ok(())
 }
 
+/// Create a ZIP archive from the contents of `src_dir` into `dest_dir` with the given file name.
+/// If `archive_name` has no extension, `.zip` is appended.
+#[instrument(skip(src_dir, dest_dir, cancel), err, level = "debug")]
+pub async fn create_zip_from_dir(
+    src_dir: &Path,
+    dest_dir: &Path,
+    archive_name: &str,
+    cancel: Option<CancellationToken>,
+) -> Result<PathBuf> {
+    ensure!(src_dir.is_dir(), "Source directory does not exist: {}", src_dir.display());
+
+    if !dest_dir.exists() {
+        fs::create_dir_all(dest_dir).await.with_context(|| {
+            format!("Failed to create destination directory {}", dest_dir.display())
+        })?;
+    }
+    ensure!(dest_dir.is_dir(), "Destination directory is not a directory: {}", dest_dir.display());
+
+    let mut archive_path = dest_dir.join(archive_name);
+    if archive_path.extension().is_none() {
+        archive_path.set_extension("zip");
+    }
+
+    if archive_path.exists() {
+        fs::remove_file(&archive_path).await.with_context(|| {
+            format!("Failed to remove existing archive {}", archive_path.display())
+        })?;
+    }
+
+    // Archive the whole source directory; 7-Zip will store it as a top-level folder.
+    let args = [
+        OsString::from("a"),
+        OsString::from("-tzip"),
+        OsString::from("-y"),
+        archive_path.as_os_str().to_os_string(),
+        src_dir.as_os_str().to_os_string(),
+    ];
+
+    run_7z(args, cancel.as_ref()).await?;
+    Ok(archive_path)
+}
+
 /// Extract an archive into `dest_dir`.
 ///
 /// - `password`: if provided, passes `-p<password>` to 7-Zip.
@@ -226,7 +268,11 @@ pub async fn extract_single_from_archive(
 
 #[cfg(test)]
 mod tests {
-    use super::parse_7z_slt_listing;
+    use std::{ffi::OsString, path::Path};
+
+    use tempfile::tempdir;
+
+    use super::*;
 
     #[test]
     fn parse_7z_listing() {
@@ -366,5 +412,103 @@ Offset = 2174509
         assert!(files.iter().any(|p| p.ends_with("/git-log.txt")));
 
         assert_eq!(files.len(), 5);
+    }
+
+    #[tokio::test(flavor = "multi_thread")]
+    #[ignore]
+    async fn create_zip_and_decompress_roundtrip() {
+        let src_dir = tempdir().unwrap();
+        let src_path = src_dir.path();
+        std::fs::create_dir(src_path.join("sub")).unwrap();
+        std::fs::write(src_path.join("sub/file.txt"), b"hello 7-zip").unwrap();
+
+        let archive_dir = tempdir().unwrap();
+        let archive_path = create_zip_from_dir(src_path, archive_dir.path(), "test-archive", None)
+            .await
+            .expect("zip creation should succeed");
+        assert!(archive_path.is_file());
+
+        let dest_dir = tempdir().unwrap();
+        decompress_archive(&archive_path, dest_dir.path(), None, None, None)
+            .await
+            .expect("decompression should succeed");
+
+        let top = src_path.file_name().expect("tempdir path should have a final component");
+        let extracted = dest_dir.path().join(top).join("sub").join("file.txt");
+        let content = std::fs::read_to_string(extracted).unwrap();
+        assert_eq!(content, "hello 7-zip");
+    }
+
+    #[tokio::test(flavor = "multi_thread")]
+    #[ignore]
+    async fn list_archive_and_extract_single_entry() {
+        let src_dir = tempdir().unwrap();
+        let src_path = src_dir.path();
+        std::fs::write(src_path.join("first.txt"), b"FIRST").unwrap();
+        std::fs::write(src_path.join("second.txt"), b"SECOND").unwrap();
+
+        let archive_dir = tempdir().unwrap();
+        let archive_path = create_zip_from_dir(src_path, archive_dir.path(), "list-extract", None)
+            .await
+            .expect("zip creation should succeed");
+
+        let files = list_archive_file_paths(&archive_path).await.expect("listing should succeed");
+        assert!(files.iter().any(|p| p.ends_with("first.txt")));
+        assert!(files.iter().any(|p| p.ends_with("second.txt")));
+
+        let entry = files
+            .iter()
+            .find(|p| p.ends_with("first.txt"))
+            .expect("expected first.txt entry in archive")
+            .clone();
+        let dest_dir = tempdir().unwrap();
+
+        extract_single_from_archive(&archive_path, dest_dir.path(), &entry)
+            .await
+            .expect("single-file extraction should succeed");
+
+        let file_name = Path::new(&entry).file_name().unwrap().to_owned();
+        let extracted_path = dest_dir.path().join(file_name);
+        assert!(extracted_path.is_file());
+        let content = std::fs::read_to_string(extracted_path).unwrap();
+        assert_eq!(content, "FIRST");
+    }
+
+    #[tokio::test(flavor = "multi_thread")]
+    #[ignore]
+    async fn decompress_all_7z_archives_in_dir() {
+        let root = tempdir().unwrap();
+        let root_path = root.path();
+
+        let payload_dir = root_path.join("payload");
+        std::fs::create_dir(&payload_dir).unwrap();
+        let inner_file = payload_dir.join("inner.txt");
+        std::fs::write(&inner_file, b"CONTENT").unwrap();
+
+        let archive_path = root_path.join("payload.7z");
+        run_7z(
+            [
+                OsString::from("a"),
+                archive_path.as_os_str().to_os_string(),
+                payload_dir.as_os_str().to_os_string(),
+            ],
+            None,
+        )
+        .await
+        .expect("7z archive creation should succeed");
+        assert!(archive_path.is_file());
+
+        std::fs::remove_dir_all(&payload_dir).unwrap();
+        assert!(!payload_dir.exists());
+
+        decompress_all_7z_in_dir(root_path, None)
+            .await
+            .expect("decompress_all_7z_in_dir should succeed");
+
+        assert!(payload_dir.is_dir());
+        let extracted_inner = payload_dir.join("inner.txt");
+        assert!(extracted_inner.is_file());
+        let content = std::fs::read_to_string(extracted_inner).unwrap();
+        assert_eq!(content, "CONTENT");
     }
 }

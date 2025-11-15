@@ -607,7 +607,7 @@ impl AdbDevice {
     /// * `source_file` - Source path on the device
     /// * `dest_file` - Local path to save the file
     #[instrument(skip(self), err)]
-    async fn pull(&self, source_file: &UnixPath, dest_file: &Path) -> Result<()> {
+    async fn pull(&self, source_file: &UnixPath, dest_file: &Path) -> Result<PathBuf> {
         let source_stat =
             self.inner.stat(source_file).await.context("Failed to stat source file")?;
         ensure!(
@@ -620,7 +620,7 @@ impl AdbDevice {
         // debug!(source = %source_file.display(), dest = %dest_path.display(), "Pulling file");
         let mut file = File::create(&dest_path).await?;
         Box::pin(self.inner.pull(source_file, &mut file)).await?;
-        Ok(())
+        Ok(dest_path)
     }
 
     /// Pulls a directory from the device
@@ -629,7 +629,7 @@ impl AdbDevice {
     /// * `source` - Source path on the device
     /// * `dest` - Local path to save the directory
     #[instrument(skip(self), err)]
-    async fn pull_dir(&self, source: &UnixPath, dest: &Path) -> Result<()> {
+    async fn pull_dir(&self, source: &UnixPath, dest: &Path) -> Result<PathBuf> {
         let source_stat =
             self.inner.stat(source).await.context("Failed to stat source directory")?;
         ensure!(
@@ -646,7 +646,10 @@ impl AdbDevice {
             format!("Failed to create destination directory: {}", dest_path.display())
         })?;
         // debug!(source = %source.display(), dest = %dest_path.display(), "Pulling directory");
-        Box::pin(self.inner.pull_dir(source, &dest_path)).await.context("Failed to pull directory")
+        Box::pin(self.inner.pull_dir(source, &dest_path))
+            .await
+            .context("Failed to pull directory")?;
+        Ok(dest_path)
     }
 
     /// Pulls an item from the device.
@@ -665,7 +668,7 @@ impl AdbDevice {
                     );
                 }
                 // `pull_dir` will ensure the destination directory exists (create_dir_all).
-                self.pull_dir(remote_path, local_path).await?
+                self.pull_dir(remote_path, local_path).await?;
             }
             UnixFileStatus::RegularFile => {
                 // For files, allow non-existent destination paths as long as the parent exists.
@@ -678,7 +681,7 @@ impl AdbDevice {
                 }
                 // If destination is a directory, `pull` will place the file inside it via
                 // `resolve_pull_dest_path`. Otherwise it writes to the given file path.
-                self.pull(remote_path, local_path).await?
+                self.pull(remote_path, local_path).await?;
             }
             other => bail!("Unsupported file type: {:?}", other),
         }
@@ -1173,6 +1176,64 @@ impl AdbDevice {
             }
         }
         bail!("Failed to parse APK path for package '{}': {}", package_name, output);
+    }
+
+    /// Pulls an application's APK and OBB (if present) into a local directory suitable for sharing.
+    ///
+    /// Layout:
+    /// - `<dest_root>/<package_name>/<package_name>.apk`
+    /// - `<dest_root>/<package_name>/` + OBB contents (when present)
+    #[instrument(skip(self, dest_root), err)]
+    pub async fn pull_app_for_sharing(
+        &self,
+        package_name: &str,
+        dest_root: &Path,
+    ) -> Result<PathBuf> {
+        ensure_valid_package(package_name)?;
+
+        if !dest_root.exists() {
+            fs::create_dir_all(dest_root).await.with_context(|| {
+                format!("Failed to create destination root {}", dest_root.display())
+            })?;
+        }
+        ensure!(dest_root.is_dir(), "Destination root is not a directory: {}", dest_root.display());
+
+        let app_dir = dest_root.join(package_name);
+        if app_dir.exists() {
+            debug!(path = %app_dir.display(), "Removing existing app share directory");
+            fs::remove_dir_all(&app_dir).await.with_context(|| {
+                format!("Failed to remove existing directory {}", app_dir.display())
+            })?;
+        }
+        fs::create_dir_all(&app_dir).await.with_context(|| {
+            format!("Failed to create app share directory {}", app_dir.display())
+        })?;
+
+        let apk_remote = self.get_apk_path(package_name).await?;
+        let apk_remote_path = UnixPath::new(&apk_remote);
+        let local_apk_path = self.pull(apk_remote_path, &app_dir).await?;
+
+        let renamed_apk_path = app_dir.join(format!("{package_name}.apk"));
+        if local_apk_path != renamed_apk_path {
+            fs::rename(&local_apk_path, &renamed_apk_path).await.with_context(|| {
+                format!(
+                    "Failed to rename pulled APK from {} to {}",
+                    local_apk_path.display(),
+                    renamed_apk_path.display()
+                )
+            })?;
+        }
+
+        // Pull OBB directory if present
+        let obb_remote_dir = UnixPath::new("/sdcard/Android/obb").join(package_name);
+        if self.dir_exists(&obb_remote_dir).await? {
+            debug!(package = package_name, "Pulling OBB directory for sharing");
+            self.pull_dir(&obb_remote_dir, &app_dir).await?;
+        } else {
+            debug!(package = package_name, "No OBB directory found for package, skipping");
+        }
+
+        Ok(app_dir)
     }
 
     /// Creates a backup of the given package.

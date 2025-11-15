@@ -5,7 +5,7 @@ use std::{
     time::Duration,
 };
 
-use anyhow::{Result, bail};
+use anyhow::{Context, Result, anyhow, bail, ensure};
 use rand::seq::IndexedRandom;
 use rinf::{DartSignal, RustSignal};
 use tokio::sync::{Mutex, RwLock, mpsc::UnboundedSender};
@@ -353,6 +353,46 @@ impl Downloader {
     #[instrument(level = "debug", skip(self))]
     pub async fn get_download_dir(&self) -> PathBuf {
         self.download_dir.read().await.clone()
+    }
+
+    /// Upload a prepared archive (and its MD5 sidecar) used for app sharing.
+    ///
+    /// This uses optional `share_remote_name` and `share_remote_path` from DownloaderConfig.
+    /// If either is missing or empty, the call fails with a configuration error.
+    #[instrument(skip(self, cancellation_token), err)]
+    pub async fn upload_shared_archive(
+        &self,
+        archive_path: &Path,
+        cancellation_token: CancellationToken,
+    ) -> Result<()> {
+        let remote =
+            self.config.share_remote_name.as_deref().filter(|s| !s.is_empty()).ok_or_else(
+                || anyhow!("App sharing remote is not configured in downloader.json"),
+            )?;
+        let remote_path =
+            self.config.share_remote_path.as_deref().filter(|s| !s.is_empty()).ok_or_else(
+                || anyhow!("App sharing remote path is not configured in downloader.json"),
+            )?;
+
+        ensure!(
+            archive_path.is_file(),
+            "Shared archive does not exist or is not a file: {}",
+            archive_path.display()
+        );
+
+        let storage = self.storage.read().await.clone();
+
+        storage
+            .upload_file_to_remote(
+                archive_path,
+                remote,
+                remote_path,
+                Some(cancellation_token.clone()),
+            )
+            .await
+            .context("Failed to upload shared archive")?;
+
+        Ok(())
     }
 
     #[instrument(skip(self))]

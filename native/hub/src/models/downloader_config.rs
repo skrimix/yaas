@@ -15,6 +15,12 @@ pub struct DownloaderConfig {
     pub remote_name_filter_regex: Option<String>,
     #[serde(default)]
     pub disable_randomize_remote: bool,
+    /// Optional remote used for app sharing uploads.
+    #[serde(default)]
+    pub share_remote_name: Option<String>,
+    /// Optional path within the share remote where uploaded archives are placed.
+    #[serde(default)]
+    pub share_remote_path: Option<String>,
     /// Repository layout selector. "ffa" or "vrp-public"
     pub layout: RepoLayoutKind,
     #[serde(default = "default_root_dir")]

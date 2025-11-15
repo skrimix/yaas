@@ -387,6 +387,43 @@ impl RcloneStorage {
         )
     }
 
+    /// Upload a single local file to an arbitrary remote and path.
+    ///
+    /// The file name from `local_path` is appended to `remote_dir`.
+    #[instrument(skip(self, cancellation_token), err)]
+    pub async fn upload_file_to_remote(
+        &self,
+        local_path: &Path,
+        remote: &str,
+        remote_dir: &str,
+        cancellation_token: Option<CancellationToken>,
+    ) -> Result<()> {
+        ensure!(local_path.is_file(), "Local path is not a file: {}", local_path.display());
+        ensure!(!remote.is_empty(), "Remote name must not be empty");
+
+        let file_name = local_path.file_name().and_then(|n| n.to_str()).ok_or_else(|| {
+            anyhow!("Local path has no valid UTF-8 file name: {}", local_path.display())
+        })?;
+
+        let remote_dir_path = if remote_dir.is_empty() {
+            PathBuf::from(file_name)
+        } else {
+            PathBuf::from(remote_dir.trim_start_matches(['/', '\\'])).join(file_name)
+        };
+
+        let dest = format!("{remote}:{}", remote_dir_path.display());
+        debug!(src = %local_path.display(), dest = %dest, "Starting rclone upload");
+
+        self.client
+            .transfer(
+                local_path.display().to_string(),
+                dest,
+                RcloneTransferOperation::Copy,
+                cancellation_token,
+            )
+            .await
+    }
+
     #[instrument(skip(self, stats_tx, cancellation_token), err, ret)]
     pub async fn download_dir_with_stats(
         &self,

@@ -14,6 +14,8 @@ pub enum TaskKind {
     Uninstall,
     BackupApp,
     RestoreBackup,
+    /// Pull an installed app from device and upload it for sharing
+    ShareApp,
 }
 
 #[derive(Clone, Copy, Debug, Serialize, Deserialize, SignalPiece)]
@@ -49,6 +51,8 @@ pub enum Task {
     },
     /// Restore from a backup directory path (contains a `.backup` marker)
     RestoreBackup(String),
+    /// Share (upload/donate) installed app files from the device.
+    ShareApp { package_name: String, display_name: Option<String> },
 }
 
 impl Task {
@@ -61,6 +65,7 @@ impl Task {
             Task::Uninstall { .. } => "Uninstall",
             Task::BackupApp { .. } => "Backup App",
             Task::RestoreBackup(_) => "Restore Backup",
+            Task::ShareApp { .. } => "Share App",
         }
     }
 
@@ -82,7 +87,23 @@ impl Task {
             Task::RestoreBackup(path) => {
                 Path::new(path).file_name().unwrap_or_default().to_string_lossy().to_string()
             }
+            Task::ShareApp { package_name, display_name } => {
+                display_name.clone().unwrap_or_else(|| package_name.clone())
+            }
         })
+    }
+
+    pub fn total_steps(&self) -> u8 {
+        match self {
+            Task::Download(..) => 1,
+            Task::DownloadInstall(..) => 2,
+            Task::InstallApk(..) => 1,
+            Task::InstallLocalApp(..) => 1,
+            Task::Uninstall { .. } => 1,
+            Task::BackupApp { .. } => 1,
+            Task::RestoreBackup(..) => 1,
+            Task::ShareApp { .. } => 3,
+        }
     }
 }
 
@@ -102,6 +123,7 @@ impl From<&Task> for TaskKind {
             Task::Uninstall { .. } => TaskKind::Uninstall,
             Task::BackupApp { .. } => TaskKind::BackupApp,
             Task::RestoreBackup(_) => TaskKind::RestoreBackup,
+            Task::ShareApp { .. } => TaskKind::ShareApp,
         }
     }
 }

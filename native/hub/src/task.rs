@@ -21,6 +21,8 @@ use crate::{
         AdbHandler,
         device::{BackupOptions, SideloadProgress},
     },
+    apk::get_apk_info,
+    archive::create_zip_from_dir,
     downloader::RcloneTransferStats,
     downloader_manager::DownloaderManager,
     downloads_catalog::DownloadsCatalog,
@@ -36,20 +38,20 @@ use crate::{
 
 struct ProgressUpdate {
     status: TaskStatus,
-    step_number: u32,
+    step_number: u8,
     step_progress: Option<f32>,
     message: String,
 }
 
 #[derive(Debug)]
 struct InstallStepConfig<'a> {
-    step_number: u32,
+    step_number: u8,
     log_context: &'a str,
 }
 
 #[derive(Debug)]
 struct AdbStepConfig<'a> {
-    step_number: u32,
+    step_number: u8,
     waiting_msg: &'a str,
     running_msg: String,
     log_context: &'a str,
@@ -249,11 +251,7 @@ impl TaskManager {
                 return;
             }
         };
-
-        let total_steps: u32 = match &task {
-            Task::DownloadInstall(_) => 2,
-            _ => 1,
-        };
+        let total_steps = task.total_steps();
 
         let task_name_clone = task_name.clone();
         let update_progress = move |u: ProgressUpdate| {
@@ -277,8 +275,8 @@ impl TaskManager {
                 status: u.status,
                 total_progress,
                 message: u.message,
-                current_step: u.step_number,
-                total_steps,
+                current_step: u.step_number.into(),
+                total_steps: total_steps.into(),
                 step_progress: u.step_progress,
             });
         };
@@ -345,6 +343,16 @@ impl TaskManager {
             Task::RestoreBackup(path) => {
                 info!(task_id = id, "Executing restore backup task");
                 self.handle_restore(path.clone(), &update_progress, token.clone()).await
+            }
+            Task::ShareApp { package_name, display_name } => {
+                info!(task_id = id, "Executing app share task");
+                self.handle_share_app(
+                    package_name.clone(),
+                    display_name.clone(),
+                    &update_progress,
+                    token.clone(),
+                )
+                .await
             }
         };
 
@@ -417,7 +425,7 @@ impl TaskManager {
     async fn run_download_step(
         &self,
         app_full_name: &str,
-        step_number: u32,
+        step_number: u8,
         update_progress: &impl Fn(ProgressUpdate),
         token: CancellationToken,
     ) -> Result<String> {
@@ -975,6 +983,140 @@ impl TaskManager {
         );
 
         BackupsChanged {}.send_signal_to_dart();
+
+        Ok(())
+    }
+
+    #[instrument(skip(self, update_progress, token))]
+    async fn handle_share_app(
+        &self,
+        package_name: String,
+        display_name: Option<String>,
+        update_progress: &impl Fn(ProgressUpdate),
+        token: CancellationToken,
+    ) -> Result<()> {
+        ensure!(
+            self.downloader_manager.is_some().await,
+            "Downloader is not configured. Install configuration file to initialize."
+        );
+
+        debug!(
+            package_name = %package_name,
+            adb_permits_available = self.adb_semaphore.available_permits(),
+            "Starting app share task"
+        );
+
+        let adb_handler = self.adb_handler.clone();
+        let device = adb_handler.current_device().await?;
+
+        // Use downloads location as the base for temporary share directories and archives.
+        let settings = self.settings.read().await.clone();
+        let downloads_root = std::path::PathBuf::from(settings.downloads_location.clone());
+        let upload_root = downloads_root.join("_upload");
+        tokio::fs::create_dir_all(&upload_root).await.with_context(|| {
+            format!("Failed to create upload directory {}", upload_root.display())
+        })?;
+
+        let pkg_for_pull = package_name.clone();
+        let dest_root_clone = upload_root.clone();
+        let pulled_dir = self
+            .run_adb_one_step(
+                AdbStepConfig {
+                    step_number: 1,
+                    waiting_msg: "Waiting to start pull from device...",
+                    running_msg: "Pulling app from device...".to_string(),
+                    log_context: "share_app_pull",
+                },
+                update_progress,
+                token.clone(),
+                move || {
+                    let device = device.clone();
+                    let pkg = pkg_for_pull.clone();
+                    let dest_root = dest_root_clone.clone();
+                    async move { device.pull_app_for_sharing(&pkg, &dest_root).await }
+                },
+            )
+            .await?;
+
+        if token.is_cancelled() {
+            warn!("Task was cancelled after pull step");
+            return Err(anyhow!("Task cancelled after pulling app from device"));
+        }
+
+        // Step 2: prepare archive (APK metadata, HWID file, archive name and ZIP).
+        update_progress(ProgressUpdate {
+            status: TaskStatus::Running,
+            step_number: 2,
+            step_progress: None,
+            message: "Preparing archive for upload...".into(),
+        });
+
+        let apk_path = pulled_dir.join(format!("{}.apk", package_name));
+        let apk_info = get_apk_info(&apk_path)
+            .with_context(|| format!("Failed to read APK metadata from {}", apk_path.display()))?;
+
+        let label = apk_info
+            .application_label
+            .as_deref()
+            .filter(|s| !s.trim().is_empty())
+            .map(|s| s.to_string())
+            .or(display_name.clone())
+            .unwrap_or_else(|| package_name.clone());
+
+        let version_code = apk_info.version_code.with_context(|| {
+            format!("Failed to get version code from APK {}", apk_path.display())
+        })?;
+
+        let base_archive_name = format!("{label} v{version_code} {}", apk_info.package_name);
+        let sanitized_name = sanitize_filename::sanitize(&base_archive_name);
+        ensure!(!sanitized_name.is_empty(), "Sanitized archive name is empty");
+        let archive_file_name = format!("{sanitized_name}.zip");
+
+        let hwid_hex = {
+            let digest = md5::compute(settings.installation_id.as_bytes());
+            format!("{:X}", digest)
+        };
+        tokio::fs::write(pulled_dir.join("HWID.txt"), hwid_hex.as_bytes())
+            .await
+            .context("Failed to write HWID.txt")?;
+
+        let archive_path =
+            create_zip_from_dir(&pulled_dir, &upload_root, &archive_file_name, Some(token.clone()))
+                .await
+                .context("Failed to create archive from pulled app")?;
+
+        if let Err(e) = tokio::fs::remove_dir_all(&pulled_dir).await {
+            warn!(
+                error = &e as &dyn Error,
+                path = %pulled_dir.display(),
+                "Failed to clean up pulled app directory after share"
+            );
+        }
+
+        if token.is_cancelled() {
+            warn!("Task was cancelled after archive preparation step");
+            return Err(anyhow!("Task cancelled after preparing archive"));
+        }
+
+        // Step 3: upload archive via rclone.
+        update_progress(ProgressUpdate {
+            status: TaskStatus::Running,
+            step_number: 3,
+            step_progress: None,
+            message: "Uploading archive...".into(),
+        });
+
+        let downloader = self
+            .downloader_manager
+            .get()
+            .await
+            .ok_or_else(|| anyhow!("Downloader is not configured"))?;
+
+        // TODO: add progress
+        downloader
+            .upload_shared_archive(&archive_path, token)
+            .await
+            .context("Failed to upload shared app archive")?;
 
         Ok(())
     }

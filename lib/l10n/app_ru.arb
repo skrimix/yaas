@@ -39,6 +39,15 @@
   "downloadingRcloneFiles": "Загрузка файлов rclone",
   "installDownloaderConfig": "Установить конфигурацию загрузчика",
   "settingsSelectDownloaderConfig": "Выберите downloader.json",
+  "downloaderConfigId": "ID текущей конфигурации: {id}",
+  "@downloaderConfigId": {
+    "placeholders": {
+      "id": {
+        "type": "String",
+        "example": "vrp-public"
+      }
+    }
+  },
   "loadingApps": "Загрузка списка приложений...",
     "settingsSectionAppearance": "Оформление",
     "settingsUseSystemColor": "Использовать системный цвет",
@@ -542,13 +551,14 @@
     "tasksEmptyActive": "Нет активных задач",
     "tasksEmptyRecent": "Нет недавних задач",
     "cancelTask": "Отменить задачу",
-    "taskTypeDownload": "Скачать",
-    "taskTypeDownloadInstall": "Скачать и установить",
-    "taskTypeInstallApk": "Установить APK",
-    "taskTypeInstallLocalApp": "Установить из папки",
-    "taskTypeUninstall": "Удалить",
-    "taskTypeBackupApp": "Резервное копирование",
-    "taskTypeRestoreBackup": "Восстановить из копии",
+    "taskKindDownload": "Скачать",
+    "taskKindDownloadInstall": "Скачать и установить",
+    "taskKindInstallApk": "Установить APK",
+    "taskKindInstallLocalApp": "Установить из папки",
+    "taskKindUninstall": "Удалить",
+    "taskKindBackupApp": "Резервное копирование",
+    "taskKindRestoreBackup": "Восстановление из копии",
+    "taskKindShareApp": "Поделиться приложением",
     "taskStatusWaiting": "Ожидание",
     "taskStatusRunning": "Выполняется",
     "taskStatusCompleted": "Завершено",

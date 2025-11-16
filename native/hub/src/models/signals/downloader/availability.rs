@@ -5,4 +5,6 @@ pub struct DownloaderAvailabilityChanged {
     pub available: bool,
     pub initializing: bool,
     pub error: Option<String>,
+    /// Optional ID of the currently configured downloader.json
+    pub config_id: Option<String>,
 }

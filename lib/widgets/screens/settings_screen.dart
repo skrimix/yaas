@@ -652,22 +652,36 @@ class _SettingsScreenState extends State<SettingsScreen> {
           ],
           Align(
             alignment: Alignment.centerLeft,
-            child: TextButton.icon(
-              onPressed: () async {
-                final result = await FilePicker.platform.pickFiles(
-                  dialogTitle: l10n.settingsSelectDownloaderConfig,
-                  allowMultiple: false,
-                  type: FileType.custom,
-                  allowedExtensions: const ['json'],
-                );
-                final path = result?.files.single.path;
-                if (path != null) {
-                  InstallDownloaderConfigRequest(sourcePath: path)
-                      .sendSignalToRust();
-                }
-              },
-              icon: const Icon(Icons.file_open),
-              label: Text(l10n.installDownloaderConfig),
+            child: Row(
+              children: [
+                TextButton.icon(
+                  onPressed: () async {
+                    final result = await FilePicker.platform.pickFiles(
+                      dialogTitle: l10n.settingsSelectDownloaderConfig,
+                      allowMultiple: false,
+                      type: FileType.custom,
+                      allowedExtensions: const ['json'],
+                    );
+                    final path = result?.files.single.path;
+                    if (path != null) {
+                      InstallDownloaderConfigRequest(sourcePath: path)
+                          .sendSignalToRust();
+                    }
+                  },
+                  icon: const Icon(Icons.file_open),
+                  label: Text(l10n.installDownloaderConfig),
+                ),
+                if (settingsState.downloaderConfigId != null) ...[
+                  const SizedBox(width: 4),
+                  Text(
+                    l10n.downloaderConfigId(settingsState.downloaderConfigId!),
+                    style: Theme.of(context).textTheme.bodySmall?.copyWith(
+                          color: Theme.of(context).hintColor,
+                        ),
+                    overflow: TextOverflow.ellipsis,
+                  ),
+                ],
+              ],
             ),
           ),
         ],

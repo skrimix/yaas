@@ -332,6 +332,12 @@ abstract class AppLocalizations {
   /// **'Select downloader.json'**
   String get settingsSelectDownloaderConfig;
 
+  /// No description provided for @downloaderConfigId.
+  ///
+  /// In en, this message translates to:
+  /// **'Current config ID: {id}'**
+  String downloaderConfigId(String id);
+
   /// No description provided for @loadingApps.
   ///
   /// In en, this message translates to:
@@ -2228,47 +2234,53 @@ abstract class AppLocalizations {
   /// **'Cancel Task'**
   String get cancelTask;
 
-  /// No description provided for @taskTypeDownload.
+  /// No description provided for @taskKindDownload.
   ///
   /// In en, this message translates to:
   /// **'Download'**
-  String get taskTypeDownload;
+  String get taskKindDownload;
 
-  /// No description provided for @taskTypeDownloadInstall.
+  /// No description provided for @taskKindDownloadInstall.
   ///
   /// In en, this message translates to:
   /// **'Download & Install'**
-  String get taskTypeDownloadInstall;
+  String get taskKindDownloadInstall;
 
-  /// No description provided for @taskTypeInstallApk.
+  /// No description provided for @taskKindInstallApk.
   ///
   /// In en, this message translates to:
   /// **'Install APK'**
-  String get taskTypeInstallApk;
+  String get taskKindInstallApk;
 
-  /// No description provided for @taskTypeInstallLocalApp.
+  /// No description provided for @taskKindInstallLocalApp.
   ///
   /// In en, this message translates to:
   /// **'Install Local App'**
-  String get taskTypeInstallLocalApp;
+  String get taskKindInstallLocalApp;
 
-  /// No description provided for @taskTypeUninstall.
+  /// No description provided for @taskKindUninstall.
   ///
   /// In en, this message translates to:
   /// **'Uninstall'**
-  String get taskTypeUninstall;
+  String get taskKindUninstall;
 
-  /// No description provided for @taskTypeBackupApp.
+  /// No description provided for @taskKindBackupApp.
   ///
   /// In en, this message translates to:
   /// **'Backup App'**
-  String get taskTypeBackupApp;
+  String get taskKindBackupApp;
 
-  /// No description provided for @taskTypeRestoreBackup.
+  /// No description provided for @taskKindRestoreBackup.
   ///
   /// In en, this message translates to:
   /// **'Restore Backup'**
-  String get taskTypeRestoreBackup;
+  String get taskKindRestoreBackup;
+
+  /// No description provided for @taskKindShareApp.
+  ///
+  /// In en, this message translates to:
+  /// **'Share App'**
+  String get taskKindShareApp;
 
   /// No description provided for @taskStatusWaiting.
   ///

@@ -129,6 +129,11 @@ class AppLocalizationsRu extends AppLocalizations {
   String get settingsSelectDownloaderConfig => 'Выберите downloader.json';
 
   @override
+  String downloaderConfigId(String id) {
+    return 'ID текущей конфигурации: $id';
+  }
+
+  @override
   String get loadingApps => 'Загрузка списка приложений...';
 
   @override
@@ -1168,25 +1173,28 @@ class AppLocalizationsRu extends AppLocalizations {
   String get cancelTask => 'Отменить задачу';
 
   @override
-  String get taskTypeDownload => 'Скачать';
+  String get taskKindDownload => 'Скачать';
 
   @override
-  String get taskTypeDownloadInstall => 'Скачать и установить';
+  String get taskKindDownloadInstall => 'Скачать и установить';
 
   @override
-  String get taskTypeInstallApk => 'Установить APK';
+  String get taskKindInstallApk => 'Установить APK';
 
   @override
-  String get taskTypeInstallLocalApp => 'Установить из папки';
+  String get taskKindInstallLocalApp => 'Установить из папки';
 
   @override
-  String get taskTypeUninstall => 'Удалить';
+  String get taskKindUninstall => 'Удалить';
 
   @override
-  String get taskTypeBackupApp => 'Резервное копирование';
+  String get taskKindBackupApp => 'Резервное копирование';
 
   @override
-  String get taskTypeRestoreBackup => 'Восстановить из копии';
+  String get taskKindRestoreBackup => 'Восстановление из копии';
+
+  @override
+  String get taskKindShareApp => 'Поделиться приложением';
 
   @override
   String get taskStatusWaiting => 'Ожидание';

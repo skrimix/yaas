@@ -111,6 +111,7 @@ impl DownloaderManager {
                             available: false,
                             initializing: false,
                             error: Some("Failed to fetch default downloader config".into()),
+                            config_id: None,
                         }
                         .send_signal_to_dart();
                     }
@@ -151,8 +152,14 @@ impl DownloaderManager {
         app_dir: PathBuf,
         settings_handler: Arc<SettingsHandler>,
     ) -> Result<()> {
-        DownloaderAvailabilityChanged { available: false, initializing: true, error: None }
-            .send_signal_to_dart();
+        let config_id = cfg.id.clone();
+        DownloaderAvailabilityChanged {
+            available: false,
+            initializing: true,
+            error: None,
+            config_id: Some(config_id.clone()),
+        }
+        .send_signal_to_dart();
 
         // Drop old downloader before initializing a new one.
         self.set_downloader(None).await;
@@ -178,6 +185,7 @@ impl DownloaderManager {
                             available: true,
                             initializing: false,
                             error: None,
+                            config_id: Some(config_id.clone()),
                         }
                         .send_signal_to_dart();
                         Ok(())
@@ -187,6 +195,7 @@ impl DownloaderManager {
                             available: false,
                             initializing: false,
                             error: Some(format!("Failed to initialize downloader: {:#}", e)),
+                            config_id: Some(config_id.clone()),
                         }
                         .send_signal_to_dart();
                         Err(e)
@@ -198,6 +207,7 @@ impl DownloaderManager {
                     available: false,
                     initializing: false,
                     error: Some(format!("Failed to prepare downloader: {:#}", e)),
+                    config_id: Some(config_id),
                 }
                 .send_signal_to_dart();
                 Err(e)

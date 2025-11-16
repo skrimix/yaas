@@ -128,6 +128,11 @@ class AppLocalizationsEn extends AppLocalizations {
   String get settingsSelectDownloaderConfig => 'Select downloader.json';
 
   @override
+  String downloaderConfigId(String id) {
+    return 'Current config ID: $id';
+  }
+
+  @override
   String get loadingApps => 'Loading apps...';
 
   @override
@@ -1155,25 +1160,28 @@ class AppLocalizationsEn extends AppLocalizations {
   String get cancelTask => 'Cancel Task';
 
   @override
-  String get taskTypeDownload => 'Download';
+  String get taskKindDownload => 'Download';
 
   @override
-  String get taskTypeDownloadInstall => 'Download & Install';
+  String get taskKindDownloadInstall => 'Download & Install';
 
   @override
-  String get taskTypeInstallApk => 'Install APK';
+  String get taskKindInstallApk => 'Install APK';
 
   @override
-  String get taskTypeInstallLocalApp => 'Install Local App';
+  String get taskKindInstallLocalApp => 'Install Local App';
 
   @override
-  String get taskTypeUninstall => 'Uninstall';
+  String get taskKindUninstall => 'Uninstall';
 
   @override
-  String get taskTypeBackupApp => 'Backup App';
+  String get taskKindBackupApp => 'Backup App';
 
   @override
-  String get taskTypeRestoreBackup => 'Restore Backup';
+  String get taskKindRestoreBackup => 'Restore Backup';
+
+  @override
+  String get taskKindShareApp => 'Share App';
 
   @override
   String get taskStatusWaiting => 'Waiting';

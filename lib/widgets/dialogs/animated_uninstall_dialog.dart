@@ -157,7 +157,7 @@ class _AnimatedUninstallDialogState extends State<AnimatedUninstallDialog>
               ? l10n.uninstalledDone
               : _isUninstalling
                   ? l10n.uninstalling
-                  : l10n.taskTypeUninstall),
+                  : l10n.uninstall),
         ),
       ],
     );

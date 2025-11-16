@@ -39,6 +39,15 @@
   "downloadingRcloneFiles": "Downloading rclone files",
   "installDownloaderConfig": "Install downloader config",
   "settingsSelectDownloaderConfig": "Select downloader.json",
+  "downloaderConfigId": "Current config ID: {id}",
+  "@downloaderConfigId": {
+    "placeholders": {
+      "id": {
+        "type": "String",
+        "example": "vrp-public"
+      }
+    }
+  },
   "loadingApps": "Loading apps...",
     "settingsSectionAppearance": "Appearance",
     "settingsUseSystemColor": "Use system color",
@@ -548,13 +557,14 @@
     "tasksEmptyActive": "No active tasks",
     "tasksEmptyRecent": "No recent tasks",
     "cancelTask": "Cancel Task",
-    "taskTypeDownload": "Download",
-    "taskTypeDownloadInstall": "Download & Install",
-    "taskTypeInstallApk": "Install APK",
-    "taskTypeInstallLocalApp": "Install Local App",
-    "taskTypeUninstall": "Uninstall",
-    "taskTypeBackupApp": "Backup App",
-    "taskTypeRestoreBackup": "Restore Backup",
+    "taskKindDownload": "Download",
+    "taskKindDownloadInstall": "Download & Install",
+    "taskKindInstallApk": "Install APK",
+    "taskKindInstallLocalApp": "Install Local App",
+    "taskKindUninstall": "Uninstall",
+    "taskKindBackupApp": "Backup App",
+    "taskKindRestoreBackup": "Restore Backup",
+    "taskKindShareApp": "Share App",
     "taskStatusWaiting": "Waiting",
     "taskStatusRunning": "Running",
     "taskStatusCompleted": "Completed",

@@ -32,6 +32,7 @@ class SettingsState extends ChangeNotifier {
   bool _downloaderAvailable = false;
   bool _downloaderInitializing = false;
   String? _downloaderError;
+  String? _downloaderConfigId;
   int _downloaderInitBytes = 0;
   int? _downloaderInitTotal;
 
@@ -86,6 +87,7 @@ class SettingsState extends ChangeNotifier {
       _downloaderAvailable = msg.available;
       _downloaderInitializing = msg.initializing;
       _downloaderError = msg.error;
+      _downloaderConfigId = msg.configId;
       notifyListeners();
     });
 
@@ -127,6 +129,7 @@ class SettingsState extends ChangeNotifier {
   bool get isDownloaderAvailable => _downloaderAvailable;
   bool get isDownloaderInitializing => _downloaderInitializing;
   String? get downloaderError => _downloaderError;
+  String? get downloaderConfigId => _downloaderConfigId;
   int get downloaderInitBytes => _downloaderInitBytes;
   int? get downloaderInitTotal => _downloaderInitTotal;
   double? get downloaderInitProgress =>

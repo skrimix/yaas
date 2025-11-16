@@ -50,23 +50,25 @@ class _TaskListDialogState extends State<TaskListDialog>
     _previousTaskState = taskState;
   }
 
-  String _getTaskTypeString(TaskKind kind) {
+  String _getTaskKindString(TaskKind kind) {
     final l10n = AppLocalizations.of(context);
     switch (kind) {
       case TaskKind.download:
-        return l10n.taskTypeDownload;
+        return l10n.taskKindDownload;
       case TaskKind.downloadInstall:
-        return l10n.taskTypeDownloadInstall;
+        return l10n.taskKindDownloadInstall;
       case TaskKind.installApk:
-        return l10n.taskTypeInstallApk;
+        return l10n.taskKindInstallApk;
       case TaskKind.installLocalApp:
-        return l10n.taskTypeInstallLocalApp;
+        return l10n.taskKindInstallLocalApp;
       case TaskKind.uninstall:
-        return l10n.taskTypeUninstall;
+        return l10n.taskKindUninstall;
       case TaskKind.backupApp:
-        return l10n.taskTypeBackupApp;
+        return l10n.taskKindBackupApp;
       case TaskKind.restoreBackup:
-        return l10n.taskTypeRestoreBackup;
+        return l10n.taskKindRestoreBackup;
+      case TaskKind.shareApp:
+        return l10n.taskKindShareApp;
     }
   }
 
@@ -194,7 +196,7 @@ class _TaskListDialogState extends State<TaskListDialog>
           Row(
             children: [
               Text(
-                _getTaskTypeString(task.kind),
+                _getTaskKindString(task.kind),
                 style: TextStyle(
                   fontSize: 12,
                   color: Theme.of(context)

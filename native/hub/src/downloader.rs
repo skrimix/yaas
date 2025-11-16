@@ -569,6 +569,10 @@ impl Downloader {
                 send_event(false, Some(apps), None);
             }
             Ok(Err(e)) => {
+                if cancellation_token.is_cancelled() {
+                    warn!("App list load cancelled");
+                    return;
+                }
                 error!(error = e.as_ref() as &dyn Error, "Failed to load app list");
                 send_event(false, None, Some(format!("Failed to load app list: {e:#}")));
             }

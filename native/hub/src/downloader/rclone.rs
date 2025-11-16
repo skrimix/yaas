@@ -4,7 +4,7 @@ use std::{
     process::Stdio,
 };
 
-use anyhow::{Context, Result, anyhow, ensure};
+use anyhow::{Context, Result, anyhow, bail, ensure};
 use lazy_regex::Regex;
 use serde::Deserialize;
 use tokio::{
@@ -108,7 +108,7 @@ impl RcloneClient {
         Self { rclone_path: resolved_path, config_path, sys_proxy, bandwidth_limit }
     }
 
-    #[instrument(skip(self), level = "trace")]
+    #[instrument(skip(self), level = "debug")]
     fn command(&self, args: &[&str], use_json_log: bool) -> Command {
         let mut command = Command::new(&self.rclone_path);
         command.kill_on_drop(true);
@@ -136,7 +136,7 @@ impl RcloneClient {
         command
     }
 
-    #[instrument(skip(self), level = "trace")]
+    #[instrument(skip(self), level = "debug")]
     async fn run_to_string(&self, args: &[&str]) -> Result<String> {
         let output = self.command(args, false).output().await.context("rclone command failed")?;
         if output.status.success() {
@@ -146,14 +146,15 @@ impl RcloneClient {
         } else {
             let stderr = String::from_utf8_lossy(&output.stderr).to_string();
             error!(code = output.status.code().unwrap_or(-1), stderr, "rclone command failed");
-            Err(anyhow::anyhow!(
+            bail!(
                 "rclone returned exit code {}, stderr:\n{}",
                 output.status.code().map_or("unknown".to_string(), |c| c.to_string()),
                 stderr
-            ))
+            )
         }
     }
 
+    #[instrument(skip(self), level = "debug")]
     pub async fn remotes(&self) -> Result<Vec<String>> {
         let output = self.run_to_string(&["listremotes"]).await?;
         let remotes: Vec<String> =

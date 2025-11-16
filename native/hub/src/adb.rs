@@ -765,7 +765,7 @@ impl AdbHandler {
     }
 
     /// Gets the currently connected device or returns an error if none is connected
-    #[instrument(skip(self), level = "trace", err)]
+    #[instrument(skip(self), level = "debug", err)]
     pub async fn current_device(&self) -> Result<Arc<AdbDevice>> {
         self.try_current_device().await.context("No device connected")
     }

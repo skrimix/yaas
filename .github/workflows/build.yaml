@@ -140,7 +140,7 @@ jobs:
         shell: bash
         run: |
           set -euo pipefail
-          fastforge package --platform linux --targets appimage
+          fastforge package --platform linux --targets appimage --skip-clean
           shopt -s globstar nullglob
           files=(dist/**/*.AppImage)
           if (( ${#files[@]} == 0 )); then
@@ -152,14 +152,13 @@ jobs:
           cp -v "${files[0]}" "dist/yaas.AppImage"
 
       # TODO: Any better way to do this?
-      - name: Repack AppImage with 7-Zip (Linux)
+      - name: Repack AppImage with 7-Zip included (Linux)
         if: matrix.target == 'linux'
         shell: bash
         run: |
           set -euo pipefail
           app="dist/yaas.AppImage"
           chmod +x "$app"
-          # Extract current AppImage contents
           "$app" --appimage-extract
           # Fetch 7-Zip static and place into usr/bin of AppDir
           curl -fsSL -o 7zip-linux.tar.xz "https://github.com/ip7z/7zip/releases/download/25.01/7z2501-linux-x64.tar.xz"

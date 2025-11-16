@@ -89,7 +89,7 @@ struct RcloneClient {
 }
 
 impl RcloneClient {
-    #[instrument(fields(sys_proxy), ret)]
+    #[instrument(level = "debug", fields(sys_proxy), ret)]
     pub fn new(rclone_path: PathBuf, config_path: PathBuf, bandwidth_limit: String) -> Self {
         let sys_proxy = get_sys_proxy();
         let resolved_path =
@@ -161,7 +161,7 @@ impl RcloneClient {
         Ok(remotes)
     }
 
-    #[instrument(skip(self), ret, err)]
+    #[instrument(level = "debug", skip(self), ret, err)]
     pub async fn lsjson(&self, path: &str) -> Result<Vec<RcloneLsJsonEntry>> {
         let output = self
             .run_to_string(&["lsjson", "--fast-list", path])
@@ -172,7 +172,7 @@ impl RcloneClient {
         Ok(entries)
     }
 
-    #[instrument(skip(self), ret, err)]
+    #[instrument(level = "debug", skip(self), ret, err)]
     pub async fn size(&self, path: &str) -> Result<RcloneSizeOutput> {
         let output = self.run_to_string(&["size", "--fast-list", "--json", path]).await?;
         let size_output: RcloneSizeOutput =
@@ -180,7 +180,7 @@ impl RcloneClient {
         Ok(size_output)
     }
 
-    #[instrument(skip(self, cancellation_token), err)]
+    #[instrument(level = "debug", skip(self, cancellation_token), err)]
     pub async fn transfer(
         &self,
         source: String,
@@ -191,7 +191,7 @@ impl RcloneClient {
         self.transfer_internal(source, dest, operation, None, None, cancellation_token).await
     }
 
-    #[instrument(skip(self, stats_tx, cancellation_token), err)]
+    #[instrument(level = "debug", skip(self, stats_tx, cancellation_token), err)]
     pub async fn transfer_with_stats(
         &self,
         source: String,
@@ -212,7 +212,7 @@ impl RcloneClient {
         .await
     }
 
-    #[instrument(skip(self, stats_tx, cancellation_token))]
+    #[instrument(level = "debug", skip(self, stats_tx, cancellation_token))]
     async fn transfer_internal(
         &self,
         source: String,
@@ -390,7 +390,7 @@ impl RcloneStorage {
     /// Upload a single local file to an arbitrary remote and path.
     ///
     /// The file name from `local_path` is appended to `remote_dir`.
-    #[instrument(skip(self, cancellation_token), err)]
+    #[instrument(level = "debug", skip(self, cancellation_token), err)]
     pub async fn upload_file_to_remote(
         &self,
         local_path: &Path,
@@ -424,7 +424,7 @@ impl RcloneStorage {
             .await
     }
 
-    #[instrument(skip(self, stats_tx, cancellation_token), err, ret)]
+    #[instrument(level = "debug", skip(self, stats_tx, cancellation_token), err, ret)]
     pub async fn download_dir_with_stats(
         &self,
         source: String,
@@ -449,7 +449,7 @@ impl RcloneStorage {
             .map(|_| dest)
     }
 
-    #[instrument(skip(self), err, ret)]
+    #[instrument(level = "debug", skip(self), err, ret)]
     pub async fn download_file(
         &self,
         source: String,
@@ -476,13 +476,13 @@ impl RcloneStorage {
         Ok(dest_path)
     }
 
-    #[instrument(skip(self), ret, err)]
+    #[instrument(level = "debug", skip(self), ret, err)]
     pub async fn list_dir_json(&self, source: String) -> Result<Vec<RcloneLsJsonEntry>> {
         let remote_path = self.format_remote_path(&source);
         self.client.lsjson(&remote_path).await
     }
 
-    #[instrument(skip(self), ret, err)]
+    #[instrument(level = "debug", skip(self), ret, err)]
     pub async fn remotes(&self) -> Result<Vec<String>> {
         let remotes = self.client.remotes().await?;
         Ok(filter_remotes_with_regex(remotes, self.remote_filter_regex.as_ref()))
@@ -500,7 +500,7 @@ impl PartialEq for RcloneStorage {
 
 impl Eq for RcloneStorage {}
 
-#[instrument(ret, err)]
+#[instrument(level = "debug", ret, err)]
 pub async fn list_remotes(
     rclone_path: &Path,
     config_path: &Path,

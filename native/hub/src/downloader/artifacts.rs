@@ -118,7 +118,7 @@ fn build_http_client() -> Result<reqwest::Client> {
         .build()?)
 }
 
-#[instrument(skip(client), fields(src = %src, dst = %dst.display(), label = label), err)]
+#[instrument(level = "debug", skip(client), fields(src = %src, dst = %dst.display(), label = label), err)]
 async fn ensure_remote_file(
     client: &reqwest::Client,
     src: &str,
@@ -160,7 +160,7 @@ async fn ensure_remote_file(
     Ok(())
 }
 
-#[instrument(skip(client), fields(url = %url, bin = %bin_dst.display()), err)]
+#[instrument(level = "debug", skip(client), fields(url = %url, bin = %bin_dst.display()), err)]
 async fn ensure_remote_rclone_from_zip(
     client: &reqwest::Client,
     url: &str,

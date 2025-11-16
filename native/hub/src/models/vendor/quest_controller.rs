@@ -74,86 +74,88 @@ struct RstestControllerItem {
     status: Option<String>,
 }
 
-/// Parses the JSON output of `rstest info --json`.
-/// Returns HeadsetControllersInfo for left/right controllers.
-pub fn parse_rstest_json(json: &str) -> Result<HeadsetControllersInfo> {
-    let mut result = HeadsetControllersInfo::default();
+impl HeadsetControllersInfo {
+    /// Parses the JSON output of `rstest info --json`.
+    /// Returns HeadsetControllersInfo for left/right controllers.
+    pub fn from_rstest_json(json: &str) -> Result<Self> {
+        let mut result = Self::default();
 
-    let items: Vec<RstestControllerItem> = serde_json::from_str(json)
-        .with_context(|| "Failed to deserialize rstest info --json output")?;
+        let items: Vec<RstestControllerItem> = serde_json::from_str(json)
+            .with_context(|| "Failed to deserialize rstest info --json output")?;
 
-    for item in items.into_iter() {
-        let status = item.status.as_deref().map(ControllerStatus::from).unwrap_or_default();
-        let info = ControllerInfo { battery_level: item.battery_level, status };
-        match item.controller_type.as_str() {
-            "LeftHand" | "Left" => result.left = Some(info),
-            "RightHand" | "Right" => result.right = Some(info),
-            other => warn!("unexpected controller type '{}'", other),
-        }
-    }
-
-    if result.left.is_none() {
-        warn!("left controller info not found in rstest json");
-    }
-    if result.right.is_none() {
-        warn!("right controller info not found in rstest json");
-    }
-
-    Ok(result)
-}
-
-// #[instrument(level = "debug")]
-/// Parses the output of `QUEST_CONTROLLER_INFO_COMMAND` command.
-pub fn parse_dumpsys(lines: &str) -> HeadsetControllersInfo {
-    let mut result = HeadsetControllersInfo::default();
-
-    let re = regex!(
-        r#"^\s*Paired.+Type:\s*(?<type>\w{4,5}).+Battery:\s*(?<battery>\-*\d{1,3})%.+ Status: (?<status>\w+).+$"#m
-    );
-
-    for caps in re.captures_iter(lines) {
-        if let (Some(controller_type), Some(battery_str), Some(controller_status)) = (
-            caps.name("type").map(|m| m.as_str()),
-            caps.name("battery").map(|m| m.as_str()),
-            caps.name("status").map(|m| m.as_str()),
-        ) {
-            let controller_battery = battery_str.parse::<u8>().ok();
-
-            if controller_battery.is_none() {
-                debug!(
-                    "Invalid battery level for {} controller: {}",
-                    controller_type.to_lowercase(),
-                    battery_str
-                );
-            }
-            match controller_type {
-                "Left" => {
-                    result.left = Some(ControllerInfo {
-                        battery_level: controller_battery,
-                        status: controller_status.into(),
-                    })
-                }
-                "Right" => {
-                    result.right = Some(ControllerInfo {
-                        battery_level: controller_battery,
-                        status: controller_status.into(),
-                    })
-                }
-                _ => warn!("unexpected controller type '{}'", controller_type),
+        for item in items.into_iter() {
+            let status = item.status.as_deref().map(ControllerStatus::from).unwrap_or_default();
+            let info = ControllerInfo { battery_level: item.battery_level, status };
+            match item.controller_type.as_str() {
+                "LeftHand" | "Left" => result.left = Some(info),
+                "RightHand" | "Right" => result.right = Some(info),
+                other => warn!("unexpected controller type '{}'", other),
             }
         }
+
+        if result.left.is_none() {
+            warn!("left controller info not found in rstest json");
+        }
+        if result.right.is_none() {
+            warn!("right controller info not found in rstest json");
+        }
+
+        Ok(result)
     }
 
-    trace!("parsed controller levels: {:?}", result);
+    // #[instrument(level = "debug")]
+    /// Parses the output of `QUEST_CONTROLLER_INFO_COMMAND` command.
+    pub fn from_dumpsys(lines: &str) -> Self {
+        let mut result = Self::default();
 
-    if result.left.is_none() {
-        warn!("left controller info not found");
-    }
-    if result.right.is_none() {
-        warn!("right controller info not found");
-    }
+        let re = regex!(
+            r#"^\s*Paired.+Type:\s*(?<type>\w{4,5}).+Battery:\s*(?<battery>\-*\d{1,3})%.+ Status: (?<status>\w+).+$"#m
+        );
 
-    result
+        for caps in re.captures_iter(lines) {
+            if let (Some(controller_type), Some(battery_str), Some(controller_status)) = (
+                caps.name("type").map(|m| m.as_str()),
+                caps.name("battery").map(|m| m.as_str()),
+                caps.name("status").map(|m| m.as_str()),
+            ) {
+                let controller_battery = battery_str.parse::<u8>().ok();
+
+                if controller_battery.is_none() {
+                    debug!(
+                        "Invalid battery level for {} controller: {}",
+                        controller_type.to_lowercase(),
+                        battery_str
+                    );
+                }
+                match controller_type {
+                    "Left" => {
+                        result.left = Some(ControllerInfo {
+                            battery_level: controller_battery,
+                            status: controller_status.into(),
+                        })
+                    }
+                    "Right" => {
+                        result.right = Some(ControllerInfo {
+                            battery_level: controller_battery,
+                            status: controller_status.into(),
+                        })
+                    }
+                    _ => warn!("unexpected controller type '{}'", controller_type),
+                }
+            }
+        }
+
+        trace!("parsed controller levels: {:?}", result);
+
+        if result.left.is_none() {
+            warn!("left controller info not found");
+        }
+        if result.right.is_none() {
+            warn!("right controller info not found");
+        }
+
+        result
+    }
 }
 
 #[cfg(test)]
@@ -238,7 +240,8 @@ mod tests {
 
     #[test]
     fn test_parse_rstest_json_sample1() {
-        let parsed = parse_rstest_json(SAMPLE_JSON_1).expect("json parse should succeed");
+        let parsed = HeadsetControllersInfo::from_rstest_json(SAMPLE_JSON_1)
+            .expect("json parse should succeed");
         assert_eq!(
             parsed.left,
             Some(ControllerInfo { battery_level: Some(90), status: ControllerStatus::Disabled })
@@ -251,7 +254,8 @@ mod tests {
 
     #[test]
     fn test_parse_rstest_json_sample2() {
-        let parsed = parse_rstest_json(SAMPLE_JSON_2).expect("json parse should succeed");
+        let parsed = HeadsetControllersInfo::from_rstest_json(SAMPLE_JSON_2)
+            .expect("json parse should succeed");
         assert_eq!(
             parsed.left,
             Some(ControllerInfo { battery_level: Some(90), status: ControllerStatus::Searching })
@@ -271,7 +275,7 @@ mod tests {
                      Battery:  50%, Status: Disabled, ExternalStatus: DISABLED, TrackingStatus: \
                      POSITION, BrightnessLevel: GOOD
   ";
-        let parsed = parse_dumpsys(lines);
+        let parsed = HeadsetControllersInfo::from_dumpsys(lines);
         assert_eq!(
             parsed.right,
             Some(ControllerInfo { battery_level: Some(100), status: ControllerStatus::Active })
@@ -288,7 +292,7 @@ mod tests {
                      1.9.2, ImuModel: ICM42686, Battery:  50%, Status: Active, ExternalStatus: \
                      DISABLED, TrackingStatus: POSITION, BrightnessLevel: GOOD
   ";
-        let parsed = parse_dumpsys(lines);
+        let parsed = HeadsetControllersInfo::from_dumpsys(lines);
         assert_eq!(
             parsed.left,
             Some(ControllerInfo { battery_level: Some(50), status: ControllerStatus::Active })
@@ -302,7 +306,7 @@ mod tests {
                      1.9.2, ImuModel: ICM42686, Battery: 100%, Status: Disabled, ExternalStatus: \
                      DISABLED, TrackingStatus: ORIENTATION, BrightnessLevel: GOOD
   ";
-        let parsed = parse_dumpsys(lines);
+        let parsed = HeadsetControllersInfo::from_dumpsys(lines);
         assert_eq!(
             parsed.right,
             Some(ControllerInfo { battery_level: Some(100), status: ControllerStatus::Disabled })
@@ -316,7 +320,7 @@ mod tests {
                      1.9.2, ImuModel: ICM42686, Battery: -1%, Status: Disabled, ExternalStatus: \
                      DISABLED, TrackingStatus: ORIENTATION, BrightnessLevel: GOOD
   ";
-        let parsed = parse_dumpsys(lines);
+        let parsed = HeadsetControllersInfo::from_dumpsys(lines);
         assert_eq!(
             parsed.right,
             Some(ControllerInfo { battery_level: None, status: ControllerStatus::Disabled })
@@ -326,7 +330,7 @@ mod tests {
     #[test]
     fn test_quest_parse_dumpsys_controller_empty() {
         let lines = "\n";
-        let parsed = parse_dumpsys(lines);
+        let parsed = HeadsetControllersInfo::from_dumpsys(lines);
         assert!(parsed.left.is_none());
         assert!(parsed.right.is_none());
     }
@@ -334,7 +338,7 @@ mod tests {
     #[test]
     fn test_quest_parse_dumpsys_controller_noservice() {
         let lines = "Can't find service: battery";
-        let parsed = parse_dumpsys(lines);
+        let parsed = HeadsetControllersInfo::from_dumpsys(lines);
         assert!(parsed.left.is_none());
         assert!(parsed.right.is_none());
     }

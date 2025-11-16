@@ -17,7 +17,7 @@ use crate::utils::resolve_binary_path;
 static SEVENZ_PATH: LazyLock<Option<PathBuf>> = LazyLock::new(|| resolve_7z_path().ok());
 
 /// Resolve 7-Zip binary path for the current platform.
-#[instrument(level = "debug", ret, err)]
+#[instrument(level = "debug", err)]
 fn resolve_7z_path() -> Result<PathBuf> {
     #[cfg(target_os = "windows")]
     const CANDIDATES: &[&str] = &["7za", "7z", "7zz"];
@@ -142,7 +142,7 @@ pub async fn decompress_archive(
 }
 
 /// Decompresses all `.7z` archives found directly under `dir` into `dir`.
-#[instrument(skip(dir, cancel), err)]
+#[instrument(level = "debug", skip(dir, cancel), err)]
 pub async fn decompress_all_7z_in_dir(dir: &Path, cancel: Option<CancellationToken>) -> Result<()> {
     if !dir.is_dir() {
         return Ok(());

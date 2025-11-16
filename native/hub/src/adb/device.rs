@@ -28,8 +28,7 @@ use crate::{
         InstalledPackage, SPACE_INFO_COMMAND, SpaceInfo, parse_list_apps_dex,
         signals::{adb::command::RebootMode, system::Toast},
         vendor::quest_controller::{
-            self, CONTROLLER_INFO_COMMAND_DUMPSYS, CONTROLLER_INFO_COMMAND_JSON,
-            HeadsetControllersInfo,
+            CONTROLLER_INFO_COMMAND_DUMPSYS, CONTROLLER_INFO_COMMAND_JSON, HeadsetControllersInfo,
         },
     },
     utils::{dir_has_any_files, first_subdirectory, remove_child_dir_if_exists},
@@ -83,7 +82,7 @@ impl AdbDevice {
     ///
     /// # Arguments
     /// * `inner` - The underlying forensic_adb Device instance
-    #[instrument(skip(inner), ret, err)]
+    #[instrument(level = "debug", skip(inner), ret, err)]
     pub async fn new(inner: Device) -> Result<Self> {
         let serial = inner.serial.clone();
         // Heuristic: wireless adb usually uses host:port as serial
@@ -122,7 +121,7 @@ impl AdbDevice {
     }
 
     /// Refresh basic identity (name) using `ro.product.manufacturer` and `ro.product.model`
-    #[instrument(skip(self), err)]
+    #[instrument(level = "debug", skip(self), err)]
     async fn refresh_identity(&mut self) -> Result<()> {
         let identity = Self::query_identity(&self.inner).await?;
         self.name = Some(identity);
@@ -131,7 +130,7 @@ impl AdbDevice {
 
     /// Queries manufacturer + model from a `forensic_adb::Device` and returns a combined string.
     /// If manufacturer is empty, returns just model.
-    #[instrument(skip(device), err)]
+    #[instrument(level = "debug", skip(device), err)]
     pub async fn query_identity(device: &Device) -> Result<String> {
         let manufacturer = tokio::time::timeout(
             Duration::from_millis(800),
@@ -161,7 +160,7 @@ impl AdbDevice {
     }
 
     /// Queries the true serial number from a `forensic_adb::Device`
-    #[instrument(skip(device), err)]
+    #[instrument(level = "debug", skip(device), err)]
     pub async fn query_true_serial(device: &Device) -> Result<String> {
         Ok(device
             .execute_host_shell_command("getprop ro.serialno")
@@ -172,7 +171,7 @@ impl AdbDevice {
     }
 
     /// Refreshes device information (packages, battery, space)
-    #[instrument(skip(self), err)]
+    #[instrument(level = "debug", skip(self), err)]
     pub async fn refresh(&mut self) -> Result<()> {
         let mut errors = Vec::new();
 
@@ -203,7 +202,7 @@ impl AdbDevice {
     }
 
     /// Returns humanized `dumpsys battery` output from the device
-    #[instrument(skip(self), err)]
+    #[instrument(level = "debug", skip(self), err)]
     pub async fn battery_dump(&self) -> Result<String> {
         Ok(battery_dump::humanize_dump(
             &self
@@ -214,7 +213,7 @@ impl AdbDevice {
     }
 
     /// Executes a shell command on the device
-    #[instrument(skip(self), err)]
+    #[instrument(level = "debug", skip(self), err)]
     async fn shell(&self, command: &str) -> Result<String> {
         self.inner
             .execute_host_shell_command(command)
@@ -225,7 +224,7 @@ impl AdbDevice {
 
     /// Executes a shell command and fails if exit code is non-zero.
     /// Appends `; printf '\n%s' $?` and parses the final line as the exit status.
-    #[instrument(skip(self), err)]
+    #[instrument(level = "debug", skip(self), err)]
     async fn shell_checked(&self, command: &str) -> Result<String> {
         let shell_output = self
             .shell(&format!("{} ; printf '\\n%s' $?", command))
@@ -253,7 +252,7 @@ impl AdbDevice {
     ///
     /// # Arguments
     /// * `mode` - The mode to reboot the device in (normal, bootloader, recovery, fastboot, power off)
-    #[instrument(skip(self), err)]
+    #[instrument(level = "debug", skip(self), err)]
     pub async fn reboot_with_mode(&self, mode: RebootMode) -> Result<()> {
         let cmd = match mode {
             RebootMode::Normal => "reboot",
@@ -270,7 +269,7 @@ impl AdbDevice {
     ///
     /// # Arguments
     /// * `enabled` - Whether to enable or disable the proximity sensor
-    #[instrument(skip(self), err)]
+    #[instrument(level = "debug", skip(self), err)]
     pub async fn set_proximity_sensor(&self, enabled: bool) -> Result<()> {
         // enable => automation_disable, disable => prox_close
         let cmd = if enabled {
@@ -288,7 +287,7 @@ impl AdbDevice {
     ///
     /// # Arguments
     /// * `paused` - Whether to pause or resume the guardian
-    #[instrument(skip(self), err)]
+    #[instrument(level = "debug", skip(self), err)]
     pub async fn set_guardian_paused(&self, paused: bool) -> Result<()> {
         let value = if paused { 1 } else { 0 };
         self.shell_checked(&format!("setprop debug.oculus.guardian_pause {value}"))
@@ -298,7 +297,7 @@ impl AdbDevice {
     }
 
     /// Refreshes the list of installed packages on the device
-    #[instrument(skip(self), fields(count), err)]
+    #[instrument(level = "debug", skip(self), fields(count), err)]
     async fn refresh_package_list(&mut self) -> Result<()> {
         self.push_bytes(LIST_APPS_DEX_BYTES, UnixPath::new("/data/local/tmp/list_apps.dex"))
             .await
@@ -318,7 +317,7 @@ impl AdbDevice {
     }
 
     /// Refreshes battery information for the device and controllers
-    #[instrument(skip(self), err)]
+    #[instrument(level = "debug", skip(self), err)]
     async fn refresh_battery_info(&mut self) -> Result<()> {
         // Get device battery level
         let battery_dump = self.battery_dump().await.context("Failed to get battery dump")?;
@@ -338,7 +337,7 @@ impl AdbDevice {
 
         // Get controller battery levels using rstest first, then fall back to dumpsys
         let controllers = match self.shell_checked(CONTROLLER_INFO_COMMAND_JSON).await {
-            Ok(json) => match quest_controller::parse_rstest_json(&json) {
+            Ok(json) => match HeadsetControllersInfo::from_rstest_json(&json) {
                 Ok(info) => info,
                 Err(e) => {
                     warn!(error = %e, "Failed to parse rstest json, falling back to dumpsys");
@@ -346,7 +345,7 @@ impl AdbDevice {
                         .shell(CONTROLLER_INFO_COMMAND_DUMPSYS)
                         .await
                         .context("Failed to get controller info via dumpsys")?;
-                    quest_controller::parse_dumpsys(&dump)
+                    HeadsetControllersInfo::from_dumpsys(&dump)
                 }
             },
             Err(e) => {
@@ -355,7 +354,7 @@ impl AdbDevice {
                     .shell(CONTROLLER_INFO_COMMAND_DUMPSYS)
                     .await
                     .context("Failed to get controller info via dumpsys")?;
-                quest_controller::parse_dumpsys(&dump)
+                HeadsetControllersInfo::from_dumpsys(&dump)
             }
         };
         trace!(?controllers, "Parsed controller info");
@@ -366,7 +365,7 @@ impl AdbDevice {
     }
 
     /// Refreshes storage space information
-    #[instrument(skip(self), err)]
+    #[instrument(level = "debug", skip(self), err)]
     async fn refresh_space_info(&mut self) -> Result<()> {
         let space_info = self.get_space_info().await?;
         self.space_info = space_info;
@@ -374,7 +373,7 @@ impl AdbDevice {
     }
 
     /// Gets storage space information from the device
-    #[instrument(skip(self), err)]
+    #[instrument(level = "debug", skip(self), err)]
     async fn get_space_info(&self) -> Result<SpaceInfo> {
         let output =
             self.shell_checked(SPACE_INFO_COMMAND).await.context("Space info command failed")?;
@@ -382,7 +381,7 @@ impl AdbDevice {
     }
 
     /// Launches an application on the device
-    #[instrument(skip(self), err)]
+    #[instrument(level = "debug", skip(self), err)]
     pub async fn launch(&self, package: &str) -> Result<()> {
         ensure_valid_package(package)?;
         // First try launching with VR category
@@ -413,7 +412,7 @@ impl AdbDevice {
     }
 
     /// Force stops an application on the device
-    #[instrument(skip(self), err)]
+    #[instrument(level = "debug", skip(self), err)]
     pub async fn force_stop(&self, package: &str) -> Result<()> {
         ensure_valid_package(package)?;
         self.inner.force_stop(package).await.context("Failed to force stop package")
@@ -526,7 +525,7 @@ impl AdbDevice {
     /// # Arguments
     /// * `source_file` - Local path of the file to push
     /// * `dest_file` - Destination path on the device
-    #[instrument(skip(self), err)]
+    #[instrument(level = "debug", skip(self), err)]
     async fn push(&self, source_file: &Path, dest_file: &UnixPath) -> Result<()> {
         ensure!(
             source_file.is_file(),
@@ -546,7 +545,7 @@ impl AdbDevice {
     /// * `source` - Local path of the directory to push
     /// * `dest` - Destination path on the device
     /// * `overwrite` - Whether to remove existing destination before pushing
-    #[instrument(skip(self), err)]
+    #[instrument(level = "debug", skip(self), err)]
     pub async fn push_dir(&self, source: &Path, dest: &UnixPath, overwrite: bool) -> Result<()> {
         ensure!(
             source.is_dir(),
@@ -572,7 +571,7 @@ impl AdbDevice {
     /// * `dest_dir` - Destination directory path on device
     /// * `overwrite` - Whether to clean up destination directory before pushing
     /// * `progress_sender` - Sender for progress updates
-    #[instrument(skip(self, progress_sender), err)]
+    #[instrument(level = "debug", skip(self, progress_sender), err)]
     async fn push_dir_with_progress(
         &self,
         source: &Path,
@@ -598,7 +597,7 @@ impl AdbDevice {
     }
 
     /// Pushes raw bytes to a file on the device
-    #[instrument(skip(self, bytes), fields(len = bytes.len()), err)]
+    #[instrument(level = "debug", skip(self, bytes), fields(len = bytes.len()), err)]
     async fn push_bytes(&self, mut bytes: &[u8], remote_path: &UnixPath) -> Result<()> {
         // debug!(len = bytes.len(), path = %remote_path.display(), "Pushing bytes");
         Box::pin(self.inner.push(&mut bytes, remote_path, 0o777))
@@ -611,7 +610,7 @@ impl AdbDevice {
     /// # Arguments
     /// * `source_file` - Source path on the device
     /// * `dest_file` - Local path to save the file
-    #[instrument(skip(self), err)]
+    #[instrument(level = "debug", skip(self), err)]
     async fn pull(&self, source_file: &UnixPath, dest_file: &Path) -> Result<PathBuf> {
         let source_stat =
             self.inner.stat(source_file).await.context("Failed to stat source file")?;
@@ -633,7 +632,7 @@ impl AdbDevice {
     /// # Arguments
     /// * `source` - Source path on the device
     /// * `dest` - Local path to save the directory
-    #[instrument(skip(self), err)]
+    #[instrument(level = "debug", skip(self), err)]
     async fn pull_dir(&self, source: &UnixPath, dest: &Path) -> Result<PathBuf> {
         let source_stat =
             self.inner.stat(source).await.context("Failed to stat source directory")?;
@@ -658,7 +657,7 @@ impl AdbDevice {
     }
 
     /// Pulls an item from the device.
-    #[instrument(skip(self, remote_path, local_path))]
+    #[instrument(level = "debug", skip(self, remote_path, local_path))]
     async fn pull_any(&self, remote_path: &UnixPath, local_path: &Path) -> Result<()> {
         let stat = self.inner.stat(remote_path).await.context("Stat command failed")?;
 
@@ -694,7 +693,7 @@ impl AdbDevice {
     }
 
     /// Pushes an item to the device
-    #[instrument(skip(self, source, dest), err)]
+    #[instrument(level = "debug", skip(self, source, dest), err)]
     async fn push_any(&self, source: &Path, dest: &UnixPath) -> Result<()> {
         ensure!(source.exists(), "Source path does not exist: {}", source.display());
         if source.is_dir() {
@@ -708,7 +707,7 @@ impl AdbDevice {
     }
 
     /// Installs an APK on the device
-    #[instrument(skip(self, apk_path, backups_location), err)]
+    #[instrument(level = "debug", skip(self, apk_path, backups_location), err)]
     pub async fn install_apk(&self, apk_path: &Path, backups_location: &Path) -> Result<()> {
         info!(path = %apk_path.display(), "Installing APK");
         let (tx, mut _rx) = mpsc::unbounded_channel::<SideloadProgress>();
@@ -718,7 +717,7 @@ impl AdbDevice {
     }
 
     /// Installs an APK on the device (with progress)
-    #[instrument(skip(self, apk_path, progress_sender), err)]
+    #[instrument(level = "debug", skip(self, apk_path, progress_sender), err)]
     pub async fn install_apk_with_progress(
         &self,
         apk_path: &Path,
@@ -810,7 +809,7 @@ impl AdbDevice {
     }
 
     /// Uninstalls a package from the device
-    #[instrument(skip(self))]
+    #[instrument(level = "debug", skip(self))]
     pub async fn uninstall_package(&self, package_name: &str) -> Result<()> {
         ensure_valid_package(package_name)?;
         match self.inner.uninstall_package(package_name).await {
@@ -851,7 +850,7 @@ impl AdbDevice {
     }
 
     /// Executes an install script from the given path
-    #[instrument(skip(self), err)]
+    #[instrument(level = "debug", skip(self), err)]
     async fn execute_install_script(
         &self,
         script_path: &Path,
@@ -1016,7 +1015,7 @@ impl AdbDevice {
     /// # Arguments
     /// * `app_dir` - Path to directory containing the app files
     /// * `progress_sender` - Sender for progress updates
-    #[instrument(skip(self, progress_sender), err)]
+    #[instrument(level = "debug", skip(self, progress_sender), err)]
     pub async fn sideload_app(
         &self,
         app_dir: &Path,
@@ -1153,7 +1152,7 @@ impl AdbDevice {
     }
 
     /// Returns true if a directory exists on the device
-    #[instrument(skip(self), err)]
+    #[instrument(level = "debug", skip(self), err)]
     async fn dir_exists(&self, path: &UnixPath) -> Result<bool> {
         match self.inner.stat(path).await {
             Ok(stat) => Ok(stat.file_mode == UnixFileStatus::Directory),
@@ -1165,7 +1164,7 @@ impl AdbDevice {
     }
 
     /// Gets APK path reported by `pm path <package>`
-    #[instrument(skip(self), err)]
+    #[instrument(level = "debug", skip(self), err)]
     async fn get_apk_path(&self, package_name: &str) -> Result<String> {
         ensure_valid_package(package_name)?;
         let output = self
@@ -1188,7 +1187,7 @@ impl AdbDevice {
     /// Layout:
     /// - `<dest_root>/<package_name>/<package_name>.apk`
     /// - `<dest_root>/<package_name>/` + OBB contents (when present)
-    #[instrument(skip(self, dest_root), err)]
+    #[instrument(level = "debug", skip(self, dest_root), err)]
     pub async fn pull_app_for_sharing(
         &self,
         package_name: &str,
@@ -1243,7 +1242,7 @@ impl AdbDevice {
 
     /// Creates a backup of the given package.
     /// Returns `Ok(Some(path))` if backup was created, `Ok(None)` if nothing to back up.
-    #[instrument(skip(self), err)]
+    #[instrument(level = "debug", skip(self), err)]
     pub async fn backup_app(
         &self,
         package_name: &str,
@@ -1446,7 +1445,7 @@ impl AdbDevice {
     }
 
     /// Restores a backup from the given path
-    #[instrument(skip(self), err)]
+    #[instrument(level = "debug", skip(self), err)]
     pub async fn restore_backup(&self, backup_path: &Path) -> Result<()> {
         // TODO: add a test for this
         ensure!(backup_path.is_dir(), "Backup path is not a directory");
@@ -1557,7 +1556,7 @@ impl AdbDevice {
         Ok(())
     }
 
-    #[instrument(skip(self), err)]
+    #[instrument(level = "debug", skip(self), err)]
     pub async fn clean_temp_apks(&self) -> Result<()> {
         debug!("Cleaning up temporary APKs");
         self.shell("rm -rf /data/local/tmp/*.apk").await?;
@@ -1624,7 +1623,7 @@ impl AdbDevice {
 
 /// Awaits a future or, if cancellation is requested, deletes the incomplete backup directory and
 /// runs cleanup, then returns a cancellation error.
-#[instrument(skip(token, fut, backup_path, cleanup), fields(op = op_name), err)]
+#[instrument(level = "debug", skip(token, fut, backup_path, cleanup), fields(op = op_name), err)]
 async fn await_or_cancel_backup<T, F, C>(
     token: &CancellationToken,
     backup_path: &Path,

@@ -82,7 +82,7 @@ impl AdbHandler {
     ///
     /// # Returns
     /// Arc-wrapped AdbHandler that manages ADB device connections
-    #[instrument(skip(settings_stream))]
+    #[instrument(level = "debug", skip(settings_stream))]
     pub async fn new(mut settings_stream: WatchStream<Settings>) -> Arc<Self> {
         let first_settings =
             settings_stream.next().await.expect("Settings stream closed on adb init");
@@ -131,7 +131,7 @@ impl AdbHandler {
     ///
     /// # Arguments
     /// * `settings_stream` - WatchStream for application settings updates
-    #[instrument(skip(self, settings_stream))]
+    #[instrument(level = "debug", skip(self, settings_stream))]
     async fn start_tasks(self: Arc<AdbHandler>, mut settings_stream: WatchStream<Settings>) {
         // Handle settings updates
         tokio::spawn(
@@ -165,7 +165,7 @@ impl AdbHandler {
     }
 
     /// Starts the ADB tasks
-    #[instrument(skip(self))]
+    #[instrument(level = "debug", skip(self))]
     async fn start_adb_tasks(self: Arc<AdbHandler>) {
         let cancel_token = self.cancel_token.read().await.clone();
         debug!("Starting ADB tasks");
@@ -256,7 +256,7 @@ impl AdbHandler {
     }
 
     /// Kills the ADB server
-    #[instrument(skip(self), err)]
+    #[instrument(level = "debug", skip(self), err)]
     async fn kill_adb_server(&self) -> Result<()> {
         info!("Killing ADB server");
         let adb_path = self.adb_path.read().await.clone();
@@ -271,7 +271,7 @@ impl AdbHandler {
     ///
     /// # Arguments
     /// * `sender` - Channel sender to communicate device updates
-    #[instrument(skip(self, sender), err)]
+    #[instrument(level = "debug", skip(self, sender), err)]
     async fn run_device_tracker(
         self: Arc<AdbHandler>,
         sender: tokio::sync::mpsc::UnboundedSender<Vec<DeviceBrief>>,
@@ -317,7 +317,7 @@ impl AdbHandler {
     /// Handles device state updates received from the device tracker
     ///
     /// # Arguments
-    #[instrument(skip(self, receiver), err)]
+    #[instrument(level = "debug", skip(self, receiver), err)]
     async fn handle_device_updates(
         self: Arc<AdbHandler>,
         mut receiver: tokio::sync::mpsc::UnboundedReceiver<Vec<DeviceBrief>>,
@@ -356,7 +356,7 @@ impl AdbHandler {
     }
 
     /// Listens for and processes ADB commands received from Dart
-    #[instrument(skip(self))]
+    #[instrument(level = "debug", skip(self))]
     async fn receive_commands(&self) {
         let receiver = AdbRequest::get_dart_signal_receiver();
         info!("Listening for ADB commands");
@@ -372,7 +372,7 @@ impl AdbHandler {
     }
 
     /// Executes a received ADB command with the given parameters
-    #[instrument(skip(self))]
+    #[instrument(level = "debug", skip(self))]
     async fn execute_command(&self, key: String, command: AdbCommand) -> Result<()> {
         fn send_toast(title: String, description: String, error: bool, duration: Option<Duration>) {
             Toast::send(title, description, error, duration);
@@ -759,7 +759,7 @@ impl AdbHandler {
     /// Attempts to get the currently connected device    ///
     /// # Returns
     /// Option containing the current device if one is connected
-    #[instrument(skip(self))]
+    #[instrument(level = "debug", skip(self))]
     async fn try_current_device(&self) -> Option<Arc<AdbDevice>> {
         self.device.read().await.as_ref().map(Arc::clone)
     }
@@ -929,7 +929,7 @@ impl AdbHandler {
     }
 
     /// Runs a periodic refresh of device information
-    #[instrument(skip(self))]
+    #[instrument(level = "debug", skip(self))]
     async fn run_periodic_refresh(&self) {
         let refresh_interval = Duration::from_secs(60);
         let mut interval = time::interval(refresh_interval);
@@ -948,7 +948,7 @@ impl AdbHandler {
     }
 
     /// Browses for ADB-over-Wi‑Fi services via mDNS and attempts ADB `connect`.
-    #[instrument(skip(self), err)]
+    #[instrument(level = "debug", skip(self), err)]
     async fn run_mdns_auto_connect(self: Arc<AdbHandler>) -> Result<()> {
         if let Err(e) = self.ensure_server_running().await {
             warn!(error = e.as_ref() as &dyn Error, "ADB server not running prior to mDNS start");
@@ -1092,7 +1092,7 @@ impl AdbHandler {
     }
 
     /// Refreshes the currently connected device
-    #[instrument(skip(self), err)]
+    #[instrument(level = "debug", skip(self), err)]
     pub async fn refresh_device(&self) -> Result<()> {
         let device = self.current_device().await?;
         // TODO: just add serial to instrument span
@@ -1106,7 +1106,7 @@ impl AdbHandler {
     }
 
     /// Installs an APK on the currently connected device
-    #[instrument(skip(self, progress_sender))]
+    #[instrument(level = "debug", skip(self, progress_sender))]
     pub async fn install_apk(
         &self,
         device: &AdbDevice,
@@ -1122,7 +1122,7 @@ impl AdbHandler {
     }
 
     /// Uninstalls a package from the currently connected device
-    #[instrument(skip(self))]
+    #[instrument(level = "debug", skip(self))]
     pub async fn uninstall_package(&self, device: &AdbDevice, package_name: &str) -> Result<()> {
         let result = device.uninstall_package(package_name).await;
         self.refresh_device().await?;
@@ -1130,7 +1130,7 @@ impl AdbHandler {
     }
 
     /// Sideloads an app by installing its APK and pushing OBB data if present
-    #[instrument(skip(self, progress_sender))]
+    #[instrument(level = "debug", skip(self, progress_sender))]
     pub async fn sideload_app(
         &self,
         device: &AdbDevice,
@@ -1145,7 +1145,7 @@ impl AdbHandler {
     }
 
     /// Creates a backup of an app on the currently connected device
-    #[instrument(skip(self))]
+    #[instrument(level = "debug", skip(self))]
     pub async fn backup_app(
         &self,
         device: &AdbDevice,
@@ -1159,7 +1159,7 @@ impl AdbHandler {
     }
 
     /// Restores a backup to the currently connected device
-    #[instrument(skip(self))]
+    #[instrument(level = "debug", skip(self))]
     pub async fn restore_backup(&self, device: &AdbDevice, backup_path: &Path) -> Result<()> {
         let result = device.restore_backup(backup_path).await;
         self.refresh_device().await?;
@@ -1167,7 +1167,7 @@ impl AdbHandler {
     }
 
     /// Ensures the ADB server is running, starting it if necessary
-    #[instrument(skip(self), /* fields(adb_host = ?self.adb_host) */, err)]
+    #[instrument(level = "debug", skip(self), /* fields(adb_host = ?self.adb_host) */, err)]
     async fn ensure_server_running(&self) -> Result<()> {
         let _guard = self.adb_server_mutex.lock().await;
         if !self.is_server_running().await {
@@ -1280,7 +1280,7 @@ impl AdbHandler {
     }
 
     /// Sets the ADB state directly and notifies Dart
-    #[instrument(skip(self))]
+    #[instrument(level = "debug", skip(self))]
     async fn set_adb_state(&self, new_state: AdbState) {
         let mut adb_state = self.adb_state.write().await;
         if *adb_state != new_state {
@@ -1291,7 +1291,7 @@ impl AdbHandler {
     }
 
     /// Refreshes the ADB state based on the current device and server status
-    #[instrument(skip(self))]
+    #[instrument(level = "debug", skip(self))]
     async fn refresh_adb_state(&self) {
         let mut devices_list: Vec<DeviceInfo> = vec![];
         let current_state = self.adb_state.read().await.clone();
@@ -1393,7 +1393,7 @@ impl AdbHandler {
     }
 
     /// Resolves and caches device data for ready devices missing entries, then re-emits list
-    #[instrument(skip(self), err)]
+    #[instrument(level = "debug", skip(self), err)]
     async fn resolve_device_data(&self, devices: &[DeviceInfo]) -> Result<()> {
         let cache = self.device_data_cache.read().await;
         let current = self.try_current_device().await;

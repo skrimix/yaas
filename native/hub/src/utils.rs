@@ -9,7 +9,7 @@ use sysproxy::Sysproxy;
 use tokio::fs;
 use tracing::{debug, instrument, trace, warn};
 
-#[instrument(ret, level = "debug")]
+#[instrument(level = "debug")]
 pub fn get_sys_proxy() -> Option<String> {
     let proxy = Sysproxy::get_system_proxy();
     match proxy {

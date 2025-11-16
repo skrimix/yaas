@@ -42,7 +42,7 @@ impl DownloaderManager {
         })
     }
 
-    #[instrument(skip(self, downloader))]
+    #[instrument(level = "debug", skip(self, downloader))]
     pub async fn set_downloader(&self, downloader: Option<Arc<Downloader>>) {
         if self.inner.read().await.is_none() && downloader.is_none() {
             return;
@@ -267,7 +267,7 @@ impl DownloaderManager {
 const DEFAULT_DOWNLOADER_CONFIG_URL: &str =
     "https://github.com/skrimix/yaas/releases/download/files/downloader_vrp.json";
 
-#[instrument(skip(app_dir), fields(url = DEFAULT_DOWNLOADER_CONFIG_URL), err)]
+#[instrument(level = "debug", skip(app_dir), fields(url = DEFAULT_DOWNLOADER_CONFIG_URL), err)]
 async fn download_default_downloader_config(app_dir: &Path) -> Result<()> {
     let tmp_src = app_dir.join("downloader.json.tmp");
 

@@ -56,7 +56,7 @@ pub struct Downloader {
 }
 
 impl Downloader {
-    #[instrument(skip(settings_stream))]
+    #[instrument(level = "debug", skip(settings_stream))]
     pub async fn new(
         config: Arc<DownloaderConfig>,
         cache_dir: PathBuf,
@@ -307,7 +307,7 @@ impl Downloader {
         Ok(handle)
     }
 
-    #[instrument(level = "debug", ret, err)]
+    #[instrument(level = "debug", err)]
     async fn pick_remote_name(
         rclone_path: &Path,
         rclone_config_path: &Path,
@@ -395,7 +395,7 @@ impl Downloader {
         Ok(())
     }
 
-    #[instrument(skip(self))]
+    #[instrument(level = "debug", skip(self))]
     pub async fn receive_commands(&self) {
         let load_cloud_apps_receiver = LoadCloudAppsRequest::get_dart_signal_receiver();
         let get_rclone_remotes_receiver = GetRcloneRemotesRequest::get_dart_signal_receiver();
@@ -515,7 +515,7 @@ impl Downloader {
         self.current_load_token.read().await.cancel();
     }
 
-    #[instrument(skip(self, cancellation_token))]
+    #[instrument(level = "debug", skip(self, cancellation_token))]
     async fn load_app_list(&self, force_refresh: bool, cancellation_token: CancellationToken) {
         fn send_event(is_loading: bool, apps: Option<Vec<CloudApp>>, error: Option<String>) {
             if let Some(ref a) = apps {

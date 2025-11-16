@@ -20,7 +20,7 @@ pub struct SettingsHandler {
 }
 
 impl SettingsHandler {
-    #[instrument(skip(app_dir))]
+    #[instrument(level = "debug", skip(app_dir))]
     pub fn new(app_dir: PathBuf) -> Arc<Self> {
         let watch_tx = watch::Sender::<Settings>::new(Settings::default());
         let handler =
@@ -45,7 +45,7 @@ impl SettingsHandler {
         handler
     }
 
-    #[instrument(skip(self))]
+    #[instrument(level = "debug", skip(self))]
     async fn receive_settings_requests(&self) {
         let load_receiver = LoadSettingsRequest::get_dart_signal_receiver();
         let save_receiver = SaveSettingsRequest::get_dart_signal_receiver();
@@ -130,7 +130,7 @@ impl SettingsHandler {
     /// * `settings` - The new settings
     /// * `error` - An optional error message for the UI
     /// * `force_notify` - If true, always send event to Dart even if unchanged
-    #[instrument(skip(self, settings, error))]
+    #[instrument(level = "debug", skip(self, settings, error))]
     fn on_settings_change(&self, settings: Settings, error: Option<String>, force_notify: bool) {
         trace!("on_settings_change called");
 
@@ -160,7 +160,7 @@ impl SettingsHandler {
     }
 
     /// Load settings from file or return defaults if file doesn't exist
-    #[instrument(skip(self))]
+    #[instrument(level = "debug", skip(self))]
     fn load_settings(&self) -> Result<Settings> {
         if !self.settings_file_path.exists() {
             info!(path = %self.settings_file_path.display(), "Settings file doesn't exist, using defaults");
@@ -191,7 +191,7 @@ impl SettingsHandler {
     }
 
     /// Save settings to file and notify subscribers/UI
-    #[instrument(skip(self, settings))]
+    #[instrument(level = "debug", skip(self, settings))]
     pub fn save_settings(&self, settings: &Settings) -> Result<()> {
         info!(path = %self.settings_file_path.display(), settings = ?settings, "Saving settings to file");
         let settings_json =
@@ -217,7 +217,7 @@ impl SettingsHandler {
     }
 
     /// Load default settings, optionally retaining provided installation id
-    #[instrument(skip(self))]
+    #[instrument(level = "debug", skip(self))]
     fn load_default_settings(&self, installation_id: Option<String>) -> Result<Settings> {
         info!("Loading default settings");
         let mut settings = Settings::default();

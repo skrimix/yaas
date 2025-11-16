@@ -125,7 +125,7 @@ impl Repo for FFARepo {
         "ffa"
     }
 
-    #[instrument(name = "repo.build_storage", fields(layout = %self.id()))]
+    #[instrument(level = "debug", name = "repo.build_storage", fields(layout = %self.id()))]
     async fn build_storage(&self, args: BuildStorageArgs<'_>) -> Result<BuildStorageResult> {
         debug!("Using repository layout: FFA");
         let storage = RcloneStorage::new(
@@ -139,7 +139,7 @@ impl Repo for FFARepo {
         Ok(BuildStorageResult { storage, persist_remote: None })
     }
 
-    #[instrument(name = "repo.load_app_list", skip(storage, _http_client, cancellation_token), fields(layout = %self.id()))]
+    #[instrument(level = "debug", name = "repo.load_app_list", skip(storage, _http_client, cancellation_token), fields(layout = %self.id()))]
     async fn load_app_list(
         &self,
         storage: RcloneStorage,
@@ -181,7 +181,7 @@ pub struct VRPPublicRepo {
 }
 
 impl VRPPublicRepo {
-    #[instrument(ret)]
+    #[instrument(level = "debug", ret)]
     pub fn from_config(cfg: &DownloaderConfig) -> Self {
         Self {
             public_url: cfg.vrp_public_url.clone(),
@@ -288,6 +288,7 @@ impl Repo for VRPPublicRepo {
     }
 
     #[instrument(
+        level = "debug",
         name = "repo.build_storage",
         fields(layout = %self.id(), remote = %self.remote_name)
     )]
@@ -305,6 +306,7 @@ impl Repo for VRPPublicRepo {
     }
 
     #[instrument(
+        level = "debug",
         name = "repo.load_app_list",
         skip(_list_path, http_client, cancellation_token),
         fields(layout = %self.id(), list = %self.list_filename)
@@ -360,10 +362,10 @@ impl Repo for VRPPublicRepo {
         self.source_for(app_full_name)
     }
 
-    #[allow(unused_variables)]
     #[instrument(
+        level = "debug",
         name = "repo.pre_download",
-        skip(storage, http_client, cancellation_token),
+        skip(storage, _http_client, _cancellation_token),
         fields(layout = %self.id(), app = %app_full_name)
     )]
     async fn pre_download(
@@ -371,9 +373,9 @@ impl Repo for VRPPublicRepo {
         storage: &RcloneStorage,
         app_full_name: &str,
         dst_dir: &Path,
-        http_client: &reqwest::Client,
+        _http_client: &reqwest::Client,
         cache_dir: &Path,
-        cancellation_token: CancellationToken,
+        _cancellation_token: CancellationToken,
     ) -> Result<PreDownloadDecision> {
         let stamp_path = dst_dir.join("vrp_stamp.json");
         if !stamp_path.is_file() {
@@ -423,6 +425,7 @@ impl Repo for VRPPublicRepo {
 
         // Compare with current remote listing
         let source = self.source_for_download(app_full_name);
+        // TODO: add cancellation
         let entries = storage.list_dir_json(source).await.unwrap_or_default();
         #[derive(Clone)]
         struct Part {
@@ -475,6 +478,7 @@ impl Repo for VRPPublicRepo {
     }
 
     #[instrument(
+        level = "debug",
         name = "repo.post_download",
         skip(http_client, cancellation_token),
         fields(layout = %self.id(), app = %app_full_name)

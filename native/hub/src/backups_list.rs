@@ -50,7 +50,7 @@ impl BackupsListHandler {
         handler
     }
 
-    #[instrument(skip(self))]
+    #[instrument(level = "debug", skip(self))]
     async fn receive_signals(self: Arc<Self>) {
         let list_receiver = GetBackupsRequest::get_dart_signal_receiver();
         let delete_receiver = DeleteBackupRequest::get_dart_signal_receiver();
@@ -117,7 +117,7 @@ impl BackupsListHandler {
         }
     }
 
-    #[instrument(skip(self), err)]
+    #[instrument(level = "debug", skip(self), err)]
     async fn list_backups(&self) -> Result<Vec<BackupEntry>> {
         let dir = self.backups_dir.read().await.clone();
         let dir_path = Path::new(&dir);
@@ -147,7 +147,7 @@ impl BackupsListHandler {
         Ok(entries)
     }
 
-    #[instrument(skip(self), fields(dir = %dir.display()), err)]
+    #[instrument(level = "debug", skip(self), fields(dir = %dir.display()), err)]
     async fn build_entry(&self, dir: &Path) -> Result<Option<BackupEntry>> {
         if !dir.is_dir() {
             return Ok(None);
@@ -224,7 +224,7 @@ impl BackupsListHandler {
         }))
     }
 
-    #[instrument(skip(self))]
+    #[instrument(level = "debug", skip(self))]
     async fn delete_backup(&self, path: &Path) -> Result<()> {
         // Security: ensure path is inside backups directory
         let root = self.backups_dir.read().await.clone();

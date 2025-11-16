@@ -4,7 +4,7 @@ use tracing::{debug, instrument};
 
 use crate::models::{AppApiResponse, signals::cloud_apps::reviews::AppReview};
 
-#[instrument(skip(client), err)]
+#[instrument(level = "debug", skip(client), err)]
 pub async fn fetch_app_details(
     client: &reqwest::Client,
     package_name: String,
@@ -30,7 +30,7 @@ pub struct ReviewsResponse {
     pub total: u32,
 }
 
-#[instrument(skip(client), err)]
+#[instrument(level = "debug", skip(client), err)]
 pub async fn fetch_app_reviews(
     client: &reqwest::Client,
     app_id: &str,

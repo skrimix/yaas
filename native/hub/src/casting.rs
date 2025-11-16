@@ -42,7 +42,7 @@ async fn send_status() {
         .send_signal_to_dart();
 }
 
-#[instrument(skip_all, err)]
+#[instrument(level = "debug", skip_all, err)]
 async fn download_casting_bundle() -> Result<()> {
     let url = CASTING_URL;
     let target_zip = std::env::current_dir()?.join("casting-bundle.zip");

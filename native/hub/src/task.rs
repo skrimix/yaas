@@ -138,7 +138,7 @@ impl TaskManager {
         handle
     }
 
-    #[instrument(skip(self))]
+    #[instrument(level = "debug", skip(self))]
     async fn receive_requests(self: Arc<Self>) {
         let request_receiver = TaskRequest::get_dart_signal_receiver();
         let cancel_request_receiver = TaskCancelRequest::get_dart_signal_receiver();
@@ -163,7 +163,7 @@ impl TaskManager {
         }
     }
 
-    #[instrument(skip(self))]
+    #[instrument(level = "debug", skip(self))]
     async fn enqueue_task(self: Arc<Self>, task: Task) -> u64 {
         let id = self.id_counter.fetch_add(1, Ordering::Relaxed);
         let token = CancellationToken::new();
@@ -193,7 +193,7 @@ impl TaskManager {
         id
     }
 
-    #[instrument(skip(self))]
+    #[instrument(level = "debug", skip(self))]
     async fn cancel_task(self: Arc<Self>, task_id: u64) {
         let tasks = self.tasks.lock().await;
         if let Some((task, token)) = tasks.get(&task_id) {
@@ -213,7 +213,7 @@ impl TaskManager {
         }
     }
 
-    #[instrument(skip(self, token))]
+    #[instrument(level = "debug", skip(self, token))]
     async fn process_task(&self, id: u64, task: Task, token: CancellationToken) {
         let start_time = std::time::Instant::now();
         let task_kind = TaskKind::from(&task);
@@ -421,7 +421,7 @@ impl TaskManager {
         }
     }
 
-    #[instrument(skip(self, update_progress, token))]
+    #[instrument(level = "debug", skip(self, update_progress, token))]
     async fn run_download_step(
         &self,
         app_full_name: &str,
@@ -565,7 +565,7 @@ impl TaskManager {
         Ok(app_path)
     }
 
-    #[instrument(skip(self, update_progress, token, spawn_install))]
+    #[instrument(level = "debug", skip(self, update_progress, token, spawn_install))]
     async fn run_install_step<'a>(
         &self,
         cfg: InstallStepConfig<'a>,
@@ -651,7 +651,7 @@ impl TaskManager {
         Ok(())
     }
 
-    #[instrument(skip(self, update_progress, token, fut))]
+    #[instrument(level = "debug", skip(self, update_progress, token, fut))]
     async fn run_adb_one_step<'a, F, Fut, T>(
         &self,
         cfg: AdbStepConfig<'a>,

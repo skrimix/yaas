@@ -53,7 +53,7 @@ impl DownloadsCatalog {
         handler
     }
 
-    #[instrument(skip(self))]
+    #[instrument(level = "debug", skip(self))]
     async fn receive_signals(self: Arc<Self>) {
         let list_receiver = GetDownloadsRequest::get_dart_signal_receiver();
         let get_dir_receiver = GetDownloadsDirectoryRequest::get_dart_signal_receiver();
@@ -129,7 +129,7 @@ impl DownloadsCatalog {
         }
     }
 
-    #[instrument(skip(self), err)]
+    #[instrument(level = "debug", skip(self), err)]
     async fn list_downloads(&self) -> Result<Vec<DownloadEntry>> {
         let root = self.root.read().await.clone();
         let mut entries: Vec<DownloadEntry> = Vec::new();
@@ -152,7 +152,7 @@ impl DownloadsCatalog {
         Ok(entries)
     }
 
-    #[instrument(skip(self), fields(dir = %dir.display()), err)]
+    #[instrument(level = "debug", skip(self), fields(dir = %dir.display()), err)]
     async fn try_build_download_entry(&self, dir: &Path) -> Result<Option<DownloadEntry>> {
         if !dir.is_dir() {
             return Ok(None);
@@ -229,12 +229,14 @@ async fn dir_size(dir: &Path) -> Result<u64> {
     Ok(total)
 }
 
+#[derive(Debug)]
 struct DownloadMetadata {
     downloaded_at: Option<u64>,
     package_name: Option<String>,
     version_code: Option<u32>,
 }
 
+#[instrument(level = "debug", err, ret)]
 async fn read_download_metadata(dir: &Path) -> Result<DownloadMetadata> {
     #[derive(serde::Deserialize)]
     struct DownloadMetaPartial {
@@ -285,7 +287,7 @@ impl DownloadsCatalog {
     /// Downloads are grouped by their directory name using the `{name} v{version}+{build}`
     /// convention (regex: `(?m)^(.+) v\d+\+.+$`). Entries that do not match this pattern are
     /// left untouched and a warning is logged.
-    #[instrument(skip(self), fields(policy = ?policy, installed = %installed_full_name), err)]
+    #[instrument(level = "debug", skip(self), fields(policy = ?policy, installed = %installed_full_name), err)]
     pub async fn apply_cleanup_policy(
         &self,
         policy: DownloadCleanupPolicy,
@@ -420,6 +422,7 @@ impl DownloadsCatalog {
 
     #[instrument(skip(self), err, ret)]
     async fn delete_all_downloads(&self) -> Result<(u32, u32)> {
+        info!("Deleting all downloads");
         let root = self.root.read().await.clone();
         let mut removed: u32 = 0;
         let mut skipped: u32 = 0;

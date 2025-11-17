@@ -1,5 +1,5 @@
 /// Takes `dumpsys battery` output and converts raw values to human-readable format
-pub fn humanize_dump(input: &str) -> String {
+pub(super) fn humanize_dump(input: &str) -> String {
     fn fmt(n: f64) -> String {
         if (n.fract()).abs() < 1e-9 {
             format!("{:.0}", n)

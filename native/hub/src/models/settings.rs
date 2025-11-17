@@ -4,7 +4,7 @@ use uuid::Uuid;
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize, SignalPiece, Default)]
 #[serde(rename_all = "snake_case")]
-pub enum ThemePreference {
+pub(crate) enum ThemePreference {
     #[default]
     Dark,
     Light,
@@ -13,21 +13,21 @@ pub enum ThemePreference {
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize, SignalPiece, Default)]
 #[serde(rename_all = "snake_case")]
-pub enum NavigationRailLabelVisibility {
+pub(crate) enum NavigationRailLabelVisibility {
     #[default]
     Selected,
     All,
 }
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize, SignalPiece, Default)]
-pub enum ConnectionKind {
+pub(crate) enum ConnectionKind {
     #[default]
     Usb,
     Wireless,
 }
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize, SignalPiece, Default)]
-pub enum DownloadCleanupPolicy {
+pub(crate) enum DownloadCleanupPolicy {
     #[default]
     DeleteAfterInstall,
     KeepOneVersion,
@@ -37,7 +37,7 @@ pub enum DownloadCleanupPolicy {
 
 #[derive(Debug, Clone, Serialize, Deserialize, PartialEq, Eq, SignalPiece)]
 #[serde(default)]
-pub struct Settings {
+pub(crate) struct Settings {
     pub installation_id: String,
     pub rclone_remote_name: String,
     pub adb_path: String,

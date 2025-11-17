@@ -31,14 +31,14 @@ use crate::{
 };
 
 mod rclone;
-pub use rclone::RcloneTransferStats;
-pub mod artifacts;
+pub(crate) use rclone::RcloneTransferStats;
+pub(crate) mod artifacts;
 mod cloud_api;
 mod http_cache;
 mod metadata;
 mod repo;
 
-pub struct Downloader {
+pub(crate) struct Downloader {
     config: Arc<DownloaderConfig>,
     cache_dir: PathBuf,
     rclone_path: PathBuf,
@@ -57,7 +57,7 @@ pub struct Downloader {
 
 impl Downloader {
     #[instrument(level = "debug", skip(settings_stream))]
-    pub async fn new(
+    pub(crate) async fn new(
         config: Arc<DownloaderConfig>,
         cache_dir: PathBuf,
         rclone_path: PathBuf,
@@ -76,7 +76,7 @@ impl Downloader {
             .unwrap_or_else(|_| reqwest::Client::new());
 
         let mut remote_for_init = settings.rclone_remote_name.clone();
-        if matches!(config.layout, RepoLayoutKind::FFA) {
+        if matches!(config.layout, RepoLayoutKind::Ffa) {
             remote_for_init = Self::pick_remote_name(
                 &rclone_path,
                 &rclone_config_path,
@@ -171,7 +171,7 @@ impl Downloader {
 
                             // Rebuild storage on settings changes, do not randomize the remote
                             let mut chosen_remote = settings.rclone_remote_name.clone();
-                            if matches!(handle.config.layout, RepoLayoutKind::FFA) {
+                            if matches!(handle.config.layout, RepoLayoutKind::Ffa) {
                                 match Self::pick_remote_name(
                                     &handle.rclone_path,
                                     &handle.rclone_config_path,
@@ -337,22 +337,9 @@ impl Downloader {
 
     /// Returns the cached CloudApp (if any) that matches the given full name
     #[instrument(level = "debug", skip(self))]
-    pub async fn get_app_by_full_name(&self, full_name: &str) -> Option<CloudApp> {
+    async fn get_app_by_full_name(&self, full_name: &str) -> Option<CloudApp> {
         let cache = self.cloud_apps.lock().await;
         cache.iter().find(|a| a.full_name == full_name).cloned()
-    }
-
-    /// Returns all cached CloudApps for a given package name
-    #[instrument(level = "debug", skip(self))]
-    pub async fn get_apps_by_package(&self, package_name: &str) -> Vec<CloudApp> {
-        let cache = self.cloud_apps.lock().await;
-        cache.iter().filter(|a| a.package_name == package_name).cloned().collect()
-    }
-
-    /// Returns the current downloads directory
-    #[instrument(level = "debug", skip(self))]
-    pub async fn get_download_dir(&self) -> PathBuf {
-        self.download_dir.read().await.clone()
     }
 
     /// Upload a prepared archive (and its MD5 sidecar) used for app sharing.
@@ -360,7 +347,7 @@ impl Downloader {
     /// This uses optional `share_remote_name` and `share_remote_path` from DownloaderConfig.
     /// If either is missing or empty, the call fails with a configuration error.
     #[instrument(skip(self, cancellation_token), err)]
-    pub async fn upload_shared_archive(
+    pub(crate) async fn upload_shared_archive(
         &self,
         archive_path: &Path,
         cancellation_token: CancellationToken,
@@ -396,7 +383,7 @@ impl Downloader {
     }
 
     #[instrument(level = "debug", skip(self))]
-    pub async fn receive_commands(&self) {
+    async fn receive_commands(&self) {
         let load_cloud_apps_receiver = LoadCloudAppsRequest::get_dart_signal_receiver();
         let get_rclone_remotes_receiver = GetRcloneRemotesRequest::get_dart_signal_receiver();
         let get_app_details_receiver = GetAppDetailsRequest::get_dart_signal_receiver();
@@ -509,7 +496,7 @@ impl Downloader {
     }
 
     #[instrument(level = "debug", skip(self))]
-    pub async fn stop(&self) {
+    pub(crate) async fn stop(&self) {
         info!("Stopping downloader instance");
         self.cancel_token.cancel();
         self.current_load_token.read().await.cancel();
@@ -584,7 +571,7 @@ impl Downloader {
     }
 
     #[instrument(skip(self), err, ret)]
-    pub async fn download_app(
+    pub(crate) async fn download_app(
         &self,
         app_full_name: String,
         progress_tx: UnboundedSender<RcloneTransferStats>,

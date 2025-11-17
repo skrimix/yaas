@@ -2,7 +2,7 @@ use rinf::{DartSignal, RustSignal, SignalPiece};
 use serde::{Deserialize, Serialize};
 
 #[derive(Debug, Clone, Serialize, Deserialize, SignalPiece)]
-pub enum AdbCommand {
+pub(crate) enum AdbCommand {
     LaunchApp(String),
     ForceStopApp(String),
     UninstallPackage(String),
@@ -20,14 +20,14 @@ pub enum AdbCommand {
 }
 
 #[derive(Serialize, Deserialize, DartSignal)]
-pub struct AdbRequest {
+pub(crate) struct AdbRequest {
     pub command: AdbCommand,
     /// Arbitrary identifier to correlate completion events with UI elements
     pub command_key: String,
 }
 
 #[derive(Debug, Clone, Serialize, Deserialize, SignalPiece)]
-pub enum AdbCommandKind {
+pub(crate) enum AdbCommandKind {
     LaunchApp,
     ForceStopApp,
     UninstallPackage,
@@ -40,7 +40,7 @@ pub enum AdbCommandKind {
 }
 
 #[derive(Debug, Clone, Serialize, Deserialize, SignalPiece)]
-pub enum RebootMode {
+pub(crate) enum RebootMode {
     Normal,
     Bootloader,
     Recovery,
@@ -49,7 +49,7 @@ pub enum RebootMode {
 }
 
 #[derive(Serialize, Deserialize, RustSignal)]
-pub struct AdbCommandCompletedEvent {
+pub(crate) struct AdbCommandCompletedEvent {
     pub command_type: AdbCommandKind,
     pub command_key: String,
     pub success: bool,

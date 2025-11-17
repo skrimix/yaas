@@ -14,14 +14,14 @@ use crate::models::{Settings, signals::backups::*};
 
 /// Handles backup list-related requests (list, delete)
 #[derive(Debug, Clone)]
-pub struct BackupsListHandler {
+pub(crate) struct BackupsCatalog {
     backups_dir: Arc<tokio::sync::RwLock<PathBuf>>,
 }
 
-impl BackupsListHandler {
-    pub fn start(mut settings_stream: WatchStream<Settings>) -> Arc<Self> {
+impl BackupsCatalog {
+    pub(crate) fn start(mut settings_stream: WatchStream<Settings>) -> Arc<Self> {
         let initial_settings = futures::executor::block_on(settings_stream.next())
-            .expect("Settings stream closed on backups handler init");
+            .expect("Settings stream closed on backups catalog init");
 
         let handler = Arc::new(Self {
             backups_dir: Arc::new(tokio::sync::RwLock::new(PathBuf::from(
@@ -185,13 +185,11 @@ impl BackupsListHandler {
             }
         }
 
-        if timestamp == 0 {
-            // Fallback to directory modified time
-            if let Ok(meta) = fs::metadata(dir).await
-                && let Ok(modified) = meta.modified()
-            {
-                timestamp = system_time_to_millis(modified);
-            }
+        if timestamp == 0
+            && let Ok(meta) = fs::metadata(dir).await
+            && let Ok(modified) = meta.modified()
+        {
+            timestamp = system_time_to_millis(modified);
         }
 
         // Part flags (check existence quickly)

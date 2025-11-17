@@ -1,3 +1,3 @@
-pub mod availability;
-pub mod progress;
-pub mod setup;
+pub(crate) mod availability;
+pub(crate) mod progress;
+pub(crate) mod setup;

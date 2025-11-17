@@ -25,7 +25,7 @@ use tracing_appender::{
 use tracing_subscriber::{EnvFilter, fmt, layer::SubscriberExt};
 
 use crate::{
-    backups_list::BackupsListHandler, casting::CastingManager,
+    backups_catalog::BackupsCatalog, casting::CastingManager,
     downloader_manager::DownloaderManager, downloads_catalog::DownloadsCatalog,
 };
 
@@ -37,25 +37,25 @@ static LOG_GUARD: OnceLock<WorkerGuard> = OnceLock::new();
 
 rinf::write_interface!();
 
-pub mod adb;
-pub mod apk;
-pub mod archive;
-pub mod backups_list;
-pub mod casting;
-pub mod downloader;
-pub mod downloader_manager;
-pub mod downloads_catalog;
-pub mod logging;
-pub mod models;
-pub mod settings;
-pub mod task;
-pub mod utils;
+pub(crate) mod adb;
+pub(crate) mod apk;
+pub(crate) mod archive;
+pub(crate) mod backups_catalog;
+pub(crate) mod casting;
+pub(crate) mod downloader;
+pub(crate) mod downloader_manager;
+pub(crate) mod downloads_catalog;
+pub(crate) mod logging;
+pub(crate) mod models;
+pub(crate) mod settings;
+pub(crate) mod task;
+pub(crate) mod utils;
 
-pub mod built_info {
+pub(crate) mod built_info {
     include!(concat!(env!("OUT_DIR"), "/built.rs"));
 }
 
-pub const USER_AGENT: &str = concat!("YAAS/", env!("CARGO_PKG_VERSION"));
+pub(crate) const USER_AGENT: &str = concat!("YAAS/", env!("CARGO_PKG_VERSION"));
 
 fn main() {
     let runtime = tokio::runtime::Builder::new_multi_thread().enable_all().build().unwrap();
@@ -152,8 +152,7 @@ async fn init() {
     downloader_manager.clone().start(app_dir.clone(), settings_handler.clone());
 
     // Backups-related requests
-    let _backups_handler =
-        BackupsListHandler::start(WatchStream::new(settings_handler.subscribe()));
+    let _backups_handler = BackupsCatalog::start(WatchStream::new(settings_handler.subscribe()));
 
     // Casting-related requests (Windows-only)
     CastingManager::start();

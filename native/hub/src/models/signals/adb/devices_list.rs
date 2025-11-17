@@ -3,7 +3,7 @@ use rinf::{RustSignal, SignalPiece};
 use serde::{Deserialize, Serialize};
 
 #[derive(Debug, Clone, Serialize, Deserialize, SignalPiece, PartialEq, Eq)]
-pub enum AdbBriefState {
+pub(crate) enum AdbBriefState {
     Offline,
     Bootloader,
     Device,
@@ -34,7 +34,7 @@ impl From<DeviceState> for AdbBriefState {
 }
 
 #[derive(Debug, Clone, Serialize, Deserialize, SignalPiece, PartialEq, Eq)]
-pub struct AdbDeviceBrief {
+pub(crate) struct AdbDeviceBrief {
     pub serial: String,
     pub is_wireless: bool,
     pub state: AdbBriefState,
@@ -44,6 +44,6 @@ pub struct AdbDeviceBrief {
 }
 
 #[derive(Debug, Clone, Serialize, RustSignal, PartialEq)]
-pub struct AdbDevicesList {
+pub(crate) struct AdbDevicesList {
     pub value: Vec<AdbDeviceBrief>,
 }

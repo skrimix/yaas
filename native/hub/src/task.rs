@@ -85,7 +85,7 @@ macro_rules! acquire_permit_or_cancel {
     }};
 }
 
-pub struct TaskManager {
+pub(crate) struct TaskManager {
     adb_semaphore: Semaphore,
     download_semaphore: Semaphore,
     id_counter: AtomicU64,
@@ -97,7 +97,7 @@ pub struct TaskManager {
 }
 
 impl TaskManager {
-    pub fn new(
+    pub(crate) fn new(
         adb_handler: Arc<AdbHandler>,
         downloader_manager: Arc<DownloaderManager>,
         downloads_catalog: Arc<DownloadsCatalog>,
@@ -1030,10 +1030,11 @@ impl TaskManager {
                 update_progress,
                 token.clone(),
                 move || {
+                    let adb_handler = adb_handler.clone();
                     let device = device.clone();
                     let pkg = pkg_for_pull.clone();
                     let dest_root = dest_root_clone.clone();
-                    async move { device.pull_app_for_sharing(&pkg, &dest_root).await }
+                    async move { adb_handler.pull_app_for_sharing(&device, &pkg, &dest_root).await }
                 },
             )
             .await?;
@@ -1166,13 +1167,6 @@ impl TaskManager {
         self.downloads_catalog
             .apply_cleanup_policy(settings.cleanup_policy, app_full_name, app_path)
             .await
-    }
-}
-
-#[cfg(test)]
-impl TaskManager {
-    pub async fn __test_has_downloader(&self) -> bool {
-        self.downloader_manager.is_some().await
     }
 }
 

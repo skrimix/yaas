@@ -1,12 +1,13 @@
 use rinf::{RustSignal, SignalPiece};
 use serde::Serialize;
 
-use crate::models::{
-    InstalledPackage, SpaceInfo, vendor::quest_controller::HeadsetControllersInfo,
+use crate::{
+    adb,
+    models::{InstalledPackage, SpaceInfo, vendor::quest_controller::HeadsetControllersInfo},
 };
 
 #[derive(Serialize, SignalPiece)]
-pub struct AdbDevice {
+pub(crate) struct AdbDevice {
     pub name: Option<String>,
     pub product: String,
     pub serial: String,
@@ -20,12 +21,12 @@ pub struct AdbDevice {
 }
 
 #[derive(Serialize, RustSignal)]
-pub struct DeviceChangedEvent {
+pub(crate) struct DeviceChangedEvent {
     pub device: Option<AdbDevice>,
 }
 
-impl From<crate::adb::device::AdbDevice> for AdbDevice {
-    fn from(device: crate::adb::device::AdbDevice) -> Self {
+impl From<adb::device::AdbDevice> for AdbDevice {
+    fn from(device: adb::device::AdbDevice) -> Self {
         AdbDevice {
             name: device.name,
             product: device.product,

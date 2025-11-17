@@ -14,14 +14,14 @@ use crate::models::{Settings, signals::settings::*};
 
 /// Handles application settings
 #[derive(Debug, Clone)]
-pub struct SettingsHandler {
+pub(crate) struct SettingsHandler {
     settings_file_path: PathBuf,
     watch_tx: watch::Sender<Settings>,
 }
 
 impl SettingsHandler {
     #[instrument(level = "debug", skip(app_dir))]
-    pub fn new(app_dir: PathBuf) -> Arc<Self> {
+    pub(crate) fn new(app_dir: PathBuf) -> Arc<Self> {
         let watch_tx = watch::Sender::<Settings>::new(Settings::default());
         let handler =
             Arc::new(Self { settings_file_path: app_dir.join("settings.json"), watch_tx });
@@ -155,7 +155,7 @@ impl SettingsHandler {
     }
 
     /// Create a receiver for settings changes
-    pub fn subscribe(&self) -> watch::Receiver<Settings> {
+    pub(crate) fn subscribe(&self) -> watch::Receiver<Settings> {
         self.watch_tx.subscribe()
     }
 
@@ -192,7 +192,7 @@ impl SettingsHandler {
 
     /// Save settings to file and notify subscribers/UI
     #[instrument(level = "debug", skip(self, settings))]
-    pub fn save_settings(&self, settings: &Settings) -> Result<()> {
+    pub(crate) fn save_settings(&self, settings: &Settings) -> Result<()> {
         info!(path = %self.settings_file_path.display(), settings = ?settings, "Saving settings to file");
         let settings_json =
             serde_json::to_string_pretty(settings).context("Failed to serialize settings")?;

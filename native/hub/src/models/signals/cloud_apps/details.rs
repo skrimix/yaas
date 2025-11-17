@@ -3,13 +3,13 @@ use serde::{Deserialize, Serialize};
 
 // Request detailed info about an app from the external API by package name
 #[derive(Serialize, Deserialize, DartSignal)]
-pub struct GetAppDetailsRequest {
+pub(crate) struct GetAppDetailsRequest {
     pub package_name: String,
 }
 
 // Response with app details fetched from the external API.
 #[derive(Serialize, Deserialize, RustSignal)]
-pub struct AppDetailsResponse {
+pub(crate) struct AppDetailsResponse {
     pub package_name: String,
     pub app_id: Option<String>,
     pub display_name: Option<String>,
@@ -23,7 +23,7 @@ pub struct AppDetailsResponse {
 }
 
 impl AppDetailsResponse {
-    pub fn default_not_found(package_name: String) -> Self {
+    pub(crate) fn default_not_found(package_name: String) -> Self {
         Self {
             package_name,
             app_id: None,
@@ -36,7 +36,7 @@ impl AppDetailsResponse {
         }
     }
 
-    pub fn default_error(package_name: String, error: String) -> Self {
+    pub(crate) fn default_error(package_name: String, error: String) -> Self {
         Self {
             package_name,
             app_id: None,

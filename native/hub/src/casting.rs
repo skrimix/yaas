@@ -4,6 +4,7 @@ use std::{
     path::{Path, PathBuf},
 };
 
+#[allow(unused)]
 use anyhow::{Context, Result, anyhow, bail};
 use futures::StreamExt;
 use rinf::{DartSignal, RustSignal};
@@ -108,10 +109,10 @@ fn unzip_to_current_dir(zip_path: &Path) -> Result<()> {
     Ok(())
 }
 
-pub struct CastingManager;
+pub(crate) struct CastingManager;
 
 impl CastingManager {
-    pub fn start() {
+    pub(crate) fn start() {
         // Status requests
         tokio::spawn(async move {
             let rx = GetCastingStatusRequest::get_dart_signal_receiver();
@@ -139,88 +140,73 @@ impl CastingManager {
         });
     }
 
-    pub async fn start_casting(adb_path: &Path, device_serial: &str, wireless: bool) -> Result<()> {
-        #[cfg(not(target_os = "windows"))]
-        {
-            let _ = adb_path;
-            let _ = device_serial;
-            let _ = wireless;
-            bail!("Casting is Windows-only");
+    #[cfg(target_os = "windows")]
+    pub(crate) async fn start_casting(
+        adb_path: &Path,
+        device_serial: &str,
+        wireless: bool,
+    ) -> Result<()> {
+        use std::path::PathBuf;
+
+        use tokio::process::Command as TokioCommand;
+
+        use crate::models::signals::system::Toast;
+
+        if wireless {
+            // TODO: Support wireless devices for casting
+            Toast::send(
+                "Casting not supported for wireless".to_string(),
+                "Please connect the headset via USB to start casting.".to_string(),
+                true,
+                None,
+            );
+            bail!("Casting not supported for wireless");
         }
-        #[cfg(target_os = "windows")]
-        {
-            use std::path::PathBuf;
 
-            use tokio::process::Command as TokioCommand;
+        // Resolve Casting.exe path (installed under app data directory)
+        let exe_path: PathBuf =
+            std::env::current_dir().unwrap_or_default().join("Casting").join("Casting.exe");
+        if !exe_path.is_file() {
+            Toast::send(
+                "Casting tool not installed".to_string(),
+                "Open Settings and download the Meta Quest Casting tool.".to_string(),
+                true,
+                None,
+            );
+            bail!("Casting tool not installed");
+        }
 
-            use crate::models::signals::system::Toast;
+        // Ensure caches directory exists: %APPDATA%/odh/casting
+        let caches_dir =
+            dirs::data_dir().unwrap_or_else(|| PathBuf::from(".")).join("odh").join("casting");
+        if let Err(e) = tokio::fs::create_dir_all(&caches_dir).await {
+            Toast::send("Failed to prepare caches dir".to_string(), format!("{}", e), true, None);
+            bail!("Failed to prepare caches dir");
+        }
 
-            if wireless {
-                // TODO: Support wireless devices for casting
-                Toast::send(
-                    "Casting not supported for wireless".to_string(),
-                    "Please connect the headset via USB to start casting.".to_string(),
-                    true,
-                    None,
-                );
-                bail!("Casting not supported for wireless");
-            }
+        // Build command
+        let mut cmd = TokioCommand::new(&exe_path);
+        cmd.current_dir(exe_path.parent().unwrap_or_else(|| std::path::Path::new(".")));
+        cmd.arg("--adb").arg(adb_path);
+        cmd.arg("--application-caches-dir").arg(&caches_dir);
+        cmd.arg("--exit-on-close");
+        cmd.arg("--launch-surface").arg("MQDH");
+        let target_json = format!("{{\"id\":\"{}\"}}", device_serial);
+        cmd.arg("--target-device").arg(target_json);
+        cmd.arg("--features").args([
+            "input_forwarding",
+            "input_forwarding_gaze_click",
+            "input_forwarding_text_input_forwarding",
+            "image_stabilization",
+            "update_device_fov_via_openxr_api",
+            "panel_streaming",
+        ]);
 
-            // Resolve Casting.exe path (installed under app data directory)
-            let exe_path: PathBuf =
-                std::env::current_dir().unwrap_or_default().join("Casting").join("Casting.exe");
-            if !exe_path.is_file() {
-                Toast::send(
-                    "Casting tool not installed".to_string(),
-                    "Open Settings and download the Meta Quest Casting tool.".to_string(),
-                    true,
-                    None,
-                );
-                bail!("Casting tool not installed");
-            }
-
-            // Ensure caches directory exists: %APPDATA%/odh/casting
-            let caches_dir =
-                dirs::data_dir().unwrap_or_else(|| PathBuf::from(".")).join("odh").join("casting");
-            if let Err(e) = tokio::fs::create_dir_all(&caches_dir).await {
-                Toast::send(
-                    "Failed to prepare caches dir".to_string(),
-                    format!("{}", e),
-                    true,
-                    None,
-                );
-                bail!("Failed to prepare caches dir");
-            }
-
-            // Build command
-            let mut cmd = TokioCommand::new(&exe_path);
-            cmd.current_dir(exe_path.parent().unwrap_or_else(|| std::path::Path::new(".")));
-            cmd.arg("--adb").arg(adb_path);
-            cmd.arg("--application-caches-dir").arg(&caches_dir);
-            cmd.arg("--exit-on-close");
-            cmd.arg("--launch-surface").arg("MQDH");
-            let target_json = format!("{{\"id\":\"{}\"}}", device_serial);
-            cmd.arg("--target-device").arg(target_json);
-            cmd.arg("--features").args([
-                "input_forwarding",
-                "input_forwarding_gaze_click",
-                "input_forwarding_text_input_forwarding",
-                "image_stabilization",
-                "update_device_fov_via_openxr_api",
-                "panel_streaming",
-            ]);
-
-            match cmd.spawn() {
-                Ok(_child) => Ok(()),
-                Err(e) => {
-                    Toast::send(
-                        "Failed to launch Casting".to_string(),
-                        format!("{:#}", e),
-                        true,
-                        None,
-                    );
-                    bail!("Failed to launch Casting");
-                }
+        match cmd.spawn() {
+            Ok(_child) => Ok(()),
+            Err(e) => {
+                Toast::send("Failed to launch Casting".to_string(), format!("{:#}", e), true, None);
+                bail!("Failed to launch Casting");
             }
         }
     }

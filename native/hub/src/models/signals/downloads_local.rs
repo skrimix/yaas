@@ -2,7 +2,7 @@ use rinf::{DartSignal, RustSignal, SignalPiece};
 use serde::{Deserialize, Serialize};
 
 #[derive(Clone, Debug, Serialize, Deserialize, SignalPiece)]
-pub struct DownloadEntry {
+pub(crate) struct DownloadEntry {
     pub path: String,
     pub name: String,
     /// Milliseconds since Unix epoch
@@ -15,41 +15,41 @@ pub struct DownloadEntry {
 }
 
 #[derive(Serialize, Deserialize, DartSignal)]
-pub struct GetDownloadsRequest {}
+pub(crate) struct GetDownloadsRequest {}
 
 #[derive(Serialize, Deserialize, RustSignal)]
-pub struct GetDownloadsResponse {
+pub(crate) struct GetDownloadsResponse {
     pub entries: Vec<DownloadEntry>,
     pub error: Option<String>,
 }
 
 #[derive(Serialize, Deserialize, RustSignal)]
-pub struct DownloadsChanged {}
+pub(crate) struct DownloadsChanged {}
 
 #[derive(Serialize, Deserialize, DartSignal)]
-pub struct GetDownloadsDirectoryRequest {}
+pub(crate) struct GetDownloadsDirectoryRequest {}
 
 #[derive(Serialize, Deserialize, RustSignal)]
-pub struct GetDownloadsDirectoryResponse {
+pub(crate) struct GetDownloadsDirectoryResponse {
     pub path: String,
 }
 
 #[derive(Serialize, Deserialize, DartSignal)]
-pub struct DeleteDownloadRequest {
+pub(crate) struct DeleteDownloadRequest {
     pub path: String,
 }
 
 #[derive(Serialize, Deserialize, RustSignal)]
-pub struct DeleteDownloadResponse {
+pub(crate) struct DeleteDownloadResponse {
     pub path: String,
     pub error: Option<String>,
 }
 
 #[derive(Serialize, Deserialize, DartSignal)]
-pub struct DeleteAllDownloadsRequest {}
+pub(crate) struct DeleteAllDownloadsRequest {}
 
 #[derive(Serialize, Deserialize, RustSignal)]
-pub struct DeleteAllDownloadsResponse {
+pub(crate) struct DeleteAllDownloadsResponse {
     pub removed: u32,
     pub skipped: u32,
     pub error: Option<String>,

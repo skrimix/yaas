@@ -2,7 +2,7 @@ use rinf::RustSignal;
 use serde::Serialize;
 
 #[derive(Debug, Clone, Serialize, RustSignal, PartialEq, Default)]
-pub enum AdbState {
+pub(crate) enum AdbState {
     #[default]
     ServerNotRunning,
     ServerStarting,

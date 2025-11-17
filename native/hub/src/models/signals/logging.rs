@@ -5,7 +5,7 @@ use serde::{Deserialize, Serialize};
 use tracing::Level;
 
 #[derive(Clone, Debug, Serialize, Deserialize, SignalPiece)]
-pub enum LogLevel {
+pub(crate) enum LogLevel {
     Trace,
     Debug,
     Info,
@@ -14,7 +14,7 @@ pub enum LogLevel {
 }
 
 #[derive(Clone, Debug, Serialize, Deserialize, SignalPiece)]
-pub enum LogKind {
+pub(crate) enum LogKind {
     Event,
     SpanNew,
     SpanClose,
@@ -45,7 +45,7 @@ impl From<LogLevel> for Level {
 }
 
 #[derive(Clone, Debug, Serialize, Deserialize, SignalPiece)]
-pub struct SpanInfo {
+pub(crate) struct SpanInfo {
     /// Stable identifier assigned by the backend for this span instance
     pub id: String,
     pub name: String,
@@ -54,12 +54,12 @@ pub struct SpanInfo {
 }
 
 #[derive(Clone, Debug, Serialize, Deserialize, SignalPiece)]
-pub struct SpanTrace {
+pub(crate) struct SpanTrace {
     pub spans: Vec<SpanInfo>,
 }
 
 #[derive(Clone, Debug, Serialize, Deserialize, SignalPiece)]
-pub struct LogEntry {
+pub(crate) struct LogEntry {
     pub timestamp: u64, // Milliseconds since Unix epoch
     pub level: LogLevel,
     pub target: String,
@@ -70,14 +70,14 @@ pub struct LogEntry {
 }
 
 #[derive(Serialize, Deserialize, RustSignal)]
-pub struct LogBatch {
+pub(crate) struct LogBatch {
     pub entries: Vec<LogEntry>,
 }
 
 #[derive(Serialize, Deserialize, DartSignal)]
-pub struct GetLogsDirectoryRequest {}
+pub(crate) struct GetLogsDirectoryRequest {}
 
 #[derive(Serialize, Deserialize, RustSignal)]
-pub struct GetLogsDirectoryResponse {
+pub(crate) struct GetLogsDirectoryResponse {
     pub path: String,
 }

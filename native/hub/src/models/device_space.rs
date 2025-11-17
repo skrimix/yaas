@@ -2,14 +2,14 @@ use anyhow::{Context, Result, ensure};
 use rinf::SignalPiece;
 use serde::Serialize;
 
-pub static SPACE_INFO_COMMAND: &str = "stat -fc %S:%b:%a /data";
+pub(crate) static SPACE_INFO_COMMAND: &str = "stat -fc %S:%b:%a /data";
 
 /// Represents storage space information for a device
 ///
 /// Contains information about total and available storage space
 /// measured in bytes using the ByteUnit type.
 #[derive(Clone, Debug, Default, Serialize, SignalPiece)]
-pub struct SpaceInfo {
+pub(crate) struct SpaceInfo {
     /// Total storage space in bytes
     pub total: u64,
     /// Available storage space in bytes
@@ -18,7 +18,7 @@ pub struct SpaceInfo {
 
 impl SpaceInfo {
     /// Creates a new SpaceInfo instance from `SPACE_INFO_COMMAND`
-    pub fn from_stat_output(output: &str) -> Result<Self> {
+    pub(crate) fn from_stat_output(output: &str) -> Result<Self> {
         // block_size:total_blocks:available_blocks
         let parts = output.trim().split(':').collect::<Vec<&str>>();
 

@@ -6,7 +6,7 @@ use rinf::{DartSignal, RustSignal, SignalPiece};
 use serde::{Deserialize, Serialize};
 
 #[derive(Clone, Copy, Debug, Serialize, Deserialize, SignalPiece)]
-pub enum TaskKind {
+pub(crate) enum TaskKind {
     Download,
     DownloadInstall,
     InstallApk,
@@ -19,7 +19,7 @@ pub enum TaskKind {
 }
 
 #[derive(Clone, Copy, Debug, Serialize, Deserialize, SignalPiece)]
-pub enum TaskStatus {
+pub(crate) enum TaskStatus {
     Waiting,
     Running,
     Completed,
@@ -29,7 +29,7 @@ pub enum TaskStatus {
 
 /// Task with parameters.
 #[derive(Debug, Clone, Serialize, Deserialize, SignalPiece)]
-pub enum Task {
+pub(crate) enum Task {
     /// Download an app by full name (catalog entry identifier)
     Download(String),
     /// Download and then install an app by full name
@@ -56,7 +56,7 @@ pub enum Task {
 }
 
 impl Task {
-    pub fn kind_label(&self) -> &'static str {
+    pub(crate) fn kind_label(&self) -> &'static str {
         match self {
             Task::Download(_) => "Download",
             Task::DownloadInstall(_) => "Download & Install",
@@ -69,7 +69,7 @@ impl Task {
         }
     }
 
-    pub fn task_name(&self) -> Result<String> {
+    pub(crate) fn task_name(&self) -> Result<String> {
         Ok(match self {
             Task::Download(name) | Task::DownloadInstall(name) => name.clone(),
             Task::InstallApk(apk_path) => {
@@ -93,7 +93,7 @@ impl Task {
         })
     }
 
-    pub fn total_steps(&self) -> u8 {
+    pub(crate) fn total_steps(&self) -> u8 {
         match self {
             Task::Download(..) => 1,
             Task::DownloadInstall(..) => 2,
@@ -129,17 +129,17 @@ impl From<&Task> for TaskKind {
 }
 
 #[derive(Serialize, Deserialize, DartSignal)]
-pub struct TaskRequest {
+pub(crate) struct TaskRequest {
     pub task: Task,
 }
 
 #[derive(Serialize, Deserialize, DartSignal)]
-pub struct TaskCancelRequest {
+pub(crate) struct TaskCancelRequest {
     pub task_id: u64,
 }
 
 #[derive(Serialize, Deserialize, RustSignal)]
-pub struct TaskProgress {
+pub(crate) struct TaskProgress {
     pub task_id: u64,
     pub task_kind: TaskKind,
     pub task_name: Option<String>,

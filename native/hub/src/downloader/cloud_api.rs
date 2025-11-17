@@ -5,7 +5,7 @@ use tracing::{debug, instrument};
 use crate::models::{AppApiResponse, signals::cloud_apps::reviews::AppReview};
 
 #[instrument(level = "debug", skip(client), err)]
-pub async fn fetch_app_details(
+pub(super) async fn fetch_app_details(
     client: &reqwest::Client,
     package_name: String,
 ) -> Result<Option<AppApiResponse>> {
@@ -23,7 +23,7 @@ pub async fn fetch_app_details(
 }
 
 #[derive(serde::Deserialize)]
-pub struct ReviewsResponse {
+pub(super) struct ReviewsResponse {
     #[serde(default)]
     pub reviews: Vec<AppReview>,
     #[serde(default)]
@@ -31,7 +31,7 @@ pub struct ReviewsResponse {
 }
 
 #[instrument(level = "debug", skip(client), err)]
-pub async fn fetch_app_reviews(
+pub(super) async fn fetch_app_reviews(
     client: &reqwest::Client,
     app_id: &str,
     limit: u32,

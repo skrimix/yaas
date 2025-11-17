@@ -5,7 +5,7 @@ use serde::Deserialize;
 use tracing::error;
 
 #[derive(Debug, Clone, Deserialize)]
-pub struct DownloaderConfig {
+pub(crate) struct DownloaderConfig {
     /// ID of the config. Used for cache separation.
     pub id: String,
     pub rclone_path: RclonePath,
@@ -40,7 +40,7 @@ fn default_list_path() -> String {
 }
 
 impl DownloaderConfig {
-    pub fn load_from_path<P: AsRef<Path>>(path: P) -> Result<Self> {
+    pub(crate) fn load_from_path<P: AsRef<Path>>(path: P) -> Result<Self> {
         let path = path.as_ref();
         let content = fs::read_to_string(path)
             .with_context(|| format!("Failed to read {}", path.display()))?;
@@ -55,42 +55,42 @@ impl DownloaderConfig {
 
 #[derive(Debug, Clone, Copy, Deserialize, PartialEq, Eq)]
 #[serde(rename_all = "kebab-case")]
-pub enum RepoLayoutKind {
+pub(crate) enum RepoLayoutKind {
     #[serde(rename = "ffa")]
-    FFA,
+    Ffa,
     #[serde(rename = "vrp-public")]
-    VRPPublic,
+    VrpPublic,
 }
 
 #[derive(Debug, Clone, Deserialize)]
 #[serde(untagged)]
-pub enum RclonePath {
+pub(crate) enum RclonePath {
     Single(String),
     Map(HashMap<String, String>),
 }
 
 #[cfg(target_os = "windows")]
-pub const CURRENT_PLATFORM: &str = "windows";
+pub(crate) const CURRENT_PLATFORM: &str = "windows";
 #[cfg(target_os = "linux")]
-pub const CURRENT_PLATFORM: &str = "linux";
+pub(crate) const CURRENT_PLATFORM: &str = "linux";
 #[cfg(target_os = "macos")]
-pub const CURRENT_PLATFORM: &str = "macos";
+pub(crate) const CURRENT_PLATFORM: &str = "macos";
 
 #[cfg(target_arch = "x86_64")]
-pub const CURRENT_ARCH: &str = "x64";
+pub(crate) const CURRENT_ARCH: &str = "x64";
 #[cfg(target_arch = "aarch64")]
-pub const CURRENT_ARCH: &str = "arm64";
+pub(crate) const CURRENT_ARCH: &str = "arm64";
 #[cfg(target_arch = "x86")]
-pub const CURRENT_ARCH: &str = "x86";
+pub(crate) const CURRENT_ARCH: &str = "x86";
 #[cfg(target_arch = "arm")]
-pub const CURRENT_ARCH: &str = "arm";
+pub(crate) const CURRENT_ARCH: &str = "arm";
 
-pub fn current_platform_arch_key() -> String {
+pub(crate) fn current_platform_arch_key() -> String {
     format!("{}-{}", CURRENT_PLATFORM, CURRENT_ARCH)
 }
 
 impl RclonePath {
-    pub fn resolve_for_current_platform(&self) -> Result<String> {
+    pub(crate) fn resolve_for_current_platform(&self) -> Result<String> {
         match self {
             RclonePath::Single(s) => Ok(s.clone()),
             RclonePath::Map(map) => {

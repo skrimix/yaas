@@ -50,3 +50,8 @@ format:
 # Create app icons using app_icon.svg
 create-icons:
     magick -background none assets/svg/app_icon.svg assets/png/app_icon.png && dart run icons_launcher:create
+
+# Run cargo check with windows target
+check-windows:
+    command -v x86_64-w64-mingw32-gcc > /dev/null || (echo "x86_64-w64-mingw32-gcc tool not installed" && exit 1)
+    cargo check --target x86_64-pc-windows-gnu

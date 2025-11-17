@@ -31,7 +31,7 @@ fn is_zip_url(value: &str) -> bool {
 }
 
 #[instrument(skip(cache_dir, cfg), fields(cache_dir = %cache_dir.display()))]
-pub async fn prepare_artifacts(
+pub(crate) async fn prepare_artifacts(
     cache_dir: &Path,
     cfg: &DownloaderConfig,
 ) -> Result<(PathBuf, PathBuf)> {
@@ -304,7 +304,7 @@ mod tests {
             share_remote_path: None,
             remote_name_filter_regex: None,
             disable_randomize_remote: true,
-            layout: RepoLayoutKind::FFA,
+            layout: RepoLayoutKind::Ffa,
             root_dir: "Quest Games".to_string(),
             list_path: "FFA.txt".to_string(),
             vrp_public_url: "".to_string(),
@@ -333,7 +333,7 @@ mod tests {
             share_remote_path: None,
             remote_name_filter_regex: None,
             disable_randomize_remote: true,
-            layout: RepoLayoutKind::FFA,
+            layout: RepoLayoutKind::Ffa,
             root_dir: "Quest Games".to_string(),
             list_path: "FFA.txt".to_string(),
             vrp_public_url: "".to_string(),
@@ -402,7 +402,7 @@ mod tests {
             share_remote_path: None,
             remote_name_filter_regex: None,
             disable_randomize_remote: true,
-            layout: RepoLayoutKind::FFA,
+            layout: RepoLayoutKind::Ffa,
             root_dir: "Quest Games".to_string(),
             list_path: "FFA.txt".to_string(),
             vrp_public_url: "".to_string(),

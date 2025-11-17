@@ -4,7 +4,7 @@ use serde::{Deserialize, Serialize};
 
 /// Represents the size information of an installed application
 #[derive(Debug, Clone, Default, Deserialize, Serialize, SignalPiece)]
-pub struct AppSize {
+pub(crate) struct AppSize {
     app: u64,
     data: u64,
     cache: u64,
@@ -12,7 +12,7 @@ pub struct AppSize {
 
 /// Represents an installed package on the device with its metadata
 #[derive(Debug, Clone, Default, Deserialize, Serialize, SignalPiece)]
-pub struct InstalledPackage {
+pub(crate) struct InstalledPackage {
     uid: u64,
     system: bool,
     package_name: String,
@@ -25,7 +25,9 @@ pub struct InstalledPackage {
 }
 
 /// Parses the output of list_apps.dex command
-pub fn parse_list_apps_dex(dex_output: &str) -> Result<Vec<InstalledPackage>, serde_json::Error> {
+pub(crate) fn parse_list_apps_dex(
+    dex_output: &str,
+) -> Result<Vec<InstalledPackage>, serde_json::Error> {
     serde_json::from_str(dex_output)
 }
 

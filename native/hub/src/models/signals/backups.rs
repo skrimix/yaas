@@ -2,7 +2,7 @@ use rinf::{DartSignal, RustSignal, SignalPiece};
 use serde::{Deserialize, Serialize};
 
 #[derive(Clone, Debug, Serialize, Deserialize, SignalPiece)]
-pub struct BackupEntry {
+pub(crate) struct BackupEntry {
     pub path: String,
     pub name: String,
     /// Milliseconds since Unix epoch
@@ -16,32 +16,32 @@ pub struct BackupEntry {
 }
 
 #[derive(Serialize, Deserialize, DartSignal)]
-pub struct GetBackupsRequest {}
+pub(crate) struct GetBackupsRequest {}
 
 #[derive(Serialize, Deserialize, RustSignal)]
-pub struct GetBackupsResponse {
+pub(crate) struct GetBackupsResponse {
     pub entries: Vec<BackupEntry>,
     pub error: Option<String>,
 }
 
 #[derive(Serialize, Deserialize, DartSignal)]
-pub struct DeleteBackupRequest {
+pub(crate) struct DeleteBackupRequest {
     pub path: String,
 }
 
 #[derive(Serialize, Deserialize, RustSignal)]
-pub struct DeleteBackupResponse {
+pub(crate) struct DeleteBackupResponse {
     pub path: String,
     pub error: Option<String>,
 }
 
 #[derive(Serialize, Deserialize, RustSignal)]
-pub struct BackupsChanged {}
+pub(crate) struct BackupsChanged {}
 
 #[derive(Serialize, Deserialize, DartSignal)]
-pub struct GetBackupsDirectoryRequest {}
+pub(crate) struct GetBackupsDirectoryRequest {}
 
 #[derive(Serialize, Deserialize, RustSignal)]
-pub struct GetBackupsDirectoryResponse {
+pub(crate) struct GetBackupsDirectoryResponse {
     pub path: String,
 }

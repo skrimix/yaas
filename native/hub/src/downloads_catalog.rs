@@ -17,12 +17,12 @@ use tracing::{Span, debug, error, info, instrument, trace, warn};
 use crate::models::{DownloadCleanupPolicy, Settings, signals::downloads_local::*};
 
 #[derive(Debug, Clone)]
-pub struct DownloadsCatalog {
+pub(crate) struct DownloadsCatalog {
     root: Arc<tokio::sync::RwLock<PathBuf>>,
 }
 
 impl DownloadsCatalog {
-    pub fn start(mut settings_stream: WatchStream<Settings>) -> Arc<Self> {
+    pub(crate) fn start(mut settings_stream: WatchStream<Settings>) -> Arc<Self> {
         let initial_settings = futures::executor::block_on(settings_stream.next())
             .expect("Settings stream closed on downloads handler init");
 
@@ -288,7 +288,7 @@ impl DownloadsCatalog {
     /// convention (regex: `(?m)^(.+) v\d+\+.+$`). Entries that do not match this pattern are
     /// left untouched and a warning is logged.
     #[instrument(level = "debug", skip(self), fields(policy = ?policy, installed = %installed_full_name), err)]
-    pub async fn apply_cleanup_policy(
+    pub(crate) async fn apply_cleanup_policy(
         &self,
         policy: DownloadCleanupPolicy,
         installed_full_name: &str,

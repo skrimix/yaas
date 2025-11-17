@@ -1,5 +1,5 @@
-pub mod command;
-pub mod device;
-pub mod devices_list;
-pub mod dump;
-pub mod state;
+pub(crate) mod command;
+pub(crate) mod device;
+pub(crate) mod devices_list;
+pub(crate) mod dump;
+pub(crate) mod state;

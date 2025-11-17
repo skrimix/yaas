@@ -23,16 +23,16 @@ use crate::{
     models::{CloudApp, DownloaderConfig, RepoLayoutKind},
 };
 
-/// High-level operations a repository must implement.
 #[derive(Debug)]
-pub struct BuildStorageResult {
+pub(super) struct BuildStorageResult {
     pub storage: RcloneStorage,
     /// If Some, Downloader should persist this remote name into settings.
     pub persist_remote: Option<String>,
 }
 
+/// High-level operations a repository must implement.
 #[async_trait]
-pub trait Repo: Send + Sync {
+pub(super) trait Repo: Send + Sync {
     fn id(&self) -> &'static str;
 
     async fn build_storage(&self, args: BuildStorageArgs<'_>) -> Result<BuildStorageResult>;
@@ -87,22 +87,22 @@ pub trait Repo: Send + Sync {
 }
 
 /// Factory: choose a concrete repo based on config.
-pub fn make_repo_from_config(cfg: &DownloaderConfig) -> Arc<dyn Repo> {
+pub(super) fn make_repo_from_config(cfg: &DownloaderConfig) -> Arc<dyn Repo> {
     match cfg.layout {
-        RepoLayoutKind::VRPPublic => Arc::new(VRPPublicRepo::from_config(cfg)),
-        RepoLayoutKind::FFA => Arc::new(FFARepo {}),
+        RepoLayoutKind::VrpPublic => Arc::new(VRPPublicRepo::from_config(cfg)),
+        RepoLayoutKind::Ffa => Arc::new(FFARepo {}),
     }
 }
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
-pub enum PreDownloadDecision {
+pub(super) enum PreDownloadDecision {
     Proceed,
     SkipAlreadyPresent,
 }
 
 /// Arguments for building storage, passed to repo implementations.
 #[derive(Debug)]
-pub struct BuildStorageArgs<'a> {
+pub(super) struct BuildStorageArgs<'a> {
     pub rclone_path: &'a Path,
     pub rclone_config_path: &'a Path,
     pub root_dir: &'a str,
@@ -117,7 +117,7 @@ pub struct BuildStorageArgs<'a> {
 
 /// FFA layout – direct files and list under a configurable remote/root.
 #[derive(Debug, Clone, Default)]
-pub struct FFARepo {}
+pub(super) struct FFARepo {}
 
 #[async_trait]
 impl Repo for FFARepo {
@@ -172,23 +172,23 @@ impl Repo for FFARepo {
 
 /// VRP-public layout – compressed+encrypted metadata, renamed+compressed+encrypted releases
 #[derive(Debug, Clone)]
-pub struct VRPPublicRepo {
+pub(super) struct VRPPublicRepo {
     pub public_url: String,
     pub meta_archive: String,
     pub list_filename: String,
     pub remote_name: String,
-    state: OnceCell<VRPPublicState>,
+    creds: OnceCell<VRPPublicState>,
 }
 
 impl VRPPublicRepo {
     #[instrument(level = "debug", ret)]
-    pub fn from_config(cfg: &DownloaderConfig) -> Self {
+    fn from_config(cfg: &DownloaderConfig) -> Self {
         Self {
             public_url: cfg.vrp_public_url.clone(),
             meta_archive: "meta.7z".to_string(),
             list_filename: "VRP-GameList.txt".to_string(),
             remote_name: "VRP-Public".to_string(),
-            state: OnceCell::new(),
+            creds: OnceCell::new(),
         }
     }
 
@@ -252,7 +252,7 @@ impl VRPPublicRepo {
         client: &reqwest::Client,
         cache_dir: &Path,
     ) -> Result<&VRPPublicState> {
-        self.state
+        self.creds
             .get_or_try_init(|| async {
                 let json = self.fetch_public_json(client, cache_dir).await?;
                 let base_uri = json

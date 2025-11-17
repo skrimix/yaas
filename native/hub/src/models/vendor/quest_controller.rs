@@ -5,13 +5,13 @@ use serde::{Deserialize, Serialize};
 use tracing::{debug, trace, warn};
 
 /// Preferred command to query Quest controllers state
-pub static CONTROLLER_INFO_COMMAND_JSON: &str = "rstest info --json";
+pub(crate) static CONTROLLER_INFO_COMMAND_JSON: &str = "rstest info --json";
 /// Legacy fallback command (parsing text from dumpsys)
-pub static CONTROLLER_INFO_COMMAND_DUMPSYS: &str = "dumpsys OVRRemoteService | grep Battery";
+pub(crate) static CONTROLLER_INFO_COMMAND_DUMPSYS: &str = "dumpsys OVRRemoteService | grep Battery";
 
 #[derive(Debug, Clone, PartialEq, Eq, Hash, Serialize, SignalPiece)]
 /// Represents the current status of a Quest controller.
-pub enum ControllerStatus {
+pub(crate) enum ControllerStatus {
     Active,
     Disabled,
     Searching,
@@ -51,14 +51,14 @@ impl From<&str> for ControllerStatus {
 
 #[derive(Debug, Default, Clone, PartialEq, Eq, Hash, Serialize, SignalPiece)]
 /// Info about a Quest controller status.
-pub struct ControllerInfo {
+pub(crate) struct ControllerInfo {
     pub battery_level: Option<u8>,
     pub status: ControllerStatus,
 }
 
 #[derive(Debug, Default, Clone, PartialEq, Eq, Hash, Serialize, SignalPiece)]
 /// Holds info about both controllers connected to the headset.
-pub struct HeadsetControllersInfo {
+pub(crate) struct HeadsetControllersInfo {
     pub left: Option<ControllerInfo>,
     pub right: Option<ControllerInfo>,
 }
@@ -77,7 +77,7 @@ struct RstestControllerItem {
 impl HeadsetControllersInfo {
     /// Parses the JSON output of `rstest info --json`.
     /// Returns HeadsetControllersInfo for left/right controllers.
-    pub fn from_rstest_json(json: &str) -> Result<Self> {
+    pub(crate) fn from_rstest_json(json: &str) -> Result<Self> {
         let mut result = Self::default();
 
         let items: Vec<RstestControllerItem> = serde_json::from_str(json)
@@ -105,7 +105,7 @@ impl HeadsetControllersInfo {
 
     // #[instrument(level = "debug")]
     /// Parses the output of `QUEST_CONTROLLER_INFO_COMMAND` command.
-    pub fn from_dumpsys(lines: &str) -> Self {
+    pub(crate) fn from_dumpsys(lines: &str) -> Self {
         let mut result = Self::default();
 
         let re = regex!(

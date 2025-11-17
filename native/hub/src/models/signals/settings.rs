@@ -4,23 +4,23 @@ use serde::{Deserialize, Serialize};
 use crate::models::Settings;
 
 #[derive(Serialize, Deserialize, DartSignal)]
-pub struct LoadSettingsRequest {}
+pub(crate) struct LoadSettingsRequest {}
 
 #[derive(Serialize, Deserialize, DartSignal)]
-pub struct ResetSettingsToDefaultsRequest {}
+pub(crate) struct ResetSettingsToDefaultsRequest {}
 
 #[derive(Debug, Clone, Serialize, Deserialize, DartSignal)]
-pub struct SaveSettingsRequest {
+pub(crate) struct SaveSettingsRequest {
     pub settings: Settings,
 }
 
 #[derive(Serialize, Deserialize, RustSignal)]
-pub struct SettingsChangedEvent {
+pub(crate) struct SettingsChangedEvent {
     pub settings: Settings,
     pub error: Option<String>,
 }
 
 #[derive(Serialize, Deserialize, RustSignal)]
-pub struct SettingsSavedEvent {
+pub(crate) struct SettingsSavedEvent {
     pub error: Option<String>,
 }

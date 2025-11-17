@@ -68,7 +68,7 @@ where
 /// Create a ZIP archive from the contents of `src_dir` into `dest_dir` with the given file name.
 /// If `archive_name` has no extension, `.zip` is appended.
 #[instrument(skip(src_dir, dest_dir, cancel), err, level = "debug")]
-pub async fn create_zip_from_dir(
+pub(crate) async fn create_zip_from_dir(
     src_dir: &Path,
     dest_dir: &Path,
     archive_name: &str,
@@ -114,7 +114,7 @@ pub async fn create_zip_from_dir(
 /// - `archive` can be a regular archive file or the first segment of a
 ///   multi-volume archive (e.g. `file.7z.001`). 7-Zip will detect parts.
 #[instrument(skip(archive, dest_dir, password, wanted, cancel), err, level = "debug")]
-pub async fn decompress_archive(
+pub(crate) async fn decompress_archive(
     archive: &Path,
     dest_dir: &Path,
     password: Option<&str>,
@@ -143,7 +143,10 @@ pub async fn decompress_archive(
 
 /// Decompresses all `.7z` archives found directly under `dir` into `dir`.
 #[instrument(level = "debug", skip(dir, cancel), err)]
-pub async fn decompress_all_7z_in_dir(dir: &Path, cancel: Option<CancellationToken>) -> Result<()> {
+pub(crate) async fn decompress_all_7z_in_dir(
+    dir: &Path,
+    cancel: Option<CancellationToken>,
+) -> Result<()> {
     if !dir.is_dir() {
         return Ok(());
     }
@@ -192,7 +195,7 @@ where
 
 /// List file paths contained in an archive using 7-Zip.
 /// Returns only file entries (directories are filtered out).
-pub async fn list_archive_file_paths(archive: &Path) -> Result<Vec<String>> {
+pub(crate) async fn list_archive_file_paths(archive: &Path) -> Result<Vec<String>> {
     // Use technical list for easier parsing
     let out = run_7z_capture([
         OsString::from("l"),
@@ -246,7 +249,7 @@ fn parse_7z_slt_listing(out: &str) -> Vec<String> {
 }
 
 /// Extract a single entry from an archive into `dest_dir`, flattening paths (7z `e`).
-pub async fn extract_single_from_archive(
+pub(crate) async fn extract_single_from_archive(
     archive: &Path,
     dest_dir: &Path,
     entry: &str,

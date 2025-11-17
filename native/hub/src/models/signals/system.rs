@@ -5,12 +5,12 @@ use serde::{Deserialize, Serialize};
 use tracing::debug;
 
 #[derive(Serialize, Deserialize, RustSignal)]
-pub struct RustPanic {
+pub(crate) struct RustPanic {
     pub message: String,
 }
 
 #[derive(Serialize, Deserialize, RustSignal)]
-pub struct Toast {
+pub(crate) struct Toast {
     /// Title of the toast
     pub title: String,
     /// Description of the toast
@@ -23,14 +23,14 @@ pub struct Toast {
 
 /// Sent on startup or when media configuration changes.
 #[derive(Serialize, Deserialize, RustSignal)]
-pub struct MediaConfigChanged {
+pub(crate) struct MediaConfigChanged {
     pub media_base_url: String,
     pub cache_dir: String,
 }
 
 /// Sent once on startup with build/version information.
 #[derive(Serialize, Deserialize, RustSignal)]
-pub struct AppVersionInfo {
+pub(crate) struct AppVersionInfo {
     /// Crate version (from Cargo.toml)
     pub backend_version: String,
     /// Rust profile (debug/release)

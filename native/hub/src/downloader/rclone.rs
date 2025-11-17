@@ -23,7 +23,7 @@ static IO_IDLE_TIMEOUT: &str = "30s";
 #[derive(Debug, Clone, Deserialize)]
 #[serde(rename_all = "PascalCase")]
 #[allow(unused)]
-pub struct RcloneLsJsonEntry {
+pub(super) struct RcloneLsJsonEntry {
     pub path: String,
     pub name: String,
     pub size: u64,
@@ -35,7 +35,7 @@ pub struct RcloneLsJsonEntry {
 }
 
 #[derive(Debug, Clone, Deserialize)]
-pub struct RcloneSizeOutput {
+pub(super) struct RcloneSizeOutput {
     // pub count: u64,
     pub bytes: u64,
     // pub sizeless: u8,
@@ -43,11 +43,11 @@ pub struct RcloneSizeOutput {
 
 #[derive(Debug, Clone, Deserialize)]
 #[serde(rename_all = "camelCase")]
-pub struct RcloneTransferStats {
+pub(crate) struct RcloneTransferStats {
     pub bytes: u64,
     pub total_bytes: u64,
     // pub elapsed_time: f64,
-    pub eta: Option<u64>,
+    // pub eta: Option<u64>,
     #[serde(deserialize_with = "deserialize_speed")]
     pub speed: u64,
 }
@@ -61,18 +61,18 @@ where
 }
 
 #[derive(Debug, Clone, Deserialize)]
-pub struct RcloneStatLine {
-    pub stats: RcloneTransferStats,
+struct RcloneStatLine {
+    stats: RcloneTransferStats,
 }
 
 #[derive(Debug)]
-pub enum RcloneTransferOperation {
+enum RcloneTransferOperation {
     Copy,
     Sync,
 }
 
 impl RcloneTransferOperation {
-    pub fn as_str(&self) -> &str {
+    fn as_str(&self) -> &str {
         match self {
             RcloneTransferOperation::Copy => "copy",
             RcloneTransferOperation::Sync => "sync",
@@ -90,7 +90,7 @@ struct RcloneClient {
 
 impl RcloneClient {
     #[instrument(level = "debug", fields(sys_proxy), ret)]
-    pub fn new(rclone_path: PathBuf, config_path: PathBuf, bandwidth_limit: String) -> Self {
+    fn new(rclone_path: PathBuf, config_path: PathBuf, bandwidth_limit: String) -> Self {
         let sys_proxy = get_sys_proxy();
         let resolved_path =
             match resolve_binary_path(Some(&rclone_path.to_string_lossy()), "rclone") {
@@ -155,7 +155,7 @@ impl RcloneClient {
     }
 
     #[instrument(skip(self), level = "debug")]
-    pub async fn remotes(&self) -> Result<Vec<String>> {
+    async fn remotes(&self) -> Result<Vec<String>> {
         let output = self.run_to_string(&["listremotes"]).await?;
         let remotes: Vec<String> =
             output.lines().map(|line| line.trim().trim_end_matches(':').to_string()).collect();
@@ -163,7 +163,7 @@ impl RcloneClient {
     }
 
     #[instrument(level = "debug", skip(self), ret, err)]
-    pub async fn lsjson(&self, path: &str) -> Result<Vec<RcloneLsJsonEntry>> {
+    async fn lsjson(&self, path: &str) -> Result<Vec<RcloneLsJsonEntry>> {
         let output = self
             .run_to_string(&["lsjson", "--fast-list", path])
             .await
@@ -174,7 +174,7 @@ impl RcloneClient {
     }
 
     #[instrument(level = "debug", skip(self), ret, err)]
-    pub async fn size(&self, path: &str) -> Result<RcloneSizeOutput> {
+    async fn size(&self, path: &str) -> Result<RcloneSizeOutput> {
         let output = self.run_to_string(&["size", "--fast-list", "--json", path]).await?;
         let size_output: RcloneSizeOutput =
             serde_json::from_str(&output).context("Failed to parse rclone size output")?;
@@ -182,7 +182,7 @@ impl RcloneClient {
     }
 
     #[instrument(level = "debug", skip(self, cancellation_token), err)]
-    pub async fn transfer(
+    async fn transfer(
         &self,
         source: String,
         dest: String,
@@ -193,7 +193,7 @@ impl RcloneClient {
     }
 
     #[instrument(level = "debug", skip(self, stats_tx, cancellation_token), err)]
-    pub async fn transfer_with_stats(
+    async fn transfer_with_stats(
         &self,
         source: String,
         dest: String,
@@ -342,7 +342,7 @@ fn filter_remotes_with_pattern(remotes: Vec<String>, pattern: Option<&str>) -> V
 }
 
 #[derive(Debug, Clone)]
-pub struct RcloneStorage {
+pub(super) struct RcloneStorage {
     client: RcloneClient,
     remote: String,
     root_dir: String,
@@ -353,7 +353,7 @@ pub struct RcloneStorage {
 
 impl RcloneStorage {
     #[instrument]
-    pub fn new(
+    pub(super) fn new(
         rclone_path: PathBuf,
         config_path: PathBuf,
         root_dir: String,
@@ -392,7 +392,7 @@ impl RcloneStorage {
     ///
     /// The file name from `local_path` is appended to `remote_dir`.
     #[instrument(level = "debug", skip(self, cancellation_token), err)]
-    pub async fn upload_file_to_remote(
+    pub(super) async fn upload_file_to_remote(
         &self,
         local_path: &Path,
         remote: &str,
@@ -426,7 +426,7 @@ impl RcloneStorage {
     }
 
     #[instrument(level = "debug", skip(self, stats_tx, cancellation_token), err, ret)]
-    pub async fn download_dir_with_stats(
+    pub(super) async fn download_dir_with_stats(
         &self,
         source: String,
         dest: PathBuf,
@@ -451,7 +451,7 @@ impl RcloneStorage {
     }
 
     #[instrument(level = "debug", skip(self), err, ret)]
-    pub async fn download_file(
+    pub(super) async fn download_file(
         &self,
         source: String,
         dest: PathBuf,
@@ -478,13 +478,13 @@ impl RcloneStorage {
     }
 
     #[instrument(level = "debug", skip(self), ret, err)]
-    pub async fn list_dir_json(&self, source: String) -> Result<Vec<RcloneLsJsonEntry>> {
+    pub(super) async fn list_dir_json(&self, source: String) -> Result<Vec<RcloneLsJsonEntry>> {
         let remote_path = self.format_remote_path(&source);
         self.client.lsjson(&remote_path).await
     }
 
     #[instrument(level = "debug", skip(self), ret, err)]
-    pub async fn remotes(&self) -> Result<Vec<String>> {
+    pub(super) async fn remotes(&self) -> Result<Vec<String>> {
         let remotes = self.client.remotes().await?;
         Ok(filter_remotes_with_regex(remotes, self.remote_filter_regex.as_ref()))
     }
@@ -502,7 +502,7 @@ impl PartialEq for RcloneStorage {
 impl Eq for RcloneStorage {}
 
 #[instrument(level = "debug", ret, err)]
-pub async fn list_remotes(
+pub(super) async fn list_remotes(
     rclone_path: &Path,
     config_path: &Path,
     remote_filter_regex: Option<&str>,

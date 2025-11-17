@@ -43,7 +43,7 @@ static COMMAND_ARGS_REGEX: Lazy<Regex> = lazy_regex!(r#""[^"]*"|'[^']*'|[^\s]+"#
 
 /// Represents a connected Android device with ADB capabilities
 #[derive(Debug, Clone)]
-pub struct AdbDevice {
+pub(crate) struct AdbDevice {
     #[debug(skip)]
     pub inner: Device,
     /// Human-readable device name
@@ -83,7 +83,7 @@ impl AdbDevice {
     /// # Arguments
     /// * `inner` - The underlying forensic_adb Device instance
     #[instrument(level = "debug", skip(inner), ret, err)]
-    pub async fn new(inner: Device) -> Result<Self> {
+    pub(super) async fn new(inner: Device) -> Result<Self> {
         let serial = inner.serial.clone();
         // Heuristic: wireless adb usually uses host:port as serial
         let is_wireless = serial.contains(':');
@@ -131,7 +131,7 @@ impl AdbDevice {
     /// Queries manufacturer + model from a `forensic_adb::Device` and returns a combined string.
     /// If manufacturer is empty, returns just model.
     #[instrument(level = "debug", skip(device), err)]
-    pub async fn query_identity(device: &Device) -> Result<String> {
+    pub(super) async fn query_identity(device: &Device) -> Result<String> {
         let manufacturer = tokio::time::timeout(
             Duration::from_millis(800),
             device.execute_host_shell_command("getprop ro.product.manufacturer"),
@@ -161,7 +161,7 @@ impl AdbDevice {
 
     /// Queries the true serial number from a `forensic_adb::Device`
     #[instrument(level = "debug", skip(device), err)]
-    pub async fn query_true_serial(device: &Device) -> Result<String> {
+    pub(super) async fn query_true_serial(device: &Device) -> Result<String> {
         Ok(device
             .execute_host_shell_command("getprop ro.serialno")
             .await
@@ -172,7 +172,7 @@ impl AdbDevice {
 
     /// Refreshes device information (packages, battery, space)
     #[instrument(level = "debug", skip(self), err)]
-    pub async fn refresh(&mut self) -> Result<()> {
+    pub(super) async fn refresh(&mut self) -> Result<()> {
         let mut errors = Vec::new();
 
         if let Err(e) = self.refresh_package_list().await {
@@ -203,7 +203,7 @@ impl AdbDevice {
 
     /// Returns humanized `dumpsys battery` output from the device
     #[instrument(level = "debug", skip(self), err)]
-    pub async fn battery_dump(&self) -> Result<String> {
+    pub(super) async fn battery_dump(&self) -> Result<String> {
         Ok(battery_dump::humanize_dump(
             &self
                 .shell_checked("dumpsys battery")
@@ -253,7 +253,7 @@ impl AdbDevice {
     /// # Arguments
     /// * `mode` - The mode to reboot the device in (normal, bootloader, recovery, fastboot, power off)
     #[instrument(level = "debug", skip(self), err)]
-    pub async fn reboot_with_mode(&self, mode: RebootMode) -> Result<()> {
+    pub(super) async fn reboot_with_mode(&self, mode: RebootMode) -> Result<()> {
         let cmd = match mode {
             RebootMode::Normal => "reboot",
             RebootMode::Bootloader => "reboot bootloader",
@@ -270,7 +270,7 @@ impl AdbDevice {
     /// # Arguments
     /// * `enabled` - Whether to enable or disable the proximity sensor
     #[instrument(level = "debug", skip(self), err)]
-    pub async fn set_proximity_sensor(&self, enabled: bool) -> Result<()> {
+    pub(super) async fn set_proximity_sensor(&self, enabled: bool) -> Result<()> {
         // enable => automation_disable, disable => prox_close
         let cmd = if enabled {
             "am broadcast -a com.oculus.vrpowermanager.automation_disable"
@@ -288,7 +288,7 @@ impl AdbDevice {
     /// # Arguments
     /// * `paused` - Whether to pause or resume the guardian
     #[instrument(level = "debug", skip(self), err)]
-    pub async fn set_guardian_paused(&self, paused: bool) -> Result<()> {
+    pub(super) async fn set_guardian_paused(&self, paused: bool) -> Result<()> {
         let value = if paused { 1 } else { 0 };
         self.shell_checked(&format!("setprop debug.oculus.guardian_pause {value}"))
             .await
@@ -382,7 +382,7 @@ impl AdbDevice {
 
     /// Launches an application on the device
     #[instrument(level = "debug", skip(self), err)]
-    pub async fn launch(&self, package: &str) -> Result<()> {
+    pub(super) async fn launch(&self, package: &str) -> Result<()> {
         ensure_valid_package(package)?;
         // First try launching with VR category
         let output = self
@@ -413,7 +413,7 @@ impl AdbDevice {
 
     /// Force stops an application on the device
     #[instrument(level = "debug", skip(self), err)]
-    pub async fn force_stop(&self, package: &str) -> Result<()> {
+    pub(super) async fn force_stop(&self, package: &str) -> Result<()> {
         ensure_valid_package(package)?;
         self.inner.force_stop(package).await.context("Failed to force stop package")
     }
@@ -546,7 +546,12 @@ impl AdbDevice {
     /// * `dest` - Destination path on the device
     /// * `overwrite` - Whether to remove existing destination before pushing
     #[instrument(level = "debug", skip(self), err)]
-    pub async fn push_dir(&self, source: &Path, dest: &UnixPath, overwrite: bool) -> Result<()> {
+    pub(super) async fn push_dir(
+        &self,
+        source: &Path,
+        dest: &UnixPath,
+        overwrite: bool,
+    ) -> Result<()> {
         ensure!(
             source.is_dir(),
             "Source path does not exist or is not a directory: {}",
@@ -708,7 +713,7 @@ impl AdbDevice {
 
     /// Installs an APK on the device
     #[instrument(level = "debug", skip(self, apk_path, backups_location), err)]
-    pub async fn install_apk(&self, apk_path: &Path, backups_location: &Path) -> Result<()> {
+    pub(super) async fn install_apk(&self, apk_path: &Path, backups_location: &Path) -> Result<()> {
         info!(path = %apk_path.display(), "Installing APK");
         let (tx, mut _rx) = mpsc::unbounded_channel::<SideloadProgress>();
         // Drain in background to avoid unbounded buffer growth
@@ -718,7 +723,7 @@ impl AdbDevice {
 
     /// Installs an APK on the device (with progress)
     #[instrument(level = "debug", skip(self, apk_path, progress_sender), err)]
-    pub async fn install_apk_with_progress(
+    pub(super) async fn install_apk_with_progress(
         &self,
         apk_path: &Path,
         backups_location: &Path,
@@ -810,7 +815,7 @@ impl AdbDevice {
 
     /// Uninstalls a package from the device
     #[instrument(level = "debug", skip(self))]
-    pub async fn uninstall_package(&self, package_name: &str) -> Result<()> {
+    pub(super) async fn uninstall_package(&self, package_name: &str) -> Result<()> {
         ensure_valid_package(package_name)?;
         match self.inner.uninstall_package(package_name).await {
             Ok(_) => Ok(()),
@@ -1016,7 +1021,7 @@ impl AdbDevice {
     /// * `app_dir` - Path to directory containing the app files
     /// * `progress_sender` - Sender for progress updates
     #[instrument(level = "debug", skip(self, progress_sender), err)]
-    pub async fn sideload_app(
+    pub(super) async fn sideload_app(
         &self,
         app_dir: &Path,
         backups_location: &Path,
@@ -1188,7 +1193,7 @@ impl AdbDevice {
     /// - `<dest_root>/<package_name>/<package_name>.apk`
     /// - `<dest_root>/<package_name>/` + OBB contents (when present)
     #[instrument(level = "debug", skip(self, dest_root), err)]
-    pub async fn pull_app_for_sharing(
+    pub(super) async fn pull_app_for_sharing(
         &self,
         package_name: &str,
         dest_root: &Path,
@@ -1243,7 +1248,7 @@ impl AdbDevice {
     /// Creates a backup of the given package.
     /// Returns `Ok(Some(path))` if backup was created, `Ok(None)` if nothing to back up.
     #[instrument(level = "debug", skip(self), err)]
-    pub async fn backup_app(
+    pub(super) async fn backup_app(
         &self,
         package_name: &str,
         display_name: Option<&str>,
@@ -1446,7 +1451,7 @@ impl AdbDevice {
 
     /// Restores a backup from the given path
     #[instrument(level = "debug", skip(self), err)]
-    pub async fn restore_backup(&self, backup_path: &Path) -> Result<()> {
+    pub(super) async fn restore_backup(&self, backup_path: &Path) -> Result<()> {
         // TODO: add a test for this
         ensure!(backup_path.is_dir(), "Backup path is not a directory");
         ensure!(backup_path.join(".backup").exists(), "Backup marker not found (.backup)");
@@ -1557,7 +1562,7 @@ impl AdbDevice {
     }
 
     #[instrument(level = "debug", skip(self), err)]
-    pub async fn clean_temp_apks(&self) -> Result<()> {
+    pub(super) async fn clean_temp_apks(&self) -> Result<()> {
         debug!("Cleaning up temporary APKs");
         self.shell("rm -rf /data/local/tmp/*.apk").await?;
         Ok(())
@@ -1591,7 +1596,7 @@ impl AdbDevice {
     }
 
     #[instrument(level = "debug", skip(self), ret, err)]
-    pub async fn enable_wireless_adb(&self) -> Result<SocketAddrV4> {
+    pub(super) async fn enable_wireless_adb(&self) -> Result<SocketAddrV4> {
         if let Some(ip) = self.ip_from_route().await? {
             return self.enable_tcpip(ip).await;
         }
@@ -1648,14 +1653,14 @@ where
 
 // TODO: move somewhere else?
 #[derive(Debug)]
-pub struct SideloadProgress {
+pub(crate) struct SideloadProgress {
     pub status: String,
     pub progress: Option<f32>,
 }
 
 /// Options to control backup behavior
 #[derive(Debug, Clone, Default)]
-pub struct BackupOptions {
+pub(crate) struct BackupOptions {
     /// String to append to backup name
     pub name_append: Option<String>,
     /// Should backup APK

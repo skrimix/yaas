@@ -10,7 +10,7 @@ use tokio::fs;
 use tracing::{debug, instrument, trace, warn};
 
 #[instrument(level = "debug")]
-pub fn get_sys_proxy() -> Option<String> {
+pub(crate) fn get_sys_proxy() -> Option<String> {
     let proxy = Sysproxy::get_system_proxy();
     match proxy {
         Ok(proxy) => {
@@ -34,7 +34,7 @@ pub fn get_sys_proxy() -> Option<String> {
 ///
 /// The `base_name` must be provided without an extension (e.g. "adb", "rclone").
 #[instrument(level = "debug", ret, skip(custom_path))]
-pub fn resolve_binary_path(custom_path: Option<&str>, base_name: &str) -> Result<PathBuf> {
+pub(crate) fn resolve_binary_path(custom_path: Option<&str>, base_name: &str) -> Result<PathBuf> {
     // Build candidate file names with platform-specific extensions
     #[cfg(target_os = "windows")]
     const CANDIDATES: [&str; 2] = [".exe", ""];
@@ -113,7 +113,7 @@ pub fn resolve_binary_path(custom_path: Option<&str>, base_name: &str) -> Result
 }
 
 /// Finds the first immediate subdirectory in `dir`
-pub async fn first_subdirectory(dir: &Path) -> Result<Option<PathBuf>> {
+pub(crate) async fn first_subdirectory(dir: &Path) -> Result<Option<PathBuf>> {
     if !dir.is_dir() {
         return Ok(None);
     }
@@ -127,7 +127,7 @@ pub async fn first_subdirectory(dir: &Path) -> Result<Option<PathBuf>> {
 }
 
 /// Checks recursively if a directory contains any files
-pub async fn dir_has_any_files(dir: &Path) -> Result<bool> {
+pub(crate) async fn dir_has_any_files(dir: &Path) -> Result<bool> {
     if !dir.exists() || !dir.is_dir() {
         return Ok(false);
     }
@@ -154,7 +154,7 @@ pub async fn dir_has_any_files(dir: &Path) -> Result<bool> {
 }
 
 /// Removes a specific child directory if present. Errors are ignored.
-pub async fn remove_child_dir_if_exists(parent: &Path, child: &str) {
+pub(crate) async fn remove_child_dir_if_exists(parent: &Path, child: &str) {
     let target = parent.join(child);
     if target.exists() {
         let _ = fs::remove_dir_all(target).await;

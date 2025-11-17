@@ -29,7 +29,7 @@ struct CachedSpanFields {
 }
 
 /// A custom tracing layer that forwards log events to Flutter via Rinf signals
-pub struct SignalLayer {
+pub(crate) struct SignalLayer {
     sender: Sender<LogEntry>,
     /// Counter for assigning stable span IDs
     span_id_counter: AtomicU64,
@@ -41,7 +41,7 @@ impl SignalLayer {
         SystemTime::now().duration_since(UNIX_EPOCH).unwrap_or_default().as_millis() as u64
     }
 
-    pub fn new() -> (Self, Receiver<LogEntry>) {
+    pub(crate) fn new() -> (Self, Receiver<LogEntry>) {
         // Use bounded channel with capacity of 1000 entries
         let (sender, receiver) = mpsc::channel(1000);
         let layer = Self { sender, span_id_counter: AtomicU64::new(1) };
@@ -49,7 +49,7 @@ impl SignalLayer {
     }
 
     /// Start the background task that batches and sends log entries to Flutter
-    pub fn start_forwarder(mut receiver: Receiver<LogEntry>) {
+    pub(crate) fn start_forwarder(mut receiver: Receiver<LogEntry>) {
         tokio::spawn(async move {
             let mut buffer = Vec::new();
             let mut interval = time::interval(Duration::from_millis(100));
@@ -84,7 +84,7 @@ impl SignalLayer {
         }.instrument(info_span!("task_log_forwarder")));
     }
 
-    pub fn start_request_handler(logs_dir: PathBuf) {
+    pub(crate) fn start_request_handler(logs_dir: PathBuf) {
         tokio::spawn(
             async move {
                 let directory_receiver = GetLogsDirectoryRequest::get_dart_signal_receiver();

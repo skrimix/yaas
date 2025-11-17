@@ -2,7 +2,7 @@ use rinf::{DartSignal, RustSignal};
 use serde::{Deserialize, Serialize};
 
 #[derive(Serialize, Deserialize, RustSignal)]
-pub struct CastingStatusChanged {
+pub(crate) struct CastingStatusChanged {
     /// True if Casting/Casting.exe exists in the app data directory (Windows only)
     pub installed: bool,
     /// Absolute path to Casting.exe when installed (Windows only)
@@ -12,13 +12,13 @@ pub struct CastingStatusChanged {
 }
 
 #[derive(Serialize, Deserialize, DartSignal)]
-pub struct GetCastingStatusRequest {}
+pub(crate) struct GetCastingStatusRequest {}
 
 #[derive(Serialize, Deserialize, DartSignal)]
-pub struct DownloadCastingBundleRequest {}
+pub(crate) struct DownloadCastingBundleRequest {}
 
 #[derive(Serialize, Deserialize, RustSignal)]
-pub struct CastingDownloadProgress {
+pub(crate) struct CastingDownloadProgress {
     /// Bytes received so far
     pub received: u64,
     /// Total bytes if known

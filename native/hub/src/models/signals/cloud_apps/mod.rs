@@ -1,3 +1,3 @@
-pub mod details;
-pub mod list;
-pub mod reviews;
+pub(crate) mod details;
+pub(crate) mod list;
+pub(crate) mod reviews;

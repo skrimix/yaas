@@ -16,7 +16,8 @@ use zip::ZipArchive;
 
 /// Basic APK metadata parsed from `AndroidManifest.xml` (and optionally `resources.arsc`).
 #[derive(Debug, Clone)]
-pub struct ApkInfo {
+#[allow(unused)]
+pub(crate) struct ApkInfo {
     pub application_label: Option<String>,
     pub package_name: String,
     pub version_code: Option<u32>,
@@ -27,7 +28,7 @@ pub struct ApkInfo {
 /// Best-effort: returns `Ok` with whatever could be extracted. Fails for
 /// unrecoverable issues like missing/invalid `AndroidManifest.xml`.
 #[instrument(ret, level = "debug", fields(apk_path = %apk_path.as_ref().display()))]
-pub fn get_apk_info(apk_path: impl AsRef<Path>) -> Result<ApkInfo> {
+pub(crate) fn get_apk_info(apk_path: impl AsRef<Path>) -> Result<ApkInfo> {
     let apk_path = apk_path.as_ref();
     if !apk_path.exists() {
         return Err(anyhow!("APK file not found: {}", apk_path.display()));

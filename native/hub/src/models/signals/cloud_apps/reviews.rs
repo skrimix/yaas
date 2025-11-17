@@ -2,7 +2,7 @@ use rinf::{DartSignal, RustSignal, SignalPiece};
 use serde::{Deserialize, Serialize};
 
 #[derive(Serialize, Deserialize, DartSignal)]
-pub struct GetAppReviewsRequest {
+pub(crate) struct GetAppReviewsRequest {
     pub app_id: String,
     /// Optional page size, defaults to 5 if None
     #[serde(default)]
@@ -16,7 +16,7 @@ pub struct GetAppReviewsRequest {
 }
 
 #[derive(Serialize, Deserialize, RustSignal)]
-pub struct AppReviewsResponse {
+pub(crate) struct AppReviewsResponse {
     pub app_id: String,
     pub reviews: Vec<AppReview>,
     /// Total number of reviews available for the app (for pagination)
@@ -26,7 +26,7 @@ pub struct AppReviewsResponse {
 }
 
 #[derive(Serialize, Deserialize, Debug, Clone, SignalPiece)]
-pub struct DeveloperResponse {
+pub(crate) struct DeveloperResponse {
     pub id: String,
     pub body: String,
     #[serde(default)]
@@ -34,7 +34,7 @@ pub struct DeveloperResponse {
 }
 
 #[derive(Serialize, Deserialize, Debug, Clone, SignalPiece)]
-pub struct AppReview {
+pub(crate) struct AppReview {
     pub id: String,
     pub author_display_name: Option<String>,
     #[serde(default)]

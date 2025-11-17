@@ -25,7 +25,7 @@ struct DownloadMetadata {
 }
 
 #[instrument(level = "debug", skip(cached), fields(app_full_name = %app_full_name, dir = %dst_dir.display()), err)]
-pub async fn write_download_metadata(
+pub(super) async fn write_download_metadata(
     cached: Option<CloudApp>,
     app_full_name: &str,
     dst_dir: &PathBuf,

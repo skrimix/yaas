@@ -1,1 +1,1 @@
-pub mod remotes;
+pub(crate) mod remotes;

@@ -37,7 +37,7 @@ fn normalize_package_name(name: &str) -> String {
 
 /// A cloud app from the local device.
 #[derive(Serialize, Debug, Clone, SignalPiece)]
-pub struct CloudApp {
+pub(crate) struct CloudApp {
     pub app_name: String,
     pub full_name: String,
     pub package_name: String,
@@ -70,7 +70,7 @@ impl<'de> Deserialize<'de> for CloudApp {
 }
 
 #[derive(serde::Deserialize, Debug)]
-pub struct AppApiResponse {
+pub(crate) struct AppApiResponse {
     #[serde(default)]
     pub id: Option<String>,
     #[serde(default)]

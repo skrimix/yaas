@@ -1,5 +1,10 @@
 use std::{
-    collections::HashMap, error::Error, net::SocketAddr, path::Path, sync::Arc, time::Duration,
+    collections::HashMap,
+    error::Error,
+    net::SocketAddr,
+    path::{Path, PathBuf},
+    sync::Arc,
+    time::Duration,
 };
 
 use anyhow::{Context, Result, anyhow, bail, ensure};
@@ -36,26 +41,26 @@ use crate::{
     utils::resolve_binary_path,
 };
 
-pub mod battery_dump;
-pub mod device;
+pub(crate) mod battery_dump;
+pub(crate) mod device;
 
-pub static PACKAGE_NAME_REGEX: Lazy<Regex> = lazy_regex!(r"^(?:[A-Za-z]{1}[\w]*\.)+[A-Za-z][\w]*$");
+static PACKAGE_NAME_REGEX: Lazy<Regex> = lazy_regex!(r"^(?:[A-Za-z]{1}[\w]*\.)+[A-Za-z][\w]*$");
 
 /// Validates a package name and returns an error if invalid
-pub fn ensure_valid_package(package_name: &str) -> Result<()> {
+fn ensure_valid_package(package_name: &str) -> Result<()> {
     ensure!(PACKAGE_NAME_REGEX.is_match(package_name), "Invalid package name: '{}'", package_name);
     Ok(())
 }
 
 #[derive(Debug, Clone, Default)]
-pub struct CachedDeviceData {
+struct CachedDeviceData {
     pub name: String,
     pub true_serial: String,
 }
 
 /// Handles ADB device connections and commands
 #[derive(Debug)]
-pub struct AdbHandler {
+pub(crate) struct AdbHandler {
     /// The ADB host instance for device communication
     adb_host: forensic_adb::Host,
     /// ADB server check/start mutex
@@ -83,7 +88,7 @@ impl AdbHandler {
     /// # Returns
     /// Arc-wrapped AdbHandler that manages ADB device connections
     #[instrument(level = "debug", skip(settings_stream))]
-    pub async fn new(mut settings_stream: WatchStream<Settings>) -> Arc<Self> {
+    pub(crate) async fn new(mut settings_stream: WatchStream<Settings>) -> Arc<Self> {
         let first_settings =
             settings_stream.next().await.expect("Settings stream closed on adb init");
         let adb_path = first_settings.adb_path;
@@ -766,7 +771,7 @@ impl AdbHandler {
 
     /// Gets the currently connected device or returns an error if none is connected
     #[instrument(skip(self), level = "debug", err)]
-    pub async fn current_device(&self) -> Result<Arc<AdbDevice>> {
+    pub(crate) async fn current_device(&self) -> Result<Arc<AdbDevice>> {
         self.try_current_device().await.context("No device connected")
     }
 
@@ -1093,7 +1098,7 @@ impl AdbHandler {
 
     /// Refreshes the currently connected device
     #[instrument(level = "debug", skip(self), err)]
-    pub async fn refresh_device(&self) -> Result<()> {
+    pub(crate) async fn refresh_device(&self) -> Result<()> {
         let device = self.current_device().await?;
         // TODO: just add serial to instrument span
         debug!(serial = %device.serial, "Refreshing device data");
@@ -1107,7 +1112,7 @@ impl AdbHandler {
 
     /// Installs an APK on the currently connected device
     #[instrument(level = "debug", skip(self, progress_sender))]
-    pub async fn install_apk(
+    pub(crate) async fn install_apk(
         &self,
         device: &AdbDevice,
         apk_path: &Path,
@@ -1123,7 +1128,11 @@ impl AdbHandler {
 
     /// Uninstalls a package from the currently connected device
     #[instrument(level = "debug", skip(self))]
-    pub async fn uninstall_package(&self, device: &AdbDevice, package_name: &str) -> Result<()> {
+    pub(crate) async fn uninstall_package(
+        &self,
+        device: &AdbDevice,
+        package_name: &str,
+    ) -> Result<()> {
         let result = device.uninstall_package(package_name).await;
         self.refresh_device().await?;
         result
@@ -1131,7 +1140,7 @@ impl AdbHandler {
 
     /// Sideloads an app by installing its APK and pushing OBB data if present
     #[instrument(level = "debug", skip(self, progress_sender))]
-    pub async fn sideload_app(
+    pub(crate) async fn sideload_app(
         &self,
         device: &AdbDevice,
         app_path: &Path,
@@ -1146,7 +1155,7 @@ impl AdbHandler {
 
     /// Creates a backup of an app on the currently connected device
     #[instrument(level = "debug", skip(self))]
-    pub async fn backup_app(
+    pub(crate) async fn backup_app(
         &self,
         device: &AdbDevice,
         package_name: &str,
@@ -1160,10 +1169,29 @@ impl AdbHandler {
 
     /// Restores a backup to the currently connected device
     #[instrument(level = "debug", skip(self))]
-    pub async fn restore_backup(&self, device: &AdbDevice, backup_path: &Path) -> Result<()> {
+    pub(crate) async fn restore_backup(
+        &self,
+        device: &AdbDevice,
+        backup_path: &Path,
+    ) -> Result<()> {
         let result = device.restore_backup(backup_path).await;
         self.refresh_device().await?;
         result
+    }
+
+    /// Pulls an application's APK and OBB (if present) into a local directory suitable for sharing.
+    ///
+    /// Layout:
+    /// - `<dest_root>/<package_name>/<package_name>.apk`
+    /// - `<dest_root>/<package_name>/` + OBB contents (when present)
+    #[instrument(level = "debug", skip(self, dest_root), err)]
+    pub(crate) async fn pull_app_for_sharing(
+        &self,
+        device: &AdbDevice,
+        package_name: &str,
+        dest_root: &Path,
+    ) -> Result<PathBuf> {
+        device.pull_app_for_sharing(package_name, dest_root).await
     }
 
     /// Ensures the ADB server is running, starting it if necessary

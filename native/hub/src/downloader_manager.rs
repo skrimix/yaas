@@ -29,13 +29,13 @@ use crate::{
 };
 
 #[derive(Clone)]
-pub struct DownloaderManager {
+pub(crate) struct DownloaderManager {
     inner: Arc<RwLock<Option<Arc<Downloader>>>>,
     init_guard: Arc<Mutex<()>>,
 }
 
 impl DownloaderManager {
-    pub fn new(initial: Option<Arc<Downloader>>) -> Arc<Self> {
+    pub(crate) fn new(initial: Option<Arc<Downloader>>) -> Arc<Self> {
         Arc::new(Self {
             inner: Arc::new(RwLock::new(initial)),
             init_guard: Arc::new(Mutex::new(())),
@@ -43,7 +43,7 @@ impl DownloaderManager {
     }
 
     #[instrument(level = "debug", skip(self, downloader))]
-    pub async fn set_downloader(&self, downloader: Option<Arc<Downloader>>) {
+    async fn set_downloader(&self, downloader: Option<Arc<Downloader>>) {
         if self.inner.read().await.is_none() && downloader.is_none() {
             return;
         }
@@ -61,16 +61,16 @@ impl DownloaderManager {
         }
     }
 
-    pub async fn get(&self) -> Option<Arc<Downloader>> {
+    pub(crate) async fn get(&self) -> Option<Arc<Downloader>> {
         self.inner.read().await.as_ref().cloned()
     }
 
-    pub async fn is_some(&self) -> bool {
+    pub(crate) async fn is_some(&self) -> bool {
         self.inner.read().await.is_some()
     }
 
     /// Start downloader lifecycle: initial init, setup handler, and retry handling.
-    pub fn start(self: Arc<Self>, app_dir: PathBuf, settings_handler: Arc<SettingsHandler>) {
+    pub(crate) fn start(self: Arc<Self>, app_dir: PathBuf, settings_handler: Arc<SettingsHandler>) {
         if Path::new("downloader.json").exists() {
             let manager = self.clone();
             let app_dir_init = app_dir.clone();
@@ -136,7 +136,7 @@ impl DownloaderManager {
         });
     }
 
-    pub async fn init_from_disk(
+    pub(crate) async fn init_from_disk(
         &self,
         app_dir: PathBuf,
         settings_handler: Arc<SettingsHandler>,
@@ -146,7 +146,7 @@ impl DownloaderManager {
         self.init_with_config(cfg, app_dir, settings_handler).await
     }
 
-    pub async fn init_with_config(
+    pub(crate) async fn init_with_config(
         &self,
         cfg: DownloaderConfig,
         app_dir: PathBuf,
@@ -216,7 +216,7 @@ impl DownloaderManager {
     }
 
     /// Start handler that watches for InstallDownloaderConfigRequest and installs config.
-    pub fn start_setup_handler(
+    fn start_setup_handler(
         self: Arc<Self>,
         app_dir: PathBuf,
         settings_handler: Arc<SettingsHandler>,

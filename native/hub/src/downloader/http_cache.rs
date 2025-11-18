@@ -206,7 +206,7 @@ pub(super) async fn update_file_cached(
         cb(downloaded, total);
     }
 
-    let completed_md5 = format!("{:x}", md5_ctx.compute());
+    let completed_md5 = format!("{:x}", md5_ctx.finalize());
     let new_meta = MetaEntry {
         etag: header_meta.etag,
         last_modified: header_meta.last_modified,
@@ -300,7 +300,7 @@ pub(super) async fn compute_md5_file(path: &Path) -> Result<String> {
         }
         ctx.consume(&buf[..n]);
     }
-    Ok(format!("{:x}", ctx.compute()))
+    Ok(format!("{:x}", ctx.finalize()))
 }
 
 #[cfg(test)]

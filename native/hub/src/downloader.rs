@@ -39,7 +39,7 @@ pub(crate) mod artifacts;
 mod cloud_api;
 pub(crate) mod config;
 mod http_cache;
-mod metadata;
+pub(crate) mod metadata;
 mod repo;
 
 pub(crate) struct Downloader {

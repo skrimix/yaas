@@ -1,4 +1,4 @@
-use std::path::PathBuf;
+use std::path::{Path, PathBuf};
 
 use anyhow::{Context, Result};
 use time::{OffsetDateTime, format_description::well_known::Rfc3339};
@@ -22,6 +22,13 @@ struct DownloadMetadata {
     #[serde(skip_serializing_if = "Option::is_none")]
     size: Option<u64>,
     downloaded_at: String,
+}
+
+#[derive(Debug)]
+pub(crate) struct DownloadMetadataInfo {
+    pub(crate) downloaded_at: Option<u64>,
+    pub(crate) package_name: Option<String>,
+    pub(crate) version_code: Option<u32>,
 }
 
 #[instrument(level = "debug", skip(cached), fields(app_full_name = %app_full_name, dir = %dst_dir.display()), err)]
@@ -91,4 +98,57 @@ pub(super) async fn write_download_metadata(
     }
 
     Ok(())
+}
+
+#[instrument(level = "debug", err, ret)]
+pub(crate) async fn read_download_metadata(dir: &Path) -> Result<DownloadMetadataInfo> {
+    #[derive(serde::Deserialize)]
+    struct DownloadMetaPartial {
+        downloaded_at: Option<String>,
+        #[serde(alias = "PackageName")]
+        package_name: Option<String>,
+        #[serde(alias = "VersionCode")]
+        version_code: Option<u32>,
+    }
+
+    let meta_path = dir.join("metadata.json");
+    let meta_path_alt = dir.join("release.json");
+    let mut package_name: Option<String> = None;
+    let mut version_code: Option<u32> = None;
+    let mut ts_millis: Option<u64> = None;
+    if meta_path.exists()
+        && let Ok(text) = tokio::fs::read_to_string(&meta_path).await
+        && let Ok(meta) = serde_json::from_str::<DownloadMetaPartial>(&text)
+    {
+        package_name = meta.package_name;
+        version_code = meta.version_code;
+        if let Some(dt) = meta.downloaded_at {
+            ts_millis = Some(rfc3339_to_millis(&dt));
+        }
+    } else if meta_path_alt.exists()
+        && let Ok(text) = tokio::fs::read_to_string(&meta_path_alt).await
+        && let Ok(meta) = serde_json::from_str::<DownloadMetaPartial>(&text)
+    {
+        package_name = meta.package_name;
+        version_code = meta.version_code;
+        if let Some(dt) = meta.downloaded_at {
+            ts_millis = Some(rfc3339_to_millis(&dt));
+
+            // Only our metadata has downloaded_at, rename to metadata.json to avoid conflicts with QL
+            let new_path = dir.join("metadata.json");
+            if let Err(e) = tokio::fs::rename(&meta_path_alt, &new_path).await {
+                warn!(error = %e, "Failed to rename our release.json to metadata.json");
+            }
+        }
+    }
+
+    Ok(DownloadMetadataInfo { downloaded_at: ts_millis, package_name, version_code })
+}
+
+fn rfc3339_to_millis(s: &str) -> u64 {
+    // Parse RFC3339 in UTC
+    match OffsetDateTime::parse(s, &Rfc3339) {
+        Ok(dt) => (dt.unix_timestamp_nanos() / 1_000_000) as u64,
+        Err(_) => 0,
+    }
 }

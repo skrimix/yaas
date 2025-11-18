@@ -9,12 +9,12 @@ use std::{
 use anyhow::{Context, Result, ensure};
 use lazy_regex::regex;
 use rinf::{DartSignal, RustSignal};
-use time::{OffsetDateTime, format_description::well_known::Rfc3339};
 use tokio::fs;
 use tokio_stream::{StreamExt, wrappers::WatchStream};
 use tracing::{Span, debug, error, info, instrument, trace, warn};
 
 use crate::models::{DownloadCleanupPolicy, Settings, signals::downloads_local::*};
+use crate::downloader::metadata::read_download_metadata;
 
 #[derive(Debug, Clone)]
 pub(crate) struct DownloadsCatalog {
@@ -192,15 +192,6 @@ impl DownloadsCatalog {
 fn system_time_to_millis(time: SystemTime) -> u64 {
     time.duration_since(UNIX_EPOCH).map(|d| d.as_millis() as u64).unwrap_or(0)
 }
-
-fn rfc3339_to_millis(s: &str) -> u64 {
-    // Parse RFC3339 in UTC
-    match OffsetDateTime::parse(s, &Rfc3339) {
-        Ok(dt) => (dt.unix_timestamp_nanos() / 1_000_000) as u64,
-        Err(_) => 0,
-    }
-}
-
 #[instrument(level = "debug", fields(dir = %dir.display(), size), err)]
 async fn dir_size(dir: &Path) -> Result<u64> {
     if !dir.is_dir() {
@@ -227,58 +218,6 @@ async fn dir_size(dir: &Path) -> Result<u64> {
     }
     Span::current().record("size", total);
     Ok(total)
-}
-
-#[derive(Debug)]
-struct DownloadMetadata {
-    downloaded_at: Option<u64>,
-    package_name: Option<String>,
-    version_code: Option<u32>,
-}
-
-#[instrument(level = "debug", err, ret)]
-async fn read_download_metadata(dir: &Path) -> Result<DownloadMetadata> {
-    #[derive(serde::Deserialize)]
-    struct DownloadMetaPartial {
-        downloaded_at: Option<String>,
-        #[serde(alias = "PackageName")]
-        package_name: Option<String>,
-        #[serde(alias = "VersionCode")]
-        version_code: Option<u32>,
-    }
-
-    let meta_path = dir.join("metadata.json");
-    let meta_path_alt = dir.join("release.json");
-    let mut package_name: Option<String> = None;
-    let mut version_code: Option<u32> = None;
-    let mut ts_millis: Option<u64> = None;
-    if meta_path.exists()
-        && let Ok(text) = fs::read_to_string(&meta_path).await
-        && let Ok(meta) = serde_json::from_str::<DownloadMetaPartial>(&text)
-    {
-        package_name = meta.package_name;
-        version_code = meta.version_code;
-        if let Some(dt) = meta.downloaded_at {
-            ts_millis = Some(rfc3339_to_millis(&dt));
-        }
-    } else if meta_path_alt.exists()
-        && let Ok(text) = fs::read_to_string(&meta_path_alt).await
-        && let Ok(meta) = serde_json::from_str::<DownloadMetaPartial>(&text)
-    {
-        package_name = meta.package_name;
-        version_code = meta.version_code;
-        if let Some(dt) = meta.downloaded_at {
-            ts_millis = Some(rfc3339_to_millis(&dt));
-
-            // Only our metadata has downloaded_at, rename to metadata.json to avoid conflicts with QL
-            let new_path = dir.join("metadata.json");
-            if let Err(e) = fs::rename(&meta_path_alt, &new_path).await {
-                warn!(error = %e, "Failed to rename our release.json to metadata.json");
-            }
-        }
-    }
-
-    Ok(DownloadMetadata { downloaded_at: ts_millis, package_name, version_code })
 }
 
 impl DownloadsCatalog {

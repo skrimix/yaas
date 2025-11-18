@@ -65,6 +65,9 @@ base64 = "0.22"
 fs4 = { version = "0.13", features = ["fs-err3-tokio", "tokio"] }
 fs-err = { version = "3", features = ["tokio"] }
 uuid = { version = "1.18.1", features = ["v4"] }
+sha2-const-stable = "0.1.0"
+const-hex = "1.17.0"
+const_format = "0.2.35"
 
 [build-dependencies]
 built = { version = "0.8", features = ["git2", "chrono"] }

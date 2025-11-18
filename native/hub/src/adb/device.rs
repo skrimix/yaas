@@ -7,9 +7,11 @@ use std::{
 };
 
 use anyhow::{Context, Result, anyhow, bail, ensure};
+use const_format::concatcp;
 use derive_more::Debug;
 use forensic_adb::{Device, DirectoryTransferProgress, UnixFileStatus, UnixPath, UnixPathBuf};
 use lazy_regex::{Lazy, Regex, lazy_regex};
+use sha2_const_stable::Sha256;
 use time::{OffsetDateTime, macros::format_description};
 use tokio::{
     fs::{self, File},
@@ -36,6 +38,8 @@ use crate::{
 
 /// Java tool used for package listing
 static LIST_APPS_DEX_BYTES: &[u8] = include_bytes!("../../assets/list_apps.dex");
+const LIST_APPS_DEX_SHA256: const_hex::Buffer<32> =
+    const_hex::const_encode(&Sha256::new().update(LIST_APPS_DEX_BYTES).finalize());
 
 /// Regex to split command arguments - handles quoted arguments with spaces
 /// Note: This is a simplified parser for install scripts and may not handle all edge cases
@@ -299,12 +303,21 @@ impl AdbDevice {
     /// Refreshes the list of installed packages on the device
     #[instrument(level = "debug", skip(self), fields(count), err)]
     async fn refresh_package_list(&mut self) -> Result<()> {
-        self.push_bytes(LIST_APPS_DEX_BYTES, UnixPath::new("/data/local/tmp/list_apps.dex"))
+        const LIST_APPS_DEX_PATH: &str = "/data/local/tmp/list_apps.dex";
+        if !self
+            .shell_checked(concatcp!("sha256sum ", LIST_APPS_DEX_PATH))
             .await
-            .context("Failed to push list_apps.dex")?;
+            .map(|output| output.contains(LIST_APPS_DEX_SHA256.as_str()))
+            .unwrap_or_default()
+        {
+            debug!("Pushing list_apps.dex");
+            self.push_bytes(LIST_APPS_DEX_BYTES, UnixPath::new(LIST_APPS_DEX_PATH))
+                .await
+                .context("Failed to push list_apps.dex")?;
+        }
 
         let list_output = self
-            .shell_checked("CLASSPATH=/data/local/tmp/list_apps.dex app_process / Main")
+            .shell_checked(concatcp!("CLASSPATH=", LIST_APPS_DEX_PATH, " app_process / Main"))
             .await
             .context("Failed to execute app_process for list_apps.dex")?;
 

@@ -293,7 +293,7 @@ mod tests {
     };
 
     use super::*;
-    use crate::models::{RclonePath, RepoLayoutKind};
+    use crate::downloader::config::{RclonePath, RepoLayoutKind};
 
     fn cfg_local(bin: &str, conf: &str) -> DownloaderConfig {
         DownloaderConfig {

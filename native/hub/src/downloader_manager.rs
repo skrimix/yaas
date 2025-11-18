@@ -11,19 +11,16 @@ use tokio_stream::wrappers::WatchStream;
 use tracing::{debug, info, instrument};
 
 use crate::{
-    downloader::{self, Downloader},
-    models::{
-        DownloaderConfig,
-        signals::{
-            downloader::{
-                availability::DownloaderAvailabilityChanged,
-                setup::{
-                    DownloaderConfigInstallResult, InstallDownloaderConfigRequest,
-                    RetryDownloaderInitRequest,
-                },
+    downloader::{self, Downloader, config::DownloaderConfig},
+    models::signals::{
+        downloader::{
+            availability::DownloaderAvailabilityChanged,
+            setup::{
+                DownloaderConfigInstallResult, InstallDownloaderConfigRequest,
+                RetryDownloaderInitRequest,
             },
-            system::Toast,
         },
+        system::Toast,
     },
     settings::SettingsHandler,
 };

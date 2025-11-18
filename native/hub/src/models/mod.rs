@@ -2,8 +2,6 @@ mod cloud_app;
 pub(crate) use cloud_app::*;
 mod device_space;
 pub(crate) use device_space::*;
-mod downloader_config;
-pub(crate) use downloader_config::*;
 mod installed_package;
 pub(crate) use installed_package::*;
 mod settings;

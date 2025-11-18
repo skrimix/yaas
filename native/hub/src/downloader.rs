@@ -14,9 +14,12 @@ use tokio_util::sync::CancellationToken;
 use tracing::{Instrument, debug, error, info, info_span, instrument, warn};
 
 use crate::{
-    downloader::rclone::RcloneStorage,
+    downloader::{
+        config::{DownloaderConfig, RepoLayoutKind},
+        rclone::RcloneStorage,
+    },
     models::{
-        CloudApp, DownloaderConfig, RepoLayoutKind, Settings,
+        CloudApp, Settings,
         signals::{
             cloud_apps::{
                 details::{AppDetailsResponse, GetAppDetailsRequest},
@@ -34,6 +37,7 @@ mod rclone;
 pub(crate) use rclone::RcloneTransferStats;
 pub(crate) mod artifacts;
 mod cloud_api;
+pub(crate) mod config;
 mod http_cache;
 mod metadata;
 mod repo;

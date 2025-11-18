@@ -1,6 +1,7 @@
 use std::{collections::HashMap, fmt, fs, path::Path};
 
 use anyhow::{Context, Result};
+use const_format::concatcp;
 use serde::Deserialize;
 use tracing::error;
 
@@ -69,33 +70,25 @@ pub(crate) enum RclonePath {
     Map(HashMap<String, String>),
 }
 
-#[cfg(target_os = "windows")]
-pub(crate) const CURRENT_PLATFORM: &str = "windows";
-#[cfg(target_os = "linux")]
-pub(crate) const CURRENT_PLATFORM: &str = "linux";
-#[cfg(target_os = "macos")]
-pub(crate) const CURRENT_PLATFORM: &str = "macos";
+const CURRENT_PLATFORM: &str = std::env::consts::OS;
 
 #[cfg(target_arch = "x86_64")]
-pub(crate) const CURRENT_ARCH: &str = "x64";
+const CURRENT_ARCH: &str = "x64";
 #[cfg(target_arch = "aarch64")]
-pub(crate) const CURRENT_ARCH: &str = "arm64";
+const CURRENT_ARCH: &str = "arm64";
 #[cfg(target_arch = "x86")]
-pub(crate) const CURRENT_ARCH: &str = "x86";
+const CURRENT_ARCH: &str = "x86";
 #[cfg(target_arch = "arm")]
-pub(crate) const CURRENT_ARCH: &str = "arm";
+const CURRENT_ARCH: &str = "arm";
 
-pub(crate) fn current_platform_arch_key() -> String {
-    format!("{}-{}", CURRENT_PLATFORM, CURRENT_ARCH)
-}
+const CURRENT_PLATFORM_ARCH_KEY: &str = concatcp!(CURRENT_PLATFORM, "-", CURRENT_ARCH);
 
 impl RclonePath {
     pub(crate) fn resolve_for_current_platform(&self) -> Result<String> {
         match self {
             RclonePath::Single(s) => Ok(s.clone()),
             RclonePath::Map(map) => {
-                let combined = current_platform_arch_key();
-                if let Some(v) = map.get(&combined) {
+                if let Some(v) = map.get(CURRENT_PLATFORM_ARCH_KEY) {
                     return Ok(v.clone());
                 }
                 if let Some(v) = map.get(CURRENT_PLATFORM) {
@@ -167,9 +160,7 @@ mod tests {
     fn rclone_path_map_resolves_platform_first_then_platform_only() {
         // Build a map that includes both exact platform-arch and platform-only keys
         let mut map = HashMap::new();
-        let combined = current_platform_arch_key();
-
-        map.insert(combined.clone(), String::from("/bin/exact"));
+        map.insert(CURRENT_PLATFORM_ARCH_KEY.to_string(), String::from("/bin/exact"));
         map.insert(CURRENT_PLATFORM.to_string(), String::from("/bin/platform"));
         map.insert(String::from("other"), String::from("/bin/other"));
 
@@ -182,7 +173,7 @@ mod tests {
             RclonePath::Map(m) => m,
             _ => unreachable!(),
         };
-        map2.remove(&combined);
+        map2.remove(CURRENT_PLATFORM_ARCH_KEY);
         let path2 = RclonePath::Map(map2);
         let resolved2 = path2.resolve_for_current_platform().expect("resolve platform only");
         assert_eq!(resolved2, "/bin/platform");

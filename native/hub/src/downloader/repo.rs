@@ -20,7 +20,8 @@ use tracing::{Span, debug, error, instrument, warn};
 use super::{http_cache, rclone::RcloneStorage};
 use crate::{
     archive::decompress_archive,
-    models::{CloudApp, DownloaderConfig, RepoLayoutKind},
+    downloader::config::{DownloaderConfig, RepoLayoutKind},
+    models::CloudApp,
 };
 
 #[derive(Debug)]

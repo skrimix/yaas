@@ -13,6 +13,12 @@ import '../common/no_device_connected_indicator.dart';
 import '../dialogs/animated_uninstall_dialog.dart';
 import '../dialogs/backup_options_dialog.dart';
 
+const _animationDuration = Duration(milliseconds: 200);
+const _cardPadding = EdgeInsets.symmetric(horizontal: 16.0, vertical: 4.0);
+const _listPadding = EdgeInsets.only(bottom: 24);
+const _segmentPadding = EdgeInsets.symmetric(horizontal: 16, vertical: 8);
+const _buttonPadding = EdgeInsets.symmetric(horizontal: 12, vertical: 8);
+
 class ManageAppsScreen extends StatefulWidget {
   const ManageAppsScreen({super.key});
 
@@ -35,14 +41,6 @@ const hiddenPrefixes = [
 
 class _ManageAppsScreenState extends State<ManageAppsScreen> {
   AppCategory _selectedCategory = AppCategory.vr;
-  static const _animationDuration = Duration(milliseconds: 200);
-  static const _cardPadding =
-      EdgeInsets.symmetric(horizontal: 16.0, vertical: 4.0);
-  static const _listPadding = EdgeInsets.only(bottom: 24);
-  static const _segmentPadding =
-      EdgeInsets.symmetric(horizontal: 16, vertical: 8);
-  static const _buttonPadding =
-      EdgeInsets.symmetric(horizontal: 12, vertical: 8);
 
   final bool _sortAscending = true;
   final ValueNotifier<bool> _isShiftPressedNotifier =
@@ -486,8 +484,7 @@ class _ManageAppsScreenState extends State<ManageAppsScreen> {
 
                 String tooltip;
                 if (hasNewerVersion) {
-                  tooltip = l10n.updateFromTo(
-                      '${app.versionCode}', '${newestCloudApp.versionCode}');
+                  tooltip = l10n.updateTo(newestCloudApp.fullName);
                 } else if (isSameVersion) {
                   tooltip = isShiftPressed
                       ? l10n.reinstallThisVersion

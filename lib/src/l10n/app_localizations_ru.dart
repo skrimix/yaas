@@ -684,8 +684,8 @@ class AppLocalizationsRu extends AppLocalizations {
       'Нет подходящего приложения в облачном репозитории';
 
   @override
-  String updateFromTo(String from, String to) {
-    return 'Обновить с $from до $to';
+  String updateTo(String to) {
+    return 'Обновить до $to';
   }
 
   @override

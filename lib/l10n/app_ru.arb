@@ -304,12 +304,9 @@
     "install": "Установить",
     "checkForUpdates": "Проверить обновления",
     "noMatchingCloudApp": "Нет подходящего приложения в облачном репозитории",
-    "updateFromTo": "Обновить с {from} до {to}",
-    "@updateFromTo": {
+    "updateTo": "Обновить до {to}",
+    "@updateTo": {
         "placeholders": {
-            "from": {
-                "type": "String"
-            },
             "to": {
                 "type": "String"
             }

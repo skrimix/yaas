@@ -131,6 +131,8 @@ impl RcloneClient {
             command.arg("--use-json-log");
         }
 
+        command.args(["--contimeout", CONNECTION_TIMEOUT, "--timeout", IO_IDLE_TIMEOUT]);
+
         command.args(args);
         trace!(command = ?command, "Constructed rclone command");
         command
@@ -235,10 +237,6 @@ impl RcloneClient {
             "--stats-log-level",
             "NOTICE",
             "--fast-list",
-            "--contimeout",
-            CONNECTION_TIMEOUT,
-            "--timeout",
-            IO_IDLE_TIMEOUT,
             "--retries",
             "3",
             "--transfers",

@@ -1322,11 +1322,11 @@ abstract class AppLocalizations {
   /// **'No matching app found in cloud repository'**
   String get noMatchingCloudApp;
 
-  /// No description provided for @updateFromTo.
+  /// No description provided for @updateTo.
   ///
   /// In en, this message translates to:
-  /// **'Update from {from} to {to}'**
-  String updateFromTo(String from, String to);
+  /// **'Update to {to}'**
+  String updateTo(String to);
 
   /// No description provided for @downgradeAppTitle.
   ///

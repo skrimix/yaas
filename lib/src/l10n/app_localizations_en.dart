@@ -675,8 +675,8 @@ class AppLocalizationsEn extends AppLocalizations {
   String get noMatchingCloudApp => 'No matching app found in cloud repository';
 
   @override
-  String updateFromTo(String from, String to) {
-    return 'Update from $from to $to';
+  String updateTo(String to) {
+    return 'Update to $to';
   }
 
   @override

@@ -310,12 +310,9 @@
     "install": "Install",
     "checkForUpdates": "Check for updates",
     "noMatchingCloudApp": "No matching app found in cloud repository",
-    "updateFromTo": "Update from {from} to {to}",
-    "@updateFromTo": {
+    "updateTo": "Update to {to}",
+    "@updateTo": {
         "placeholders": {
-            "from": {
-                "type": "String"
-            },
             "to": {
                 "type": "String"
             }

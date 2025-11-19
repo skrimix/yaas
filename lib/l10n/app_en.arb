@@ -561,7 +561,7 @@
     "taskKindUninstall": "Uninstall",
     "taskKindBackupApp": "Backup App",
     "taskKindRestoreBackup": "Restore Backup",
-    "taskKindShareApp": "Share App",
+    "taskKindDonateApp": "Donate App",
     "taskStatusWaiting": "Waiting",
     "taskStatusRunning": "Running",
     "taskStatusCompleted": "Completed",

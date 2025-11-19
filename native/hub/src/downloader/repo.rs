@@ -120,12 +120,12 @@ pub(super) struct BuildStorageArgs<'a> {
 /// FFA layout – direct files and list under a configurable remote/root.
 #[derive(Debug, Clone, Default)]
 pub(super) struct FFARepo {
-    share_blacklist_path: Option<String>,
+    donation_blacklist_path: Option<String>,
 }
 
 impl FFARepo {
     fn from_config(cfg: &DownloaderConfig) -> Self {
-        Self { share_blacklist_path: cfg.share_blacklist_path.clone() }
+        Self { donation_blacklist_path: cfg.donation_blacklist_path.clone() }
     }
 }
 
@@ -159,7 +159,7 @@ impl Repo for FFARepo {
         cancellation_token: CancellationToken,
     ) -> Result<Vec<CloudApp>> {
         let blacklist_handle = if let Some(blacklist_path) =
-            self.share_blacklist_path.as_deref().filter(|p| !p.is_empty())
+            self.donation_blacklist_path.as_deref().filter(|p| !p.is_empty())
         {
             let storage_clone = storage.clone();
             let cache_dir = cache_dir.to_path_buf();
@@ -188,12 +188,12 @@ impl Repo for FFARepo {
         if let Some(handle) = blacklist_handle {
             match handle.await {
                 Ok(Ok(blacklist)) => {
-                    apply_sharing_blacklist(&mut cloud_apps, &blacklist);
+                    apply_donation_blacklist(&mut cloud_apps, &blacklist);
                 }
                 Ok(Err(e)) => {
                     warn!(
                         error = e.as_ref() as &dyn Error,
-                        "Failed to load sharing blacklist in FFA repo, continuing without it"
+                        "Failed to load donation blacklist in FFA repo, continuing without it"
                     );
                 }
                 Err(e) => {
@@ -221,7 +221,7 @@ pub(super) struct VRPPublicRepo {
     pub meta_archive: String,
     pub list_filename: String,
     pub remote_name: String,
-    pub share_blacklist_path: Option<String>,
+    pub donation_blacklist_path: Option<String>,
     creds: OnceCell<VRPPublicState>,
 }
 
@@ -233,7 +233,7 @@ impl VRPPublicRepo {
             meta_archive: "meta.7z".to_string(),
             list_filename: "VRP-GameList.txt".to_string(),
             remote_name: "VRP-Public".to_string(),
-            share_blacklist_path: cfg.share_blacklist_path.clone(),
+            donation_blacklist_path: cfg.donation_blacklist_path.clone(),
             creds: OnceCell::new(),
         }
     }
@@ -379,7 +379,7 @@ impl Repo for VRPPublicRepo {
         };
 
         let wanted_paths: Vec<&str> =
-            if let Some(path) = self.share_blacklist_path.as_deref().filter(|p| !p.is_empty()) {
+            if let Some(path) = self.donation_blacklist_path.as_deref().filter(|p| !p.is_empty()) {
                 vec![self.list_filename.as_str(), path]
             } else {
                 vec![self.list_filename.as_str()]
@@ -409,10 +409,10 @@ impl Repo for VRPPublicRepo {
         let mut apps: Vec<CloudApp> =
             records.try_collect().await.context("Failed to parse VRP-public list")?;
 
-        if let Some(path) = self.share_blacklist_path.as_deref().filter(|p| !p.is_empty()) {
+        if let Some(path) = self.donation_blacklist_path.as_deref().filter(|p| !p.is_empty()) {
             let blacklist_path = cache_dir.join(path);
             let blacklist = load_blacklist_from_path(&blacklist_path).await?;
-            apply_sharing_blacklist(&mut apps, &blacklist);
+            apply_donation_blacklist(&mut apps, &blacklist);
         }
         Ok(apps)
     }
@@ -679,7 +679,7 @@ async fn load_blacklist_from_remote(
             warn!(
                 error = e.as_ref() as &dyn Error,
                 path = remote_path,
-                "Failed to download sharing blacklist, continuing without it"
+                "Failed to download donation blacklist, continuing without it"
             );
             Ok(HashSet::new())
         }
@@ -693,7 +693,7 @@ async fn load_blacklist_from_remote(
 )]
 async fn load_blacklist_from_path(path: &Path) -> Result<HashSet<String>> {
     if !path.exists() {
-        warn!(path = %path.display(), "Sharing blacklist file does not exist");
+        warn!(path = %path.display(), "Donation blacklist file does not exist");
         return Ok(HashSet::new());
     }
 
@@ -703,7 +703,7 @@ async fn load_blacklist_from_path(path: &Path) -> Result<HashSet<String>> {
             warn!(
                 error = &e as &dyn Error,
                 path = %path.display(),
-                "Failed to read sharing blacklist file, continuing without it"
+                "Failed to read donation blacklist file, continuing without it"
             );
             Ok(HashSet::new())
         }
@@ -718,14 +718,14 @@ fn parse_blacklist(text: &str) -> HashSet<String> {
         .collect()
 }
 
-fn apply_sharing_blacklist(apps: &mut [CloudApp], blacklist: &HashSet<String>) {
+fn apply_donation_blacklist(apps: &mut [CloudApp], blacklist: &HashSet<String>) {
     if blacklist.is_empty() {
         return;
     }
 
     for app in apps {
         if blacklist.contains(&app.package_name) || blacklist.contains(&app.original_package_name) {
-            app.is_sharing_blacklisted = true;
+            app.is_donation_blacklisted = true;
         }
     }
 }

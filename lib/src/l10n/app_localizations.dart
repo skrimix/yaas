@@ -2276,11 +2276,11 @@ abstract class AppLocalizations {
   /// **'Restore Backup'**
   String get taskKindRestoreBackup;
 
-  /// No description provided for @taskKindShareApp.
+  /// No description provided for @taskKindDonateApp.
   ///
   /// In en, this message translates to:
-  /// **'Share App'**
-  String get taskKindShareApp;
+  /// **'Donate App'**
+  String get taskKindDonateApp;
 
   /// No description provided for @taskStatusWaiting.
   ///

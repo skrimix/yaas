@@ -555,7 +555,7 @@
     "taskKindUninstall": "Удалить",
     "taskKindBackupApp": "Резервное копирование",
     "taskKindRestoreBackup": "Восстановление из копии",
-    "taskKindShareApp": "Поделиться приложением",
+    "taskKindDonateApp": "Пожертвование",
     "taskStatusWaiting": "Ожидание",
     "taskStatusRunning": "Выполняется",
     "taskStatusCompleted": "Завершено",

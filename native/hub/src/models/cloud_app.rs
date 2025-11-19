@@ -47,7 +47,7 @@ pub(crate) struct CloudApp {
     pub last_updated: String,
     pub size: u64,
     /// `true` if the repo doesn't want this app to be uploaded.
-    pub is_sharing_blacklisted: bool,
+    pub is_donation_blacklisted: bool,
 }
 
 impl<'de> Deserialize<'de> for CloudApp {
@@ -67,7 +67,7 @@ impl<'de> Deserialize<'de> for CloudApp {
             version_code: helper.version_code,
             last_updated: helper.last_updated,
             size,
-            is_sharing_blacklisted: false,
+            is_donation_blacklisted: false,
         })
     }
 }

@@ -1179,19 +1179,19 @@ impl AdbHandler {
         result
     }
 
-    /// Pulls an application's APK and OBB (if present) into a local directory suitable for sharing.
+    /// Pulls an application's APK and OBB (if present) into a local directory suitable for donation.
     ///
     /// Layout:
     /// - `<dest_root>/<package_name>/<package_name>.apk`
     /// - `<dest_root>/<package_name>/` + OBB contents (when present)
     #[instrument(level = "debug", skip(self, dest_root), err)]
-    pub(crate) async fn pull_app_for_sharing(
+    pub(crate) async fn pull_app_for_donation(
         &self,
         device: &AdbDevice,
         package_name: &str,
         dest_root: &Path,
     ) -> Result<PathBuf> {
-        device.pull_app_for_sharing(package_name, dest_root).await
+        device.pull_app_for_donation(package_name, dest_root).await
     }
 
     /// Ensures the ADB server is running, starting it if necessary

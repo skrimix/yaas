@@ -17,18 +17,18 @@ pub(crate) struct DownloaderConfig {
     pub remote_name_filter_regex: Option<String>,
     #[serde(default)]
     pub disable_randomize_remote: bool,
-    /// Optional remote used for app sharing uploads.
+    /// Optional remote used for app donation uploads.
     #[serde(default)]
-    pub share_remote_name: Option<String>,
-    /// Optional path within the share remote where uploaded archives are placed.
+    pub donation_remote_name: Option<String>,
+    /// Optional path within the donation remote where uploaded archives are placed.
     #[serde(default)]
-    pub share_remote_path: Option<String>,
-    /// Optional path to a newline-separated sharing blacklist.
+    pub donation_remote_path: Option<String>,
+    /// Optional path to a newline-separated donation blacklist.
     ///
     /// For FFA layout this is a path on the configured rclone remote.
     /// For VRP-public layout this is a path inside the `meta.7z` archive.
     #[serde(default)]
-    pub share_blacklist_path: Option<String>,
+    pub donation_blacklist_path: Option<String>,
     /// Repository layout selector. "ffa" or "vrp-public"
     pub layout: RepoLayoutKind,
     #[serde(default = "default_root_dir")]

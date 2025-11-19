@@ -1181,7 +1181,7 @@ class AppLocalizationsEn extends AppLocalizations {
   String get taskKindRestoreBackup => 'Restore Backup';
 
   @override
-  String get taskKindShareApp => 'Share App';
+  String get taskKindDonateApp => 'Donate App';
 
   @override
   String get taskStatusWaiting => 'Waiting';

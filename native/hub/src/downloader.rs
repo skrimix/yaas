@@ -79,15 +79,15 @@ impl Downloader {
             .build()
             .unwrap_or_else(|_| reqwest::Client::new());
 
-        let share_remote_configured =
-            config.share_remote_name.as_deref().map(|s| !s.is_empty()).unwrap_or(false)
-                || config.share_remote_path.as_deref().map(|s| !s.is_empty()).unwrap_or(false);
+        let donation_remote_configured =
+            config.donation_remote_name.as_deref().map(|s| !s.is_empty()).unwrap_or(false)
+                || config.donation_remote_path.as_deref().map(|s| !s.is_empty()).unwrap_or(false);
         let blacklist_path_configured =
-            config.share_blacklist_path.as_deref().map(|s| !s.is_empty()).unwrap_or(false);
-        if share_remote_configured && !blacklist_path_configured {
+            config.donation_blacklist_path.as_deref().map(|s| !s.is_empty()).unwrap_or(false);
+        if donation_remote_configured && !blacklist_path_configured {
             warn!(
-                "App sharing remote is configured but `share_blacklist_path` is missing; sharing \
-                 blacklist will be disabled"
+                "App donation remote is configured but `donation_blacklist_path` is missing; \
+                 donation blacklist will be disabled"
             );
         }
 
@@ -358,28 +358,28 @@ impl Downloader {
         cache.iter().find(|a| a.full_name == full_name).cloned()
     }
 
-    /// Upload a prepared archive (and its MD5 sidecar) used for app sharing.
+    /// Upload a prepared archive used for app donation.
     ///
-    /// This uses optional `share_remote_name` and `share_remote_path` from DownloaderConfig.
+    /// This uses optional `donation_remote_name` and `donation_remote_path` from DownloaderConfig.
     /// If either is missing or empty, the call fails with a configuration error.
     #[instrument(skip(self, cancellation_token), err)]
-    pub(crate) async fn upload_shared_archive(
+    pub(crate) async fn upload_donation_archive(
         &self,
         archive_path: &Path,
         cancellation_token: CancellationToken,
     ) -> Result<()> {
         let remote =
-            self.config.share_remote_name.as_deref().filter(|s| !s.is_empty()).ok_or_else(
-                || anyhow!("App sharing remote is not configured in downloader.json"),
+            self.config.donation_remote_name.as_deref().filter(|s| !s.is_empty()).ok_or_else(
+                || anyhow!("App donation remote is not configured in downloader.json"),
             )?;
         let remote_path =
-            self.config.share_remote_path.as_deref().filter(|s| !s.is_empty()).ok_or_else(
-                || anyhow!("App sharing remote path is not configured in downloader.json"),
+            self.config.donation_remote_path.as_deref().filter(|s| !s.is_empty()).ok_or_else(
+                || anyhow!("App donation remote path is not configured in downloader.json"),
             )?;
 
         ensure!(
             archive_path.is_file(),
-            "Shared archive does not exist or is not a file: {}",
+            "Donation archive does not exist or is not a file: {}",
             archive_path.display()
         );
 
@@ -393,7 +393,7 @@ impl Downloader {
                 Some(cancellation_token.clone()),
             )
             .await
-            .context("Failed to upload shared archive")?;
+            .context("Failed to upload donation archive")?;
 
         Ok(())
     }

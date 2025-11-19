@@ -344,9 +344,9 @@ impl TaskManager {
                 info!(task_id = id, "Executing restore backup task");
                 self.handle_restore(path.clone(), &update_progress, token.clone()).await
             }
-            Task::ShareApp { package_name, display_name } => {
-                info!(task_id = id, "Executing app share task");
-                self.handle_share_app(
+            Task::DonateApp { package_name, display_name } => {
+                info!(task_id = id, "Executing app donation task");
+                self.handle_donate_app(
                     package_name.clone(),
                     display_name.clone(),
                     &update_progress,
@@ -988,7 +988,7 @@ impl TaskManager {
     }
 
     #[instrument(skip(self, update_progress, token))]
-    async fn handle_share_app(
+    async fn handle_donate_app(
         &self,
         package_name: String,
         display_name: Option<String>,
@@ -1003,13 +1003,13 @@ impl TaskManager {
         debug!(
             package_name = %package_name,
             adb_permits_available = self.adb_semaphore.available_permits(),
-            "Starting app share task"
+            "Starting app donation task"
         );
 
         let adb_handler = self.adb_handler.clone();
         let device = adb_handler.current_device().await?;
 
-        // Use downloads location as the base for temporary share directories and archives.
+        // Use downloads location as the base for temporary donation directories and archives.
         let settings = self.settings.read().await.clone();
         let downloads_root = std::path::PathBuf::from(settings.downloads_location.clone());
         let upload_root = downloads_root.join("_upload");
@@ -1025,7 +1025,7 @@ impl TaskManager {
                     step_number: 1,
                     waiting_msg: "Waiting to start pull from device...",
                     running_msg: "Pulling app from device...".to_string(),
-                    log_context: "share_app_pull",
+                    log_context: "donate_app_pull",
                 },
                 update_progress,
                 token.clone(),
@@ -1034,7 +1034,7 @@ impl TaskManager {
                     let device = device.clone();
                     let pkg = pkg_for_pull.clone();
                     let dest_root = dest_root_clone.clone();
-                    async move { adb_handler.pull_app_for_sharing(&device, &pkg, &dest_root).await }
+                    async move { adb_handler.pull_app_for_donation(&device, &pkg, &dest_root).await }
                 },
             )
             .await?;
@@ -1090,7 +1090,7 @@ impl TaskManager {
             warn!(
                 error = &e as &dyn Error,
                 path = %pulled_dir.display(),
-                "Failed to clean up pulled app directory after share"
+                "Failed to clean up pulled app directory after donation"
             );
         }
 
@@ -1115,9 +1115,9 @@ impl TaskManager {
 
         // TODO: add progress
         downloader
-            .upload_shared_archive(&archive_path, token)
+            .upload_donation_archive(&archive_path, token)
             .await
-            .context("Failed to upload shared app archive")?;
+            .context("Failed to upload donation app archive")?;
 
         Ok(())
     }

@@ -1214,13 +1214,13 @@ impl AdbDevice {
         bail!("Failed to parse APK path for package '{}': {}", package_name, output);
     }
 
-    /// Pulls an application's APK and OBB (if present) into a local directory suitable for sharing.
+    /// Pulls an application's APK and OBB (if present) into a local directory suitable for donation.
     ///
     /// Layout:
     /// - `<dest_root>/<package_name>/<package_name>.apk`
     /// - `<dest_root>/<package_name>/` + OBB contents (when present)
     #[instrument(level = "debug", skip(self, dest_root), err)]
-    pub(super) async fn pull_app_for_sharing(
+    pub(super) async fn pull_app_for_donation(
         &self,
         package_name: &str,
         dest_root: &Path,
@@ -1236,13 +1236,13 @@ impl AdbDevice {
 
         let app_dir = dest_root.join(package_name);
         if app_dir.exists() {
-            debug!(path = %app_dir.display(), "Removing existing app share directory");
+            debug!(path = %app_dir.display(), "Removing existing app donation directory");
             fs::remove_dir_all(&app_dir).await.with_context(|| {
                 format!("Failed to remove existing directory {}", app_dir.display())
             })?;
         }
         fs::create_dir_all(&app_dir).await.with_context(|| {
-            format!("Failed to create app share directory {}", app_dir.display())
+            format!("Failed to create app donation directory {}", app_dir.display())
         })?;
 
         let apk_remote = self.get_apk_path(package_name).await?;
@@ -1263,7 +1263,7 @@ impl AdbDevice {
         // Pull OBB directory if present
         let obb_remote_dir = UnixPath::new("/sdcard/Android/obb").join(package_name);
         if self.dir_exists(&obb_remote_dir).await? {
-            debug!(package = package_name, "Pulling OBB directory for sharing");
+            debug!(package = package_name, "Pulling OBB directory for donation");
             self.pull_dir(&obb_remote_dir, &app_dir).await?;
         } else {
             debug!(package = package_name, "No OBB directory found for package, skipping");

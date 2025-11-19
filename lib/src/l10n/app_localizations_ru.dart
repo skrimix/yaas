@@ -1194,7 +1194,7 @@ class AppLocalizationsRu extends AppLocalizations {
   String get taskKindRestoreBackup => 'Восстановление из копии';
 
   @override
-  String get taskKindShareApp => 'Поделиться приложением';
+  String get taskKindDonateApp => 'Пожертвование';
 
   @override
   String get taskStatusWaiting => 'Ожидание';

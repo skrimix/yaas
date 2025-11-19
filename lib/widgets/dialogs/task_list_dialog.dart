@@ -67,8 +67,8 @@ class _TaskListDialogState extends State<TaskListDialog>
         return l10n.taskKindBackupApp;
       case TaskKind.restoreBackup:
         return l10n.taskKindRestoreBackup;
-      case TaskKind.shareApp:
-        return l10n.taskKindShareApp;
+      case TaskKind.donateApp:
+        return l10n.taskKindDonateApp;
     }
   }
 

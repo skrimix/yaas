@@ -9,7 +9,9 @@ use std::{
 use anyhow::{Context, Result, anyhow, bail, ensure};
 use const_format::concatcp;
 use derive_more::Debug;
-use forensic_adb::{Device, DirectoryTransferProgress, UnixFileStatus, UnixPath, UnixPathBuf};
+use forensic_adb::{
+    Device, DeviceError, DirectoryTransferProgress, UnixFileStatus, UnixPath, UnixPathBuf,
+};
 use lazy_regex::{Lazy, Regex, lazy_regex};
 use sha2_const_stable::Sha256;
 use time::{OffsetDateTime, macros::format_description};
@@ -777,16 +779,18 @@ impl AdbDevice {
             .await
         {
             Ok(_) => Ok(()),
-            Err(e) => {
-                let error_str = e.to_string();
-                debug!(error = %error_str, "Install failed, checking error type");
+            Err(DeviceError::PackageManagerError(msg)) => {
+                info!(
+                    error = msg,
+                    "Package manager returned error, checking if reinstall is needed"
+                );
 
                 // TODO: add a settings flag to disable this behavior?
-                if (error_str.contains("INSTALL_FAILED_VERSION_DOWNGRADE")
-                    || error_str.contains("INSTALL_FAILED_UPDATE_INCOMPATIBLE"))
+                if (msg.contains("INSTALL_FAILED_VERSION_DOWNGRADE")
+                    || msg.contains("INSTALL_FAILED_UPDATE_INCOMPATIBLE"))
                     && !did_reinstall
                 {
-                    info!("Incompatible update, reinstalling. Reason: {}", error_str);
+                    info!("Incompatible update, reinstalling. Reason: {}", msg);
                     let _ = progress_sender.send(SideloadProgress {
                         status: "Incompatible update, reinstalling".to_string(),
                         progress: None,
@@ -829,9 +833,10 @@ impl AdbDevice {
                     }
                     Ok(())
                 } else {
-                    Err(e.into())
+                    Err(DeviceError::PackageManagerError(msg).into())
                 }
             }
+            Err(e) => Err(e.into()),
         }
     }
 

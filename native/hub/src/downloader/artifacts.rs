@@ -75,9 +75,11 @@ pub(crate) async fn prepare_artifacts(
     let config_source = match maybe_config_source {
         Some(v) => v,
         None => {
+            // TODO: extract validation to config parser
             bail!("rclone_config_path is required for this repository layout")
         }
     };
+    // TODO: extract validation to config parser
     ensure!(
         bin_is_url == config_is_url,
         "rclone_path and rclone_config_path must both be local or both be URLs"
@@ -302,6 +304,7 @@ mod tests {
             rclone_config_path: Some(conf.to_string()),
             share_remote_name: None,
             share_remote_path: None,
+            share_blacklist_path: None,
             remote_name_filter_regex: None,
             disable_randomize_remote: true,
             layout: RepoLayoutKind::Ffa,
@@ -331,6 +334,7 @@ mod tests {
             rclone_config_path: Some("/tmp/rclone.conf".to_string()),
             share_remote_name: None,
             share_remote_path: None,
+            share_blacklist_path: None,
             remote_name_filter_regex: None,
             disable_randomize_remote: true,
             layout: RepoLayoutKind::Ffa,
@@ -400,6 +404,7 @@ mod tests {
             rclone_config_path: Some(format!("{}{}", server.uri(), conf_path)),
             share_remote_name: None,
             share_remote_path: None,
+            share_blacklist_path: None,
             remote_name_filter_regex: None,
             disable_randomize_remote: true,
             layout: RepoLayoutKind::Ffa,

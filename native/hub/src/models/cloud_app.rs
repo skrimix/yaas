@@ -31,7 +31,7 @@ fn parse_size_mb_to_bytes(size_mb_str: &str) -> Result<u64, String> {
 
 /// Strips known rename markers from a package name to derive the original.
 fn normalize_package_name(name: &str) -> String {
-    let re = regex!(r"(^mr\.)|(^mrf\.)|(\.mrf\.)|(\.jjb)");
+    let re = lazy_regex!(r"(^mr\.)|(^mrf\.)|(\.mrf\.)|(\.jjb)");
     re.replace_all(name, "").into_owned()
 }
 
@@ -46,6 +46,8 @@ pub(crate) struct CloudApp {
     pub version_code: u32,
     pub last_updated: String,
     pub size: u64,
+    /// `true` if the repo doesn't want this app to be uploaded.
+    pub is_sharing_blacklisted: bool,
 }
 
 impl<'de> Deserialize<'de> for CloudApp {
@@ -65,6 +67,7 @@ impl<'de> Deserialize<'de> for CloudApp {
             version_code: helper.version_code,
             last_updated: helper.last_updated,
             size,
+            is_sharing_blacklisted: false,
         })
     }
 }

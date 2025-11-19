@@ -1,4 +1,5 @@
 use std::{
+    collections::HashSet,
     error::Error,
     path::{Path, PathBuf},
     sync::Arc,
@@ -15,7 +16,7 @@ use tokio::{
     sync::OnceCell,
 };
 use tokio_util::sync::CancellationToken;
-use tracing::{Span, debug, error, instrument, warn};
+use tracing::{Instrument, Span, debug, error, instrument, warn};
 
 use super::{http_cache, rclone::RcloneStorage};
 use crate::{
@@ -91,7 +92,7 @@ pub(super) trait Repo: Send + Sync {
 pub(super) fn make_repo_from_config(cfg: &DownloaderConfig) -> Arc<dyn Repo> {
     match cfg.layout {
         RepoLayoutKind::VrpPublic => Arc::new(VRPPublicRepo::from_config(cfg)),
-        RepoLayoutKind::Ffa => Arc::new(FFARepo {}),
+        RepoLayoutKind::Ffa => Arc::new(FFARepo::from_config(cfg)),
     }
 }
 
@@ -118,7 +119,15 @@ pub(super) struct BuildStorageArgs<'a> {
 
 /// FFA layout – direct files and list under a configurable remote/root.
 #[derive(Debug, Clone, Default)]
-pub(super) struct FFARepo {}
+pub(super) struct FFARepo {
+    share_blacklist_path: Option<String>,
+}
+
+impl FFARepo {
+    fn from_config(cfg: &DownloaderConfig) -> Self {
+        Self { share_blacklist_path: cfg.share_blacklist_path.clone() }
+    }
+}
 
 #[async_trait]
 impl Repo for FFARepo {
@@ -149,6 +158,20 @@ impl Repo for FFARepo {
         _http_client: &reqwest::Client,
         cancellation_token: CancellationToken,
     ) -> Result<Vec<CloudApp>> {
+        let blacklist_handle = if let Some(blacklist_path) =
+            self.share_blacklist_path.as_deref().filter(|p| !p.is_empty())
+        {
+            let storage_clone = storage.clone();
+            let cache_dir = cache_dir.to_path_buf();
+            let path = blacklist_path.to_string();
+            Some(tokio::spawn(
+                async move { load_blacklist_from_remote(&storage_clone, &path, &cache_dir).await }
+                    .instrument(Span::current()),
+            ))
+        } else {
+            None
+        };
+
         let path = storage
             .download_file(list_path, cache_dir.to_path_buf(), Some(cancellation_token))
             .await
@@ -159,8 +182,28 @@ impl Repo for FFARepo {
         let mut reader =
             csv_async::AsyncReaderBuilder::new().delimiter(b';').create_deserializer(file);
         let records = reader.deserialize();
-        let cloud_apps: Vec<CloudApp> =
+        let mut cloud_apps: Vec<CloudApp> =
             records.try_collect().await.context("Failed to parse game list file")?;
+
+        if let Some(handle) = blacklist_handle {
+            match handle.await {
+                Ok(Ok(blacklist)) => {
+                    apply_sharing_blacklist(&mut cloud_apps, &blacklist);
+                }
+                Ok(Err(e)) => {
+                    warn!(
+                        error = e.as_ref() as &dyn Error,
+                        "Failed to load sharing blacklist in FFA repo, continuing without it"
+                    );
+                }
+                Err(e) => {
+                    warn!(
+                        error = &e as &dyn Error,
+                        "Blacklist task join error in FFA repo, continuing without blacklist"
+                    );
+                }
+            }
+        }
 
         Span::current().record("count", cloud_apps.len());
         Ok(cloud_apps)
@@ -178,6 +221,7 @@ pub(super) struct VRPPublicRepo {
     pub meta_archive: String,
     pub list_filename: String,
     pub remote_name: String,
+    pub share_blacklist_path: Option<String>,
     creds: OnceCell<VRPPublicState>,
 }
 
@@ -189,6 +233,7 @@ impl VRPPublicRepo {
             meta_archive: "meta.7z".to_string(),
             list_filename: "VRP-GameList.txt".to_string(),
             remote_name: "VRP-Public".to_string(),
+            share_blacklist_path: cfg.share_blacklist_path.clone(),
             creds: OnceCell::new(),
         }
     }
@@ -333,11 +378,18 @@ impl Repo for VRPPublicRepo {
             state.password.clone()
         };
 
+        let wanted_paths: Vec<&str> =
+            if let Some(path) = self.share_blacklist_path.as_deref().filter(|p| !p.is_empty()) {
+                vec![self.list_filename.as_str(), path]
+            } else {
+                vec![self.list_filename.as_str()]
+            };
+
         decompress_archive(
             &meta_path,
             cache_dir,
             Some(&pass),
-            Some(&[self.list_filename.as_str()]),
+            Some(&wanted_paths),
             Some(cancellation_token.clone()),
         )
         .await
@@ -354,8 +406,14 @@ impl Repo for VRPPublicRepo {
         let mut reader =
             csv_async::AsyncReaderBuilder::new().delimiter(b';').create_deserializer(file);
         let records = reader.deserialize();
-        let apps: Vec<CloudApp> =
+        let mut apps: Vec<CloudApp> =
             records.try_collect().await.context("Failed to parse VRP-public list")?;
+
+        if let Some(path) = self.share_blacklist_path.as_deref().filter(|p| !p.is_empty()) {
+            let blacklist_path = cache_dir.join(path);
+            let blacklist = load_blacklist_from_path(&blacklist_path).await?;
+            apply_sharing_blacklist(&mut apps, &blacklist);
+        }
         Ok(apps)
     }
 
@@ -601,5 +659,73 @@ impl Repo for VRPPublicRepo {
 
     fn generated_config_filename(&self) -> Option<&'static str> {
         Some("rclone.vrp.conf")
+    }
+}
+
+#[instrument(
+    level = "debug",
+    name = "load_blacklist_from_remote",
+    skip(storage),
+    fields(path = %remote_path, cache_dir = %cache_dir.display())
+)]
+async fn load_blacklist_from_remote(
+    storage: &RcloneStorage,
+    remote_path: &str,
+    cache_dir: &Path,
+) -> Result<HashSet<String>> {
+    match storage.download_file(remote_path.to_string(), cache_dir.to_path_buf(), None).await {
+        Ok(path) => load_blacklist_from_path(&path).await,
+        Err(e) => {
+            warn!(
+                error = e.as_ref() as &dyn Error,
+                path = remote_path,
+                "Failed to download sharing blacklist, continuing without it"
+            );
+            Ok(HashSet::new())
+        }
+    }
+}
+
+#[instrument(
+    level = "debug",
+    name = "load_blacklist_from_path",
+    fields(path = %path.display())
+)]
+async fn load_blacklist_from_path(path: &Path) -> Result<HashSet<String>> {
+    if !path.exists() {
+        warn!(path = %path.display(), "Sharing blacklist file does not exist");
+        return Ok(HashSet::new());
+    }
+
+    match fs::read_to_string(path).await {
+        Ok(text) => Ok(parse_blacklist(&text)),
+        Err(e) => {
+            warn!(
+                error = &e as &dyn Error,
+                path = %path.display(),
+                "Failed to read sharing blacklist file, continuing without it"
+            );
+            Ok(HashSet::new())
+        }
+    }
+}
+
+fn parse_blacklist(text: &str) -> HashSet<String> {
+    text.lines()
+        .map(str::trim)
+        .filter(|line| !line.is_empty() && !line.starts_with('#'))
+        .map(|line| line.to_string())
+        .collect()
+}
+
+fn apply_sharing_blacklist(apps: &mut [CloudApp], blacklist: &HashSet<String>) {
+    if blacklist.is_empty() {
+        return;
+    }
+
+    for app in apps {
+        if blacklist.contains(&app.package_name) || blacklist.contains(&app.original_package_name) {
+            app.is_sharing_blacklisted = true;
+        }
     }
 }

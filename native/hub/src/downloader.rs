@@ -79,6 +79,18 @@ impl Downloader {
             .build()
             .unwrap_or_else(|_| reqwest::Client::new());
 
+        let share_remote_configured =
+            config.share_remote_name.as_deref().map(|s| !s.is_empty()).unwrap_or(false)
+                || config.share_remote_path.as_deref().map(|s| !s.is_empty()).unwrap_or(false);
+        let blacklist_path_configured =
+            config.share_blacklist_path.as_deref().map(|s| !s.is_empty()).unwrap_or(false);
+        if share_remote_configured && !blacklist_path_configured {
+            warn!(
+                "App sharing remote is configured but `share_blacklist_path` is missing; sharing \
+                 blacklist will be disabled"
+            );
+        }
+
         let mut remote_for_init = settings.rclone_remote_name.clone();
         if matches!(config.layout, RepoLayoutKind::Ffa) {
             remote_for_init = Self::pick_remote_name(

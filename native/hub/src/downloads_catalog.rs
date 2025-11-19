@@ -13,8 +13,10 @@ use tokio::fs;
 use tokio_stream::{StreamExt, wrappers::WatchStream};
 use tracing::{Span, debug, error, info, instrument, trace, warn};
 
-use crate::models::{DownloadCleanupPolicy, Settings, signals::downloads_local::*};
-use crate::downloader::metadata::read_download_metadata;
+use crate::{
+    downloader::metadata::read_download_metadata,
+    models::{DownloadCleanupPolicy, Settings, signals::downloads_local::*},
+};
 
 #[derive(Debug, Clone)]
 pub(crate) struct DownloadsCatalog {

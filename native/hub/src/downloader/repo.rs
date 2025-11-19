@@ -343,9 +343,9 @@ impl Repo for VRPPublicRepo {
         .await
         .with_context(|| "Failed to extract meta.7z")?;
 
-        if let Err(e) = fs::remove_file(&meta_path).await {
-            warn!(error = &e as &dyn Error, "Failed to remove meta.7z");
-        }
+        // if let Err(e) = fs::remove_file(&meta_path).await {
+        //     warn!(error = &e as &dyn Error, "Failed to remove meta.7z");
+        // }
 
         let list_path = cache_dir.join(&self.list_filename);
         let file = File::open(&list_path)

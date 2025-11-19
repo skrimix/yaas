@@ -1,4 +1,4 @@
-use std::{collections::HashMap, path::Path};
+use std::{collections::HashMap, error::Error, path::Path};
 
 use anyhow::{Context, Result};
 use fs_err::tokio::{self as fs, File, OpenOptions};
@@ -48,7 +48,7 @@ async fn load_meta(dir: &Path) -> Result<MetaStore> {
         Ok(meta) => Ok(meta),
         Err(e) => {
             warn!(
-                error = %e,
+                error = &e as &dyn Error,
                 path = %path.display(),
                 "Invalid cache metadata, starting with empty store"
             );
@@ -282,7 +282,7 @@ async fn swap_and_persist(
     let mut meta_after = load_meta(cache_dir).await.unwrap_or_default();
     meta_after.update(url.to_string(), new_meta.clone());
     if let Err(e) = save_meta(cache_dir, &meta_after).await {
-        warn!(error = %e, dir = %cache_dir.display(), "Failed to persist meta.json");
+        warn!(error = e.as_ref() as &dyn Error, dir = %cache_dir.display(), "Failed to persist meta.json");
     }
     Ok(())
 }

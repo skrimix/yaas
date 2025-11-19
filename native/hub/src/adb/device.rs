@@ -118,7 +118,10 @@ impl AdbDevice {
 
         // Refresh identity first to use manufacturer + model if available
         if let Err(e) = device.refresh_identity().await {
-            warn!(error = %e, "Failed to refresh device identity, using fallback name");
+            warn!(
+                error = e.as_ref() as &dyn Error,
+                "Failed to refresh device identity, using fallback name"
+            );
         }
         device.refresh().await.context("Failed to refresh device info")?;
         Ok(device)
@@ -353,7 +356,10 @@ impl AdbDevice {
             Ok(json) => match HeadsetControllersInfo::from_rstest_json(&json) {
                 Ok(info) => info,
                 Err(e) => {
-                    warn!(error = %e, "Failed to parse rstest json, falling back to dumpsys");
+                    warn!(
+                        error = e.as_ref() as &dyn Error,
+                        "Failed to parse rstest json, falling back to dumpsys"
+                    );
                     let dump = self
                         .shell(CONTROLLER_INFO_COMMAND_DUMPSYS)
                         .await
@@ -362,7 +368,10 @@ impl AdbDevice {
                 }
             },
             Err(e) => {
-                warn!(error = %e, "rstest command failed, falling back to dumpsys");
+                warn!(
+                    error = e.as_ref() as &dyn Error,
+                    "rstest command failed, falling back to dumpsys"
+                );
                 let dump = self
                     .shell(CONTROLLER_INFO_COMMAND_DUMPSYS)
                     .await
@@ -1175,7 +1184,7 @@ impl AdbDevice {
         match self.inner.stat(path).await {
             Ok(stat) => Ok(stat.file_mode == UnixFileStatus::Directory),
             Err(e) => {
-                trace!(error = %e, path = %path.display(), "stat failed");
+                trace!(error = &e as &dyn Error, path = %path.display(), "stat failed");
                 Ok(false)
             }
         }

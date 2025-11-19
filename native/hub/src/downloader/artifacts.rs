@@ -194,7 +194,7 @@ async fn ensure_remote_rclone_from_zip(
             extract_rclone_from_zip(&zip_path, cache_dir, bin_dst).await?;
             // Update checksum after (re)extraction
             if let Err(e) = write_md5_file(bin_dst, &md5_path).await {
-                warn!(error = %e, "Failed to write rclone MD5 stamp");
+                warn!(error = e.as_ref() as &dyn Error, "Failed to write rclone MD5 stamp");
             }
         }
         Ok(DownloadResult::Downloaded(_)) => {
@@ -202,7 +202,7 @@ async fn ensure_remote_rclone_from_zip(
             extract_rclone_from_zip(&zip_path, cache_dir, bin_dst).await?;
             // Persist checksum for future NotModified fast‑path
             if let Err(e) = write_md5_file(bin_dst, &md5_path).await {
-                warn!(error = %e, "Failed to write rclone MD5 stamp");
+                warn!(error = e.as_ref() as &dyn Error, "Failed to write rclone MD5 stamp");
             }
         }
         Err(e) => {
@@ -218,7 +218,7 @@ async fn ensure_remote_rclone_from_zip(
             if !bin_dst.exists() {
                 extract_rclone_from_zip(&zip_path, cache_dir, bin_dst).await?;
                 if let Err(e) = write_md5_file(bin_dst, &md5_path).await {
-                    warn!(error = %e, "Failed to write rclone MD5 stamp");
+                    warn!(error = e.as_ref() as &dyn Error, "Failed to write rclone MD5 stamp");
                 }
             }
         }

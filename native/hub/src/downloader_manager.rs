@@ -8,7 +8,7 @@ use anyhow::{Context, Result, ensure};
 use rinf::{DartSignal, RustSignal};
 use tokio::sync::{Mutex, RwLock};
 use tokio_stream::wrappers::WatchStream;
-use tracing::{debug, info, instrument};
+use tracing::{debug, error, info, instrument};
 
 use crate::{
     downloader::{self, Downloader, config::DownloaderConfig},
@@ -77,7 +77,7 @@ impl DownloaderManager {
                     .init_from_disk(app_dir_init.clone(), settings_handler_init.clone())
                     .await
                 {
-                    tracing::error!("Failed to initialize downloader: {:#}", e);
+                    error!("Failed to initialize downloader: {:#}", e);
                 }
             });
         } else {
@@ -93,10 +93,7 @@ impl DownloaderManager {
                             .init_from_disk(app_dir_dl.clone(), settings_handler_dl.clone())
                             .await
                         {
-                            tracing::error!(
-                                "Failed to initialize downloader after default config: {:#}",
-                                e
-                            );
+                            error!("Failed to initialize downloader after default config: {:#}", e);
                         }
                     }
                     Err(e) => {
@@ -242,11 +239,14 @@ impl DownloaderManager {
                                     .init_from_disk(app_dir.clone(), settings_handler.clone())
                                     .await
                                 {
-                                    tracing::error!(error = %e, "Downloader init after install failed");
+                                    error!(
+                                        error = e.as_ref() as &dyn Error,
+                                        "Downloader init after install failed"
+                                    );
                                 }
                             }
                             Err(e) => {
-                                tracing::error!(
+                                error!(
                                     error = e.as_ref() as &dyn Error,
                                     "Failed to install downloader config"
                                 );

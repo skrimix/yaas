@@ -7,7 +7,7 @@ use std::{
 };
 
 use anyhow::{Context, Result, ensure};
-use lazy_regex::regex;
+use lazy_regex::lazy_regex;
 use rinf::{DartSignal, RustSignal};
 use tokio::fs;
 use tokio_stream::{StreamExt, wrappers::WatchStream};
@@ -264,7 +264,7 @@ impl DownloadsCatalog {
                     _ => unreachable!(),
                 };
 
-                let pattern = regex!(r"^(.+) v\d+\+.+$");
+                let pattern = lazy_regex!(r"^(.+) v\d+\+.+$");
                 let Some(captures) = pattern.captures(installed_full_name) else {
                     warn!(
                         installed = installed_full_name,

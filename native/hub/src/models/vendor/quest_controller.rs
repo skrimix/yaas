@@ -1,5 +1,5 @@
 use anyhow::{Context, Result};
-use lazy_regex::regex;
+use lazy_regex::lazy_regex;
 use rinf::SignalPiece;
 use serde::{Deserialize, Serialize};
 use tracing::{debug, trace, warn};
@@ -108,7 +108,7 @@ impl HeadsetControllersInfo {
     pub(crate) fn from_dumpsys(lines: &str) -> Self {
         let mut result = Self::default();
 
-        let re = regex!(
+        let re = lazy_regex!(
             r#"^\s*Paired.+Type:\s*(?<type>\w{4,5}).+Battery:\s*(?<battery>\-*\d{1,3})%.+ Status: (?<status>\w+).+$"#m
         );
 

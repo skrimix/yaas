@@ -1,6 +1,6 @@
 use std::str::FromStr;
 
-use lazy_regex::regex;
+use lazy_regex::lazy_regex;
 use rinf::SignalPiece;
 use serde::{Deserialize, Deserializer, Serialize};
 /// Custom helper used only during deserialization from CSV/remote list.

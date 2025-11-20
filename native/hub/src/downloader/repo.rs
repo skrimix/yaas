@@ -32,6 +32,13 @@ pub(super) struct BuildStorageResult {
     pub persist_remote: Option<String>,
 }
 
+#[derive(Debug)]
+pub(super) struct RepoAppList {
+    pub apps: Vec<CloudApp>,
+    /// Package names that repo doesn't want donations for.
+    pub donation_blacklist: Vec<String>,
+}
+
 /// High-level operations a repository must implement.
 #[async_trait]
 pub(super) trait Repo: Send + Sync {
@@ -46,7 +53,7 @@ pub(super) trait Repo: Send + Sync {
         cache_dir: &Path,
         http_client: &reqwest::Client,
         cancellation_token: CancellationToken,
-    ) -> Result<Vec<CloudApp>>;
+    ) -> Result<RepoAppList>;
 
     /// Source path under the root directory for download.
     fn source_for_download(&self, app_full_name: &str) -> String;
@@ -157,7 +164,7 @@ impl Repo for FFARepo {
         cache_dir: &Path,
         _http_client: &reqwest::Client,
         cancellation_token: CancellationToken,
-    ) -> Result<Vec<CloudApp>> {
+    ) -> Result<RepoAppList> {
         let blacklist_handle = if let Some(blacklist_path) =
             self.donation_blacklist_path.as_deref().filter(|p| !p.is_empty())
         {
@@ -182,13 +189,13 @@ impl Repo for FFARepo {
         let mut reader =
             csv_async::AsyncReaderBuilder::new().delimiter(b';').create_deserializer(file);
         let records = reader.deserialize();
-        let mut cloud_apps: Vec<CloudApp> =
+        let cloud_apps: Vec<CloudApp> =
             records.try_collect().await.context("Failed to parse game list file")?;
-
+        let mut donation_blacklist = Vec::new();
         if let Some(handle) = blacklist_handle {
             match handle.await {
                 Ok(Ok(blacklist)) => {
-                    apply_donation_blacklist(&mut cloud_apps, &blacklist);
+                    donation_blacklist = blacklist.into_iter().collect();
                 }
                 Ok(Err(e)) => {
                     warn!(
@@ -206,7 +213,7 @@ impl Repo for FFARepo {
         }
 
         Span::current().record("count", cloud_apps.len());
-        Ok(cloud_apps)
+        Ok(RepoAppList { apps: cloud_apps, donation_blacklist })
     }
 
     fn source_for_download(&self, app_full_name: &str) -> String {
@@ -364,7 +371,7 @@ impl Repo for VRPPublicRepo {
         cache_dir: &Path,
         http_client: &reqwest::Client,
         cancellation_token: CancellationToken,
-    ) -> Result<Vec<CloudApp>> {
+    ) -> Result<RepoAppList> {
         let meta_path = storage
             .download_file(
                 self.meta_archive.clone(),
@@ -406,15 +413,16 @@ impl Repo for VRPPublicRepo {
         let mut reader =
             csv_async::AsyncReaderBuilder::new().delimiter(b';').create_deserializer(file);
         let records = reader.deserialize();
-        let mut apps: Vec<CloudApp> =
+        let apps: Vec<CloudApp> =
             records.try_collect().await.context("Failed to parse VRP-public list")?;
 
+        let mut donation_blacklist = Vec::new();
         if let Some(path) = self.donation_blacklist_path.as_deref().filter(|p| !p.is_empty()) {
             let blacklist_path = cache_dir.join(path);
             let blacklist = load_blacklist_from_path(&blacklist_path).await?;
-            apply_donation_blacklist(&mut apps, &blacklist);
+            donation_blacklist = blacklist.into_iter().collect();
         }
-        Ok(apps)
+        Ok(RepoAppList { apps, donation_blacklist })
     }
 
     fn source_for_download(&self, app_full_name: &str) -> String {
@@ -716,16 +724,4 @@ fn parse_blacklist(text: &str) -> HashSet<String> {
         .filter(|line| !line.is_empty() && !line.starts_with('#'))
         .map(|line| line.to_string())
         .collect()
-}
-
-fn apply_donation_blacklist(apps: &mut [CloudApp], blacklist: &HashSet<String>) {
-    if blacklist.is_empty() {
-        return;
-    }
-
-    for app in apps {
-        if blacklist.contains(&app.package_name) || blacklist.contains(&app.original_package_name) {
-            app.is_donation_blacklisted = true;
-        }
-    }
 }

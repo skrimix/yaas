@@ -50,6 +50,7 @@ pub(crate) struct Downloader {
     root_dir: String,
     list_path: String,
     cloud_apps: Mutex<Vec<CloudApp>>,
+    donation_blacklist: Mutex<Vec<String>>,
     storage: RwLock<RcloneStorage>,
     download_dir: RwLock<PathBuf>,
     current_load_token: RwLock<CancellationToken>,
@@ -152,6 +153,7 @@ impl Downloader {
             root_dir,
             list_path,
             cloud_apps: Mutex::new(Vec::new()),
+            donation_blacklist: Mutex::new(Vec::new()),
             storage: RwLock::new(storage),
             download_dir: RwLock::new(PathBuf::from(settings.downloads_location.clone())),
             current_load_token: RwLock::new(CancellationToken::new()),
@@ -520,27 +522,35 @@ impl Downloader {
 
     #[instrument(level = "debug", skip(self, cancellation_token))]
     async fn load_app_list(&self, force_refresh: bool, cancellation_token: CancellationToken) {
-        fn send_event(is_loading: bool, apps: Option<Vec<CloudApp>>, error: Option<String>) {
+        fn send_event(
+            is_loading: bool,
+            apps: Option<Vec<CloudApp>>,
+            donation_blacklist: Option<Vec<String>>,
+            error: Option<String>,
+        ) {
             if let Some(ref a) = apps {
                 debug!(count = a.len(), ?error, "Sending app list to UI");
             }
-            CloudAppsChangedEvent { is_loading, apps, error }.send_signal_to_dart();
+            CloudAppsChangedEvent { is_loading, apps, donation_blacklist, error }
+                .send_signal_to_dart();
         }
 
         // Short lock to decide refresh vs cached send
-        let (should_refresh, cached_snapshot) = {
+        let (should_refresh, cached_apps, cached_blacklist) = {
             let cache = self.cloud_apps.lock().await;
+            let blacklist_cache = self.donation_blacklist.lock().await;
             let should = cache.is_empty() || force_refresh;
-            let snapshot = if should { None } else { Some(cache.clone()) };
-            (should, snapshot)
+            let apps_snapshot = if should { None } else { Some(cache.clone()) };
+            let blacklist_snapshot = if should { None } else { Some(blacklist_cache.clone()) };
+            (should, apps_snapshot, blacklist_snapshot)
         };
 
         if !should_refresh {
             debug!(
-                count = cached_snapshot.as_ref().map(|v| v.len()).unwrap_or(0),
+                count = cached_apps.as_ref().map(|v| v.len()).unwrap_or(0),
                 "Using cached app list"
             );
-            send_event(false, cached_snapshot, None);
+            send_event(false, cached_apps, cached_blacklist, None);
             return;
         }
 
@@ -550,7 +560,7 @@ impl Downloader {
         }
 
         info!("Loading app list from remote");
-        send_event(true, None, None);
+        send_event(true, None, None, None);
 
         let storage = self.storage.read().await.clone();
         let list_path = self.list_path.clone();
@@ -563,13 +573,17 @@ impl Downloader {
             repo.load_app_list(storage, list_path, &cache_dir, &client, cancellation_token.clone());
 
         match tokio::time::timeout(timeout, fut).await {
-            Ok(Ok(apps)) => {
-                debug!(len = apps.len(), "Loaded app list successfully");
+            Ok(Ok(result)) => {
+                debug!(len = result.apps.len(), "Loaded app list successfully");
                 {
                     let mut cache = self.cloud_apps.lock().await;
-                    *cache = apps.clone();
+                    *cache = result.apps.clone();
                 }
-                send_event(false, Some(apps), None);
+                {
+                    let mut blacklist_cache = self.donation_blacklist.lock().await;
+                    *blacklist_cache = result.donation_blacklist.clone();
+                }
+                send_event(false, Some(result.apps), Some(result.donation_blacklist), None);
             }
             Ok(Err(e)) => {
                 if cancellation_token.is_cancelled() {
@@ -577,11 +591,11 @@ impl Downloader {
                     return;
                 }
                 error!(error = e.as_ref() as &dyn Error, "Failed to load app list");
-                send_event(false, None, Some(format!("Failed to load app list: {e:#}")));
+                send_event(false, None, None, Some(format!("Failed to load app list: {e:#}")));
             }
             Err(_) => {
                 warn!("App list load timed out");
-                send_event(false, None, Some("Timed out while loading app list".into()));
+                send_event(false, None, None, Some("Timed out while loading app list".into()));
             }
         }
     }

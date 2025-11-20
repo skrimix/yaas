@@ -14,5 +14,7 @@ pub(crate) struct CloudAppsChangedEvent {
     pub is_loading: bool,
     /// New app list if it changed. None means no change since last
     pub apps: Option<Vec<CloudApp>>,
+    /// Package names that repo doesn't want donations for, if it changed. None means no change since last.
+    pub donation_blacklist: Option<Vec<String>>,
     pub error: Option<String>,
 }

@@ -8,12 +8,14 @@ class CloudAppsState extends ChangeNotifier {
   String _mediaBaseUrl = '';
   String? _mediaCacheDir;
   final Map<String, int> _maxVersionCodeByPackage = {};
+  final Set<String> _donationBlacklist = {};
 
   List<CloudApp> get apps => _apps;
   String? get error => _error;
   bool get isLoading => _isLoading;
   String get mediaBaseUrl => _mediaBaseUrl;
   String? get mediaCacheDir => _mediaCacheDir;
+  Set<String> get donationBlacklist => _donationBlacklist;
 
   /// Returns the newest known cloud versionCode for a given package.
   int? newestVersionCodeForPackage(String packageName) =>
@@ -31,6 +33,12 @@ class CloudAppsState extends ChangeNotifier {
     CloudAppsChangedEvent.rustSignalStream.listen((event) {
       _isLoading = event.message.isLoading;
       _error = event.message.error;
+      final blacklist = event.message.donationBlacklist;
+      if (blacklist != null) {
+        _donationBlacklist
+          ..clear()
+          ..addAll(blacklist);
+      }
       final apps = event.message.apps;
       if (apps != null) {
         _setApps(apps);
@@ -47,6 +55,7 @@ class CloudAppsState extends ChangeNotifier {
       if (!msg.available) {
         _setApps([]);
         _error = null;
+        _donationBlacklist.clear();
         _isLoading = false;
         notifyListeners();
       } else {
@@ -99,5 +108,9 @@ class CloudAppsState extends ChangeNotifier {
         _maxVersionCodeByPackage[app.packageName] = app.versionCode;
       }
     }
+  }
+
+  bool isDonationBlacklisted(String packageName) {
+    return _donationBlacklist.contains(packageName);
   }
 }

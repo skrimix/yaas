@@ -311,6 +311,7 @@ mod tests {
             root_dir: "Quest Games".to_string(),
             list_path: "FFA.txt".to_string(),
             vrp_public_url: "".to_string(),
+            config_update_url: None,
         }
     }
 
@@ -341,6 +342,7 @@ mod tests {
             root_dir: "Quest Games".to_string(),
             list_path: "FFA.txt".to_string(),
             vrp_public_url: "".to_string(),
+            config_update_url: None,
         };
         let err =
             prepare_artifacts(dir.path(), &cfg).await.expect_err("Prepare artifacts should fail");
@@ -411,6 +413,7 @@ mod tests {
             root_dir: "Quest Games".to_string(),
             list_path: "FFA.txt".to_string(),
             vrp_public_url: "".to_string(),
+            config_update_url: None,
         };
 
         // First run downloads both files

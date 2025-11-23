@@ -14,7 +14,7 @@ use tracing::{debug, instrument, warn};
 
 /// Per-URL metadata kept for caching decisions.
 #[derive(Debug, Clone, Default, Serialize, Deserialize)]
-pub(super) struct MetaEntry {
+pub(crate) struct MetaEntry {
     pub etag: Option<String>,
     pub last_modified: Option<String>,
     pub md5: String,
@@ -97,7 +97,7 @@ fn extract_header_meta(headers: &reqwest::header::HeaderMap) -> HeaderMeta {
 
 /// Result of a conditional binary download.
 #[derive(Debug)]
-pub(super) enum DownloadResult {
+pub(crate) enum DownloadResult {
     NotModified,
     Downloaded(MetaEntry),
 }
@@ -108,7 +108,7 @@ pub(super) enum DownloadResult {
     skip(client, progress),
     fields(url = url, dst = %dst.display(), cache_dir = %cache_dir.display())
 )]
-pub(super) async fn update_file_cached(
+pub(crate) async fn update_file_cached(
     client: &reqwest::Client,
     url: &str,
     dst: &Path,

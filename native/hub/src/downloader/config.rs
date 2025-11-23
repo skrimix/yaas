@@ -38,6 +38,9 @@ pub(crate) struct DownloaderConfig {
     pub list_path: String,
     #[serde(default)]
     pub vrp_public_url: String,
+    /// Optional URL used to update this downloader configuration.
+    #[serde(default)]
+    pub config_update_url: Option<String>,
 }
 
 fn default_root_dir() -> String {

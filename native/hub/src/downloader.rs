@@ -43,6 +43,9 @@ mod http_cache;
 pub(crate) mod metadata;
 mod repo;
 
+// Re-export selected HTTP cache helpers for use by the manager.
+pub(crate) use http_cache::update_file_cached;
+
 pub(crate) struct Downloader {
     config: Arc<DownloaderConfig>,
     cache_dir: PathBuf,

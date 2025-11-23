@@ -14,6 +14,7 @@ use tokio_util::sync::CancellationToken;
 use tracing::{Instrument, debug, error, info, info_span, instrument, warn};
 
 use crate::{
+    adb::PackageName,
     downloader::{
         config::{DownloaderConfig, RepoLayoutKind},
         rclone::RcloneStorage,
@@ -453,7 +454,16 @@ impl Downloader {
                         debug!(%package_name, "Received GetAppDetailsRequest");
                         let client = self.http_client.clone();
                         tokio::spawn(async move {
-                            match cloud_api::fetch_app_details(&client, package_name.clone()).await {
+                            let package = match PackageName::parse(&package_name) {
+                                Ok(p) => p,
+                                Err(e) => {
+                                    error!(error = e.as_ref() as &dyn Error, "Invalid package name");
+                                    AppDetailsResponse::default_error(package_name, format!("Invalid package name: {:#}", e)).send_signal_to_dart();
+                                    return;
+                                }
+                            };
+
+                            match cloud_api::fetch_app_details(&client, package).await {
                                 Ok(Some(api)) => {
                                     let crate::models::AppApiResponse {
                                         id,

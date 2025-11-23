@@ -3,11 +3,10 @@ use std::{path::Path, time::Duration};
 use anyhow::{Context, Result};
 use tokio::sync::mpsc;
 use tokio_util::sync::CancellationToken;
-use tracing::{debug, info, instrument, warn, Instrument, Span};
-
-use crate::adb::device::SideloadProgress;
+use tracing::{Instrument, Span, debug, info, instrument, warn};
 
 use super::{AdbStepConfig, InstallStepConfig, ProgressUpdate, TaskManager};
+use crate::adb::{PackageName, device::SideloadProgress};
 
 impl TaskManager {
     #[instrument(level = "debug", skip(self, update_progress, token, spawn_install))]
@@ -230,12 +229,12 @@ impl TaskManager {
     #[instrument(skip(self, update_progress, token))]
     pub(super) async fn handle_uninstall(
         &self,
-        package_name: String,
+        package: PackageName,
         update_progress: &impl Fn(ProgressUpdate),
         token: CancellationToken,
     ) -> Result<()> {
         debug!(
-            package_name = %package_name,
+            package_name = %package,
             adb_permits_available = self.adb_semaphore.available_permits(),
             "Starting uninstall task"
         );
@@ -243,7 +242,6 @@ impl TaskManager {
         let adb_handler = self.adb_handler.clone();
         let device = adb_handler.current_device().await?;
 
-        let pkg = package_name.clone();
         self.run_adb_one_step(
             AdbStepConfig {
                 step_number: 1,
@@ -254,7 +252,7 @@ impl TaskManager {
             update_progress,
             token,
             move || {
-                let package_name = pkg.clone();
+                let package_name = package.clone();
                 async move { adb_handler.uninstall_package(&device, &package_name).await }
             },
         )

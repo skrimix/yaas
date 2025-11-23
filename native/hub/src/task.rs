@@ -2,28 +2,28 @@ use std::{
     collections::HashMap,
     error::Error,
     sync::{
-        atomic::{AtomicU64, Ordering},
         Arc,
+        atomic::{AtomicU64, Ordering},
     },
     time::Duration,
 };
 
 use rinf::{DartSignal, RustSignal};
 use tokio::sync::{Mutex, RwLock, Semaphore};
-use tokio_stream::{wrappers::WatchStream, StreamExt};
+use tokio_stream::{StreamExt, wrappers::WatchStream};
 use tokio_util::sync::CancellationToken;
 use tracing::{debug, error, info, instrument, warn};
 
 use crate::{
-    adb::AdbHandler,
+    adb::{AdbHandler, PackageName},
     downloader_manager::DownloaderManager,
     downloads_catalog::DownloadsCatalog,
     models::{
+        Settings,
         signals::{
             system::Toast,
             task::{Task, TaskCancelRequest, TaskKind, TaskProgress, TaskRequest, TaskStatus},
         },
-        Settings,
     },
 };
 
@@ -306,7 +306,11 @@ impl TaskManager {
             }
             Task::Uninstall { package_name, .. } => {
                 info!(task_id = id, "Executing uninstall task");
-                self.handle_uninstall(package_name.clone(), &update_progress, token.clone()).await
+                async {
+                    let package = PackageName::parse(package_name)?;
+                    self.handle_uninstall(package, &update_progress, token.clone()).await
+                }
+                .await
             }
             Task::BackupApp {
                 package_name,
@@ -337,12 +341,16 @@ impl TaskManager {
             }
             Task::DonateApp { package_name, display_name } => {
                 info!(task_id = id, "Executing app donation task");
-                self.handle_donate_app(
-                    package_name.clone(),
-                    display_name.clone(),
-                    &update_progress,
-                    token.clone(),
-                )
+                async {
+                    let package = PackageName::parse(package_name)?;
+                    self.handle_donate_app(
+                        package,
+                        display_name.clone(),
+                        &update_progress,
+                        token.clone(),
+                    )
+                    .await
+                }
                 .await
             }
         };
@@ -448,7 +456,7 @@ fn send_progress(progress: TaskProgress) {
     progress.send_signal_to_dart();
 }
 
-mod download;
-mod install;
 mod backup;
 mod donate;
+mod download;
+mod install;

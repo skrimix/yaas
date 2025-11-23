@@ -25,7 +25,7 @@ use tokio_util::sync::CancellationToken;
 use tracing::{Instrument, Span, debug, error, info, instrument, trace, warn};
 
 use crate::{
-    adb::{PACKAGE_NAME_REGEX, battery_dump, ensure_valid_package},
+    adb::{PACKAGE_NAME_REGEX, PackageName, battery_dump},
     apk::get_apk_info,
     archive::decompress_all_7z_in_dir,
     models::{
@@ -406,8 +406,7 @@ impl AdbDevice {
 
     /// Launches an application on the device
     #[instrument(level = "debug", skip(self), err)]
-    pub(super) async fn launch(&self, package: &str) -> Result<()> {
-        ensure_valid_package(package)?;
+    pub(super) async fn launch(&self, package: &PackageName) -> Result<()> {
         // First try launching with VR category
         let output = self
             .shell(&format!("monkey -p {package} -c com.oculus.intent.category.VR 1"))
@@ -427,8 +426,8 @@ impl AdbDevice {
             .context("Failed to execute monkey command")?;
 
         if output.contains("monkey aborted") {
-            warn!(output, package, "Monkey command returned error");
-            return Err(anyhow!("Failed to launch package '{}'", package));
+            warn!(output, %package, "Monkey command returned error");
+            return Err(anyhow!("Failed to launch package '{package}'"));
         }
 
         info!("Launched with default category");
@@ -437,9 +436,11 @@ impl AdbDevice {
 
     /// Force stops an application on the device
     #[instrument(level = "debug", skip(self), err)]
-    pub(super) async fn force_stop(&self, package: &str) -> Result<()> {
-        ensure_valid_package(package)?;
-        self.inner.force_stop(package).await.context("Failed to force stop package")
+    pub(super) async fn force_stop(&self, package: &PackageName) -> Result<()> {
+        self.inner
+            .force_stop(package.as_str())
+            .await
+            .with_context(|| format!("Failed to force stop {package}"))
     }
 
     /// Resolves the effective remote destination path for a push operation.
@@ -797,7 +798,8 @@ impl AdbDevice {
                     });
                     let apk_info =
                         get_apk_info(apk_path).context("Failed to get APK info for backup")?;
-                    let package_name = apk_info.package_name;
+                    let package_name = PackageName::parse(&apk_info.package_name)
+                        .context("Invalid package name in APK info")?;
                     let backup_path = self
                         .backup_app(
                             &package_name,
@@ -842,9 +844,8 @@ impl AdbDevice {
 
     /// Uninstalls a package from the device
     #[instrument(level = "debug", skip(self))]
-    pub(super) async fn uninstall_package(&self, package_name: &str) -> Result<()> {
-        ensure_valid_package(package_name)?;
-        match self.inner.uninstall_package(package_name).await {
+    pub(super) async fn uninstall_package(&self, package: &PackageName) -> Result<()> {
+        match self.inner.uninstall_package(package.as_str()).await {
             Ok(_) => Ok(()),
             Err(e) => {
                 let error_str = e.to_string();
@@ -852,25 +853,25 @@ impl AdbDevice {
 
                 if error_str.contains("DELETE_FAILED_INTERNAL_ERROR") {
                     // Check if package exists
-                    let escaped = package_name.replace('.', "\\.");
+                    let escaped = package.as_str().replace('.', "\\.");
                     let output = self
                         .shell(&format!("pm list packages | grep -w ^package:{escaped}$"))
                         .await
                         .unwrap_or_default();
 
                     if output.trim().is_empty() {
-                        Err(anyhow!("Package not installed: {}", package_name))
+                        Err(anyhow!("Package not installed: {package}"))
                     } else {
                         Err(e.into())
                     }
                 } else if error_str.contains("DELETE_FAILED_DEVICE_POLICY_MANAGER") {
                     info!(
                         "Package {} is protected by device policy, trying to force uninstall",
-                        package_name
+                        package.as_str()
                     );
-                    self.shell(&format!("pm disable-user {package_name}")).await?;
+                    self.shell(&format!("pm disable-user {package}")).await?;
                     self.inner
-                        .uninstall_package(package_name)
+                        .uninstall_package(package.as_str())
                         .await
                         .map_err(Into::<anyhow::Error>::into)
                 } else {
@@ -969,7 +970,17 @@ impl AdbDevice {
                     );
                     let package = &adb_args[0];
                     debug!(package, "Line {line_num}: uninstalling package");
-                    if let Err(e) = self.uninstall_package(package).await {
+                    let package = match PackageName::parse(package) {
+                        Ok(p) => p,
+                        Err(e) => {
+                            warn!(
+                                error = e.as_ref() as &dyn Error,
+                                "Line {line_num}: adb uninstall: invalid package '{package}'"
+                            );
+                            return Ok(());
+                        }
+                    };
+                    if let Err(e) = self.uninstall_package(&package).await {
                         warn!(
                             error = e.as_ref() as &dyn Error,
                             "Line {line_num}: adb uninstall: failed to uninstall package \
@@ -984,7 +995,18 @@ impl AdbDevice {
                     if adb_args.len() == 3 && adb_args[0] == "pm" && adb_args[1] == "uninstall" {
                         let package = &adb_args[2];
                         debug!(package, "Line {line_num}: uninstalling package");
-                        if let Err(e) = self.uninstall_package(package).await {
+                        let package = match PackageName::parse(package) {
+                            Ok(p) => p,
+                            Err(e) => {
+                                warn!(
+                                    error = e.as_ref() as &dyn Error,
+                                    "Line {line_num}: adb shell uninstall: invalid package \
+                                     '{package}'"
+                                );
+                                return Ok(());
+                            }
+                        };
+                        if let Err(e) = self.uninstall_package(&package).await {
                             warn!(
                                 error = e.as_ref() as &dyn Error,
                                 "Line {line_num}: failed to uninstall package '{package}'"
@@ -1197,10 +1219,9 @@ impl AdbDevice {
 
     /// Gets APK path reported by `pm path <package>`
     #[instrument(level = "debug", skip(self), err)]
-    async fn get_apk_path(&self, package_name: &str) -> Result<String> {
-        ensure_valid_package(package_name)?;
+    async fn get_apk_path(&self, package: &PackageName) -> Result<String> {
         let output = self
-            .shell_checked(&format!("pm path {package_name}"))
+            .shell_checked(&format!("pm path {package}"))
             .await
             .context("Failed to run 'pm path'")?;
         for line in output.lines() {
@@ -1211,7 +1232,7 @@ impl AdbDevice {
                 }
             }
         }
-        bail!("Failed to parse APK path for package '{}': {}", package_name, output);
+        bail!("Failed to parse APK path for package '{package}': {output}");
     }
 
     /// Pulls an application's APK and OBB (if present) into a local directory suitable for donation.
@@ -1222,10 +1243,10 @@ impl AdbDevice {
     #[instrument(level = "debug", skip(self, dest_root), err)]
     pub(super) async fn pull_app_for_donation(
         &self,
-        package_name: &str,
+        package: &PackageName,
         dest_root: &Path,
     ) -> Result<PathBuf> {
-        ensure_valid_package(package_name)?;
+        let package_str = package.as_str();
 
         if !dest_root.exists() {
             fs::create_dir_all(dest_root).await.with_context(|| {
@@ -1234,7 +1255,7 @@ impl AdbDevice {
         }
         ensure!(dest_root.is_dir(), "Destination root is not a directory: {}", dest_root.display());
 
-        let app_dir = dest_root.join(package_name);
+        let app_dir = dest_root.join(package_str);
         if app_dir.exists() {
             debug!(path = %app_dir.display(), "Removing existing app donation directory");
             fs::remove_dir_all(&app_dir).await.with_context(|| {
@@ -1245,11 +1266,11 @@ impl AdbDevice {
             format!("Failed to create app donation directory {}", app_dir.display())
         })?;
 
-        let apk_remote = self.get_apk_path(package_name).await?;
+        let apk_remote = self.get_apk_path(package).await?;
         let apk_remote_path = UnixPath::new(&apk_remote);
         let local_apk_path = self.pull(apk_remote_path, &app_dir).await?;
 
-        let renamed_apk_path = app_dir.join(format!("{package_name}.apk"));
+        let renamed_apk_path = app_dir.join(format!("{package_str}.apk"));
         if local_apk_path != renamed_apk_path {
             fs::rename(&local_apk_path, &renamed_apk_path).await.with_context(|| {
                 format!(
@@ -1261,12 +1282,12 @@ impl AdbDevice {
         }
 
         // Pull OBB directory if present
-        let obb_remote_dir = UnixPath::new("/sdcard/Android/obb").join(package_name);
+        let obb_remote_dir = UnixPath::new("/sdcard/Android/obb").join(package_str);
         if self.dir_exists(&obb_remote_dir).await? {
-            debug!(package = package_name, "Pulling OBB directory for donation");
+            debug!(package = package_str, "Pulling OBB directory for donation");
             self.pull_dir(&obb_remote_dir, &app_dir).await?;
         } else {
-            debug!(package = package_name, "No OBB directory found for package, skipping");
+            debug!(package = package_str, "No OBB directory found for package, skipping");
         }
 
         Ok(app_dir)
@@ -1277,7 +1298,7 @@ impl AdbDevice {
     #[instrument(level = "debug", skip(self), err)]
     pub(super) async fn backup_app(
         &self,
-        package_name: &str,
+        package: &PackageName,
         display_name: Option<&str>,
         backups_location: &Path,
         options: &BackupOptions,
@@ -1289,14 +1310,14 @@ impl AdbDevice {
         // Take backup_path as an argument to the macro
         // macro_rules! delete_dir {
 
-        ensure_valid_package(package_name)?;
         ensure!(backups_location.is_dir(), "Backups location must be a directory");
         ensure!(
             !options.require_private_data || options.backup_data,
             "require_private_data requires backup_data"
         );
 
-        info!(package = package_name, "Creating app backup");
+        let package_str = package.as_str();
+        info!(package = package_str, "Creating app backup");
         let fmt = format_description!("[year]-[month]-[day]_[hour]-[minute]-[second]");
         let now = OffsetDateTime::now_local().unwrap_or_else(|_| OffsetDateTime::now_utc());
         let timestamp = now.format(&fmt).unwrap_or_else(|_| "0000-00-00_00-00-00".into());
@@ -1304,7 +1325,7 @@ impl AdbDevice {
         let display = display_name
             .map(sanitize_filename::sanitize)
             .filter(|s| !s.is_empty())
-            .unwrap_or_else(|| package_name.to_string());
+            .unwrap_or_else(|| package_str.to_string());
         let mut directory_name = format!("{}_{}", timestamp, display);
         if let Some(suffix) = &options.name_append
             && !suffix.is_empty()
@@ -1319,9 +1340,9 @@ impl AdbDevice {
         debug!(path = %backup_path.display(), "Creating backup directory");
         fs::create_dir_all(&backup_path).await?;
 
-        let shared_data_path = UnixPath::new("/sdcard/Android/data").join(package_name);
-        let private_data_path = UnixPath::new("/data/data").join(package_name);
-        let obb_path = UnixPath::new("/sdcard/Android/obb").join(package_name);
+        let shared_data_path = UnixPath::new("/sdcard/Android/data").join(package_str);
+        let private_data_path = UnixPath::new("/data/data").join(package_str);
+        let obb_path = UnixPath::new("/sdcard/Android/obb").join(package_str);
         debug!(shared_data_path = %shared_data_path.display(), private_data_path = %private_data_path.display(), obb_path = %obb_path.display(), "Built source paths");
 
         let shared_data_backup_path = backup_path.join("data");
@@ -1346,12 +1367,12 @@ impl AdbDevice {
             // Pipe through tar because run-as has weird permissions
             debug!("Trying to backup private data");
             fs::create_dir_all(&private_data_backup_path).await?;
-            let tmp_pkg = tmp_root.join(package_name);
+            let tmp_pkg = tmp_root.join(package_str);
             let cmd = format!(
                 "mkdir -p '{tmp}'; run-as {pkg} tar -cf - -C '{priv_path}' . | tar -xvf - -C \
                  '{tmp}'",
                 tmp = tmp_pkg.display(),
-                pkg = package_name,
+                pkg = package_str,
                 priv_path = private_data_path.display(),
             );
             let cmd_output = await_or_cancel_backup(
@@ -1382,7 +1403,7 @@ impl AdbDevice {
             .await?;
             let _ = self.shell("rm -rf /sdcard/backup_tmp/").await;
 
-            let private_pkg_dir = private_data_backup_path.join(package_name);
+            let private_pkg_dir = private_data_backup_path.join(package_str);
             if private_pkg_dir.is_dir() {
                 let _ = remove_child_dir_if_exists(&private_pkg_dir, "cache").await;
                 let _ = remove_child_dir_if_exists(&private_pkg_dir, "code_cache").await;
@@ -1408,7 +1429,7 @@ impl AdbDevice {
                 )
                 .await?;
 
-                let shared_pkg_dir = shared_data_backup_path.join(package_name);
+                let shared_pkg_dir = shared_data_backup_path.join(package_str);
                 if shared_pkg_dir.is_dir() {
                     let _ = remove_child_dir_if_exists(&shared_pkg_dir, "cache").await;
                 }
@@ -1427,7 +1448,7 @@ impl AdbDevice {
         // Backup APK
         if options.backup_apk {
             debug!("Backing up APK");
-            let apk_remote = self.get_apk_path(package_name).await?;
+            let apk_remote = self.get_apk_path(package).await?;
             await_or_cancel_backup(
                 &token,
                 &backup_path,
@@ -1520,6 +1541,8 @@ impl AdbDevice {
                     }
                 }
                 if let Some(pkg) = candidate_pkg {
+                    let pkg = PackageName::parse(&pkg)
+                        .context("Inferred invalid package name from backup directory")?;
                     let _ = self.get_apk_path(&pkg).await.with_context(|| {
                         format!(
                             "Backup does not contain an APK and package '{pkg}' is not installed"

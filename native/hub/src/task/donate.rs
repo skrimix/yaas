@@ -1,24 +1,21 @@
 use std::{error::Error, time::Duration};
 
-use anyhow::{anyhow, ensure, Context, Result};
+use anyhow::{Context, Result, anyhow, ensure};
 use tokio::sync::mpsc;
 use tokio_util::sync::CancellationToken;
-use tracing::{debug, info, instrument, warn, Instrument, Span};
-
-use crate::{
-    apk::get_apk_info,
-    archive::create_zip_from_dir,
-    downloader::RcloneTransferStats,
-    models::signals::task::TaskStatus,
-};
+use tracing::{Instrument, Span, debug, info, instrument, warn};
 
 use super::{AdbStepConfig, ProgressUpdate, TaskManager};
+use crate::{
+    adb::PackageName, apk::get_apk_info, archive::create_zip_from_dir,
+    downloader::RcloneTransferStats, models::signals::task::TaskStatus,
+};
 
 impl TaskManager {
     #[instrument(skip(self, update_progress, token))]
     pub(super) async fn handle_donate_app(
         &self,
-        package_name: String,
+        package: PackageName,
         display_name: Option<String>,
         update_progress: &impl Fn(ProgressUpdate),
         token: CancellationToken,
@@ -29,7 +26,7 @@ impl TaskManager {
         );
 
         debug!(
-            package_name = %package_name,
+            package_name = %package,
             adb_permits_available = self.adb_semaphore.available_permits(),
             "Starting app donation task"
         );
@@ -45,7 +42,7 @@ impl TaskManager {
             format!("Failed to create upload directory {}", upload_root.display())
         })?;
 
-        let pkg_for_pull = package_name.clone();
+        let pkg_for_pull = package.clone();
         let dest_root_clone = upload_root.clone();
         let pulled_dir = self
             .run_adb_one_step(
@@ -80,7 +77,7 @@ impl TaskManager {
             message: "Preparing archive for upload...".into(),
         });
 
-        let apk_path = pulled_dir.join(format!("{}.apk", package_name));
+        let apk_path = pulled_dir.join(format!("{package}.apk"));
         let apk_info = get_apk_info(&apk_path)
             .with_context(|| format!("Failed to read APK metadata from {}", apk_path.display()))?;
 
@@ -90,7 +87,7 @@ impl TaskManager {
             .filter(|s| !s.trim().is_empty())
             .map(|s| s.to_string())
             .or(display_name.clone())
-            .unwrap_or_else(|| package_name.clone());
+            .unwrap_or_else(|| package.as_str().to_owned());
 
         let version_code = apk_info.version_code.with_context(|| {
             format!("Failed to get version code from APK {}", apk_path.display())

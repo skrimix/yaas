@@ -2,14 +2,17 @@ use anyhow::{Result, ensure};
 use reqwest::header::{ACCEPT, HeaderMap, HeaderValue};
 use tracing::{debug, instrument};
 
-use crate::models::{AppApiResponse, signals::cloud_apps::reviews::AppReview};
+use crate::{
+    adb::PackageName,
+    models::{AppApiResponse, signals::cloud_apps::reviews::AppReview},
+};
 
 #[instrument(level = "debug", skip(client), err)]
 pub(super) async fn fetch_app_details(
     client: &reqwest::Client,
-    package_name: String,
+    package: PackageName,
 ) -> Result<Option<AppApiResponse>> {
-    let url = format!("https://qloader.5698452.xyz/api/v1/oculusgames/{}", package_name);
+    let url = format!("https://qloader.5698452.xyz/api/v1/oculusgames/{package}");
     debug!(%url, "Fetching app details from QLoader API");
 
     let resp = client.get(&url).send().await?;

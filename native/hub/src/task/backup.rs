@@ -1,14 +1,15 @@
 use std::path::Path;
 
-use anyhow::{ensure, Result};
+use anyhow::{Result, ensure};
 use rinf::RustSignal;
 use tokio_util::sync::CancellationToken;
 use tracing::{debug, instrument};
 
-use crate::adb::device::BackupOptions;
-use crate::models::signals::backups::BackupsChanged;
-
 use super::{AdbStepConfig, BackupStepConfig, ProgressUpdate, TaskManager};
+use crate::{
+    adb::{PackageName, device::BackupOptions},
+    models::signals::backups::BackupsChanged,
+};
 
 impl TaskManager {
     #[instrument(skip(self, update_progress, token))]
@@ -50,7 +51,7 @@ impl TaskManager {
             require_private_data: false,
         };
 
-        let pkg = cfg.package_name.clone();
+        let pkg = PackageName::parse(&cfg.package_name)?;
         let display_name = cfg.display_name.clone();
         let options_moved = options;
         let backups_path_moved = backups_path.clone();

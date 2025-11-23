@@ -1,6 +1,7 @@
 use std::{
     collections::HashMap,
     error::Error,
+    fmt,
     net::SocketAddr,
     path::{Path, PathBuf},
     sync::Arc,
@@ -44,12 +45,30 @@ use crate::{
 pub(crate) mod battery_dump;
 pub(crate) mod device;
 
-static PACKAGE_NAME_REGEX: Lazy<Regex> = lazy_regex!(r"^(?:[A-Za-z]{1}[\w]*\.)+[A-Za-z][\w]*$");
+pub(crate) static PACKAGE_NAME_REGEX: Lazy<Regex> =
+    lazy_regex!(r"^(?:[A-Za-z]{1}[\w]*\.)+[A-Za-z][\w]*$");
 
-/// Validates a package name and returns an error if invalid
-fn ensure_valid_package(package_name: &str) -> Result<()> {
-    ensure!(PACKAGE_NAME_REGEX.is_match(package_name), "Invalid package name: '{}'", package_name);
-    Ok(())
+/// Validated Android package name.
+#[derive(Debug, Clone, PartialEq, Eq, Hash)]
+pub(crate) struct PackageName(String);
+
+impl PackageName {
+    /// Validates and constructs a `PackageName` from the provided string-like value.
+    pub(crate) fn parse(value: impl AsRef<str>) -> Result<Self> {
+        let value_ref = value.as_ref();
+        ensure!(PACKAGE_NAME_REGEX.is_match(value_ref), "Invalid package name: '{}'", value_ref);
+        Ok(Self(value_ref.to_owned()))
+    }
+
+    pub(crate) fn as_str(&self) -> &str {
+        &self.0
+    }
+}
+
+impl fmt::Display for PackageName {
+    fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
+        f.write_str(&self.0)
+    }
 }
 
 #[derive(Debug, Clone, Default)]
@@ -386,8 +405,8 @@ impl AdbHandler {
         let result = match command.clone() {
             AdbCommand::LaunchApp(package_name) => {
                 let device = self.current_device().await?;
-                ensure_valid_package(&package_name)?;
-                let result = device.launch(&package_name).await;
+                let package = PackageName::parse(&package_name)?;
+                let result = device.launch(&package).await;
                 AdbCommandCompletedEvent {
                     command_type: AdbCommandKind::LaunchApp,
                     command_key: key.clone(),
@@ -398,9 +417,9 @@ impl AdbHandler {
                 match result {
                     Ok(_) => Ok(()),
                     Err(e) => {
-                        let error_msg = format!("Failed to launch {package_name}: {e:#}");
+                        let error_msg = format!("Failed to launch {package}: {e:#}");
                         send_toast("Launch Failed".to_string(), error_msg, true, None);
-                        Err(e.context(format!("Failed to launch {package_name}")))
+                        Err(e.context(format!("Failed to launch {package}")))
                     }
                 }
             }
@@ -480,8 +499,8 @@ impl AdbHandler {
 
             AdbCommand::ForceStopApp(package_name) => {
                 let device = self.current_device().await?;
-                ensure_valid_package(&package_name)?;
-                let result = device.force_stop(&package_name).await;
+                let package = PackageName::parse(&package_name)?;
+                let result = device.force_stop(&package).await;
                 AdbCommandCompletedEvent {
                     command_type: AdbCommandKind::ForceStopApp,
                     command_key: key.clone(),
@@ -492,17 +511,17 @@ impl AdbHandler {
                 match result {
                     Ok(_) => Ok(()),
                     Err(e) => {
-                        let error_msg = format!("Failed to force stop {package_name}: {e:#}");
+                        let error_msg = format!("Failed to force stop {package}: {e:#}");
                         send_toast("Stop Failed".to_string(), error_msg, true, None);
-                        Err(e.context(format!("Failed to force stop {package_name}")))
+                        Err(e.context(format!("Failed to force stop {package}")))
                     }
                 }
             }
 
             AdbCommand::UninstallPackage(package_name) => {
-                ensure_valid_package(&package_name)?;
                 let device = self.current_device().await?;
-                let result = self.uninstall_package(&device, &package_name).await;
+                let package = PackageName::parse(&package_name)?;
+                let result = self.uninstall_package(&device, &package).await;
                 AdbCommandCompletedEvent {
                     command_type: AdbCommandKind::UninstallPackage,
                     command_key: key.clone(),
@@ -513,9 +532,9 @@ impl AdbHandler {
                 match result {
                     Ok(_) => Ok(()),
                     Err(e) => {
-                        let error_msg = format!("Failed to uninstall {package_name}: {e:#}");
+                        let error_msg = format!("Failed to uninstall {package}: {e:#}");
                         send_toast("Uninstall Failed".to_string(), error_msg, true, None);
-                        Err(e.context(format!("Failed to uninstall {package_name}")))
+                        Err(e.context(format!("Failed to uninstall {package}")))
                     }
                 }
             }
@@ -1131,9 +1150,9 @@ impl AdbHandler {
     pub(crate) async fn uninstall_package(
         &self,
         device: &AdbDevice,
-        package_name: &str,
+        package: &PackageName,
     ) -> Result<()> {
-        let result = device.uninstall_package(package_name).await;
+        let result = device.uninstall_package(package).await;
         self.refresh_device().await?;
         result
     }
@@ -1158,13 +1177,13 @@ impl AdbHandler {
     pub(crate) async fn backup_app(
         &self,
         device: &AdbDevice,
-        package_name: &str,
+        package: &PackageName,
         display_name: Option<&str>,
         backups_location: &Path,
         options: &BackupOptions,
         token: CancellationToken,
     ) -> Result<Option<std::path::PathBuf>> {
-        device.backup_app(package_name, display_name, backups_location, options, token).await
+        device.backup_app(package, display_name, backups_location, options, token).await
     }
 
     /// Restores a backup to the currently connected device
@@ -1188,10 +1207,10 @@ impl AdbHandler {
     pub(crate) async fn pull_app_for_donation(
         &self,
         device: &AdbDevice,
-        package_name: &str,
+        package: &PackageName,
         dest_root: &Path,
     ) -> Result<PathBuf> {
-        device.pull_app_for_donation(package_name, dest_root).await
+        device.pull_app_for_donation(package, dest_root).await
     }
 
     /// Ensures the ADB server is running, starting it if necessary

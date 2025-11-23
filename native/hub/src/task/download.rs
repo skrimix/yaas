@@ -1,14 +1,12 @@
 use std::{error::Error, path::Path, time::Duration};
 
-use anyhow::{anyhow, ensure, Context, Result};
+use anyhow::{Context, Result, anyhow, ensure};
 use tokio::sync::mpsc;
 use tokio_util::sync::CancellationToken;
-use tracing::{debug, error, info, instrument, warn, Instrument, Span};
-
-use crate::downloader::RcloneTransferStats;
-use crate::models::signals::task::TaskStatus;
+use tracing::{Instrument, Span, debug, error, info, instrument, warn};
 
 use super::{InstallStepConfig, ProgressUpdate, TaskManager};
+use crate::{downloader::RcloneTransferStats, models::signals::task::TaskStatus};
 
 impl TaskManager {
     #[instrument(level = "debug", skip(self, update_progress, token))]

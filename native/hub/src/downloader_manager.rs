@@ -106,6 +106,7 @@ impl DownloaderManager {
                             initializing: false,
                             error: Some("Failed to fetch default downloader config".into()),
                             config_id: None,
+                            is_donation_configured: false,
                         }
                         .send_signal_to_dart();
                     }
@@ -147,11 +148,15 @@ impl DownloaderManager {
         settings_handler: Arc<SettingsHandler>,
     ) -> Result<()> {
         let config_id = cfg.id.clone();
+        let is_donation_configured =
+            cfg.donation_remote_name.is_some() && cfg.donation_remote_path.is_some();
+
         DownloaderAvailabilityChanged {
             available: false,
             initializing: true,
             error: None,
             config_id: Some(config_id.clone()),
+            is_donation_configured,
         }
         .send_signal_to_dart();
 
@@ -180,6 +185,7 @@ impl DownloaderManager {
                             initializing: false,
                             error: None,
                             config_id: Some(config_id.clone()),
+                            is_donation_configured,
                         }
                         .send_signal_to_dart();
                         Ok(())
@@ -190,6 +196,7 @@ impl DownloaderManager {
                             initializing: false,
                             error: Some(format!("Failed to initialize downloader: {:#}", e)),
                             config_id: Some(config_id.clone()),
+                            is_donation_configured: false,
                         }
                         .send_signal_to_dart();
                         Err(e)
@@ -202,6 +209,7 @@ impl DownloaderManager {
                     initializing: false,
                     error: Some(format!("Failed to prepare downloader: {:#}", e)),
                     config_id: Some(config_id),
+                    is_donation_configured: false,
                 }
                 .send_signal_to_dart();
                 Err(e)

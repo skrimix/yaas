@@ -8,6 +8,7 @@ use anyhow::{Context, Result, anyhow, bail, ensure};
 use lazy_regex::Regex;
 use serde::Deserialize;
 use tokio::{
+    fs,
     io::{AsyncBufReadExt, BufReader},
     process::Command,
     sync::mpsc::UnboundedSender,
@@ -177,6 +178,7 @@ impl RcloneClient {
 
     #[instrument(level = "debug", skip(self), ret, err)]
     async fn size(&self, path: &str) -> Result<RcloneSizeOutput> {
+        // TODO: can `--check-first` be used to make `total_bytes` reliable instead?
         let output = self.run_to_string(&["size", "--fast-list", "--json", path]).await?;
         let size_output: RcloneSizeOutput =
             serde_json::from_str(&output).context("Failed to parse rclone size output")?;
@@ -304,7 +306,7 @@ impl RcloneClient {
                 _ = token.cancelled() => {
                     warn!("Rclone transfer cancelled by token");
                     child.kill().await.context("Failed to kill rclone process")?;
-                    Err(anyhow!("Download cancelled by user"))
+                    Err(anyhow!("Download cancelled"))
                 }
             }
         } else {
@@ -389,12 +391,13 @@ impl RcloneStorage {
     /// Upload a single local file to an arbitrary remote and path.
     ///
     /// The file name from `local_path` is appended to `remote_dir`.
-    #[instrument(level = "debug", skip(self, cancellation_token), err)]
+    #[instrument(level = "debug", skip(self, stats_tx, cancellation_token), err)]
     pub(super) async fn upload_file_to_remote(
         &self,
         local_path: &Path,
         remote: &str,
         remote_dir: &str,
+        stats_tx: Option<UnboundedSender<RcloneTransferStats>>,
         cancellation_token: Option<CancellationToken>,
     ) -> Result<()> {
         ensure!(local_path.is_file(), "Local path is not a file: {}", local_path.display());
@@ -413,11 +416,18 @@ impl RcloneStorage {
         let dest = format!("{remote}:{}", remote_dir_path.display());
         debug!(src = %local_path.display(), dest = %dest, "Starting rclone upload");
 
+        let total_bytes = fs::metadata(local_path)
+            .await
+            .with_context(|| format!("Failed to get metadata for {}", local_path.display()))?
+            .len();
+
         self.client
-            .transfer(
+            .transfer_with_stats(
                 local_path.display().to_string(),
                 dest,
                 RcloneTransferOperation::Copy,
+                total_bytes,
+                stats_tx,
                 cancellation_token,
             )
             .await

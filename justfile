@@ -26,6 +26,10 @@ build-release:
 build-profile:
     rinf gen && flutter build linux --profile
 
+# Build Linux AppImage artifact into dist/yaas.AppImage
+build-appimage:
+    ./scripts/build_appimage.sh
+
 # Run all tests
 test:
     cargo test

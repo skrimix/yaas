@@ -1345,4 +1345,54 @@ class AppLocalizationsRu extends AppLocalizations {
 
   @override
   String get emptyValue => '(пусто)';
+
+  @override
+  String get navDonate => 'Донат';
+
+  @override
+  String get donateAppsDescription =>
+      'Выберите приложения для загрузки в сообщество';
+
+  @override
+  String get donateShowFiltered => 'Показать скрытые';
+
+  @override
+  String get donateHideFiltered => 'Скрыть отфильтрованные';
+
+  @override
+  String get donateFilterReasonBlacklisted => 'В чёрном списке';
+
+  @override
+  String get donateFilterReasonRenamed => 'Переименованный пакет';
+
+  @override
+  String get donateFilterReasonSystemUnwanted => 'Системное/нежелательное';
+
+  @override
+  String get donateFilterReasonAlreadyExists => 'Уже существует';
+
+  @override
+  String get donateStatusNewApp => 'Новое приложение';
+
+  @override
+  String get donateStatusNewerVersion => 'Новая версия';
+
+  @override
+  String get donateDonateButton => 'Загрузить';
+
+  @override
+  String get donateNoAppsAvailable => 'Нет приложений для загрузки';
+
+  @override
+  String get donateNoAppsWithFilters =>
+      'Нет приложений, соответствующих фильтрам';
+
+  @override
+  String get donateLoadingCloudApps => 'Загрузка списка приложений...';
+
+  @override
+  String get copyDisplayName => 'Скопировать отображаемое имя';
+
+  @override
+  String get donateDownloaderNotAvailable => 'Загрузчик не доступен';
 }

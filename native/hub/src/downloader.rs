@@ -364,10 +364,11 @@ impl Downloader {
     ///
     /// This uses optional `donation_remote_name` and `donation_remote_path` from DownloaderConfig.
     /// If either is missing or empty, the call fails with a configuration error.
-    #[instrument(skip(self, cancellation_token), err)]
+    #[instrument(skip(self, stats_tx, cancellation_token), err)]
     pub(crate) async fn upload_donation_archive(
         &self,
         archive_path: &Path,
+        stats_tx: Option<UnboundedSender<RcloneTransferStats>>,
         cancellation_token: CancellationToken,
     ) -> Result<()> {
         let remote =
@@ -392,6 +393,7 @@ impl Downloader {
                 archive_path,
                 remote,
                 remote_path,
+                stats_tx,
                 Some(cancellation_token.clone()),
             )
             .await

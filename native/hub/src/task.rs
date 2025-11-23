@@ -1107,17 +1107,105 @@ impl TaskManager {
             message: "Uploading archive...".into(),
         });
 
-        let downloader = self
-            .downloader_manager
-            .get()
-            .await
-            .ok_or_else(|| anyhow!("Downloader is not configured"))?;
+        let (tx, mut rx) = mpsc::unbounded_channel::<RcloneTransferStats>();
 
-        // TODO: add progress
-        downloader
-            .upload_donation_archive(&archive_path, token)
-            .await
-            .context("Failed to upload donation app archive")?;
+        let mut upload_task = {
+            let downloader = self
+                .downloader_manager
+                .get()
+                .await
+                .ok_or_else(|| anyhow!("Downloader is not configured"))?;
+            let archive_path = archive_path.clone();
+            let token = token.clone();
+            tokio::spawn(
+                    async move {
+                        downloader.upload_donation_archive(&archive_path, Some(tx), token).await
+                    }
+                    .instrument(Span::current()),
+                )
+        };
+
+        debug!("Starting upload monitoring");
+        let step_number = 3;
+        let mut upload_result = None;
+        let mut last_log_time = std::time::Instant::now();
+        let mut last_log_progress = 0.0;
+        let mut unknown_progress = false;
+
+        while upload_result.is_none() {
+            tokio::select! {
+                result = &mut upload_task => {
+                    result
+                        .context("Upload task failed")?
+                        .context("Failed to upload donation app archive")?;
+                    info!("Upload task completed");
+                    upload_result = Some(());
+                }
+                Some(progress) = rx.recv() => {
+                    if unknown_progress {
+                        // TODO: can we deduplicate this with the download task?
+                        update_progress(ProgressUpdate {
+                            status: TaskStatus::Running,
+                            step_number,
+                            step_progress: None,
+                            message: format!(
+                                "Uploading archive (Unknown%) - {}/s",
+                                humansize::format_size(progress.speed, humansize::DECIMAL)
+                            ),
+                        });
+                        continue;
+                    }
+
+                    let step_progress = progress.bytes as f32 / progress.total_bytes as f32;
+
+                    // Log upload progress every 10 seconds or at major milestones
+                    let now = std::time::Instant::now();
+                    let should_log = now.duration_since(last_log_time) > Duration::from_secs(10)
+                        || ((0.25..0.26).contains(&step_progress)
+                            || (0.5..0.51).contains(&step_progress)
+                            || (0.75..0.76).contains(&step_progress))
+                            && last_log_progress != step_progress;
+                    let progress_percent = step_progress * 100.0;
+
+                    if should_log {
+                        debug!(
+                            bytes_uploaded = progress.bytes,
+                            total_bytes = progress.total_bytes,
+                            speed_bytes_per_sec = progress.speed,
+                            progress_percent,
+                            "Upload progress"
+                        );
+                        last_log_time = now;
+                        last_log_progress = step_progress;
+                    }
+
+                    let (step_progress, message): (Option<f32>, String) =
+                        if progress.bytes <= progress.total_bytes {
+                            (Some(step_progress), format!(
+                                "Uploading archive ({:.1}%) - {}/s",
+                                progress_percent,
+                                humansize::format_size(progress.speed, humansize::DECIMAL)
+                            ))
+                        } else {
+                            unknown_progress = true;
+                            warn!(progress.bytes, progress.total_bytes, "Upload progress is unknown: bytes > total_bytes");
+                            (None, format!(
+                                "Uploading archive (Unknown%) - {}/s",
+                                humansize::format_size(progress.speed, humansize::DECIMAL)
+                            ))
+                        };
+
+                    update_progress(ProgressUpdate {
+                        status: TaskStatus::Running,
+                        step_number,
+                        step_progress,
+                        message,
+                    });
+                }
+            }
+        }
+
+        upload_result.unwrap();
 
         Ok(())
     }

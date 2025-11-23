@@ -35,6 +35,7 @@ class SettingsState extends ChangeNotifier {
   String? _downloaderConfigId;
   int _downloaderInitBytes = 0;
   int? _downloaderInitTotal;
+  bool _downloaderIsDonationConfigured = false;
 
   List<String> _rcloneRemotes = const [];
   bool _isRemotesLoading = true;
@@ -88,6 +89,7 @@ class SettingsState extends ChangeNotifier {
       _downloaderInitializing = msg.initializing;
       _downloaderError = msg.error;
       _downloaderConfigId = msg.configId;
+      _downloaderIsDonationConfigured = msg.isDonationConfigured;
       notifyListeners();
     });
 
@@ -136,6 +138,7 @@ class SettingsState extends ChangeNotifier {
       _downloaderInitTotal == null || _downloaderInitTotal == 0
           ? null
           : _downloaderInitBytes / _downloaderInitTotal!;
+  bool get isDownloaderDonationConfigured => _downloaderIsDonationConfigured;
   Locale? get locale {
     final code = _settings.localeCode;
     if (code == 'system' || code.isEmpty) return null;

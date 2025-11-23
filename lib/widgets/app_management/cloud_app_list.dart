@@ -5,6 +5,7 @@ import '../../src/bindings/bindings.dart';
 import '../../providers/settings_state.dart';
 import '../../src/l10n/app_localizations.dart';
 import '../../utils/utils.dart';
+import '../common/context_menu_region.dart';
 import 'cloud_app_details_dialog.dart';
 
 class CachedAppData {
@@ -121,143 +122,130 @@ class CloudAppListItem extends StatelessWidget {
     return Card(
       margin: const EdgeInsets.symmetric(horizontal: 16, vertical: 2),
       child: SizedBox(
-        child: MenuAnchor(
+        child: ContextMenuRegion(
           menuChildren: [
             MenuItemButton(
               child: Text(l10n.copyFullName),
               onPressed: () {
-                copyToClipboard(context, cachedApp.app.fullName,
-                    description: cachedApp.app.fullName);
+                copyToClipboard(
+                  context,
+                  cachedApp.app.fullName,
+                  description: cachedApp.app.fullName,
+                );
               },
             ),
             MenuItemButton(
               child: Text(l10n.copyPackageName),
               onPressed: () {
-                copyToClipboard(context, cachedApp.app.packageName,
-                    description: cachedApp.app.packageName);
+                copyToClipboard(
+                  context,
+                  cachedApp.app.packageName,
+                  description: cachedApp.app.packageName,
+                );
               },
             ),
           ],
-          builder: (context, controller, child) {
-            return GestureDetector(
-              onSecondaryTapUp: (details) {
-                controller.open(position: details.localPosition);
-              },
-              onLongPress: () {
-                controller.open();
-              },
-              onTapUp: (_) {
-                if (showCheckbox) {
-                  onSelectionChanged(!isSelected);
-                }
-                controller.close();
-              },
-              child: ListTile(
-                leading: showCheckbox
-                    ? Checkbox(
-                        value: isSelected,
-                        onChanged: (value) =>
-                            onSelectionChanged(value ?? false),
-                      )
-                    : null,
-                title: Text(
-                  cachedApp.app.fullName,
-                  softWrap: false,
-                  overflow: TextOverflow.ellipsis,
+          onPrimaryTap:
+              showCheckbox ? () => onSelectionChanged(!isSelected) : null,
+          child: ListTile(
+            leading: showCheckbox
+                ? Checkbox(
+                    value: isSelected,
+                    onChanged: (value) => onSelectionChanged(value ?? false),
+                  )
+                : null,
+            title: Text(
+              cachedApp.app.fullName,
+              softWrap: false,
+              overflow: TextOverflow.ellipsis,
+            ),
+            subtitle: Column(
+              mainAxisSize: MainAxisSize.min,
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                Text(
+                  cachedApp.app.packageName,
+                  style: textTheme.bodyMedium?.copyWith(
+                    color: textTheme.bodyMedium?.color?.withValues(alpha: 0.6),
+                  ),
                 ),
-                subtitle: Column(
-                  mainAxisSize: MainAxisSize.min,
-                  crossAxisAlignment: CrossAxisAlignment.start,
-                  children: [
-                    Text(
-                      cachedApp.app.packageName,
-                      style: textTheme.bodyMedium?.copyWith(
+                Text(
+                  l10n.sizeAndDate(
+                    cachedApp.formattedSize,
+                    cachedApp.formattedDate,
+                  ),
+                  style: textTheme.bodySmall?.copyWith(
+                    color: textTheme.bodySmall?.color?.withValues(alpha: 0.6),
+                  ),
+                ),
+              ],
+            ),
+            contentPadding: CloudAppList.cardPadding,
+            trailing: Row(
+              mainAxisSize: MainAxisSize.min,
+              children: [
+                _InstalledStatusBadge(app: cachedApp.app),
+                const SizedBox(width: 8),
+                Consumer<SettingsState>(
+                  builder: (context, settings, _) {
+                    final original = cachedApp.app.originalPackageName;
+                    final fav = settings.isFavorite(original);
+                    return IconButton(
+                      icon: Icon(
+                        fav ? Icons.star_rounded : Icons.star_outline_rounded,
                         color:
-                            textTheme.bodyMedium?.color?.withValues(alpha: 0.6),
+                            fav ? Theme.of(context).colorScheme.tertiary : null,
                       ),
-                    ),
-                    Text(
-                      l10n.sizeAndDate(
-                          cachedApp.formattedSize, cachedApp.formattedDate),
-                      style: textTheme.bodySmall?.copyWith(
-                        color:
-                            textTheme.bodySmall?.color?.withValues(alpha: 0.6),
+                      tooltip:
+                          fav ? l10n.removeFromFavorites : l10n.addToFavorites,
+                      onPressed: () =>
+                          settings.toggleFavorite(original, value: !fav),
+                    );
+                  },
+                ),
+                const SizedBox(width: 8),
+                IconButton(
+                  icon: const Icon(Icons.info_outline),
+                  tooltip: l10n.appDetails,
+                  onPressed: () {
+                    showDialog(
+                      context: context,
+                      builder: (context) => CloudAppDetailsDialog(
+                        cachedApp: cachedApp,
+                        onDownload: onDownload,
+                        onInstall: onInstall,
                       ),
-                    ),
-                  ],
+                    );
+                  },
                 ),
-                contentPadding: CloudAppList.cardPadding,
-                trailing: Row(
-                  mainAxisSize: MainAxisSize.min,
-                  children: [
-                    _InstalledStatusBadge(app: cachedApp.app),
-                    const SizedBox(width: 8),
-                    Consumer<SettingsState>(
-                      builder: (context, settings, _) {
-                        final original = cachedApp.app.originalPackageName;
-                        final fav = settings.isFavorite(original);
-                        return IconButton(
-                          icon: Icon(
-                            fav
-                                ? Icons.star_rounded
-                                : Icons.star_outline_rounded,
-                            color: fav
-                                ? Theme.of(context).colorScheme.tertiary
-                                : null,
-                          ),
-                          tooltip: fav
-                              ? l10n.removeFromFavorites
-                              : l10n.addToFavorites,
-                          onPressed: () =>
-                              settings.toggleFavorite(original, value: !fav),
-                        );
-                      },
-                    ),
-                    const SizedBox(width: 8),
-                    IconButton(
-                      icon: const Icon(Icons.info_outline),
-                      tooltip: l10n.appDetails,
-                      onPressed: () {
-                        showDialog(
-                          context: context,
-                          builder: (context) => CloudAppDetailsDialog(
-                            cachedApp: cachedApp,
-                            onDownload: onDownload,
-                            onInstall: onInstall,
-                          ),
-                        );
-                      },
-                    ),
-                    const SizedBox(width: 8),
-                    IconButton(
-                      icon: const Icon(Icons.download),
-                      tooltip: l10n.downloadToComputer,
-                      onPressed: () {
-                        onDownload(cachedApp.app.fullName);
-                      },
-                    ),
-                    const SizedBox(width: 8),
-                    Consumer<DeviceState>(
-                      builder: (context, deviceState, _) {
-                        return Tooltip(
-                          message: deviceState.isConnected
-                              ? l10n.downloadAndInstall
-                              : l10n.downloadAndInstallNotConnected,
-                          child: OutlinedButton.icon(
-                            icon: const Icon(Icons.install_mobile),
-                            label: Text(l10n.install),
-                            onPressed: deviceState.isConnected
-                                ? () => _handleInstall(context)
-                                : null,
-                          ),
-                        );
-                      },
-                    ),
-                  ],
+                const SizedBox(width: 8),
+                IconButton(
+                  icon: const Icon(Icons.download),
+                  tooltip: l10n.downloadToComputer,
+                  onPressed: () {
+                    onDownload(cachedApp.app.fullName);
+                  },
                 ),
-              ),
-            );
-          },
+                const SizedBox(width: 8),
+                Consumer<DeviceState>(
+                  builder: (context, deviceState, _) {
+                    return Tooltip(
+                      message: deviceState.isConnected
+                          ? l10n.downloadAndInstall
+                          : l10n.downloadAndInstallNotConnected,
+                      child: OutlinedButton.icon(
+                        icon: const Icon(Icons.install_mobile),
+                        label: Text(l10n.install),
+                        onPressed: deviceState.isConnected
+                            ? () => _handleInstall(context)
+                            : null,
+                      ),
+                    );
+                  },
+                ),
+              ],
+            ),
+          ),
         ),
       ),
     );

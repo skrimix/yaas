@@ -641,5 +641,21 @@
     },
     "downloadedStatusNewerVersion": "Update available",
     "downloadedStatusToolTip": "Click to go to the list",
-    "emptyValue": "(empty)"
+    "emptyValue": "(empty)",
+    "navDonate": "Donate Apps",
+    "donateAppsDescription": "Select apps to donate (upload) to the community",
+    "donateShowFiltered": "Show filtered apps",
+    "donateHideFiltered": "Hide filtered apps",
+    "donateFilterReasonBlacklisted": "Blacklisted",
+    "donateFilterReasonRenamed": "Renamed package",
+    "donateFilterReasonSystemUnwanted": "System/unwanted app",
+    "donateFilterReasonAlreadyExists": "Already exists",
+    "donateStatusNewApp": "New app",
+    "donateStatusNewerVersion": "Newer version",
+    "donateDonateButton": "Donate",
+    "donateNoAppsAvailable": "No apps available for donation",
+    "donateNoAppsWithFilters": "No apps match the current filters",
+    "donateLoadingCloudApps": "Loading cloud apps list...",
+    "copyDisplayName": "Copy display name",
+    "donateDownloaderNotAvailable": "Downloader not available"
 }

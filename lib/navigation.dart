@@ -10,6 +10,7 @@ import 'widgets/screens/home_screen.dart';
 import 'widgets/screens/logs_screen.dart';
 import 'widgets/screens/settings_screen.dart';
 import 'widgets/screens/about_screen.dart';
+import 'widgets/screens/donate_apps_screen.dart';
 
 typedef AppPageLabelBuilder = String Function(AppLocalizations l10n);
 typedef AppPageContentBuilder = Widget Function();
@@ -85,6 +86,12 @@ class AppPageRegistry {
         icon: Icons.archive,
         labelBuilder: (l10n) => l10n.navBackups,
         contentBuilder: () => const BackupsScreen(),
+      ),
+      AppPageDefinition(
+        key: 'donate',
+        icon: Icons.cloud_upload,
+        labelBuilder: (l10n) => l10n.navDonate,
+        contentBuilder: () => const DonateAppsScreen(),
       ),
       AppPageDefinition(
         key: 'settings',

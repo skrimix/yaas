@@ -132,6 +132,17 @@ class AppState extends ChangeNotifier {
     notifyListeners();
   }
 
+  // Donate Apps page state
+  bool _donateShowFiltered = false;
+
+  bool get donateShowFiltered => _donateShowFiltered;
+
+  void setDonateShowFiltered(bool value) {
+    if (_donateShowFiltered == value) return;
+    _donateShowFiltered = value;
+    notifyListeners();
+  }
+
   // Backend (Rust) version/build info
   BackendVersionInfo? _backendVersionInfo;
   BackendVersionInfo? get backendVersionInfo => _backendVersionInfo;

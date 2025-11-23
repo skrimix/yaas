@@ -5,7 +5,7 @@ use std::{
     sync::Arc,
 };
 
-use anyhow::{Context, Result};
+use anyhow::{Context, Result, ensure};
 use async_trait::async_trait;
 use base64::Engine as _;
 use derive_more::Debug;
@@ -379,6 +379,12 @@ impl Repo for VRPPublicRepo {
                 Some(cancellation_token.clone()),
             )
             .await?;
+        ensure!(
+            fs::metadata(&meta_path).await.context("Failed to get meta archive metadata")?.len()
+                > 0,
+            "Meta archive is empty: {}",
+            meta_path.display()
+        );
 
         let pass = {
             let state = self.ensure_initialized(http_client, cache_dir).await?;

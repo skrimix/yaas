@@ -7,4 +7,5 @@ pub(crate) struct DownloaderAvailabilityChanged {
     pub error: Option<String>,
     /// Optional ID of the currently configured downloader.json
     pub config_id: Option<String>,
+    pub is_donation_configured: bool,
 }

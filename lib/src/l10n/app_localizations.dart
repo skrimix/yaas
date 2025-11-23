@@ -2552,6 +2552,102 @@ abstract class AppLocalizations {
   /// In en, this message translates to:
   /// **'(empty)'**
   String get emptyValue;
+
+  /// No description provided for @navDonate.
+  ///
+  /// In en, this message translates to:
+  /// **'Donate Apps'**
+  String get navDonate;
+
+  /// No description provided for @donateAppsDescription.
+  ///
+  /// In en, this message translates to:
+  /// **'Select apps to donate (upload) to the community'**
+  String get donateAppsDescription;
+
+  /// No description provided for @donateShowFiltered.
+  ///
+  /// In en, this message translates to:
+  /// **'Show filtered apps'**
+  String get donateShowFiltered;
+
+  /// No description provided for @donateHideFiltered.
+  ///
+  /// In en, this message translates to:
+  /// **'Hide filtered apps'**
+  String get donateHideFiltered;
+
+  /// No description provided for @donateFilterReasonBlacklisted.
+  ///
+  /// In en, this message translates to:
+  /// **'Blacklisted'**
+  String get donateFilterReasonBlacklisted;
+
+  /// No description provided for @donateFilterReasonRenamed.
+  ///
+  /// In en, this message translates to:
+  /// **'Renamed package'**
+  String get donateFilterReasonRenamed;
+
+  /// No description provided for @donateFilterReasonSystemUnwanted.
+  ///
+  /// In en, this message translates to:
+  /// **'System/unwanted app'**
+  String get donateFilterReasonSystemUnwanted;
+
+  /// No description provided for @donateFilterReasonAlreadyExists.
+  ///
+  /// In en, this message translates to:
+  /// **'Already exists'**
+  String get donateFilterReasonAlreadyExists;
+
+  /// No description provided for @donateStatusNewApp.
+  ///
+  /// In en, this message translates to:
+  /// **'New app'**
+  String get donateStatusNewApp;
+
+  /// No description provided for @donateStatusNewerVersion.
+  ///
+  /// In en, this message translates to:
+  /// **'Newer version'**
+  String get donateStatusNewerVersion;
+
+  /// No description provided for @donateDonateButton.
+  ///
+  /// In en, this message translates to:
+  /// **'Donate'**
+  String get donateDonateButton;
+
+  /// No description provided for @donateNoAppsAvailable.
+  ///
+  /// In en, this message translates to:
+  /// **'No apps available for donation'**
+  String get donateNoAppsAvailable;
+
+  /// No description provided for @donateNoAppsWithFilters.
+  ///
+  /// In en, this message translates to:
+  /// **'No apps match the current filters'**
+  String get donateNoAppsWithFilters;
+
+  /// No description provided for @donateLoadingCloudApps.
+  ///
+  /// In en, this message translates to:
+  /// **'Loading cloud apps list...'**
+  String get donateLoadingCloudApps;
+
+  /// No description provided for @copyDisplayName.
+  ///
+  /// In en, this message translates to:
+  /// **'Copy display name'**
+  String get copyDisplayName;
+
+  /// No description provided for @donateDownloaderNotAvailable.
+  ///
+  /// In en, this message translates to:
+  /// **'Downloader not available'**
+  String get donateDownloaderNotAvailable;
 }
 
 class _AppLocalizationsDelegate

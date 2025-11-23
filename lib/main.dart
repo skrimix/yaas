@@ -232,11 +232,18 @@ class _SinglePageState extends State<SinglePage> {
     final showDownloaderPages = settingsState.isDownloaderAvailable ||
         settingsState.isDownloaderInitializing ||
         settingsState.downloaderError != null;
-    final pageDefinitions = showDownloaderPages
-        ? allPages
-        : allPages
-            .where((p) => p.key != 'download' && p.key != 'downloads')
-            .toList();
+    final showDonationPages = settingsState.isDownloaderAvailable &&
+        settingsState.isDownloaderDonationConfigured;
+    List<AppPageDefinition> pageDefinitions = allPages;
+    if (!showDownloaderPages) {
+      pageDefinitions = pageDefinitions
+          .where((p) => p.key != 'download' && p.key != 'downloads')
+          .toList();
+    }
+    if (!showDonationPages) {
+      pageDefinitions =
+          pageDefinitions.where((p) => p.key != 'donate').toList();
+    }
     final destinations = pageDefinitions
         .map((page) => page.toNavigationDestination(l10n))
         .toList();
@@ -273,7 +280,7 @@ class _SinglePageState extends State<SinglePage> {
           });
         }
       } else {
-        print("ERROR: Requested page key \"$requestedPageKey\" not found");
+        debugPrint("ERROR: Requested page key \"$requestedPageKey\" not found");
       }
     }
 
@@ -283,6 +290,7 @@ class _SinglePageState extends State<SinglePage> {
       messages.NavigationRailLabelVisibility.selected =>
         NavigationRailLabelType.selected,
     };
+    // TODO: navigate to home if current page disappeared
     // Clamp pageIndex if the number of destinations shrank
     if (pageIndex >= pageDefinitions.length) {
       pageIndex = 0;

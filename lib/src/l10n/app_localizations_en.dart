@@ -1333,4 +1333,53 @@ class AppLocalizationsEn extends AppLocalizations {
 
   @override
   String get emptyValue => '(empty)';
+
+  @override
+  String get navDonate => 'Donate Apps';
+
+  @override
+  String get donateAppsDescription =>
+      'Select apps to donate (upload) to the community';
+
+  @override
+  String get donateShowFiltered => 'Show filtered apps';
+
+  @override
+  String get donateHideFiltered => 'Hide filtered apps';
+
+  @override
+  String get donateFilterReasonBlacklisted => 'Blacklisted';
+
+  @override
+  String get donateFilterReasonRenamed => 'Renamed package';
+
+  @override
+  String get donateFilterReasonSystemUnwanted => 'System/unwanted app';
+
+  @override
+  String get donateFilterReasonAlreadyExists => 'Already exists';
+
+  @override
+  String get donateStatusNewApp => 'New app';
+
+  @override
+  String get donateStatusNewerVersion => 'Newer version';
+
+  @override
+  String get donateDonateButton => 'Donate';
+
+  @override
+  String get donateNoAppsAvailable => 'No apps available for donation';
+
+  @override
+  String get donateNoAppsWithFilters => 'No apps match the current filters';
+
+  @override
+  String get donateLoadingCloudApps => 'Loading cloud apps list...';
+
+  @override
+  String get copyDisplayName => 'Copy display name';
+
+  @override
+  String get donateDownloaderNotAvailable => 'Downloader not available';
 }

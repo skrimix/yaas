@@ -635,5 +635,21 @@
     },
     "downloadedStatusNewerVersion": "Доступно обновление",
     "downloadedStatusToolTip": "Нажмите для перехода к списку",
-    "emptyValue": "(пусто)"
+    "emptyValue": "(пусто)",
+    "navDonate": "Донат",
+    "donateAppsDescription": "Выберите приложения для загрузки в сообщество",
+    "donateShowFiltered": "Показать скрытые",
+    "donateHideFiltered": "Скрыть отфильтрованные",
+    "donateFilterReasonBlacklisted": "В чёрном списке",
+    "donateFilterReasonRenamed": "Переименованный пакет",
+    "donateFilterReasonSystemUnwanted": "Системное/нежелательное",
+    "donateFilterReasonAlreadyExists": "Уже существует",
+    "donateStatusNewApp": "Новое приложение",
+    "donateStatusNewerVersion": "Новая версия",
+    "donateDonateButton": "Загрузить",
+    "donateNoAppsAvailable": "Нет приложений для загрузки",
+    "donateNoAppsWithFilters": "Нет приложений, соответствующих фильтрам",
+    "donateLoadingCloudApps": "Загрузка списка приложений...",
+    "copyDisplayName": "Скопировать отображаемое имя",
+    "donateDownloaderNotAvailable": "Загрузчик не доступен"
 }

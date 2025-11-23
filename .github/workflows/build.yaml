@@ -135,41 +135,10 @@ jobs:
       - name: Generate Rinf bindings
         run: rinf gen
 
-      - name: Build the app (Linux AppImage)
+      - name: Build Linux AppImage
         if: matrix.target == 'linux'
         shell: bash
-        run: |
-          set -euo pipefail
-          fastforge package --platform linux --targets appimage --skip-clean
-          shopt -s globstar nullglob
-          files=(dist/**/*.AppImage)
-          if (( ${#files[@]} == 0 )); then
-            echo "No AppImage found in dist/" >&2
-            find dist -maxdepth 3 -type f -name '*.AppImage' -print || true
-            exit 1
-          fi
-          # Rename to a stable filename for the artifact
-          cp -v "${files[0]}" "dist/yaas.AppImage"
-
-      # TODO: Any better way to do this?
-      - name: Repack AppImage with 7-Zip included (Linux)
-        if: matrix.target == 'linux'
-        shell: bash
-        run: |
-          set -euo pipefail
-          app="dist/yaas.AppImage"
-          chmod +x "$app"
-          "$app" --appimage-extract
-          # Fetch 7-Zip static and place into usr/bin of AppDir
-          curl -fsSL -o 7zip-linux.tar.xz "https://github.com/ip7z/7zip/releases/download/25.01/7z2501-linux-x64.tar.xz"
-          tar -xJf 7zip-linux.tar.xz || true
-          found=$(find . -maxdepth 2 -type f -name '7zzs' | head -n1 || true)
-          if [[ -z "$found" ]]; then echo "7zzs not found in archive" >&2; exit 1; fi
-          install -Dm755 "$found" squashfs-root/usr/bin/7zzs
-          rm -f 7zip-linux.tar.xz
-          # Repack into the same stable output path
-          appimagetool squashfs-root "$app"
-          rm -rf squashfs-root
+        run: ./scripts/build_appimage.sh
 
       - name: Build the app (Windows/macOS)
         if: matrix.target != 'linux'

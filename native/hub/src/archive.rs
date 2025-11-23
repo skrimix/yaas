@@ -6,8 +6,8 @@ use std::{
     sync::LazyLock,
 };
 
-use anyhow::{Context, Result, ensure};
-use tokio::{fs, process::Command as TokioCommand};
+use anyhow::{Context, Result, anyhow, ensure};
+use tokio::{fs, io::AsyncReadExt, process::Command as TokioCommand};
 use tokio_util::sync::CancellationToken;
 use tracing::{debug, instrument};
 
@@ -32,7 +32,7 @@ fn resolve_7z_path() -> Result<PathBuf> {
             return Ok(path);
         }
     }
-    Err(anyhow::anyhow!("7-Zip binary not found (tried {:?})", CANDIDATES))
+    Err(anyhow!("7-Zip binary not found (tried {:?})", CANDIDATES))
 }
 
 /// Run 7-Zip with provided args, optionally cancellable.
@@ -44,24 +44,34 @@ where
     let bin = SEVENZ_PATH.clone().context("No 7-Zip binary found")?;
 
     let mut cmd = TokioCommand::new(&bin);
-    cmd.args(args).stdin(Stdio::null()).stdout(Stdio::null()).stderr(Stdio::null());
+    cmd.args(args).stdin(Stdio::null()).stdout(Stdio::null()).stderr(Stdio::piped());
 
     let mut child = cmd.spawn().context("Failed to spawn 7-Zip process")?;
-    if let Some(tok) = cancel {
+    let mut stderr = child.stderr.take();
+
+    let status = if let Some(tok) = cancel {
         tokio::select! {
-            status = child.wait() => {
-                let status = status.context("Failed to wait for 7-Zip process")?;
-                ensure!(status.success(), "7-Zip exited with status: {}", status);
-            }
+            status = child.wait() => status.context("Failed to wait for 7-Zip process")?,
             _ = tok.cancelled() => {
                 let _ = child.kill().await;
-                return Err(anyhow::anyhow!(io::Error::new(io::ErrorKind::Interrupted, "extraction cancelled")));
+                return Err(anyhow!(io::Error::new(io::ErrorKind::Interrupted, "extraction cancelled")));
             }
         }
     } else {
-        let status = child.wait().await.context("Failed to wait for 7-Zip process")?;
-        ensure!(status.success(), "7-Zip exited with status: {}", status);
+        child.wait().await.context("Failed to wait for 7-Zip process")?
+    };
+
+    if !status.success() {
+        let stderr_text = if let Some(ref mut stderr_pipe) = stderr {
+            let mut buf = Vec::new();
+            stderr_pipe.read_to_end(&mut buf).await.ok();
+            String::from_utf8_lossy(&buf).into_owned()
+        } else {
+            String::new()
+        };
+        ensure!(false, "7-Zip exited with status: {}, stderr:\n{}", status, stderr_text);
     }
+
     Ok(())
 }
 
@@ -175,7 +185,7 @@ pub(crate) async fn decompress_all_7z_in_dir(
 }
 
 /// Run 7-Zip and capture stdout.
-async fn run_7z_capture<I, S>(args: I) -> Result<String>
+async fn run_7z_to_string<I, S>(args: I) -> Result<String>
 where
     I: IntoIterator<Item = S>,
     S: AsRef<OsStr>,
@@ -189,15 +199,22 @@ where
         .await
         .context("Failed to run 7-Zip")?;
 
-    ensure!(output.status.success(), "7-Zip exited with status: {}", output.status);
-    Ok(String::from_utf8_lossy(&output.stdout).into_owned())
+    let stdout = String::from_utf8_lossy(&output.stdout).into_owned();
+    let stderr = String::from_utf8_lossy(&output.stderr).into_owned();
+    ensure!(
+        output.status.success(),
+        "7-Zip exited with status: {}, stderr:\n{}",
+        output.status,
+        stderr
+    );
+    Ok(stdout)
 }
 
 /// List file paths contained in an archive using 7-Zip.
 /// Returns only file entries (directories are filtered out).
 pub(crate) async fn list_archive_file_paths(archive: &Path) -> Result<Vec<String>> {
     // Use technical list for easier parsing
-    let out = run_7z_capture([
+    let out = run_7z_to_string([
         OsString::from("l"),
         OsString::from("-slt"),
         archive.as_os_str().to_os_string(),

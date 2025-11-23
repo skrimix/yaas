@@ -18,6 +18,7 @@ pub(crate) struct DownloaderConfig {
     #[serde(default)]
     pub disable_randomize_remote: bool,
     /// Optional remote used for app donation uploads.
+    // TODO: check that this and the next field are both present or both absent during parsing
     #[serde(default)]
     pub donation_remote_name: Option<String>,
     /// Optional path within the donation remote where uploaded archives are placed.

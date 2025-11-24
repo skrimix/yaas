@@ -220,6 +220,7 @@ class SinglePage extends StatefulWidget {
 }
 
 class _SinglePageState extends State<SinglePage> {
+  var _lastPageCount = 0;
   var pageIndex = 0;
   var _startupApplied = false;
 
@@ -247,6 +248,13 @@ class _SinglePageState extends State<SinglePage> {
     final destinations = pageDefinitions
         .map((page) => page.toNavigationDestination(l10n))
         .toList();
+
+    if (pageDefinitions.length != _lastPageCount) {
+      _lastPageCount = pageDefinitions.length;
+      setState(() {
+        pageIndex = 0;
+      });
+    }
 
     if (!_startupApplied && settingsState.hasLoaded) {
       final initialIndex = _indexForStartupPage(

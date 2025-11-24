@@ -66,7 +66,6 @@ impl DownloaderManager {
         self.inner.read().await.is_some()
     }
 
-    /// Start downloader lifecycle: initial init, setup handler, and retry handling.
     pub(crate) fn start(self: Arc<Self>, app_dir: PathBuf, settings_handler: Arc<SettingsHandler>) {
         let manager = self.clone();
         let app_dir_init = app_dir.clone();
@@ -81,14 +80,6 @@ impl DownloaderManager {
                 }
             } else {
                 info!("No downloader.json found, cloud features disabled");
-                DownloaderAvailabilityChanged {
-                    available: false,
-                    initializing: false,
-                    error: Some("Downloader config not installed".into()),
-                    config_id: None,
-                    is_donation_configured: false,
-                }
-                .send_signal_to_dart();
             }
         });
 

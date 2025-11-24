@@ -385,6 +385,13 @@ class AppLocalizationsRu extends AppLocalizations {
   String get dragDropInvalidFile => 'Файл не является корректным APK';
 
   @override
+  String get dragDropDownloaderConfigTitle => 'Конфиг загрузчика';
+
+  @override
+  String get dragDropDownloaderConfigHint =>
+      'Перетащите downloader.json, чтобы установить или обновить конфигурацию загрузчика';
+
+  @override
   String get deviceCasting => 'Трансляция';
 
   @override
@@ -1351,7 +1358,7 @@ class AppLocalizationsRu extends AppLocalizations {
 
   @override
   String get donateAppsDescription =>
-      'Выберите приложения для загрузки в сообщество';
+      'Выберите приложения которыми хотите поделиться (выгрузить) в сообщество';
 
   @override
   String get donateShowFiltered => 'Показать скрытые';

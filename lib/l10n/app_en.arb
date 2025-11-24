@@ -198,6 +198,8 @@
     "dragDropHintDisconnected": "Connect a device to enable drag and drop installation",
     "dragDropInvalidDir": "Dropped directory is not a valid app directory or backup folder",
     "dragDropInvalidFile": "Dropped file is not a valid APK file",
+    "dragDropDownloaderConfigTitle": "Downloader config",
+    "dragDropDownloaderConfigHint": "Drop downloader.json to install or update the downloader configuration",
     "deviceCasting": "Casting",
     "deviceStartCasting": "Cast",
     "castingWirelessUnsupported": "Casting is not supported for wireless devices yet. Connect via USB.",

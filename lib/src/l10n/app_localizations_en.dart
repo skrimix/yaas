@@ -382,6 +382,13 @@ class AppLocalizationsEn extends AppLocalizations {
   String get dragDropInvalidFile => 'Dropped file is not a valid APK file';
 
   @override
+  String get dragDropDownloaderConfigTitle => 'Downloader config';
+
+  @override
+  String get dragDropDownloaderConfigHint =>
+      'Drop downloader.json to install or update the downloader configuration';
+
+  @override
   String get deviceCasting => 'Casting';
 
   @override

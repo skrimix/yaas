@@ -776,6 +776,18 @@ abstract class AppLocalizations {
   /// **'Dropped file is not a valid APK file'**
   String get dragDropInvalidFile;
 
+  /// No description provided for @dragDropDownloaderConfigTitle.
+  ///
+  /// In en, this message translates to:
+  /// **'Downloader config'**
+  String get dragDropDownloaderConfigTitle;
+
+  /// No description provided for @dragDropDownloaderConfigHint.
+  ///
+  /// In en, this message translates to:
+  /// **'Drop downloader.json to install or update the downloader configuration'**
+  String get dragDropDownloaderConfigHint;
+
   /// No description provided for @deviceCasting.
   ///
   /// In en, this message translates to:

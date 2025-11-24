@@ -215,10 +215,10 @@ class _ManageAppsScreenState extends State<ManageAppsScreen> {
         '${l10n.detailsIsLaunchable} ${app.launchable ? l10n.commonYes : l10n.commonNo}\n'
         '${l10n.detailsIsSystem} ${app.system ? l10n.commonYes : l10n.commonNo}\n'
         '${l10n.detailsStorageUsage}\n'
-        '${l10n.detailsApp} ${_formatSize(app.size.app.toInt())}\n'
-        '${l10n.detailsData} ${_formatSize(app.size.data.toInt())}\n'
-        '${l10n.detailsCache} ${_formatSize(app.size.cache.toInt())}\n'
-        '${l10n.detailsTotal} ${_formatAppSize(app.size)}';
+        '  ${l10n.detailsApp} ${_formatSize(app.size.app.toInt())}\n'
+        '  ${l10n.detailsData} ${_formatSize(app.size.data.toInt())}\n'
+        '  ${l10n.detailsCache} ${_formatSize(app.size.cache.toInt())}\n'
+        '  ${l10n.detailsTotal} ${_formatAppSize(app.size)}';
   }
 
   Widget _buildDetailsRow(String label, String value, bool copyable) {

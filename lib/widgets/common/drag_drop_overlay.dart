@@ -104,11 +104,80 @@ class _DragDropOverlayState extends State<DragDropOverlay> {
     return false;
   }
 
+  Widget _buildDropSection({
+    required BuildContext context,
+    required IconData icon,
+    required Color color,
+    required String title,
+    required String subtitle,
+    bool isSecondary = false,
+  }) {
+    final theme = Theme.of(context);
+    return ConstrainedBox(
+      constraints: BoxConstraints(maxWidth: isSecondary ? 240 : 280),
+      child: Column(
+        mainAxisSize: MainAxisSize.min,
+        children: [
+          Icon(
+            icon,
+            size: isSecondary ? 40 : 56,
+            color: isSecondary ? color.withValues(alpha: 0.7) : color,
+          ),
+          SizedBox(height: isSecondary ? 8 : 12),
+          Text(
+            title,
+            textAlign: TextAlign.center,
+            style: (isSecondary
+                    ? theme.textTheme.titleSmall
+                    : theme.textTheme.titleMedium)
+                ?.copyWith(
+              color: isSecondary ? color.withValues(alpha: 0.8) : color,
+            ),
+          ),
+          SizedBox(height: isSecondary ? 4 : 6),
+          Text(
+            subtitle,
+            textAlign: TextAlign.center,
+            style: isSecondary
+                ? theme.textTheme.bodySmall
+                : theme.textTheme.bodyMedium,
+          ),
+        ],
+      ),
+    );
+  }
+
   @override
   Widget build(BuildContext context) {
     return Consumer<DeviceState>(
       builder: (context, deviceState, _) {
         final l10n = AppLocalizations.of(context);
+        final theme = Theme.of(context);
+        final colorScheme = theme.colorScheme;
+        final isConnected = deviceState.isConnected;
+        final mainDropSection = isConnected
+            ? _buildDropSection(
+                context: context,
+                icon: Icons.file_download,
+                color: colorScheme.primary,
+                title: l10n.dragDropDropToInstall,
+                subtitle: l10n.dragDropHintConnected,
+              )
+            : _buildDropSection(
+                context: context,
+                icon: Icons.phonelink_erase,
+                color: colorScheme.error,
+                title: l10n.dragDropNoDevice,
+                subtitle: l10n.dragDropHintDisconnected,
+              );
+        final configDropSection = _buildDropSection(
+          context: context,
+          icon: Icons.cloud_download,
+          color: colorScheme.primary,
+          title: l10n.dragDropDownloaderConfigTitle,
+          subtitle: l10n.dragDropDownloaderConfigHint,
+          isSecondary: true,
+        );
         return Stack(
           children: [
             widget.child,
@@ -130,46 +199,17 @@ class _DragDropOverlayState extends State<DragDropOverlay> {
                     opacity: _isDragging ? 1.0 : 0.0,
                     duration: const Duration(milliseconds: 200),
                     child: Container(
-                      color: Theme.of(context)
-                          .colorScheme
-                          .surface
-                          .withValues(alpha: 0.8),
-                      child: Center(
-                        child: Column(
-                          mainAxisSize: MainAxisSize.min,
-                          children: [
-                            Icon(
-                              deviceState.isConnected
-                                  ? Icons.file_download
-                                  : Icons.phonelink_erase,
-                              size: 64,
-                              color: deviceState.isConnected
-                                  ? Theme.of(context).colorScheme.primary
-                                  : Theme.of(context).colorScheme.error,
+                      color: colorScheme.surface.withValues(alpha: 0.8),
+                      child: Stack(
+                        children: [
+                          Center(child: mainDropSection),
+                          Center(
+                            child: Transform.translate(
+                              offset: const Offset(308, 0),
+                              child: configDropSection,
                             ),
-                            const SizedBox(height: 16),
-                            Text(
-                              deviceState.isConnected
-                                  ? l10n.dragDropDropToInstall
-                                  : l10n.dragDropNoDevice,
-                              style: Theme.of(context)
-                                  .textTheme
-                                  .headlineMedium
-                                  ?.copyWith(
-                                    color: deviceState.isConnected
-                                        ? Theme.of(context).colorScheme.primary
-                                        : Theme.of(context).colorScheme.error,
-                                  ),
-                            ),
-                            const SizedBox(height: 8),
-                            Text(
-                              deviceState.isConnected
-                                  ? l10n.dragDropHintConnected
-                                  : l10n.dragDropHintDisconnected,
-                              style: Theme.of(context).textTheme.bodyLarge,
-                            ),
-                          ],
-                        ),
+                          ),
+                        ],
                       ),
                     ),
                   ),

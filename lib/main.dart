@@ -237,9 +237,8 @@ class _SinglePageState extends State<SinglePage> {
         settingsState.isDownloaderDonationConfigured;
     List<AppPageDefinition> pageDefinitions = allPages;
     if (!showDownloaderPages) {
-      pageDefinitions = pageDefinitions
-          .where((p) => p.key != 'download' && p.key != 'downloads')
-          .toList();
+      pageDefinitions =
+          pageDefinitions.where((p) => p.key != 'downloads').toList();
     }
     if (!showDonationPages) {
       pageDefinitions =

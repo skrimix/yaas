@@ -323,8 +323,14 @@ abstract class AppLocalizations {
   /// No description provided for @installDownloaderConfig.
   ///
   /// In en, this message translates to:
-  /// **'Install downloader config'**
+  /// **'Install local config'**
   String get installDownloaderConfig;
+
+  /// No description provided for @installDownloaderConfigFromUrl.
+  ///
+  /// In en, this message translates to:
+  /// **'Set up from preset/URL'**
+  String get installDownloaderConfigFromUrl;
 
   /// No description provided for @settingsSelectDownloaderConfig.
   ///
@@ -337,6 +343,126 @@ abstract class AppLocalizations {
   /// In en, this message translates to:
   /// **'Current config ID: {id}'**
   String downloaderConfigId(String id);
+
+  /// No description provided for @downloaderConfigFromUrlTitle.
+  ///
+  /// In en, this message translates to:
+  /// **'Set up downloader config'**
+  String get downloaderConfigFromUrlTitle;
+
+  /// No description provided for @downloaderConfigFromUrlDescription.
+  ///
+  /// In en, this message translates to:
+  /// **'Choose a preset configuration or use a custom URL. You can always change the configuration later in the settings.'**
+  String get downloaderConfigFromUrlDescription;
+
+  /// No description provided for @downloaderConfigTemplateVrp.
+  ///
+  /// In en, this message translates to:
+  /// **'VRP'**
+  String get downloaderConfigTemplateVrp;
+
+  /// No description provided for @downloaderConfigTemplateVrpHint.
+  ///
+  /// In en, this message translates to:
+  /// **'Public server'**
+  String get downloaderConfigTemplateVrpHint;
+
+  /// No description provided for @downloaderConfigTemplateVrgRus.
+  ///
+  /// In en, this message translates to:
+  /// **'VR Games RUS'**
+  String get downloaderConfigTemplateVrgRus;
+
+  /// No description provided for @downloaderConfigTemplateVrgRusHint.
+  ///
+  /// In en, this message translates to:
+  /// **'CIS countries only'**
+  String get downloaderConfigTemplateVrgRusHint;
+
+  /// No description provided for @downloaderConfigTemplateNif.
+  ///
+  /// In en, this message translates to:
+  /// **'NIF'**
+  String get downloaderConfigTemplateNif;
+
+  /// No description provided for @downloaderConfigTemplateNifHint.
+  ///
+  /// In en, this message translates to:
+  /// **'Private access'**
+  String get downloaderConfigTemplateNifHint;
+
+  /// No description provided for @downloaderConfigTemplateCustom.
+  ///
+  /// In en, this message translates to:
+  /// **'Custom URL'**
+  String get downloaderConfigTemplateCustom;
+
+  /// No description provided for @downloaderConfigUrlLabel.
+  ///
+  /// In en, this message translates to:
+  /// **'Config URL'**
+  String get downloaderConfigUrlLabel;
+
+  /// No description provided for @downloaderConfigUrlInvalid.
+  ///
+  /// In en, this message translates to:
+  /// **'Please enter a valid http(s) URL'**
+  String get downloaderConfigUrlInvalid;
+
+  /// No description provided for @downloaderConfigVrgRusTestButton.
+  ///
+  /// In en, this message translates to:
+  /// **'Test access'**
+  String get downloaderConfigVrgRusTestButton;
+
+  /// No description provided for @downloaderConfigVrgRusTestOk.
+  ///
+  /// In en, this message translates to:
+  /// **'Access looks OK.'**
+  String get downloaderConfigVrgRusTestOk;
+
+  /// No description provided for @downloaderConfigVrgRusTestNoAccess.
+  ///
+  /// In en, this message translates to:
+  /// **'No access from this network (request timed out).'**
+  String get downloaderConfigVrgRusTestNoAccess;
+
+  /// No description provided for @downloaderConfigVrgRusTestRequiredTooltip.
+  ///
+  /// In en, this message translates to:
+  /// **'Run the access test first, or select another server.'**
+  String get downloaderConfigVrgRusTestRequiredTooltip;
+
+  /// No description provided for @downloaderConfigNotConfiguredTitle.
+  ///
+  /// In en, this message translates to:
+  /// **'Cloud downloader is not configured'**
+  String get downloaderConfigNotConfiguredTitle;
+
+  /// No description provided for @downloaderConfigNotConfiguredDesc.
+  ///
+  /// In en, this message translates to:
+  /// **'Install a downloader.json config to enable cloud app downloads.'**
+  String get downloaderConfigNotConfiguredDesc;
+
+  /// No description provided for @downloaderConfigInstallButton.
+  ///
+  /// In en, this message translates to:
+  /// **'Install'**
+  String get downloaderConfigInstallButton;
+
+  /// No description provided for @downloaderConfigInstalling.
+  ///
+  /// In en, this message translates to:
+  /// **'Installing...'**
+  String get downloaderConfigInstalling;
+
+  /// No description provided for @downloaderConfigInstallFailed.
+  ///
+  /// In en, this message translates to:
+  /// **'Failed to install downloader config'**
+  String get downloaderConfigInstallFailed;
 
   /// No description provided for @loadingApps.
   ///

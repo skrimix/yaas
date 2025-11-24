@@ -123,7 +123,10 @@ class AppLocalizationsRu extends AppLocalizations {
   String get downloadingRcloneFiles => 'Загрузка файлов rclone';
 
   @override
-  String get installDownloaderConfig => 'Установить конфигурацию загрузчика';
+  String get installDownloaderConfig => 'Установить локальную конфигурацию';
+
+  @override
+  String get installDownloaderConfigFromUrl => 'Настроить из пресета/URL';
 
   @override
   String get settingsSelectDownloaderConfig => 'Выберите downloader.json';
@@ -132,6 +135,74 @@ class AppLocalizationsRu extends AppLocalizations {
   String downloaderConfigId(String id) {
     return 'ID текущей конфигурации: $id';
   }
+
+  @override
+  String get downloaderConfigFromUrlTitle =>
+      'Настройка конфигурации загрузчика';
+
+  @override
+  String get downloaderConfigFromUrlDescription =>
+      'Выберите предустановленный вариант или укажите свой URL. Вы всегда можете изменить конфигурацию позже в настройках.';
+
+  @override
+  String get downloaderConfigTemplateVrp => 'VRP';
+
+  @override
+  String get downloaderConfigTemplateVrpHint => 'Публичный сервер';
+
+  @override
+  String get downloaderConfigTemplateVrgRus => 'VR Games RUS';
+
+  @override
+  String get downloaderConfigTemplateVrgRusHint => 'Только для стран СНГ';
+
+  @override
+  String get downloaderConfigTemplateNif => 'NIF';
+
+  @override
+  String get downloaderConfigTemplateNifHint => 'Приватный доступ';
+
+  @override
+  String get downloaderConfigTemplateCustom => 'Произвольный URL';
+
+  @override
+  String get downloaderConfigUrlLabel => 'URL конфигурации';
+
+  @override
+  String get downloaderConfigUrlInvalid =>
+      'Введите корректный URL, начинающийся с http(s)';
+
+  @override
+  String get downloaderConfigVrgRusTestButton => 'Проверить доступ';
+
+  @override
+  String get downloaderConfigVrgRusTestOk => 'Доступ ОК.';
+
+  @override
+  String get downloaderConfigVrgRusTestNoAccess =>
+      'Нет доступа из этой сети (тайм-аут запроса).';
+
+  @override
+  String get downloaderConfigVrgRusTestRequiredTooltip =>
+      'Сначала выполните проверку доступа, либо выберите другой сервер.';
+
+  @override
+  String get downloaderConfigNotConfiguredTitle =>
+      'Облачный загрузчик не настроен';
+
+  @override
+  String get downloaderConfigNotConfiguredDesc =>
+      'Установите файл downloader.json, чтобы включить загрузку приложений из облака.';
+
+  @override
+  String get downloaderConfigInstallButton => 'Установить';
+
+  @override
+  String get downloaderConfigInstalling => 'Установка...';
+
+  @override
+  String get downloaderConfigInstallFailed =>
+      'Не удалось установить конфигурацию загрузчика';
 
   @override
   String get loadingApps => 'Загрузка списка приложений...';
@@ -238,7 +309,8 @@ class AppLocalizationsRu extends AppLocalizations {
   String get settingsDownloadsCleanup => 'Очистка загрузок';
 
   @override
-  String get settingsWriteLegacyReleaseJson => 'Писать legacy release.json';
+  String get settingsWriteLegacyReleaseJson =>
+      'Создавать устаревший release.json';
 
   @override
   String get settingsWriteLegacyReleaseJsonHelp =>

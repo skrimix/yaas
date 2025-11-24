@@ -122,7 +122,10 @@ class AppLocalizationsEn extends AppLocalizations {
   String get downloadingRcloneFiles => 'Downloading rclone files';
 
   @override
-  String get installDownloaderConfig => 'Install downloader config';
+  String get installDownloaderConfig => 'Install local config';
+
+  @override
+  String get installDownloaderConfigFromUrl => 'Set up from preset/URL';
 
   @override
   String get settingsSelectDownloaderConfig => 'Select downloader.json';
@@ -131,6 +134,72 @@ class AppLocalizationsEn extends AppLocalizations {
   String downloaderConfigId(String id) {
     return 'Current config ID: $id';
   }
+
+  @override
+  String get downloaderConfigFromUrlTitle => 'Set up downloader config';
+
+  @override
+  String get downloaderConfigFromUrlDescription =>
+      'Choose a preset configuration or use a custom URL. You can always change the configuration later in the settings.';
+
+  @override
+  String get downloaderConfigTemplateVrp => 'VRP';
+
+  @override
+  String get downloaderConfigTemplateVrpHint => 'Public server';
+
+  @override
+  String get downloaderConfigTemplateVrgRus => 'VR Games RUS';
+
+  @override
+  String get downloaderConfigTemplateVrgRusHint => 'CIS countries only';
+
+  @override
+  String get downloaderConfigTemplateNif => 'NIF';
+
+  @override
+  String get downloaderConfigTemplateNifHint => 'Private access';
+
+  @override
+  String get downloaderConfigTemplateCustom => 'Custom URL';
+
+  @override
+  String get downloaderConfigUrlLabel => 'Config URL';
+
+  @override
+  String get downloaderConfigUrlInvalid => 'Please enter a valid http(s) URL';
+
+  @override
+  String get downloaderConfigVrgRusTestButton => 'Test access';
+
+  @override
+  String get downloaderConfigVrgRusTestOk => 'Access looks OK.';
+
+  @override
+  String get downloaderConfigVrgRusTestNoAccess =>
+      'No access from this network (request timed out).';
+
+  @override
+  String get downloaderConfigVrgRusTestRequiredTooltip =>
+      'Run the access test first, or select another server.';
+
+  @override
+  String get downloaderConfigNotConfiguredTitle =>
+      'Cloud downloader is not configured';
+
+  @override
+  String get downloaderConfigNotConfiguredDesc =>
+      'Install a downloader.json config to enable cloud app downloads.';
+
+  @override
+  String get downloaderConfigInstallButton => 'Install';
+
+  @override
+  String get downloaderConfigInstalling => 'Installing...';
+
+  @override
+  String get downloaderConfigInstallFailed =>
+      'Failed to install downloader config';
 
   @override
   String get loadingApps => 'Loading apps...';

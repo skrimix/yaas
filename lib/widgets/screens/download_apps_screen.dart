@@ -11,6 +11,7 @@ import '../../src/bindings/bindings.dart';
 import '../../providers/device_state.dart';
 import '../../providers/settings_state.dart';
 import '../app_management/cloud_app_list.dart';
+import '../common/downloader_config_from_url_dialog.dart';
 
 enum SortOption {
   name,
@@ -708,6 +709,7 @@ class _DownloadAppsScreenState extends State<DownloadAppsScreen> {
         final showDownloaderInit = settingsState.isDownloaderInitializing;
         final showDownloaderError =
             !showDownloaderInit && settingsState.downloaderError != null;
+        final hasDownloader = settingsState.isDownloaderAvailable;
 
         if (cloudAppsState.isLoading &&
             !showDownloaderInit &&
@@ -760,7 +762,17 @@ class _DownloadAppsScreenState extends State<DownloadAppsScreen> {
           body: SafeArea(
             child: Column(
               children: [
-                if (!showDownloaderInit && !showDownloaderError)
+                if (!hasDownloader && !showDownloaderInit)
+                  Padding(
+                    padding: const EdgeInsets.fromLTRB(16, 16, 16, 8),
+                    child: _buildDownloaderConfigCallout(
+                      context,
+                      settingsState,
+                    ),
+                  ),
+                if (hasDownloader &&
+                    !showDownloaderInit &&
+                    !showDownloaderError)
                   Padding(
                     padding: const EdgeInsets.all(16.0),
                     child: Row(
@@ -856,7 +868,9 @@ class _DownloadAppsScreenState extends State<DownloadAppsScreen> {
                       ],
                     ),
                   ),
-                if (!showDownloaderInit && !showDownloaderError)
+                if (hasDownloader &&
+                    !showDownloaderInit &&
+                    !showDownloaderError)
                   Expanded(
                     child: CloudAppList(
                       apps: filteredAndSortedApps,
@@ -869,7 +883,9 @@ class _DownloadAppsScreenState extends State<DownloadAppsScreen> {
                       onInstall: _install,
                     ),
                   ),
-                if (!showDownloaderInit && !showDownloaderError)
+                if (hasDownloader &&
+                    !showDownloaderInit &&
+                    !showDownloaderError)
                   _buildSelectionSummary(_sortApps(cloudAppsState.apps)),
               ],
             ),
@@ -928,6 +944,54 @@ class _DownloadAppsScreenState extends State<DownloadAppsScreen> {
               },
               icon: const Icon(Icons.refresh),
               label: const Text('Retry'),
+            ),
+          ],
+        ),
+      ),
+    );
+  }
+
+  Widget _buildDownloaderConfigCallout(
+    BuildContext context,
+    SettingsState settingsState,
+  ) {
+    final l10n = AppLocalizations.of(context);
+    return Card(
+      child: Padding(
+        padding: const EdgeInsets.all(12.0),
+        child: Row(
+          crossAxisAlignment: CrossAxisAlignment.start,
+          children: [
+            const Icon(Icons.cloud_download),
+            const SizedBox(width: 12),
+            Expanded(
+              child: Column(
+                crossAxisAlignment: CrossAxisAlignment.start,
+                children: [
+                  Text(
+                    l10n.downloaderConfigNotConfiguredTitle,
+                    style: Theme.of(context).textTheme.titleMedium,
+                  ),
+                  const SizedBox(height: 4),
+                  Text(
+                    l10n.downloaderConfigNotConfiguredDesc,
+                    style: Theme.of(context).textTheme.bodyMedium,
+                  ),
+                ],
+              ),
+            ),
+            const SizedBox(width: 12),
+            FilledButton(
+              onPressed: () async {
+                await showDialog<void>(
+                  context: context,
+                  barrierDismissible: false,
+                  builder: (ctx) => DownloaderConfigFromUrlDialog(
+                    initialConfigId: settingsState.downloaderConfigId,
+                  ),
+                );
+              },
+              child: Text(l10n.installDownloaderConfigFromUrl),
             ),
           ],
         ),

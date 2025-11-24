@@ -11,6 +11,7 @@ import 'package:url_launcher/url_launcher.dart';
 import '../../providers/settings_state.dart';
 import '../../navigation.dart';
 import '../../src/l10n/app_localizations.dart';
+import '../common/downloader_config_from_url_dialog.dart';
 
 enum SettingTextField {
   rcloneRemoteName,
@@ -261,6 +262,18 @@ class _SettingsScreenState extends State<SettingsScreen> {
         );
       }
     }
+  }
+
+  Future<void> _showDownloaderConfigFromUrlDialog(
+    String? currentConfigId,
+  ) async {
+    await showDialog<void>(
+      context: context,
+      barrierDismissible: false,
+      builder: (ctx) => DownloaderConfigFromUrlDialog(
+        initialConfigId: currentConfigId,
+      ),
+    );
   }
 
   String _formatCleanupPolicy(
@@ -654,6 +667,14 @@ class _SettingsScreenState extends State<SettingsScreen> {
             alignment: Alignment.centerLeft,
             child: Row(
               children: [
+                TextButton.icon(
+                  onPressed: () => _showDownloaderConfigFromUrlDialog(
+                    settingsState.downloaderConfigId,
+                  ),
+                  icon: const Icon(Icons.cloud_download),
+                  label: Text(l10n.installDownloaderConfigFromUrl),
+                ),
+                const SizedBox(width: 8),
                 TextButton.icon(
                   onPressed: () async {
                     final result = await FilePicker.platform.pickFiles(

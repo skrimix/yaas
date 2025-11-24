@@ -65,6 +65,8 @@ impl DownloaderConfig {
     }
 }
 
+// TODO: add test-only constructor for DownloaderConfig
+
 #[derive(Debug, Clone, Copy, Deserialize, PartialEq, Eq)]
 #[serde(rename_all = "kebab-case")]
 pub(crate) enum RepoLayoutKind {

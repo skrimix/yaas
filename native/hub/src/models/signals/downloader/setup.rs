@@ -6,6 +6,11 @@ pub(crate) struct InstallDownloaderConfigRequest {
 }
 
 #[derive(serde::Serialize, serde::Deserialize, DartSignal)]
+pub(crate) struct InstallDownloaderConfigFromUrlRequest {
+    pub url: String,
+}
+
+#[derive(serde::Serialize, serde::Deserialize, DartSignal)]
 pub(crate) struct RetryDownloaderInitRequest {}
 
 #[derive(serde::Serialize, serde::Deserialize, RustSignal)]

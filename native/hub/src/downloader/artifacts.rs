@@ -328,7 +328,6 @@ mod tests {
     #[tokio::test(flavor = "multi_thread")]
     async fn prepare_artifacts_errors_when_mixed_url_and_local() {
         let dir = tempdir().unwrap();
-        // URL for rclone, local for config
         let cfg = DownloaderConfig {
             id: "test".to_string(),
             rclone_path: RclonePath::Single("http://127.0.0.1/rclone".to_string()),

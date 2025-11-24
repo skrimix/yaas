@@ -16,8 +16,8 @@ use crate::{
         downloader::{
             availability::DownloaderAvailabilityChanged,
             setup::{
-                DownloaderConfigInstallResult, InstallDownloaderConfigRequest,
-                RetryDownloaderInitRequest,
+                DownloaderConfigInstallResult, InstallDownloaderConfigFromUrlRequest,
+                InstallDownloaderConfigRequest, RetryDownloaderInitRequest,
             },
         },
         system::Toast,
@@ -208,62 +208,107 @@ impl DownloaderManager {
         }
     }
 
+    async fn finalize_config_install(
+        &self,
+        app_dir: &Path,
+        settings_handler: &Arc<SettingsHandler>,
+        result: Result<()>,
+    ) {
+        match result {
+            Ok(()) => {
+                DownloaderConfigInstallResult { success: true, error: None }.send_signal_to_dart();
+
+                Toast::send(
+                    "Downloader config installed".into(),
+                    "Initializing cloud features...".into(),
+                    false,
+                    None,
+                );
+
+                if let Err(e) =
+                    self.init_from_disk(app_dir.to_path_buf(), settings_handler.clone()).await
+                {
+                    error!(
+                        error = e.as_ref() as &dyn Error,
+                        "Downloader init after config install failed"
+                    );
+                    DownloaderConfigInstallResult {
+                        success: false,
+                        error: Some(format!("Failed to initialize downloader: {:#}", e)),
+                    }
+                    .send_signal_to_dart();
+                }
+            }
+            Err(e) => {
+                error!(error = e.as_ref() as &dyn Error, "Failed to install downloader config");
+                DownloaderConfigInstallResult { success: false, error: Some(format!("{:#}", e)) }
+                    .send_signal_to_dart();
+                Toast::send(
+                    "Failed to install downloader config".into(),
+                    format!("{:#}", e),
+                    true,
+                    None,
+                );
+            }
+        }
+    }
+
     /// Start handler that watches for InstallDownloaderConfigRequest and installs config.
     fn start_setup_handler(
         self: Arc<Self>,
         app_dir: PathBuf,
         settings_handler: Arc<SettingsHandler>,
     ) {
-        tokio::spawn(async move {
-            let receiver = InstallDownloaderConfigRequest::get_dart_signal_receiver();
-            loop {
-                match receiver.recv().await {
-                    Some(req) => {
-                        let src = PathBuf::from(req.message.source_path);
-                        debug!(path = %src.display(), "Received InstallDownloaderConfigRequest");
-                        let res = install_config(&app_dir, &src).await;
-                        match res {
-                            Ok(()) => {
-                                DownloaderConfigInstallResult { success: true, error: None }
-                                    .send_signal_to_dart();
+        // Local file-based install
+        tokio::spawn({
+            let manager = self.clone();
+            let app_dir = app_dir.clone();
+            let settings_handler = settings_handler.clone();
+            async move {
+                let receiver = InstallDownloaderConfigRequest::get_dart_signal_receiver();
+                loop {
+                    match receiver.recv().await {
+                        Some(req) => {
+                            let src = PathBuf::from(req.message.source_path);
+                            debug!(path = %src.display(), "Received InstallDownloaderConfigRequest");
+                            let res = install_config(&app_dir, &src).await;
+                            manager.finalize_config_install(&app_dir, &settings_handler, res).await;
+                        }
+                        None => panic!("InstallDownloaderConfigRequest receiver closed"),
+                    }
+                }
+            }
+        });
 
-                                Toast::send(
-                                    "Downloader config installed".into(),
-                                    "Initializing cloud features...".into(),
-                                    false,
-                                    None,
-                                );
+        // URL-based install
+        tokio::spawn({
+            let manager = self.clone();
+            async move {
+                let receiver = InstallDownloaderConfigFromUrlRequest::get_dart_signal_receiver();
+                loop {
+                    match receiver.recv().await {
+                        Some(req) => {
+                            let url = req.message.url;
+                            debug!(
+                                url = %url,
+                                "Received InstallDownloaderConfigFromUrlRequest"
+                            );
 
-                                if let Err(e) = self
-                                    .init_from_disk(app_dir.clone(), settings_handler.clone())
-                                    .await
-                                {
-                                    error!(
-                                        error = e.as_ref() as &dyn Error,
-                                        "Downloader init after install failed"
-                                    );
-                                }
+                            let res = async {
+                                const BOOTSTRAP_CACHE_KEY: &str = "_bootstrap";
+                                let remote_cfg_path =
+                                    cache_config_from_url(&app_dir, BOOTSTRAP_CACHE_KEY, &url)
+                                        .await?;
+                                install_config(&app_dir, &remote_cfg_path).await
                             }
-                            Err(e) => {
-                                error!(
-                                    error = e.as_ref() as &dyn Error,
-                                    "Failed to install downloader config"
-                                );
-                                DownloaderConfigInstallResult {
-                                    success: false,
-                                    error: Some(format!("{:#}", e)),
-                                }
-                                .send_signal_to_dart();
-                                Toast::send(
-                                    "Failed to install downloader config".into(),
-                                    format!("{:#}", e),
-                                    true,
-                                    None,
-                                );
-                            }
+                            .await;
+
+                            manager.finalize_config_install(&app_dir, &settings_handler, res).await;
+                        }
+                        None => {
+                            panic!("InstallDownloaderConfigFromUrlRequest receiver closed")
                         }
                     }
-                    None => panic!("InstallDownloaderConfigRequest receiver closed"),
                 }
             }
         });
@@ -275,30 +320,34 @@ fn is_http_url(value: &str) -> bool {
 }
 
 #[instrument(level = "debug", skip(app_dir), err)]
-async fn maybe_update_config_from_url(
-    app_dir: &Path,
-    config_id: &str,
-    update_url: &str,
-) -> Result<()> {
-    if update_url.trim().is_empty() || !is_http_url(update_url) {
-        ensure!(is_http_url(update_url), "Config update URL must start with http:// or https://");
-        return Ok(());
-    }
-    debug!(update_url = %update_url, config_id = %config_id, "Updating downloader config from URL");
+async fn cache_config_from_url(app_dir: &Path, cache_key: &str, url: &str) -> Result<PathBuf> {
+    ensure!(is_http_url(url), "Config update URL must start with http:// or https://");
+    debug!(update_url = %url, cache_key = %cache_key, "Downloading downloader config from URL");
 
-    let cache_dir = app_dir.join("downloader_cache").join(config_id);
-    let remote_cfg_path = cache_dir.join("downloader_config.json");
+    let cache_dir = app_dir.join("downloader_cache").join(cache_key);
+    let cached_cfg_path = cache_dir.join("downloader_config.json");
 
     let client = reqwest::Client::builder()
         .user_agent(crate::USER_AGENT)
         .build()
         .context("Failed to build HTTP client for downloader config update")?;
 
-    let _ = update_file_cached(&client, update_url, &remote_cfg_path, &cache_dir, None).await?;
+    let _ = update_file_cached(&client, url, &cached_cfg_path, &cache_dir, None).await?;
 
-    // Validate the downloaded config before installing it over the active one.
-    let _ = DownloaderConfig::load_from_path(&remote_cfg_path)?;
-    install_config(app_dir, &remote_cfg_path).await?;
+    Ok(cached_cfg_path)
+}
+
+#[instrument(level = "debug", skip(app_dir), err)]
+async fn maybe_update_config_from_url(
+    app_dir: &Path,
+    config_id: &str,
+    update_url: &str,
+) -> Result<()> {
+    ensure!(!update_url.is_empty(), "Update URL should not be empty");
+
+    let cached_cfg_path = cache_config_from_url(app_dir, config_id, update_url).await?;
+
+    install_config(app_dir, &cached_cfg_path).await?;
     Ok(())
 }
 
@@ -328,8 +377,12 @@ async fn install_config(app_dir: &Path, src: &Path) -> Result<()> {
 #[cfg(test)]
 mod tests {
     use tempfile::tempdir;
+    use wiremock::{
+        Mock, MockServer, ResponseTemplate,
+        matchers::{method, path},
+    };
 
-    use super::install_config;
+    use super::{cache_config_from_url, install_config, maybe_update_config_from_url};
 
     fn valid_config_json() -> String {
         r#"{
@@ -372,5 +425,82 @@ mod tests {
         let err = install_config(dir.path(), &src).await.unwrap_err();
         let msg = format!("{:#}", err);
         assert!(msg.contains("Failed to parse downloader.json") || msg.contains("parse"));
+    }
+
+    #[tokio::test(flavor = "multi_thread")]
+    async fn cache_config_from_url_writes_into_cache_dir() {
+        let dir = tempdir().unwrap();
+        let server = MockServer::start().await;
+        let url_path = "/downloader.json";
+        const CONTENTS: &str = "{\"example\":\"ok\"}";
+
+        Mock::given(method("GET"))
+            .and(path(url_path))
+            .respond_with(ResponseTemplate::new(200).set_body_string(CONTENTS))
+            .mount(&server)
+            .await;
+
+        let url = format!("{}{}", server.uri(), url_path);
+        let cache_key = "test-cache";
+
+        let cached_path = cache_config_from_url(dir.path(), cache_key, &url).await.unwrap();
+
+        assert!(cached_path.ends_with("downloader_cache/test-cache/downloader_config.json"));
+        assert!(cached_path.exists());
+        let content = std::fs::read_to_string(cached_path).unwrap();
+        assert_eq!(content, CONTENTS);
+    }
+
+    #[tokio::test(flavor = "multi_thread")]
+    async fn maybe_update_config_from_url_installs_to_app_dir() {
+        let dir = tempdir().unwrap();
+        let app_dir = dir.path();
+
+        let cfg_json = valid_config_json();
+
+        let server = MockServer::start().await;
+        let url_path = "/downloader.json";
+
+        Mock::given(method("GET"))
+            .and(path(url_path))
+            .respond_with(ResponseTemplate::new(200).set_body_string(cfg_json.clone()))
+            .mount(&server)
+            .await;
+
+        let url = format!("{}{}", server.uri(), url_path);
+
+        let dst = app_dir.join("downloader.json");
+        assert!(!dst.exists());
+
+        maybe_update_config_from_url(app_dir, "config-1", &url).await.expect("update from URL");
+
+        assert!(dst.exists());
+        let installed = std::fs::read_to_string(dst).unwrap();
+        assert_eq!(installed, cfg_json);
+    }
+
+    #[tokio::test(flavor = "multi_thread")]
+    async fn maybe_update_config_from_url_fails_for_empty_url() {
+        let dir = tempdir().unwrap();
+        let app_dir = dir.path();
+
+        let dst = app_dir.join("downloader.json");
+        assert!(!dst.exists());
+
+        let err = maybe_update_config_from_url(app_dir, "config-empty", "").await.unwrap_err();
+        let msg = format!("{:#}", err);
+        assert!(msg.contains("Update URL should not be empty"));
+
+        assert!(!dst.exists());
+    }
+
+    #[tokio::test(flavor = "multi_thread")]
+    async fn cache_config_from_url_rejects_non_http_url() {
+        let dir = tempdir().unwrap();
+
+        let err =
+            cache_config_from_url(dir.path(), "cache", "ftp://example.com/file").await.unwrap_err();
+        let msg = format!("{:#}", err);
+        assert!(msg.contains("Config update URL must start with http:// or https://"));
     }
 }

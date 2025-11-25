@@ -484,7 +484,7 @@ impl AdbHandler {
                             .send_signal_to_dart();
                             Ok(())
                         }
-                        Err(e) => {
+                        Err(_) => {
                             AdbCommandCompletedEvent {
                                 command_type: AdbCommandKind::StartCasting,
                                 command_key: key.clone(),

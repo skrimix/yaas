@@ -220,8 +220,7 @@ class SinglePage extends StatefulWidget {
 }
 
 class _SinglePageState extends State<SinglePage> {
-  var _lastPageCount = 0;
-  var pageIndex = 0;
+  String? _currentPageKey;
   var _startupApplied = false;
 
   @override
@@ -248,26 +247,13 @@ class _SinglePageState extends State<SinglePage> {
         .map((page) => page.toNavigationDestination(l10n))
         .toList();
 
-    if (pageDefinitions.length != _lastPageCount) {
-      _lastPageCount = pageDefinitions.length;
-      setState(() {
-        pageIndex = 0;
-      });
-    }
-
+    // Apply startup page once when settings are loaded.
     if (!_startupApplied && settingsState.hasLoaded) {
-      final initialIndex = _indexForStartupPage(
-        settingsState.settings.startupPageKey,
-        pageDefinitions,
-      );
-
-      if (initialIndex != null && initialIndex != pageIndex) {
-        WidgetsBinding.instance.addPostFrameCallback((_) {
-          if (!mounted) return;
-          setState(() {
-            pageIndex = initialIndex;
-          });
-        });
+      final startupKey = settingsState.settings.startupPageKey;
+      final hasStartupPage =
+          pageDefinitions.any((page) => page.key == startupKey);
+      if (hasStartupPage) {
+        _currentPageKey = startupKey;
       }
       _startupApplied = true;
     }
@@ -275,21 +261,29 @@ class _SinglePageState extends State<SinglePage> {
     // Handle external navigation requests
     final requestedPageKey = appState.takeNavigationRequest();
     if (requestedPageKey != null) {
-      final targetIndex =
-          _indexForStartupPage(requestedPageKey, pageDefinitions);
-      if (targetIndex != null) {
-        if (targetIndex != pageIndex) {
-          WidgetsBinding.instance.addPostFrameCallback((_) {
-            if (!mounted) return;
-            setState(() {
-              pageIndex = targetIndex;
-            });
-          });
-        }
+      final hasRequestedPage =
+          pageDefinitions.any((page) => page.key == requestedPageKey);
+      if (hasRequestedPage) {
+        _currentPageKey = requestedPageKey;
       } else {
         debugPrint("ERROR: Requested page key \"$requestedPageKey\" not found");
       }
     }
+
+    // Ensure we always have a valid current page key.
+    if (_currentPageKey == null ||
+        !pageDefinitions.any((page) => page.key == _currentPageKey)) {
+      if (pageDefinitions.isNotEmpty) {
+        final homePage = pageDefinitions.firstWhere(
+          (page) => page.key == 'home',
+          orElse: () => pageDefinitions.first,
+        );
+        _currentPageKey = homePage.key;
+      }
+    }
+
+    final pageIndex =
+        _pageIndexForKey(_currentPageKey!, pageDefinitions) ?? 0;
 
     final labelType =
         switch (settingsState.settings.navigationRailLabelVisibility) {
@@ -297,11 +291,6 @@ class _SinglePageState extends State<SinglePage> {
       messages.NavigationRailLabelVisibility.selected =>
         NavigationRailLabelType.selected,
     };
-    // TODO: navigate to home if current page disappeared
-    // Clamp pageIndex if the number of destinations shrank
-    if (pageIndex >= pageDefinitions.length) {
-      pageIndex = 0;
-    }
     return Scaffold(
         body: Row(
       children: [
@@ -311,7 +300,9 @@ class _SinglePageState extends State<SinglePage> {
           labelType: labelType,
           destinations: destinations,
           selectedIndex: pageIndex,
-          onDestinationSelected: (index) => setState(() => pageIndex = index),
+          onDestinationSelected: (index) => setState(
+            () => _currentPageKey = pageDefinitions[index].key,
+          ),
         )),
         Expanded(
           child: Column(
@@ -320,7 +311,7 @@ class _SinglePageState extends State<SinglePage> {
                 child: AnimatedSwitcher(
                   duration: const Duration(milliseconds: 100),
                   child: SizedBox.expand(
-                    key: ValueKey(pageIndex),
+                    key: ValueKey(_currentPageKey),
                     child: pageDefinitions[pageIndex].buildContent(),
                   ),
                 ),
@@ -333,7 +324,7 @@ class _SinglePageState extends State<SinglePage> {
     ));
   }
 
-  int? _indexForStartupPage(
+  int? _pageIndexForKey(
     String pageKey,
     List<AppPageDefinition> definitions,
   ) {

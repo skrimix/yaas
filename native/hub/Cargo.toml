@@ -27,7 +27,7 @@ log = { version = "0.4", features = [
     "release_max_level_debug",
 ] } # needed for tracing-log
 mimalloc = "0.1"
-rinf = { version = "8.7", features = ["show-backtrace"] }
+rinf = { version = "=8.8.0", features = ["show-backtrace"] }
 serde = { version = "1.0", features = ["derive"] }
 serde_json = { version = "1.0", features = ["preserve_order"] }
 sysproxy = { git = "https://github.com/zzzgydi/sysproxy-rs" }

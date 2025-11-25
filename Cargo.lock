@@ -1971,9 +1971,9 @@ source = "git+https://github.com/skrimix/resand#ae38a5d8781a8e0e6f31a9f91c8fc4ce
 
 [[package]]
 name = "rinf"
-version = "8.7.2"
+version = "8.8.0"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "0a0145c3e61c676598d155935480d6fe6fc20ad85652a0a0aa8ff1b30ef8cc6e"
+checksum = "7414e76e73bf17fa0d346aaaa97613f72a977f3d64fe3441c4050b2379ea7009"
 dependencies = [
  "allo-isolate",
  "backtrace",
@@ -1988,9 +1988,9 @@ dependencies = [
 
 [[package]]
 name = "rinf_proc"
-version = "8.7.2"
+version = "8.8.0"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "63adcb77345d421cdf48429b17a8c8cd6452e3f829a4ed783befe40a9e72a6f1"
+checksum = "9642307c0126c014ff814bd2b2861cefb30ec39625b0e1d0ccd6f5d3aa73da7f"
 dependencies = [
  "heck",
  "proc-macro2",

@@ -1,5 +1,6 @@
 import 'dart:async';
 import 'dart:io';
+import 'dart:convert';
 
 import 'package:flutter/material.dart';
 import 'package:rinf/rinf.dart';
@@ -41,6 +42,8 @@ class _DownloaderConfigFromUrlDialogState
   bool _isInstalling = false;
   String? _errorText;
   _VrgRusTestState _vrgRusTestState = _VrgRusTestState.idle;
+  String? _vrgRusErrorMessage;
+  int? _vrgRusErrorMessageCode;
 
   @override
   void initState() {
@@ -132,22 +135,51 @@ class _DownloaderConfigFromUrlDialogState
     if (_vrgRusTestState == _VrgRusTestState.inProgress) return;
     setState(() {
       _vrgRusTestState = _VrgRusTestState.inProgress;
+      _vrgRusErrorMessage = null;
     });
     try {
-      final socket = await Socket.connect(
-        'nas-03.dipvr.ru',
-        5006,
-        timeout: const Duration(seconds: 5),
-      );
-      await socket.close();
-      if (!mounted) return;
-      setState(() {
-        _vrgRusTestState = _VrgRusTestState.success;
-      });
-    } catch (_) {
+      final client = HttpClient()
+        ..connectionTimeout = const Duration(seconds: 15);
+      try {
+        final request = await client.getUrl(
+          Uri.parse('https://yaas.dipvr.ru:9227/api/v1/verification'),
+        );
+        final response = await request.close();
+        final body = await response.transform(utf8.decoder).join();
+
+        if (!mounted) {
+          client.close(force: true);
+          return;
+        }
+
+        if (response.statusCode == 200) {
+          setState(() {
+            _vrgRusTestState = _VrgRusTestState.success;
+            _vrgRusErrorMessage = null;
+          });
+        } else if (response.statusCode == 403) {
+          setState(() {
+            _vrgRusTestState = _VrgRusTestState.noAccess;
+            _vrgRusErrorMessage = body.trim().isNotEmpty ? body.trim() : null;
+            _vrgRusErrorMessageCode = response.statusCode;
+          });
+        } else {
+          setState(() {
+            _vrgRusTestState = _VrgRusTestState.noAccess;
+            _vrgRusErrorMessage = body.trim().isNotEmpty ? body.trim() : null;
+            _vrgRusErrorMessageCode = response.statusCode;
+          });
+        }
+      } finally {
+        client.close();
+      }
+    } catch (e) {
+      debugPrint('Error testing VRG Rus access: $e');
       if (!mounted) return;
       setState(() {
         _vrgRusTestState = _VrgRusTestState.noAccess;
+        _vrgRusErrorMessage = e.toString();
+        _vrgRusErrorMessageCode = 0;
       });
     }
   }
@@ -274,7 +306,10 @@ class _DownloaderConfigFromUrlDialogState
                             _VrgRusTestState.noAccess) ...[
                           const SizedBox(height: 2),
                           Text(
-                            l10n.downloaderConfigVrgRusTestNoAccess,
+                            l10n.downloaderConfigVrgRusTestError(
+                              _vrgRusErrorMessageCode ?? 0,
+                              _vrgRusErrorMessage ?? '',
+                            ),
                             style: Theme.of(context)
                                 .textTheme
                                 .bodySmall

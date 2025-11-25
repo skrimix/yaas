@@ -62,7 +62,17 @@
   "downloaderConfigUrlInvalid": "Введите корректный URL, начинающийся с http(s)",
   "downloaderConfigVrgRusTestButton": "Проверить доступ",
   "downloaderConfigVrgRusTestOk": "Доступ ОК.",
-  "downloaderConfigVrgRusTestNoAccess": "Нет доступа из этой сети (тайм-аут запроса).",
+  "downloaderConfigVrgRusTestError": "Ошибка ({code}): {error}",
+  "@downloaderConfigVrgRusTestError": {
+    "placeholders": {
+      "code": {
+        "type": "int"
+      },
+      "error": {
+        "type": "String"
+      }
+    }
+  },
   "downloaderConfigVrgRusTestRequiredTooltip": "Сначала пройдите проверку доступа, либо выберите другой сервер.",
   "downloaderConfigNotConfiguredTitle": "Облачный загрузчик не настроен",
   "downloaderConfigNotConfiguredDesc": "Установите файл downloader.json, чтобы включить загрузку приложений из облака.",

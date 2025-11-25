@@ -422,11 +422,11 @@ abstract class AppLocalizations {
   /// **'Access looks OK.'**
   String get downloaderConfigVrgRusTestOk;
 
-  /// No description provided for @downloaderConfigVrgRusTestNoAccess.
+  /// No description provided for @downloaderConfigVrgRusTestError.
   ///
   /// In en, this message translates to:
-  /// **'No access from this network (request timed out).'**
-  String get downloaderConfigVrgRusTestNoAccess;
+  /// **'Error ({code}): {error}'**
+  String downloaderConfigVrgRusTestError(int code, String error);
 
   /// No description provided for @downloaderConfigVrgRusTestRequiredTooltip.
   ///

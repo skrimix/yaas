@@ -62,7 +62,17 @@
   "downloaderConfigUrlInvalid": "Please enter a valid http(s) URL",
   "downloaderConfigVrgRusTestButton": "Test access",
   "downloaderConfigVrgRusTestOk": "Access looks OK.",
-  "downloaderConfigVrgRusTestNoAccess": "No access from this network (request timed out).",
+  "downloaderConfigVrgRusTestError": "Error ({code}): {error}",
+  "@downloaderConfigVrgRusTestError": {
+    "placeholders": {
+      "code": {
+        "type": "int"
+      },
+      "error": {
+        "type": "String"
+      }
+    }
+  },
   "downloaderConfigVrgRusTestRequiredTooltip": "Pass the access test first, or select another server.",
   "downloaderConfigNotConfiguredTitle": "Cloud downloader is not configured",
   "downloaderConfigNotConfiguredDesc": "Install a downloader.json config to enable cloud app downloads.",

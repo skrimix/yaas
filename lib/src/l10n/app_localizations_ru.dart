@@ -179,8 +179,9 @@ class AppLocalizationsRu extends AppLocalizations {
   String get downloaderConfigVrgRusTestOk => 'Доступ ОК.';
 
   @override
-  String get downloaderConfigVrgRusTestNoAccess =>
-      'Нет доступа из этой сети (тайм-аут запроса).';
+  String downloaderConfigVrgRusTestError(int code, String error) {
+    return 'Ошибка ($code): $error';
+  }
 
   @override
   String get downloaderConfigVrgRusTestRequiredTooltip =>

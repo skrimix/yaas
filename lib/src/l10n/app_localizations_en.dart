@@ -176,8 +176,9 @@ class AppLocalizationsEn extends AppLocalizations {
   String get downloaderConfigVrgRusTestOk => 'Access looks OK.';
 
   @override
-  String get downloaderConfigVrgRusTestNoAccess =>
-      'No access from this network (request timed out).';
+  String downloaderConfigVrgRusTestError(int code, String error) {
+    return 'Error ($code): $error';
+  }
 
   @override
   String get downloaderConfigVrgRusTestRequiredTooltip =>

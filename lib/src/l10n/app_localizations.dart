@@ -431,7 +431,7 @@ abstract class AppLocalizations {
   /// No description provided for @downloaderConfigVrgRusTestRequiredTooltip.
   ///
   /// In en, this message translates to:
-  /// **'Run the access test first, or select another server.'**
+  /// **'Pass the access test first, or select another server.'**
   String get downloaderConfigVrgRusTestRequiredTooltip;
 
   /// No description provided for @downloaderConfigNotConfiguredTitle.

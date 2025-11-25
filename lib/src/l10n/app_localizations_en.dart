@@ -181,7 +181,7 @@ class AppLocalizationsEn extends AppLocalizations {
 
   @override
   String get downloaderConfigVrgRusTestRequiredTooltip =>
-      'Run the access test first, or select another server.';
+      'Pass the access test first, or select another server.';
 
   @override
   String get downloaderConfigNotConfiguredTitle =>

@@ -184,7 +184,7 @@ class AppLocalizationsRu extends AppLocalizations {
 
   @override
   String get downloaderConfigVrgRusTestRequiredTooltip =>
-      'Сначала выполните проверку доступа, либо выберите другой сервер.';
+      'Сначала пройдите проверку доступа, либо выберите другой сервер.';
 
   @override
   String get downloaderConfigNotConfiguredTitle =>

@@ -303,15 +303,15 @@ class _DownloadAppsScreenState extends State<DownloadAppsScreen> {
     appState.setDownloadShowOnlySelected(false);
   }
 
-  void _install(String appFullName) {
+  void _install(String appFullName, String truePackageName) {
     TaskRequest(
-      task: TaskDownloadInstall(value: appFullName),
+      task: TaskDownloadInstall(field0: appFullName, field1: truePackageName),
     ).sendSignalToRust();
   }
 
-  void _download(String appFullName) {
+  void _download(String appFullName, String truePackageName) {
     TaskRequest(
-      task: TaskDownload(value: appFullName),
+      task: TaskDownload(field0: appFullName, field1: truePackageName),
     ).sendSignalToRust();
   }
 
@@ -621,7 +621,7 @@ class _DownloadAppsScreenState extends State<DownloadAppsScreen> {
           FilledButton.icon(
             onPressed: () {
               for (final app in selectedApps) {
-                _download(app.app.fullName);
+                _download(app.app.fullName, app.app.truePackageName);
               }
               _clearSelection();
             },
@@ -653,7 +653,7 @@ class _DownloadAppsScreenState extends State<DownloadAppsScreen> {
                         if (!proceed) return;
 
                         for (final app in selectedApps) {
-                          _install(app.app.fullName);
+                          _install(app.app.fullName, app.app.truePackageName);
                         }
                         _clearSelection();
                       }
@@ -667,7 +667,7 @@ class _DownloadAppsScreenState extends State<DownloadAppsScreen> {
           Consumer<SettingsState>(
             builder: (context, settings, _) {
               final names = selectedApps
-                  .map((a) => a.app.originalPackageName)
+                  .map((a) => a.app.truePackageName)
                   .toList(growable: false);
               final favs = settings.favoritePackages;
               final allInFavorites =
@@ -754,7 +754,7 @@ class _DownloadAppsScreenState extends State<DownloadAppsScreen> {
         if (_showOnlyFavorites) {
           final favs = context.watch<SettingsState>().favoritePackages;
           filteredAndSortedApps = filteredAndSortedApps
-              .where((a) => favs.contains(a.app.originalPackageName))
+              .where((a) => favs.contains(a.app.truePackageName))
               .toList();
         }
 

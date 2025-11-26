@@ -27,8 +27,8 @@ class CloudAppDetailsDialog extends StatefulWidget {
   });
 
   final CachedAppData cachedApp;
-  final void Function(String fullName) onDownload;
-  final void Function(String fullName) onInstall;
+  final void Function(String fullName, String truePackageName) onDownload;
+  final void Function(String fullName, String truePackageName) onInstall;
 
   @override
   State<CloudAppDetailsDialog> createState() => _CloudAppDetailsDialogState();
@@ -59,7 +59,7 @@ class _CloudAppDetailsDialogState extends State<CloudAppDetailsDialog> {
     _sub = AppDetailsResponse.rustSignalStream.listen((event) {
       final message = event.message;
       if (message.packageName != widget.cachedApp.app.packageName &&
-          message.packageName != widget.cachedApp.app.originalPackageName) {
+          message.packageName != widget.cachedApp.app.truePackageName) {
         return;
       }
 
@@ -105,7 +105,7 @@ class _CloudAppDetailsDialogState extends State<CloudAppDetailsDialog> {
     });
 
     GetAppDetailsRequest(
-      packageName: widget.cachedApp.app.originalPackageName,
+      packageName: widget.cachedApp.app.truePackageName,
     ).sendSignalToRust();
   }
 
@@ -157,7 +157,7 @@ class _CloudAppDetailsDialogState extends State<CloudAppDetailsDialog> {
       final ok = await _confirmDowngrade(context, installed, app);
       if (!ok) return;
     }
-    widget.onInstall(app.fullName);
+    widget.onInstall(app.fullName, app.truePackageName);
   }
 
   @override
@@ -208,8 +208,8 @@ class _CloudAppDetailsDialogState extends State<CloudAppDetailsDialog> {
                         children: [
                           // Left: Thumbnail + hover overlay + trailer player
                           _CloudAppMedia(
-                            originalPackageName:
-                                widget.cachedApp.app.originalPackageName,
+                            truePackageName:
+                                widget.cachedApp.app.truePackageName,
                             width: 450,
                             height: 270,
                           ),
@@ -317,7 +317,8 @@ class _CloudAppDetailsDialogState extends State<CloudAppDetailsDialog> {
           child: Text(l10n.commonCopy),
         ),
         TextButton(
-          onPressed: () => widget.onDownload(widget.cachedApp.app.fullName),
+          onPressed: () => widget.onDownload(widget.cachedApp.app.fullName,
+              widget.cachedApp.app.truePackageName),
           child: Row(
             mainAxisSize: MainAxisSize.min,
             children: [
@@ -945,12 +946,12 @@ String _formatEpochSeconds(int seconds) {
 
 class _CloudAppMedia extends StatefulWidget {
   const _CloudAppMedia({
-    required this.originalPackageName,
+    required this.truePackageName,
     required this.width,
     required this.height,
   });
 
-  final String originalPackageName;
+  final String truePackageName;
   final double width;
   final double height;
 
@@ -1050,8 +1051,8 @@ class _CloudAppMediaState extends State<_CloudAppMedia> {
   Widget build(BuildContext context) {
     final l10n = AppLocalizations.of(context);
     final media = context.watch<CloudAppsState>();
-    final thumbUrl = media.thumbnailUrlFor(widget.originalPackageName);
-    final trailerUrl = media.trailerUrlFor(widget.originalPackageName);
+    final thumbUrl = media.thumbnailUrlFor(widget.truePackageName);
+    final trailerUrl = media.trailerUrlFor(widget.truePackageName);
 
     final borderRadius = BorderRadius.circular(8);
 

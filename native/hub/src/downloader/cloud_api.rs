@@ -1,5 +1,6 @@
 use anyhow::{Result, ensure};
 use reqwest::header::{ACCEPT, HeaderMap, HeaderValue};
+use serde_json::json;
 use tracing::{debug, instrument};
 
 use crate::{
@@ -63,4 +64,25 @@ pub(super) async fn fetch_app_reviews(
     response.error_for_status_ref()?;
     let payload: ReviewsResponse = response.json().await?;
     Ok(payload)
+}
+
+#[instrument(level = "debug", skip(client), err)]
+pub(super) async fn track_download(
+    client: &reqwest::Client,
+    installation_id: &str,
+    true_package: PackageName,
+) -> Result<()> {
+    let url = "https://qloader.5698452.xyz/api/v2/reportdownload";
+    debug!(%url, %installation_id, %true_package, "Sending download event to QLoader API");
+
+    let resp = client
+        .post(url)
+        .json(&json!({
+            "installation_id": installation_id,
+            "package_name": true_package.to_string(),
+        }))
+        .send()
+        .await?;
+    resp.error_for_status_ref()?;
+    Ok(())
 }

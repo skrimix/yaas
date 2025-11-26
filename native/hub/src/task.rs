@@ -286,74 +286,89 @@ impl TaskManager {
             Some(Duration::from_secs(2)),
         );
 
-        let result = match &task {
-            Task::Download(app) => {
-                info!(task_id = id, "Executing download task");
-                self.handle_download(app.clone(), &update_progress, token.clone()).await
-            }
-            Task::DownloadInstall(app) => {
-                info!(task_id = id, "Executing download and install task");
-                self.handle_download_install(app.clone(), &update_progress, token.clone()).await
-            }
-            Task::InstallApk(apk_path) => {
-                info!(task_id = id, "Executing APK install task");
-                self.handle_install_apk(apk_path.clone(), &update_progress, token.clone()).await
-            }
-            Task::InstallLocalApp(app_path) => {
-                info!(task_id = id, "Executing local app install task");
-                self.handle_install_local_app(app_path.clone(), &update_progress, token.clone())
-                    .await
-            }
-            Task::Uninstall { package_name, .. } => {
-                info!(task_id = id, "Executing uninstall task");
-                async {
-                    let package = PackageName::parse(package_name)?;
-                    self.handle_uninstall(package, &update_progress, token.clone()).await
-                }
-                .await
-            }
-            Task::BackupApp {
-                package_name,
-                display_name,
-                backup_apk,
-                backup_data,
-                backup_obb,
-                backup_name_append,
-            } => {
-                info!(task_id = id, "Executing backup task");
-                self.handle_backup(
-                    BackupStepConfig {
-                        package_name: package_name.clone(),
-                        display_name: display_name.clone(),
-                        backup_apk: *backup_apk,
-                        backup_data: *backup_data,
-                        backup_obb: *backup_obb,
-                        backup_name_append: backup_name_append.clone(),
-                    },
-                    &update_progress,
-                    token.clone(),
-                )
-                .await
-            }
-            Task::RestoreBackup(path) => {
-                info!(task_id = id, "Executing restore backup task");
-                self.handle_restore(path.clone(), &update_progress, token.clone()).await
-            }
-            Task::DonateApp { package_name, display_name } => {
-                info!(task_id = id, "Executing app donation task");
-                async {
-                    let package = PackageName::parse(package_name)?;
-                    self.handle_donate_app(
-                        package,
-                        display_name.clone(),
+        let result = async {
+            match &task {
+                Task::Download(app, package) => {
+                    info!(task_id = id, "Executing download task");
+                    self.handle_download(
+                        app.clone(),
+                        PackageName::parse(package.clone())?,
                         &update_progress,
                         token.clone(),
                     )
                     .await
                 }
-                .await
+                Task::DownloadInstall(app, package) => {
+                    info!(task_id = id, "Executing download and install task");
+                    self.handle_download_install(
+                        app.clone(),
+                        PackageName::parse(package.clone())?,
+                        &update_progress,
+                        token.clone(),
+                    )
+                    .await
+                }
+                Task::InstallApk(apk_path) => {
+                    info!(task_id = id, "Executing APK install task");
+                    self.handle_install_apk(apk_path.clone(), &update_progress, token.clone()).await
+                }
+                Task::InstallLocalApp(app_path) => {
+                    info!(task_id = id, "Executing local app install task");
+                    self.handle_install_local_app(app_path.clone(), &update_progress, token.clone())
+                        .await
+                }
+                Task::Uninstall { package_name, .. } => {
+                    info!(task_id = id, "Executing uninstall task");
+                    async {
+                        let package = PackageName::parse(package_name)?;
+                        self.handle_uninstall(package, &update_progress, token.clone()).await
+                    }
+                    .await
+                }
+                Task::BackupApp {
+                    package_name,
+                    display_name,
+                    backup_apk,
+                    backup_data,
+                    backup_obb,
+                    backup_name_append,
+                } => {
+                    info!(task_id = id, "Executing backup task");
+                    self.handle_backup(
+                        BackupStepConfig {
+                            package_name: package_name.clone(),
+                            display_name: display_name.clone(),
+                            backup_apk: *backup_apk,
+                            backup_data: *backup_data,
+                            backup_obb: *backup_obb,
+                            backup_name_append: backup_name_append.clone(),
+                        },
+                        &update_progress,
+                        token.clone(),
+                    )
+                    .await
+                }
+                Task::RestoreBackup(path) => {
+                    info!(task_id = id, "Executing restore backup task");
+                    self.handle_restore(path.clone(), &update_progress, token.clone()).await
+                }
+                Task::DonateApp { package_name, display_name } => {
+                    info!(task_id = id, "Executing app donation task");
+                    async {
+                        let package = PackageName::parse(package_name)?;
+                        self.handle_donate_app(
+                            package,
+                            display_name.clone(),
+                            &update_progress,
+                            token.clone(),
+                        )
+                        .await
+                    }
+                    .await
+                }
             }
-        };
+        }
+        .await;
 
         let duration = start_time.elapsed();
 

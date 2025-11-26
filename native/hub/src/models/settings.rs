@@ -57,7 +57,7 @@ pub(crate) struct Settings {
     pub seed_color_key: String,
     /// Preferred theme mode (dark is default)
     pub theme_preference: ThemePreference,
-    /// List of favorited apps (by original package name)
+    /// List of favorited apps (by true package name)
     pub favorite_packages: Vec<String>,
     /// Discover and auto-connect ADB over Wi‑Fi devices via mDNS
     pub mdns_auto_connect: bool,

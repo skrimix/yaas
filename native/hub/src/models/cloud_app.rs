@@ -42,7 +42,7 @@ pub(crate) struct CloudApp {
     pub full_name: String,
     pub package_name: String,
     /// Package name normalized to original by removing known renames
-    pub original_package_name: String,
+    pub true_package_name: String,
     pub version_code: u32,
     pub last_updated: String,
     pub size: u64,
@@ -61,7 +61,7 @@ impl<'de> Deserialize<'de> for CloudApp {
             app_name: helper.app_name,
             full_name: helper.full_name,
             package_name: helper.package_name,
-            original_package_name: original,
+            true_package_name: original,
             version_code: helper.version_code,
             last_updated: helper.last_updated,
             size,

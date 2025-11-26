@@ -62,6 +62,7 @@ pub(crate) struct Downloader {
     cancel_token: CancellationToken,
     http_client: reqwest::Client,
     repo: Arc<dyn repo::Repo>,
+    installation_id: String,
 }
 
 impl Downloader {
@@ -165,6 +166,7 @@ impl Downloader {
             cancel_token: CancellationToken::new(),
             http_client,
             repo,
+            installation_id: settings.installation_id.clone(),
         });
 
         tokio::spawn({
@@ -619,6 +621,7 @@ impl Downloader {
     pub(crate) async fn download_app(
         &self,
         app_full_name: String,
+        true_package: PackageName,
         progress_tx: UnboundedSender<RcloneTransferStats>,
         // Status updates for non-transfer steps (e.g., extraction)
         stage_tx: tokio::sync::mpsc::UnboundedSender<String>,
@@ -655,6 +658,13 @@ impl Downloader {
                     )
                     .await?;
             }
+        }
+
+        let installation_id = self.installation_id.clone();
+        if let Err(e) =
+            cloud_api::track_download(&self.http_client, &installation_id, true_package).await
+        {
+            warn!(error = e.as_ref() as &dyn Error, "Failed to report download");
         }
 
         // Prepare metadata inputs without holding long locks

@@ -204,17 +204,17 @@ class SettingsState extends ChangeNotifier {
   // Favorites
   Set<String> get favoritePackages => _settings.favoritePackages.toSet();
 
-  bool isFavorite(String originalPackageName) =>
-      _settings.favoritePackages.contains(originalPackageName);
+  bool isFavorite(String truePackageName) =>
+      _settings.favoritePackages.contains(truePackageName);
 
-  void toggleFavorite(String originalPackageName, {bool? value}) {
+  void toggleFavorite(String truePackageName, {bool? value}) {
     final current = _settings.favoritePackages.toList(growable: true);
-    final isFav = current.contains(originalPackageName);
+    final isFav = current.contains(truePackageName);
     final shouldFav = value ?? !isFav;
     if (shouldFav && !isFav) {
-      current.add(originalPackageName);
+      current.add(truePackageName);
     } else if (!shouldFav && isFav) {
-      current.removeWhere((p) => p == originalPackageName);
+      current.removeWhere((p) => p == truePackageName);
     } else {
       return;
     }
@@ -225,10 +225,10 @@ class SettingsState extends ChangeNotifier {
     SaveSettingsRequest(settings: _settings).sendSignalToRust();
   }
 
-  void addFavoritesBulk(Iterable<String> originalPackageNames) {
+  void addFavoritesBulk(Iterable<String> truePackageNames) {
     final set = _settings.favoritePackages.toSet();
     bool changed = false;
-    for (final name in originalPackageNames) {
+    for (final name in truePackageNames) {
       if (set.add(name)) changed = true;
     }
     if (!changed) return;
@@ -237,10 +237,10 @@ class SettingsState extends ChangeNotifier {
     SaveSettingsRequest(settings: _settings).sendSignalToRust();
   }
 
-  void removeFavoritesBulk(Iterable<String> originalPackageNames) {
+  void removeFavoritesBulk(Iterable<String> truePackageNames) {
     final set = _settings.favoritePackages.toSet();
     bool changed = false;
-    for (final name in originalPackageNames) {
+    for (final name in truePackageNames) {
       if (set.remove(name)) changed = true;
     }
     if (!changed) return;

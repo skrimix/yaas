@@ -402,7 +402,8 @@ class _ManageAppsScreenState extends State<ManageAppsScreen> {
                                     }
                                     if (!context.mounted) return;
                                     Navigator.of(context).pop();
-                                    _installCloudApp(cloudApp.fullName);
+                                    _installCloudApp(cloudApp.fullName,
+                                        cloudApp.truePackageName);
                                   }
                                 : null,
                             child: Text(isNewer
@@ -429,9 +430,9 @@ class _ManageAppsScreenState extends State<ManageAppsScreen> {
     );
   }
 
-  void _installCloudApp(String appFullName) {
+  void _installCloudApp(String appFullName, String truePackageName) {
     TaskRequest(
-      task: TaskDownloadInstall(value: appFullName),
+      task: TaskDownloadInstall(field0: appFullName, field1: truePackageName),
     ).sendSignalToRust();
   }
 
@@ -518,7 +519,8 @@ class _ManageAppsScreenState extends State<ManageAppsScreen> {
                             );
                             if (!confirmed) return;
                           }
-                          _installCloudApp(newestCloudApp.fullName);
+                          _installCloudApp(newestCloudApp.fullName,
+                              newestCloudApp.truePackageName);
                         }
                       : null,
                 );

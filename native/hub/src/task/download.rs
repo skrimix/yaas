@@ -6,13 +6,14 @@ use tokio_util::sync::CancellationToken;
 use tracing::{Instrument, Span, debug, error, info, instrument, warn};
 
 use super::{InstallStepConfig, ProgressUpdate, TaskManager};
-use crate::{downloader::RcloneTransferStats, models::signals::task::TaskStatus};
+use crate::{adb::PackageName, downloader::RcloneTransferStats, models::signals::task::TaskStatus};
 
 impl TaskManager {
     #[instrument(level = "debug", skip(self, update_progress, token))]
     async fn run_download_step(
         &self,
         app_full_name: &str,
+        true_package: PackageName,
         step_number: u8,
         update_progress: &impl Fn(ProgressUpdate),
         token: CancellationToken,
@@ -49,8 +50,10 @@ impl TaskManager {
             let app_full_name = app_full_name.to_string();
             let token = token.clone();
             tokio::spawn(
-                async move { downloader.download_app(app_full_name, tx, stage_tx, token).await }
-                    .instrument(Span::current()),
+                async move {
+                    downloader.download_app(app_full_name, true_package, tx, stage_tx, token).await
+                }
+                .instrument(Span::current()),
             )
         };
 
@@ -157,6 +160,7 @@ impl TaskManager {
     pub(super) async fn handle_download_install(
         &self,
         app_full_name: String,
+        true_package: PackageName,
         update_progress: &impl Fn(ProgressUpdate),
         token: CancellationToken,
     ) -> Result<()> {
@@ -167,8 +171,9 @@ impl TaskManager {
             "Starting download and install task"
         );
 
-        let app_path =
-            self.run_download_step(&app_full_name, 1, update_progress, token.clone()).await?;
+        let app_path = self
+            .run_download_step(&app_full_name, true_package, 1, update_progress, token.clone())
+            .await?;
 
         if token.is_cancelled() {
             warn!("Task was cancelled after download completion");
@@ -222,6 +227,7 @@ impl TaskManager {
     pub(super) async fn handle_download(
         &self,
         app_full_name: String,
+        true_package: PackageName,
         update_progress: &impl Fn(ProgressUpdate),
         token: CancellationToken,
     ) -> Result<()> {
@@ -231,7 +237,8 @@ impl TaskManager {
             "Starting download task"
         );
 
-        let _ = self.run_download_step(&app_full_name, 1, update_progress, token).await?;
+        let _ =
+            self.run_download_step(&app_full_name, true_package, 1, update_progress, token).await?;
 
         Ok(())
     }

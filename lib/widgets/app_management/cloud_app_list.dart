@@ -35,8 +35,8 @@ class CloudAppList extends StatelessWidget {
   final Set<String> selectedFullNames;
   final ValueChanged<String>? onSelectionChanged;
   final ScrollController scrollController;
-  final Function(String) onDownload;
-  final Function(String) onInstall;
+  final Function(String, String) onDownload;
+  final Function(String, String) onInstall;
   final bool isSearching;
 
   const CloudAppList({
@@ -110,8 +110,8 @@ class CloudAppListItem extends StatelessWidget {
   final bool isSelected;
   final ValueChanged<bool> onSelectionChanged;
   final bool showCheckbox;
-  final Function(String) onDownload;
-  final Function(String) onInstall;
+  final Function(String, String) onDownload;
+  final Function(String, String) onInstall;
 
   @override
   Widget build(BuildContext context) {
@@ -188,7 +188,7 @@ class CloudAppListItem extends StatelessWidget {
                 const SizedBox(width: 8),
                 Consumer<SettingsState>(
                   builder: (context, settings, _) {
-                    final original = cachedApp.app.originalPackageName;
+                    final original = cachedApp.app.truePackageName;
                     final fav = settings.isFavorite(original);
                     return IconButton(
                       icon: Icon(
@@ -223,7 +223,8 @@ class CloudAppListItem extends StatelessWidget {
                   icon: const Icon(Icons.download),
                   tooltip: l10n.downloadToComputer,
                   onPressed: () {
-                    onDownload(cachedApp.app.fullName);
+                    onDownload(
+                        cachedApp.app.fullName, cachedApp.app.truePackageName);
                   },
                 ),
                 const SizedBox(width: 8),
@@ -263,7 +264,7 @@ class CloudAppListItem extends StatelessWidget {
       );
       if (!confirmed) return;
     }
-    onInstall(cachedApp.app.fullName);
+    onInstall(cachedApp.app.fullName, cachedApp.app.truePackageName);
   }
 
   Future<bool> _confirmDowngrade(

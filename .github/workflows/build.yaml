@@ -210,6 +210,12 @@ jobs:
           Write-Host "ADB files bundled:"
           Get-ChildItem $dest | Where-Object { $_.Name -match '^adb\.exe$|^AdbWin(Api|UsbApi)\.dll$' } | Format-Table Name,Length
 
+      - name: Add portable launcher script (Windows)
+        if: matrix.target == 'windows'
+        shell: pwsh
+        run: |
+          Copy-Item -Force 'scripts\launch_portable.bat' '${{ matrix.build-path }}\launch_portable.bat'
+
       - name: Upload Artifact
         uses: actions/upload-artifact@v4
         with:

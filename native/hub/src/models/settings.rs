@@ -1,3 +1,5 @@
+use std::path::Path;
+
 use rinf::SignalPiece;
 use serde::{Deserialize, Serialize};
 use uuid::Uuid;
@@ -64,6 +66,7 @@ pub(crate) struct Settings {
 }
 
 impl Default for Settings {
+    /// For serde only. Use `Settings::new` instead.
     fn default() -> Self {
         Self {
             installation_id: Uuid::new_v4().to_string(),
@@ -92,5 +95,20 @@ impl Default for Settings {
             favorite_packages: Vec::new(),
             mdns_auto_connect: true,
         }
+    }
+}
+
+impl Settings {
+    pub fn new(app_dir: &Path, portable_mode: bool) -> Self {
+        let mut settings = Self::default();
+
+        if portable_mode {
+            let downloads = app_dir.join("downloads");
+            let backups = app_dir.join("backups");
+            settings.downloads_location = downloads.to_string_lossy().to_string();
+            settings.backups_location = backups.to_string_lossy().to_string();
+        }
+
+        settings
     }
 }

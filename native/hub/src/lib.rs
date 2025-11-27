@@ -3,6 +3,7 @@
 
 use std::{
     panic::{AssertUnwindSafe, catch_unwind},
+    path::PathBuf,
     sync::{Arc, OnceLock},
     time::Duration,
 };
@@ -58,6 +59,7 @@ pub(crate) mod built_info {
 pub(crate) const USER_AGENT: &str = concat!("YAAS/", env!("CARGO_PKG_VERSION"));
 
 fn main() {
+    let portable_mode = std::env::args().any(|arg| arg == "--portable");
     let runtime = tokio::runtime::Builder::new_multi_thread().enable_all().build().unwrap();
 
     let panic_notify = Arc::new(Notify::new());
@@ -80,7 +82,7 @@ fn main() {
     let _ = catch_unwind(AssertUnwindSafe(|| {
         runtime.block_on(async move {
             // Initialize everything
-            init().await;
+            init(portable_mode).await;
 
             tokio::select! {
                 _ = rinf::dart_shutdown() => {},
@@ -92,16 +94,11 @@ fn main() {
     runtime.shutdown_timeout(Duration::from_secs(3));
 }
 
-async fn init() {
+async fn init(portable_mode: bool) {
     // Set working directory to the app's data directory
-    let data_dir = dirs::data_dir().expect("Failed to get data directory");
-    let app_dir = if cfg!(target_os = "macos") {
-        data_dir.join("io.github.skrimix.yaas")
-    } else {
-        data_dir.join("YAAS")
-    };
+    let app_dir = resolve_app_dir(portable_mode);
     if !app_dir.exists() {
-        std::fs::create_dir(&app_dir).expect("Failed to create app directory");
+        std::fs::create_dir_all(&app_dir).expect("Failed to create app directory");
     }
     std::env::set_current_dir(&app_dir).expect("Failed to set current working directory");
 
@@ -129,7 +126,7 @@ async fn init() {
     }
     .send_signal_to_dart();
 
-    let settings_handler = SettingsHandler::new(app_dir.clone());
+    let settings_handler = SettingsHandler::new(app_dir.clone(), portable_mode);
 
     // Prepare media cache directory and send media configuration to Flutter
     let media_cache_dir = app_dir.join("media_cache");
@@ -193,4 +190,37 @@ fn setup_logging() -> Result<()> {
 
     let _ = LOG_GUARD.set(guard);
     Ok(())
+}
+
+fn resolve_portable_app_dir() -> Option<PathBuf> {
+    #[cfg(target_os = "linux")]
+    {
+        if let Ok(appimage) = std::env::var("APPIMAGE") {
+            let exe_path = PathBuf::from(appimage);
+            if let Some(dir) = exe_path.parent() {
+                return Some(dir.join("_portable_data"));
+            }
+        }
+    }
+
+    let exe_path = std::env::current_exe().ok()?;
+    let dir = exe_path.parent()?;
+    Some(dir.join("_portable_data"))
+}
+
+fn resolve_app_dir(portable_mode: bool) -> PathBuf {
+    if portable_mode && cfg!(any(target_os = "windows", target_os = "linux")) {
+        if let Some(portable_dir) = resolve_portable_app_dir() {
+            return portable_dir;
+        } else {
+            panic!("--portable requested but failed to resolve executable path");
+        }
+    }
+
+    let data_dir = dirs::data_dir().expect("Failed to get data directory");
+    if cfg!(target_os = "macos") {
+        data_dir.join("io.github.skrimix.yaas")
+    } else {
+        data_dir.join("YAAS")
+    }
 }

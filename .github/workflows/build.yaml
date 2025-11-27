@@ -179,6 +179,43 @@ jobs:
           cp -v ./7zz "$app/Contents/MacOS/7zz"
           rm -f 7zip-mac.tar.xz ./7zz || true
 
+      - name: Bundle ADB into macOS app
+        if: matrix.target == 'macos'
+        shell: bash
+        run: |
+          set -euo pipefail
+
+          app=$(ls -d ${{ matrix.build-path }} | head -n1)
+          echo "App path: $app"
+
+          url="https://dl.google.com/android/repository/platform-tools-latest-darwin.zip"
+          zip="$RUNNER_TEMP/platform-tools-macos.zip"
+          extract_dir="$RUNNER_TEMP/platform-tools-macos"
+          dest_dir="$app/Contents/MacOS"
+
+          echo "Downloading Android platform-tools for macOS..."
+          curl -fsSL "$url" -o "$zip"
+
+          echo "Extracting platform-tools..."
+          rm -rf "$extract_dir"
+          mkdir -p "$extract_dir"
+          unzip -q "$zip" -d "$extract_dir"
+
+          src="$extract_dir/platform-tools/adb"
+          if [[ ! -f "$src" ]]; then
+            echo "adb binary not found in extracted platform-tools" >&2
+            ls -R "$extract_dir" || true
+            exit 1
+          fi
+
+          echo "Bundling ADB into app at: $dest_dir/adb"
+          mkdir -p "$dest_dir"
+          cp -v "$src" "$dest_dir/adb"
+          chmod +x "$dest_dir/adb" || true
+
+          echo "ADB binary:"
+          ls -l "$dest_dir/adb" || true
+
       - name: Bundle ADB into Windows artifact
         if: matrix.target == 'windows'
         shell: pwsh

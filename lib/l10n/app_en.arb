@@ -675,7 +675,7 @@
     "downloadedStatusNewerVersion": "Update available",
     "downloadedStatusToolTip": "Click to go to the list",
     "emptyValue": "(empty)",
-    "navDonate": "Donate Apps",
+    "navDonate": "Donate",
     "donateAppsDescription": "Select apps to donate (upload) to the community",
     "donateShowFiltered": "Show filtered apps",
     "donateHideFiltered": "Hide filtered apps",

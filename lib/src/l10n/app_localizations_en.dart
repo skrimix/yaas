@@ -1412,7 +1412,7 @@ class AppLocalizationsEn extends AppLocalizations {
   String get emptyValue => '(empty)';
 
   @override
-  String get navDonate => 'Donate Apps';
+  String get navDonate => 'Donate';
 
   @override
   String get donateAppsDescription =>

@@ -2694,7 +2694,7 @@ abstract class AppLocalizations {
   /// No description provided for @navDonate.
   ///
   /// In en, this message translates to:
-  /// **'Donate Apps'**
+  /// **'Donate'**
   String get navDonate;
 
   /// No description provided for @donateAppsDescription.

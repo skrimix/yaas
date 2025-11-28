@@ -309,7 +309,7 @@ jobs:
             app=$(ls -d artifacts/build-macos/*.app | head -n1)
             
             # executable bit fixup
-            chmod +x "$app/Contents/MacOS/YAAS"
+            chmod +x "$app/Contents/MacOS/"*
 
             (cd "$(dirname "$app")" && \
               zip -yr "$OLDPWD/release/YAAS-macos.zip" "$(basename "$app")")

@@ -237,7 +237,8 @@ fn parse_7z_slt_listing(out: &str) -> Vec<String> {
             {
                 result.push(path.clone());
             }
-            cur_path = Some(p.trim().to_string());
+            let normalized = p.trim().replace('\\', "/");
+            cur_path = Some(normalized);
             cur_is_folder = None;
             continue;
         }
@@ -426,6 +427,144 @@ Offset = 2174509
 
         // Expected files should be present
         assert!(files.iter().any(|p| p.ends_with("/rclone")));
+        assert!(files.iter().any(|p| p.ends_with("/rclone.1")));
+        assert!(files.iter().any(|p| p.ends_with("/README.txt")));
+        assert!(files.iter().any(|p| p.ends_with("/README.html")));
+        assert!(files.iter().any(|p| p.ends_with("/git-log.txt")));
+
+        assert_eq!(files.len(), 5);
+    }
+
+    #[test]
+    fn parse_7z_listing_windows() {
+        let sample = r#"7-Zip (a) 25.01 (x64) : Copyright (c) 1999-2025 Igor Pavlov : 2025-08-03
+
+Scanning the drive for archives:
+1 file, 17648040 bytes (17 MiB)
+
+Listing archive: C:\Users\Admin\Downloads\YAAS-windows-x64 (1)\_portable_data\downloader_cache\vrp-public\rclone.zip
+
+--
+Path = C:\Users\Admin\Downloads\YAAS-windows-x64 (1)\_portable_data\downloader_cache\vrp-public\rclone.zip
+Type = zip
+Physical Size = 17648040
+
+----------
+Path = rclone-v1.62.2-windows-amd64
+Folder = +
+Size = 0
+Packed Size = 0
+Modified = 2023-03-16 14:59:03
+Created =
+Accessed =
+Attributes = D
+Encrypted = -
+Comment =
+CRC =
+Method = Store
+Characteristics = SD UT:MAC:1
+Host OS = FAT
+Version = 10
+Volume Index = 0
+Offset = 0
+
+Path = rclone-v1.62.2-windows-amd64\git-log.txt
+Folder = -
+Size = 1456
+Packed Size = 784
+Modified = 2023-03-16 14:56:12
+Created =
+Accessed =
+Attributes = A
+Encrypted = -
+Comment =
+CRC = 5D96E4C9
+Method = Deflate:Maximum
+Characteristics = SD UT:MAC:1
+Host OS = FAT
+Version = 20
+Volume Index = 0
+Offset = 205
+
+Path = rclone-v1.62.2-windows-amd64\rclone.1
+Folder = -
+Size = 2008600
+Packed Size = 483200
+Modified = 2023-03-16 14:47:24
+Created =
+Accessed =
+Attributes = A
+Encrypted = -
+Comment =
+CRC = 5EF82EB0
+Method = Deflate:Maximum
+Characteristics = SD UT:MAC:1
+Host OS = FAT
+Version = 20
+Volume Index = 0
+Offset = 1181
+
+Path = rclone-v1.62.2-windows-amd64\rclone.exe
+Folder = -
+Size = 49853952
+Packed Size = 16212872
+Modified = 2023-03-16 14:59:02
+Created =
+Accessed =
+Attributes = A
+Encrypted = -
+Comment =
+CRC = 20E2491A
+Method = Deflate:Maximum
+Characteristics = SD UT:MAC:1
+Host OS = FAT
+Version = 20
+Volume Index = 0
+Offset = 484570
+
+Path = rclone-v1.62.2-windows-amd64\README.html
+Folder = -
+Size = 2158094
+Packed Size = 500539
+Modified = 2023-03-16 14:47:23
+Created =
+Accessed =
+Attributes = A
+Encrypted = -
+Comment =
+CRC = A66E143B
+Method = Deflate:Maximum
+Characteristics = SD UT:MAC:1
+Host OS = FAT
+Version = 20
+Volume Index = 0
+Offset = 16697633
+
+Path = rclone-v1.62.2-windows-amd64\README.txt
+Folder = -
+Size = 1777393
+Packed Size = 448861
+Modified = 2023-03-16 14:47:23
+Created =
+Accessed =
+Attributes = A
+Encrypted = -
+Comment =
+CRC = 572B09BE
+Method = Deflate:Maximum
+Characteristics = SD UT:MAC:1
+Host OS = FAT
+Version = 20
+Volume Index = 0
+Offset = 17198364
+"#;
+
+        let files = parse_7z_slt_listing(sample);
+        // Directory should not be present
+        assert!(!files.iter().any(|p| p == "rclone-v1.62.2-windows-amd64"));
+
+        // Expected files should be present
+        assert!(files.iter().any(|p| p.ends_with("/rclone.exe")));
         assert!(files.iter().any(|p| p.ends_with("/rclone.1")));
         assert!(files.iter().any(|p| p.ends_with("/README.txt")));
         assert!(files.iter().any(|p| p.ends_with("/README.html")));

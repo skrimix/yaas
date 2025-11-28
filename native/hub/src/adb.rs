@@ -1254,8 +1254,7 @@ impl AdbHandler {
                 let mut command = Command::new(&adb_path_buf);
                 command.arg("start-server");
                 #[cfg(target_os = "windows")]
-                // CREATE_NO_WINDOW
-                command.creation_flags(0x08000000);
+                command.creation_flags(0x08000000); // CREATE_NO_WINDOW
                 command.output()
             })
             .await

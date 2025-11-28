@@ -46,6 +46,9 @@ where
     let mut cmd = TokioCommand::new(&bin);
     cmd.args(args).stdin(Stdio::null()).stdout(Stdio::null()).stderr(Stdio::piped());
 
+    #[cfg(target_os = "windows")]
+    cmd.creation_flags(0x08000000); // CREATE_NO_WINDOW
+
     let mut child = cmd.spawn().context("Failed to spawn 7-Zip process")?;
     let mut stderr = child.stderr.take();
 

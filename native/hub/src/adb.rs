@@ -252,8 +252,6 @@ impl AdbHandler {
                     result
                 }
             });
-        } else {
-            info!("mDNS auto-connect disabled (enable in Settings, takes effect after restart)");
         }
     }
 

@@ -10,7 +10,6 @@ use std::{
 
 use anyhow::{Context, Result, anyhow, bail, ensure};
 use derive_more::Debug;
-use device::AdbDevice;
 use forensic_adb::{DeviceBrief, DeviceInfo, DeviceState};
 use lazy_regex::{Lazy, Regex, lazy_regex};
 use mdns_sd::{ServiceDaemon, ServiceEvent};
@@ -24,6 +23,7 @@ use tokio_stream::{StreamExt, wrappers::WatchStream};
 use tokio_util::sync::CancellationToken;
 use tracing::{Instrument, Span, debug, error, info, info_span, instrument, trace, warn};
 
+use super::device::AdbDevice;
 use crate::{
     adb::device::{BackupOptions, SideloadProgress},
     models::{
@@ -41,9 +41,6 @@ use crate::{
     },
     utils::resolve_binary_path,
 };
-
-pub(crate) mod battery_dump;
-pub(crate) mod device;
 
 pub(crate) static PACKAGE_NAME_REGEX: Lazy<Regex> =
     lazy_regex!(r"^(?:[A-Za-z]{1}[\w]*\.)+[A-Za-z][\w]*$");

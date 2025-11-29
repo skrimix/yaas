@@ -9,13 +9,10 @@ use rinf::RustSignal;
 use tokio::fs;
 use tracing::{debug, info, instrument, warn};
 
-use super::{
-    DownloaderConfig,
-    http_cache::{self, DownloadResult},
-};
+use super::http_cache::{self, DownloadResult};
 use crate::{
     archive::{extract_single_from_archive, list_archive_file_paths},
-    downloader::{http_cache::compute_md5_file, repo},
+    downloader::{config::DownloaderConfig, http_cache::compute_md5_file, repo},
     models::signals::downloader::progress::DownloaderInitProgress,
 };
 

@@ -16,8 +16,11 @@ use tracing::{Instrument, debug, error, info, info_span, instrument, warn};
 use crate::{
     adb::PackageName,
     downloader::{
+        RcloneTransferStats, cloud_api,
         config::{DownloaderConfig, RepoLayoutKind},
-        rclone::RcloneStorage,
+        metadata,
+        rclone::{self, RcloneStorage},
+        repo,
     },
     models::{
         CloudApp, Settings,
@@ -33,18 +36,6 @@ use crate::{
     },
     settings::SettingsHandler,
 };
-
-mod rclone;
-pub(crate) use rclone::RcloneTransferStats;
-pub(crate) mod artifacts;
-mod cloud_api;
-pub(crate) mod config;
-mod http_cache;
-pub(crate) mod metadata;
-mod repo;
-
-// Re-export selected HTTP cache helpers for use by the manager.
-pub(crate) use http_cache::update_file_cached;
 
 pub(crate) struct Downloader {
     config: Arc<DownloaderConfig>,

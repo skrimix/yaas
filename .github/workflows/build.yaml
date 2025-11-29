@@ -57,6 +57,7 @@ jobs:
         uses: subosito/flutter-action@v2
         with:
           channel: "stable"
+          flutter-version: 3.35.7 # Remove when https://github.com/media-kit/media-kit/issues/1321 is fixed (https://github.com/media-kit/media-kit/pull/1325)
           cache: true
 
       - name: Setup Rust toolchain

@@ -282,8 +282,7 @@ class _SinglePageState extends State<SinglePage> {
       }
     }
 
-    final pageIndex =
-        _pageIndexForKey(_currentPageKey!, pageDefinitions) ?? 0;
+    final pageIndex = _pageIndexForKey(_currentPageKey!, pageDefinitions) ?? 0;
 
     final labelType =
         switch (settingsState.settings.navigationRailLabelVisibility) {

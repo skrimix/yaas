@@ -1409,6 +1409,15 @@ class AppLocalizationsEn extends AppLocalizations {
   String get downloadedStatusToolTip => 'Click to go to the list';
 
   @override
+  String get downloadedStatusInstalled => 'Installed';
+
+  @override
+  String get downloadedStatusInstalledNewer => 'Installed newer';
+
+  @override
+  String get downloadedStatusInstalledOlder => 'Installed older';
+
+  @override
   String get emptyValue => '(empty)';
 
   @override

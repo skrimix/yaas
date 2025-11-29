@@ -2685,6 +2685,24 @@ abstract class AppLocalizations {
   /// **'Click to go to the list'**
   String get downloadedStatusToolTip;
 
+  /// No description provided for @downloadedStatusInstalled.
+  ///
+  /// In en, this message translates to:
+  /// **'Installed'**
+  String get downloadedStatusInstalled;
+
+  /// No description provided for @downloadedStatusInstalledNewer.
+  ///
+  /// In en, this message translates to:
+  /// **'Installed newer'**
+  String get downloadedStatusInstalledNewer;
+
+  /// No description provided for @downloadedStatusInstalledOlder.
+  ///
+  /// In en, this message translates to:
+  /// **'Installed older'**
+  String get downloadedStatusInstalledOlder;
+
   /// No description provided for @emptyValue.
   ///
   /// In en, this message translates to:

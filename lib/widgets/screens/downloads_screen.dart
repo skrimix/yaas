@@ -279,6 +279,8 @@ class _DownloadTile extends StatelessWidget {
             mainAxisSize: MainAxisSize.min,
             crossAxisAlignment: CrossAxisAlignment.center,
             children: [
+              _InstalledDownloadBadge(entry: entry),
+              const SizedBox(width: 8),
               _DownloadedNewerBadge(
                 entry: entry,
                 newestDownloadedForPackage: newestDownloadedForPackage,
@@ -351,6 +353,91 @@ class _DownloadTile extends StatelessWidget {
             : '$pkg • v$ver';
 
     return meta.isEmpty ? '$tsStr • $sizeStr' : '$meta • $tsStr • $sizeStr';
+  }
+}
+
+class _InstalledDownloadBadge extends StatelessWidget {
+  const _InstalledDownloadBadge({required this.entry});
+
+  final DownloadEntry entry;
+
+  @override
+  Widget build(BuildContext context) {
+    final pkg = entry.packageName;
+    if (pkg == null || pkg.isEmpty) {
+      return const SizedBox.shrink();
+    }
+
+    return Consumer<DeviceState>(
+      builder: (context, deviceState, _) {
+        final installed = deviceState.findInstalled(pkg);
+        if (installed == null) {
+          return const SizedBox.shrink();
+        }
+
+        final theme = Theme.of(context);
+        final scheme = theme.colorScheme;
+        final l10n = AppLocalizations.of(context);
+
+        final int installedCode = installed.versionCode.toInt();
+        final int? downloadCode = entry.versionCode;
+
+        late final String label;
+        late final IconData icon;
+        late final Color fg;
+        late final Color border;
+
+        if (downloadCode != null) {
+          if (downloadCode > installedCode) {
+            label = l10n.downloadedStatusInstalledOlder;
+            icon = Icons.arrow_upward_rounded;
+            fg = scheme.primary;
+            border = scheme.primary;
+          } else if (downloadCode < installedCode) {
+            label = l10n.downloadedStatusInstalledNewer;
+            icon = Icons.arrow_downward_rounded;
+            fg = scheme.secondary;
+            border = scheme.secondary;
+          } else {
+            label = l10n.downloadedStatusInstalled;
+            icon = Icons.check_rounded;
+            fg = theme.colorScheme.onSurfaceVariant;
+            border = theme.colorScheme.outline;
+          }
+        } else {
+          label = l10n.cloudStatusInstalled;
+          icon = Icons.check_rounded;
+          fg = theme.colorScheme.onSurfaceVariant;
+          border = theme.colorScheme.outline;
+        }
+
+        return Padding(
+          padding: const EdgeInsets.only(top: 6),
+          child: Container(
+            padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 4),
+            decoration: BoxDecoration(
+              color: Colors.transparent,
+              borderRadius: BorderRadius.circular(999),
+              border: Border.all(color: border.withValues(alpha: 0.7)),
+            ),
+            child: Row(
+              mainAxisSize: MainAxisSize.min,
+              children: [
+                Icon(icon, size: 14, color: fg),
+                const SizedBox(width: 6),
+                Text(
+                  label,
+                  style: Theme.of(context)
+                      .textTheme
+                      .labelSmall
+                      ?.copyWith(color: fg),
+                ),
+              ],
+            ),
+          ),
+        );
+      },
+    );
   }
 }
 

@@ -26,8 +26,9 @@ use tracing_appender::{
 use tracing_subscriber::{EnvFilter, fmt, layer::SubscriberExt};
 
 use crate::{
-    backups_catalog::BackupsCatalog, casting::CastingManager,
-    downloader_manager::DownloaderManager, downloads_catalog::DownloadsCatalog,
+    backups_catalog::BackupsCatalog,
+    casting::CastingManager,
+    downloader::{downloads_catalog::DownloadsCatalog, manager::DownloaderManager},
 };
 
 #[global_allocator]
@@ -44,8 +45,6 @@ pub(crate) mod archive;
 pub(crate) mod backups_catalog;
 pub(crate) mod casting;
 pub(crate) mod downloader;
-pub(crate) mod downloader_manager;
-pub(crate) mod downloads_catalog;
 pub(crate) mod logging;
 pub(crate) mod models;
 pub(crate) mod settings;

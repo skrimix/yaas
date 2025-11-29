@@ -6,7 +6,10 @@ use tokio_util::sync::CancellationToken;
 use tracing::{Instrument, Span, debug, error, info, instrument, warn};
 
 use super::{InstallStepConfig, ProgressUpdate, TaskManager};
-use crate::{adb::PackageName, downloader::RcloneTransferStats, models::signals::task::TaskStatus};
+use crate::{
+    adb::PackageName, downloader::RcloneTransferStats, models::signals::task::TaskStatus,
+    task::acquire_permit_or_cancel,
+};
 
 impl TaskManager {
     #[instrument(level = "debug", skip(self, update_progress, token))]

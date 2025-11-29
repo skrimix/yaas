@@ -6,7 +6,10 @@ use tokio_util::sync::CancellationToken;
 use tracing::{Instrument, Span, debug, info, instrument, warn};
 
 use super::{AdbStepConfig, InstallStepConfig, ProgressUpdate, TaskManager};
-use crate::adb::{PackageName, device::SideloadProgress};
+use crate::{
+    adb::{PackageName, device::SideloadProgress},
+    task::acquire_permit_or_cancel,
+};
 
 impl TaskManager {
     #[instrument(level = "debug", skip(self, update_progress, token, spawn_install))]

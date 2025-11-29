@@ -16,8 +16,7 @@ use tracing::{debug, error, info, instrument, warn};
 
 use crate::{
     adb::{AdbHandler, PackageName},
-    downloader_manager::DownloaderManager,
-    downloads_catalog::DownloadsCatalog,
+    downloader::{downloads_catalog::DownloadsCatalog, manager::DownloaderManager},
     models::{
         Settings,
         signals::{
@@ -25,66 +24,18 @@ use crate::{
             task::{Task, TaskCancelRequest, TaskKind, TaskProgress, TaskRequest, TaskStatus},
         },
     },
+    task::{BackupStepConfig, ProgressUpdate},
 };
 
-struct ProgressUpdate {
-    status: TaskStatus,
-    step_number: u8,
-    step_progress: Option<f32>,
-    message: String,
-}
-
-#[derive(Debug)]
-struct InstallStepConfig<'a> {
-    step_number: u8,
-    log_context: &'a str,
-}
-
-#[derive(Debug)]
-struct AdbStepConfig<'a> {
-    step_number: u8,
-    waiting_msg: &'a str,
-    running_msg: String,
-    log_context: &'a str,
-}
-
-#[derive(Debug)]
-struct BackupStepConfig {
-    package_name: String,
-    display_name: Option<String>,
-    backup_apk: bool,
-    backup_data: bool,
-    backup_obb: bool,
-    backup_name_append: Option<String>,
-}
-
-macro_rules! acquire_permit_or_cancel {
-    ($semaphore:expr, $token:expr, $semaphore_name:literal) => {{
-        if $token.is_cancelled() {
-            info!(concat!("Task already cancelled before ", $semaphore_name, " semaphore acquisition"));
-            return Err(anyhow::anyhow!(concat!("Task cancelled before ", $semaphore_name)));
-        }
-
-        debug!(concat!("Waiting for ", $semaphore_name, " semaphore"));
-        tokio::select! {
-            permit = $semaphore.acquire() => permit,
-            _ = $token.cancelled() => {
-                info!(concat!("Task cancelled while waiting for ", $semaphore_name, " semaphore"));
-                return Err(anyhow::anyhow!(concat!("Task cancelled while waiting for ", $semaphore_name, " semaphore")));
-            }
-        }
-    }};
-}
-
 pub(crate) struct TaskManager {
-    adb_semaphore: Semaphore,
-    download_semaphore: Semaphore,
+    pub(super) adb_semaphore: Semaphore,
+    pub(super) download_semaphore: Semaphore,
     id_counter: AtomicU64,
     tasks: Mutex<HashMap<u64, (Task, CancellationToken)>>,
-    adb_handler: Arc<AdbHandler>,
-    downloader_manager: Arc<DownloaderManager>,
-    downloads_catalog: Arc<DownloadsCatalog>,
-    settings: RwLock<Settings>,
+    pub(super) adb_handler: Arc<AdbHandler>,
+    pub(super) downloader_manager: Arc<DownloaderManager>,
+    pub(super) downloads_catalog: Arc<DownloadsCatalog>,
+    pub(super) settings: RwLock<Settings>,
 }
 
 impl TaskManager {
@@ -470,8 +421,3 @@ fn send_progress(progress: TaskProgress) {
 
     progress.send_signal_to_dart();
 }
-
-mod backup;
-mod donate;
-mod download;
-mod install;

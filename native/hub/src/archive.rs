@@ -16,7 +16,6 @@ use crate::utils::resolve_binary_path;
 // TODO: run resolve every time if not found
 static SEVENZ_PATH: LazyLock<Option<PathBuf>> = LazyLock::new(|| resolve_7z_path().ok());
 
-/// Resolve 7-Zip binary path for the current platform.
 #[instrument(level = "debug", err)]
 fn resolve_7z_path() -> Result<PathBuf> {
     #[cfg(target_os = "windows")]
@@ -35,7 +34,6 @@ fn resolve_7z_path() -> Result<PathBuf> {
     Err(anyhow!("7-Zip binary not found (tried {:?})", CANDIDATES))
 }
 
-/// Run 7-Zip with provided args, optionally cancellable.
 async fn run_7z<I, S>(args: I, cancel: Option<&CancellationToken>) -> Result<()>
 where
     I: IntoIterator<Item = S>,

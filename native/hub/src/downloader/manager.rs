@@ -11,7 +11,7 @@ use tokio_stream::wrappers::WatchStream;
 use tracing::{debug, error, info, instrument, warn};
 
 use crate::{
-    downloader::{self, Downloader, config::DownloaderConfig, update_file_cached},
+    downloader::{self, Downloader, config::DownloaderConfig, http_cache},
     models::signals::{
         downloader::{
             availability::DownloaderAvailabilityChanged,
@@ -323,7 +323,8 @@ async fn cache_config_from_url(app_dir: &Path, cache_key: &str, url: &str) -> Re
         .build()
         .context("Failed to build HTTP client for downloader config update")?;
 
-    let _ = update_file_cached(&client, url, &cached_cfg_path, &cache_dir, None).await?;
+    let _ =
+        http_cache::update_file_cached(&client, url, &cached_cfg_path, &cache_dir, None).await?;
 
     Ok(cached_cfg_path)
 }

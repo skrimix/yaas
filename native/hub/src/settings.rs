@@ -234,14 +234,21 @@ impl SettingsHandler {
         let backups_parent = Path::new(&backups_location)
             .parent()
             .context("Failed to get backups directory parent")?;
-        ensure!(
-            downloads_parent.exists(),
-            format!("Downloads directory parent ({}) does not exist", downloads_parent.display())
-        );
-        ensure!(
-            backups_parent.exists(),
-            format!("Backups directory parent ({}) does not exist", backups_parent.display())
-        );
+        if downloads_location.is_absolute() {
+            ensure!(
+                downloads_parent.exists(),
+                format!(
+                    "Downloads directory parent ({}) does not exist",
+                    downloads_parent.display()
+                )
+            );
+        }
+        if backups_location.is_absolute() {
+            ensure!(
+                backups_parent.exists(),
+                format!("Backups directory parent ({}) does not exist", backups_parent.display())
+            );
+        }
         fs::create_dir_all(&downloads_location).context("Failed to create downloads directory")?;
         fs::create_dir_all(&backups_location).context("Failed to create backups directory")?;
 

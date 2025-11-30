@@ -21,17 +21,20 @@ pub(crate) struct SettingsHandler {
 
 impl SettingsHandler {
     #[instrument(level = "debug", skip(app_dir))]
-    pub(crate) fn new(app_dir: PathBuf, portable_mode: bool) -> Arc<Self> {
-        let watch_tx = watch::Sender::<Settings>::new(Settings::new(&app_dir, portable_mode));
+    pub(crate) fn new(app_dir: PathBuf, portable_mode: bool) -> Result<Arc<Self>> {
+        ensure!(app_dir.is_dir(), "App directory is not a directory or does not exist");
+        ensure!(app_dir.is_absolute(), "App directory is not absolute");
+
+        let watch_tx = watch::Sender::<Settings>::new(Settings::new(portable_mode));
         let handler =
             Arc::new(Self { settings_file_path: app_dir.join("settings.json"), watch_tx });
 
-        match handler.load_settings(&app_dir, portable_mode) {
+        match handler.load_settings(portable_mode) {
             Ok(s) => s,
             Err(e) => {
                 warn!(error = e.as_ref() as &dyn Error, "Failed to load settings, using defaults.");
                 handler
-                    .load_default_settings(None, &app_dir, portable_mode)
+                    .load_default_settings(None, portable_mode)
                     .expect("Failed to load default settings")
             }
         };
@@ -40,15 +43,15 @@ impl SettingsHandler {
         tokio::spawn({
             let handler = handler.clone();
             async move {
-                handler.receive_settings_requests(&app_dir, portable_mode).await;
+                handler.receive_settings_requests(portable_mode).await;
             }
         });
 
-        handler
+        Ok(handler)
     }
 
     #[instrument(level = "debug", skip(self))]
-    async fn receive_settings_requests(&self, app_dir: &Path, portable_mode: bool) {
+    async fn receive_settings_requests(&self, portable_mode: bool) {
         let load_receiver = LoadSettingsRequest::get_dart_signal_receiver();
         let save_receiver = SaveSettingsRequest::get_dart_signal_receiver();
         let reset_receiver = ResetSettingsToDefaultsRequest::get_dart_signal_receiver();
@@ -61,12 +64,12 @@ impl SettingsHandler {
                     if request.is_some() {
                         debug!("Received LoadSettingsRequest");
                         let handler = self.clone();
-                        let result = handler.load_settings(app_dir, portable_mode);
+                        let result = handler.load_settings(portable_mode);
 
                         if let Err(e) = result {
                             error!(error = e.as_ref() as &dyn Error, "Failed to load settings, using defaults");
                                 let settings = handler
-                                    .load_default_settings(None, app_dir, portable_mode)
+                                    .load_default_settings(None, portable_mode)
                                     .expect("Failed to load default settings"); // TODO: handle error?
                                 handler.on_settings_change(
                                     settings.clone(),
@@ -101,7 +104,8 @@ impl SettingsHandler {
                         debug!("Received ResetSettingsToDefaultsRequest");
                         let handler = self.clone();
                         let current = handler.watch_tx.borrow();
-                        let result = handler.load_default_settings(Some(current.installation_id.clone()), app_dir, portable_mode);
+                        let result =
+                            handler.load_default_settings(Some(current.installation_id.clone()), portable_mode);
 
                         match result {
                             Ok(settings) => {
@@ -163,31 +167,18 @@ impl SettingsHandler {
 
     /// Load settings from file or return defaults if file doesn't exist
     #[instrument(level = "debug", skip(self))]
-    fn load_settings(&self, app_dir: &Path, portable_mode: bool) -> Result<Settings> {
+    fn load_settings(&self, portable_mode: bool) -> Result<Settings> {
         if !self.settings_file_path.exists() {
             info!(path = %self.settings_file_path.display(), "Settings file doesn't exist, using defaults");
             return self
-                .load_default_settings(None, app_dir, portable_mode)
+                .load_default_settings(None, portable_mode)
                 .context("Failed to load default settings");
         }
 
         debug!(path = %self.settings_file_path.display(), "Loading settings from file");
-        let file_content =
-            fs::read_to_string(&self.settings_file_path).context("Failed to read settings file")?;
 
-        let settings: Settings =
-            serde_json::from_str(&file_content).context("Failed to parse settings file")?;
-
-        // TODO: Validate settings
-
-        // If paths came from defaults, ensure those directories exist.
-        let defaults = Settings::new(app_dir, portable_mode);
-        if settings.downloads_location == defaults.downloads_location {
-            let _ = fs::create_dir_all(&settings.downloads_location);
-        }
-        if settings.backups_location == defaults.backups_location {
-            let _ = fs::create_dir_all(&settings.backups_location);
-        }
+        let settings = Settings::load_from_file(&self.settings_file_path, portable_mode)
+            .context("Failed to load settings from file")?;
 
         debug!(settings = ?settings, "Loaded application settings successfully");
         self.on_settings_change(settings.clone(), None, true);
@@ -198,8 +189,6 @@ impl SettingsHandler {
     #[instrument(level = "debug", skip(self, settings))]
     pub(crate) fn save_settings(&self, settings: &Settings) -> Result<()> {
         info!(path = %self.settings_file_path.display(), settings = ?settings, "Saving settings to file");
-        let settings_json =
-            serde_json::to_string_pretty(settings).context("Failed to serialize settings")?;
 
         // Ensure parent directory exists
         if let Some(parent) = self.settings_file_path.parent()
@@ -209,10 +198,9 @@ impl SettingsHandler {
             fs::create_dir_all(parent).context("Failed to create settings directory")?;
         }
 
-        // TODO: Validate settings
-
-        fs::write(&self.settings_file_path, settings_json)
-            .context("Failed to write settings file")?;
+        settings
+            .save_to_file(&self.settings_file_path)
+            .context("Failed to save settings to file")?;
 
         info!("Saved application settings successfully");
         self.on_settings_change(settings.clone(), None, false);
@@ -225,11 +213,10 @@ impl SettingsHandler {
     fn load_default_settings(
         &self,
         installation_id: Option<String>,
-        app_dir: &Path,
         portable_mode: bool,
     ) -> Result<Settings> {
         info!("Loading default settings");
-        let mut settings = Settings::new(app_dir, portable_mode);
+        let mut settings = Settings::new(portable_mode);
 
         // Retain installation id if provided
         if let Some(installation_id) = installation_id {
@@ -237,12 +224,14 @@ impl SettingsHandler {
         }
 
         // Create default directories if they don't exist (and parents do)
-        debug!(path = %settings.downloads_location, "Ensuring downloads directory exists");
-        let downloads_parent = Path::new(&settings.downloads_location)
+        let downloads_location = settings.downloads_location();
+        let backups_location = settings.backups_location();
+        debug!(path = %downloads_location.display(), "Ensuring downloads directory exists");
+        let downloads_parent = Path::new(&downloads_location)
             .parent()
             .context("Failed to get downloads directory parent")?;
-        debug!(path = %settings.backups_location, "Ensuring backups directory exists");
-        let backups_parent = Path::new(&settings.backups_location)
+        debug!(path = %backups_location.display(), "Ensuring backups directory exists");
+        let backups_parent = Path::new(&backups_location)
             .parent()
             .context("Failed to get backups directory parent")?;
         ensure!(
@@ -253,10 +242,8 @@ impl SettingsHandler {
             backups_parent.exists(),
             format!("Backups directory parent ({}) does not exist", backups_parent.display())
         );
-        fs::create_dir_all(&settings.downloads_location)
-            .context("Failed to create downloads directory")?;
-        fs::create_dir_all(&settings.backups_location)
-            .context("Failed to create backups directory")?;
+        fs::create_dir_all(&downloads_location).context("Failed to create downloads directory")?;
+        fs::create_dir_all(&backups_location).context("Failed to create backups directory")?;
 
         self.save_settings(&settings)?;
         info!("Default settings loaded and saved");

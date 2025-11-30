@@ -29,9 +29,7 @@ impl DownloadsCatalog {
             .expect("Settings stream closed on downloads handler init");
 
         let handler = Arc::new(Self {
-            root: Arc::new(tokio::sync::RwLock::new(PathBuf::from(
-                initial_settings.downloads_location,
-            ))),
+            root: Arc::new(tokio::sync::RwLock::new(initial_settings.downloads_location())),
         });
 
         // Watch settings updates
@@ -39,8 +37,8 @@ impl DownloadsCatalog {
             let handler = handler.clone();
             tokio::spawn(async move {
                 while let Some(settings) = settings_stream.next().await {
-                    debug!(dir = %settings.downloads_location, "Downloads location updated");
-                    *handler.root.write().await = PathBuf::from(settings.downloads_location);
+                    debug!(dir = %settings.downloads_location().display(), "Downloads location updated");
+                    *handler.root.write().await = settings.downloads_location();
                 }
                 panic!("Settings stream closed");
             });

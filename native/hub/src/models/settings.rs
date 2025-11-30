@@ -1,7 +1,12 @@
-use std::path::Path;
+use std::{
+    fs,
+    path::{Path, PathBuf},
+};
 
+use anyhow::{Context, Result};
 use rinf::SignalPiece;
 use serde::{Deserialize, Serialize};
+use tracing::warn;
 use uuid::Uuid;
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize, SignalPiece, Default)]
@@ -44,23 +49,24 @@ pub(crate) struct Settings {
     pub rclone_remote_name: String,
     pub adb_path: String,
     pub preferred_connection_type: ConnectionKind, // TODO: implement
-    pub downloads_location: String,
-    pub backups_location: String, // TODO: implement
+    downloads_location: String,
+    backups_location: String,
     pub bandwidth_limit: String,
-    pub cleanup_policy: DownloadCleanupPolicy, // TODO: implement
+    pub cleanup_policy: DownloadCleanupPolicy,
     /// Also write legacy release.json metadata alongside download.json
     pub write_legacy_release_json: bool,
-    pub locale_code: String,
-    pub navigation_rail_label_visibility: NavigationRailLabelVisibility,
-    pub startup_page_key: String,
+    /// Locale code (language) for the UI
+    locale_code: String,
+    navigation_rail_label_visibility: NavigationRailLabelVisibility,
+    startup_page_key: String,
     /// Whether to use system/dynamic color when available
-    pub use_system_color: bool,
+    use_system_color: bool,
     /// Seed color key from a fixed palette (e.g. "deep_purple")
-    pub seed_color_key: String,
+    seed_color_key: String,
     /// Preferred theme mode (dark is default)
-    pub theme_preference: ThemePreference,
+    theme_preference: ThemePreference,
     /// List of favorited apps (by true package name)
-    pub favorite_packages: Vec<String>,
+    favorite_packages: Vec<String>,
     /// Discover and auto-connect ADB over Wi‑Fi devices via mDNS
     pub mdns_auto_connect: bool,
 }
@@ -99,16 +105,73 @@ impl Default for Settings {
 }
 
 impl Settings {
-    pub fn new(app_dir: &Path, portable_mode: bool) -> Self {
-        let mut settings = Self::default();
+    pub fn new(portable_mode: bool) -> Self {
+        let mut settings = Settings::default();
 
         if portable_mode {
-            let downloads = app_dir.join("downloads");
-            let backups = app_dir.join("backups");
-            settings.downloads_location = downloads.to_string_lossy().to_string();
-            settings.backups_location = backups.to_string_lossy().to_string();
+            settings.downloads_location = "downloads".to_string();
+            settings.backups_location = "backups".to_string();
         }
 
         settings
+    }
+
+    pub fn load_from_file(settings_file: &Path, portable_mode: bool) -> Result<Self> {
+        let file_content =
+            fs::read_to_string(settings_file).context("Failed to read settings file")?;
+
+        let mut settings: Settings =
+            serde_json::from_str(&file_content).context("Failed to parse settings file")?;
+
+        // TODO: Validate settings
+        let defaults = Settings::new(portable_mode);
+
+        let downloads_path = Path::new(&settings.downloads_location);
+        let backups_path = Path::new(&settings.backups_location);
+        let default_downloads_path = Path::new(&defaults.downloads_location);
+        let default_backups_path = Path::new(&defaults.backups_location);
+
+        // If paths came from defaults, ensure those directories exist.
+        if downloads_path == default_downloads_path {
+            let _ = fs::create_dir_all(downloads_path);
+        }
+        if backups_path == default_backups_path {
+            let _ = fs::create_dir_all(backups_path);
+        }
+
+        // Check that effective paths exist; if not, fall back to defaults.
+        if !downloads_path.exists() {
+            warn!(
+                path = %downloads_path.display(),
+                "Downloads directory does not exist, resetting to default"
+            );
+            settings.downloads_location = defaults.downloads_location;
+        }
+        if !backups_path.exists() {
+            warn!(
+                path = %backups_path.display(),
+                "Backups directory does not exist, resetting to default"
+            );
+            settings.backups_location = defaults.backups_location;
+        }
+
+        Ok(settings)
+    }
+
+    pub fn save_to_file(&self, settings_file: &Path) -> Result<()> {
+        // TODO: Validate settings
+
+        let settings_json =
+            serde_json::to_string_pretty(self).context("Failed to serialize settings")?;
+        fs::write(settings_file, settings_json).context("Failed to write settings file")?;
+        Ok(())
+    }
+
+    pub fn downloads_location(&self) -> PathBuf {
+        PathBuf::from(&self.downloads_location)
+    }
+
+    pub fn backups_location(&self) -> PathBuf {
+        PathBuf::from(&self.backups_location)
     }
 }

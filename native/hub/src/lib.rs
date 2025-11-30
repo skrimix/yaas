@@ -125,7 +125,8 @@ async fn init(portable_mode: bool) {
     }
     .send_signal_to_dart();
 
-    let settings_handler = SettingsHandler::new(app_dir.clone(), portable_mode);
+    let settings_handler = SettingsHandler::new(app_dir.clone(), portable_mode)
+        .expect("Failed to create settings handler");
 
     // Prepare media cache directory and send media configuration to Flutter
     let media_cache_dir = app_dir.join("media_cache");

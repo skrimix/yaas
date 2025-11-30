@@ -24,9 +24,7 @@ impl BackupsCatalog {
             .expect("Settings stream closed on backups catalog init");
 
         let handler = Arc::new(Self {
-            backups_dir: Arc::new(tokio::sync::RwLock::new(PathBuf::from(
-                initial_settings.backups_location,
-            ))),
+            backups_dir: Arc::new(tokio::sync::RwLock::new(initial_settings.backups_location())),
         });
 
         // Watch settings updates
@@ -34,8 +32,8 @@ impl BackupsCatalog {
             let handler = handler.clone();
             tokio::spawn(async move {
                 while let Some(settings) = settings_stream.next().await {
-                    debug!(dir = %settings.backups_location, "Backups location updated");
-                    *handler.backups_dir.write().await = PathBuf::from(settings.backups_location);
+                    debug!(dir = %settings.backups_location().display(), "Backups location updated");
+                    *handler.backups_dir.write().await = settings.backups_location();
                 }
                 panic!("Settings stream closed");
             });

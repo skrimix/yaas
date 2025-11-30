@@ -151,7 +151,7 @@ impl Downloader {
             cloud_apps: Mutex::new(Vec::new()),
             donation_blacklist: Mutex::new(Vec::new()),
             storage: RwLock::new(storage),
-            download_dir: RwLock::new(PathBuf::from(settings.downloads_location.clone())),
+            download_dir: RwLock::new(settings.downloads_location()),
             current_load_token: RwLock::new(CancellationToken::new()),
             write_legacy_release_json: RwLock::new(settings.write_legacy_release_json),
             cancel_token: CancellationToken::new(),
@@ -270,7 +270,7 @@ impl Downloader {
                             }
 
                             let mut download_dir = handle.download_dir.write().await;
-                            let new_download_dir = PathBuf::from(settings.downloads_location);
+                            let new_download_dir = settings.downloads_location();
                             if *download_dir != new_download_dir {
                                 debug!(new_dir = %new_download_dir.display(), "Download directory changed");
                                 *download_dir = new_download_dir;

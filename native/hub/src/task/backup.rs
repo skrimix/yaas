@@ -39,8 +39,7 @@ impl TaskManager {
         .flatten()
         .collect::<Vec<_>>()
         .join(", ");
-        let backups_dir = { self.settings.read().await.backups_location.clone() };
-        let backups_path = std::path::PathBuf::from(backups_dir);
+        let backups_path = self.settings.read().await.backups_location();
         debug!(path = %backups_path.display(), "Using backups location");
 
         let options = BackupOptions {

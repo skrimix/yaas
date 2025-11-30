@@ -36,7 +36,7 @@ impl TaskManager {
 
         // Use downloads location as the base for temporary donation directories and archives.
         let settings = self.settings.read().await.clone();
-        let downloads_root = std::path::PathBuf::from(settings.downloads_location.clone());
+        let downloads_root = settings.downloads_location();
         let upload_root = downloads_root.join("_upload");
         tokio::fs::create_dir_all(&upload_root).await.with_context(|| {
             format!("Failed to create upload directory {}", upload_root.display())

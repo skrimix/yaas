@@ -186,8 +186,7 @@ impl TaskManager {
         let adb_handler = self.adb_handler.clone();
         let device = adb_handler.current_device().await?;
 
-        let backups_location =
-            std::path::PathBuf::from(self.settings.read().await.backups_location.clone());
+        let backups_location = self.settings.read().await.backups_location();
         let app_path_cloned = app_path.clone();
         self.run_install_step(
             InstallStepConfig { step_number: 2, log_context: "sideload" },

@@ -10,7 +10,7 @@ import '../common/no_device_connected_indicator.dart';
 class HomeScreen extends StatelessWidget {
   const HomeScreen({super.key});
 
-  // Applies a monochrome tint that follows the theme.
+  /// Applies a monochrome tint that follows the theme.
   ColorFilter? _monoIconFilter(BuildContext context) {
     if (Theme.of(context).brightness == Brightness.dark) {
       return null;

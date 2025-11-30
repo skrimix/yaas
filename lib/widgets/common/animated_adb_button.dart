@@ -8,7 +8,8 @@ class AnimatedAdbButton extends StatefulWidget {
   final IconData icon;
   final String tooltip;
   final AdbCommandKind commandType;
-  // Identifier to correlate completion events (was: packageName)
+
+  /// Identifier to correlate completion events (was: packageName)
   final String commandKey;
   final VoidCallback onPressed;
   final Color? iconColor;

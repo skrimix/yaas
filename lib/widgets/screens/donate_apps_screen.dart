@@ -48,17 +48,17 @@ class _FilteredApp {
 }
 
 class _DonateAppsScreenState extends State<DonateAppsScreen> {
-  // Regex pattern to detect renamed packages.
+  /// Regex pattern to detect renamed packages.
   // Source: native/hub/src/models/cloud_app.rs normalize_package_name()
   // TODO: share this pattern with Rust backend
   static final _renamePattern = RegExp(r'(^mr\.)|(^mrf\.)|(\.mrf\.)|(\.jjb)');
 
-  // Check if package name contains rename markers
+  /// Check if package name contains rename markers
   bool _isRenamed(String packageName) {
     return _renamePattern.hasMatch(packageName);
   }
 
-  // Check if package is system/unwanted
+  /// Check if package is system/unwanted
   bool _isSystemUnwanted(String packageName) {
     return packageName.startsWith('com.oculus.') ||
         packageName.startsWith('com.meta.') ||

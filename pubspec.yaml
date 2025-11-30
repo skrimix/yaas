@@ -59,6 +59,7 @@ dependencies:
   flutter_cache_manager: ^3.3.2
   path_provider: ^2.1.5
   http: ^1.5.0
+  system_date_time_format: ^1.3.0
 
 dev_dependencies:
   flutter_test:

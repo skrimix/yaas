@@ -10,6 +10,7 @@ import '../../providers/app_state.dart';
 import '../../src/bindings/bindings.dart';
 import '../../providers/device_state.dart';
 import '../../providers/settings_state.dart';
+import '../../utils/utils.dart';
 import '../app_management/cloud_app_list.dart';
 import '../common/downloader_config_from_url_dialog.dart';
 
@@ -64,7 +65,7 @@ class _DownloadAppsScreenState extends State<DownloadAppsScreen> {
   String _formatDate(String utcDate) {
     try {
       final date = DateFormat('yyyy-MM-dd HH:mm').parseUtc(utcDate);
-      return DateFormat.yMd().add_jm().format(date.toLocal());
+      return formatDateTime(context, date.toLocal()) ?? utcDate;
     } catch (e) {
       return utcDate;
     }

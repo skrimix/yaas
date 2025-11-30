@@ -9,6 +9,7 @@ import '../../src/l10n/app_localizations.dart';
 import '../../providers/device_state.dart';
 import '../../providers/cloud_apps_state.dart';
 import '../../providers/app_state.dart';
+import '../../utils/utils.dart';
 
 const _listPadding = EdgeInsets.only(bottom: 24);
 const _cardMargin = EdgeInsets.symmetric(horizontal: 16, vertical: 2);
@@ -330,10 +331,7 @@ class _DownloadTile extends StatelessWidget {
     final dt = tsMillis == 0
         ? null
         : DateTime.fromMillisecondsSinceEpoch(tsMillis, isUtc: true).toLocal();
-    final tsStr = dt == null
-        ? l10n.unknownTime
-        : '${dt.year.toString().padLeft(4, '0')}-${dt.month.toString().padLeft(2, '0')}-${dt.day.toString().padLeft(2, '0')} '
-            '${dt.hour.toString().padLeft(2, '0')}:${dt.minute.toString().padLeft(2, '0')}:${dt.second.toString().padLeft(2, '0')}';
+    final tsStr = dt == null ? l10n.unknownTime : formatDateTime(context, dt);
 
     final sizeStr =
         filesize.FileSize.fromBytes(entry.totalSize.toInt()).toString(

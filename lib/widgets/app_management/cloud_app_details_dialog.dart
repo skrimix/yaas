@@ -913,7 +913,7 @@ class _ReviewTile extends StatelessWidget {
                           if (devResp.date != null) ...[
                             const SizedBox(height: 6),
                             Text(
-                              _formatEpochSeconds(devResp.date!),
+                              _formatEpochSeconds(context, devResp.date!),
                               style: textTheme.bodySmall?.copyWith(
                                 color: textTheme.bodySmall?.color
                                     ?.withValues(alpha: 0.7),
@@ -934,11 +934,11 @@ class _ReviewTile extends StatelessWidget {
   }
 }
 
-String _formatEpochSeconds(int seconds) {
+String _formatEpochSeconds(BuildContext context, int seconds) {
   try {
     final dt = DateTime.fromMillisecondsSinceEpoch(seconds * 1000, isUtc: true)
         .toLocal();
-    return DateFormat.yMMMd().add_jm().format(dt);
+    return formatDateTime(context, dt) ?? '';
   } catch (_) {
     return '';
   }

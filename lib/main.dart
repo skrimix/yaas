@@ -3,6 +3,7 @@ import 'dart:ui';
 import 'package:desktop_window/desktop_window.dart';
 import 'package:flutter/material.dart';
 import 'package:dynamic_color/dynamic_color.dart';
+import 'package:system_date_time_format/system_date_time_format.dart';
 import 'utils/theme_utils.dart' as app_theme;
 import 'package:provider/provider.dart';
 import 'package:flutter_localizations/flutter_localizations.dart';
@@ -44,7 +45,7 @@ void main() async {
         ChangeNotifierProvider(create: (_) => SettingsState()),
         ChangeNotifierProvider(create: (_) => LogState()),
       ],
-      child: const YAASApp(),
+      child: const SDTFScope(child: YAASApp()),
     ),
   );
 

@@ -1150,6 +1150,13 @@ class _CloudAppMediaState extends State<_CloudAppMedia> {
                 ),
               ),
             ),
+            // Seekbar at bottom
+            Positioned(
+              left: 0,
+              right: 0,
+              bottom: 0,
+              child: _VideoSeekbar(controller: _controller!),
+            ),
           ],
         ),
       );
@@ -1226,12 +1233,14 @@ class _CloudAppMediaState extends State<_CloudAppMedia> {
                       ),
                     ),
                   ),
-                // FIXME: this should disappear after click (when video is loading)
                 AnimatedOpacity(
-                  opacity: _hovered && _trailerAvailable ? 1.0 : 0.0,
+                  opacity: _hovered && _trailerAvailable && !_initializingVideo
+                      ? 1.0
+                      : 0.0,
                   duration: const Duration(milliseconds: 150),
                   child: IgnorePointer(
-                    ignoring: !(_hovered && _trailerAvailable),
+                    ignoring:
+                        !(_hovered && _trailerAvailable && !_initializingVideo),
                     child: Container(
                       color: Colors.black.withValues(alpha: 0.45),
                       child: Center(
@@ -1303,6 +1312,118 @@ class _CloudAppMediaState extends State<_CloudAppMedia> {
         child: loading
             ? const CircularProgressIndicator(strokeWidth: 2)
             : const Icon(Icons.folder_off_outlined, size: 48),
+      ),
+    );
+  }
+}
+
+class _VideoSeekbar extends StatefulWidget {
+  const _VideoSeekbar({required this.controller});
+
+  final VideoPlayerController controller;
+
+  @override
+  State<_VideoSeekbar> createState() => _VideoSeekbarState();
+}
+
+class _VideoSeekbarState extends State<_VideoSeekbar> {
+  bool _dragging = false;
+  double _dragValue = 0.0;
+
+  @override
+  void initState() {
+    super.initState();
+    widget.controller.addListener(_onVideoUpdate);
+  }
+
+  @override
+  void dispose() {
+    widget.controller.removeListener(_onVideoUpdate);
+    super.dispose();
+  }
+
+  void _onVideoUpdate() {
+    if (!_dragging && mounted) {
+      setState(() {});
+    }
+  }
+
+  String _formatDuration(Duration d) {
+    final minutes = d.inMinutes.remainder(60).toString().padLeft(2, '0');
+    final seconds = d.inSeconds.remainder(60).toString().padLeft(2, '0');
+    if (d.inHours > 0) {
+      return '${d.inHours}:$minutes:$seconds';
+    }
+    return '$minutes:$seconds';
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    final value = widget.controller.value;
+    final duration = value.duration;
+    final position = value.position;
+
+    final totalMs = duration.inMilliseconds.toDouble();
+    final positionMs = position.inMilliseconds.toDouble();
+    final progress = totalMs > 0 ? (positionMs / totalMs).clamp(0.0, 1.0) : 0.0;
+
+    return Container(
+      decoration: BoxDecoration(
+        gradient: LinearGradient(
+          begin: Alignment.topCenter,
+          end: Alignment.bottomCenter,
+          colors: [
+            Colors.transparent,
+            Colors.black.withValues(alpha: 0.7),
+          ],
+        ),
+      ),
+      padding: const EdgeInsets.only(left: 12, right: 12, top: 16, bottom: 8),
+      child: Row(
+        children: [
+          Text(
+            _formatDuration(position),
+            style: const TextStyle(color: Colors.white, fontSize: 12),
+          ),
+          const SizedBox(width: 8),
+          Expanded(
+            child: SliderTheme(
+              data: SliderTheme.of(context).copyWith(
+                trackHeight: 4,
+                thumbShape: const RoundSliderThumbShape(enabledThumbRadius: 6),
+                overlayShape: const RoundSliderOverlayShape(overlayRadius: 12),
+                activeTrackColor: Colors.white,
+                inactiveTrackColor: Colors.white.withValues(alpha: 0.3),
+                thumbColor: Colors.white,
+                overlayColor: Colors.white.withValues(alpha: 0.2),
+              ),
+              child: Slider(
+                value: _dragging ? _dragValue : progress,
+                onChangeStart: (v) {
+                  _dragging = true;
+                  _dragValue = v;
+                },
+                onChanged: (v) {
+                  setState(() {
+                    _dragValue = v;
+                  });
+                },
+                onChangeEnd: (v) async {
+                  _dragging = false;
+                  final newPosition = Duration(
+                    milliseconds: (v * totalMs).round(),
+                  );
+                  await widget.controller.seekTo(newPosition);
+                },
+              ),
+            ),
+          ),
+          const SizedBox(width: 8),
+          Text(
+            _formatDuration(duration),
+            style: const TextStyle(color: Colors.white, fontSize: 12),
+          ),
+        ],
       ),
     );
   }

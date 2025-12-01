@@ -80,15 +80,8 @@ impl DownloaderManager {
                 }
             } else {
                 info!("No downloader.json found, cloud features disabled");
-                DownloaderAvailabilityChanged {
-                    available: false,
-                    initializing: false,
-                    error: None,
-                    config_id: None,
-                    is_donation_configured: false,
-                    needs_setup: true,
-                }
-                .send_signal_to_dart();
+                DownloaderAvailabilityChanged { needs_setup: true, ..Default::default() }
+                    .send_signal_to_dart();
             }
         });
 
@@ -143,12 +136,10 @@ impl DownloaderManager {
             cfg.donation_remote_name.is_some() && cfg.donation_remote_path.is_some();
 
         DownloaderAvailabilityChanged {
-            available: false,
             initializing: true,
-            error: None,
             config_id: Some(config_id.clone()),
             is_donation_configured,
-            needs_setup: false,
+            ..Default::default()
         }
         .send_signal_to_dart();
 
@@ -174,23 +165,18 @@ impl DownloaderManager {
                         self.set_downloader(Some(downloader)).await;
                         DownloaderAvailabilityChanged {
                             available: true,
-                            initializing: false,
-                            error: None,
                             config_id: Some(config_id.clone()),
                             is_donation_configured,
-                            needs_setup: false,
+                            ..Default::default()
                         }
                         .send_signal_to_dart();
                         Ok(())
                     }
                     Err(e) => {
                         DownloaderAvailabilityChanged {
-                            available: false,
-                            initializing: false,
                             error: Some(format!("Failed to initialize downloader: {:#}", e)),
                             config_id: Some(config_id.clone()),
-                            is_donation_configured: false,
-                            needs_setup: false,
+                            ..Default::default()
                         }
                         .send_signal_to_dart();
                         Err(e)
@@ -199,12 +185,9 @@ impl DownloaderManager {
             }
             Err(e) => {
                 DownloaderAvailabilityChanged {
-                    available: false,
-                    initializing: false,
                     error: Some(format!("Failed to prepare downloader: {:#}", e)),
                     config_id: Some(config_id),
-                    is_donation_configured: false,
-                    needs_setup: false,
+                    ..Default::default()
                 }
                 .send_signal_to_dart();
                 Err(e)

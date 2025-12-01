@@ -1,6 +1,6 @@
 use rinf::RustSignal;
 
-#[derive(serde::Serialize, serde::Deserialize, RustSignal)]
+#[derive(Default, serde::Serialize, serde::Deserialize, RustSignal)]
 pub(crate) struct DownloaderAvailabilityChanged {
     pub available: bool,
     pub initializing: bool,

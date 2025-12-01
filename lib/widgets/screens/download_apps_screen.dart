@@ -893,7 +893,7 @@ class _DownloadAppsScreenState extends State<DownloadAppsScreen> {
           body: SafeArea(
             child: Column(
               children: [
-                if (!hasDownloader && !showDownloaderInit)
+                if (settingsState.downloaderNeedsSetup)
                   Padding(
                     padding: const EdgeInsets.fromLTRB(16, 16, 16, 8),
                     child: _buildDownloaderConfigCallout(

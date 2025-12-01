@@ -80,6 +80,15 @@ impl DownloaderManager {
                 }
             } else {
                 info!("No downloader.json found, cloud features disabled");
+                DownloaderAvailabilityChanged {
+                    available: false,
+                    initializing: false,
+                    error: None,
+                    config_id: None,
+                    is_donation_configured: false,
+                    needs_setup: true,
+                }
+                .send_signal_to_dart();
             }
         });
 
@@ -139,6 +148,7 @@ impl DownloaderManager {
             error: None,
             config_id: Some(config_id.clone()),
             is_donation_configured,
+            needs_setup: false,
         }
         .send_signal_to_dart();
 
@@ -168,6 +178,7 @@ impl DownloaderManager {
                             error: None,
                             config_id: Some(config_id.clone()),
                             is_donation_configured,
+                            needs_setup: false,
                         }
                         .send_signal_to_dart();
                         Ok(())
@@ -179,6 +190,7 @@ impl DownloaderManager {
                             error: Some(format!("Failed to initialize downloader: {:#}", e)),
                             config_id: Some(config_id.clone()),
                             is_donation_configured: false,
+                            needs_setup: false,
                         }
                         .send_signal_to_dart();
                         Err(e)
@@ -192,6 +204,7 @@ impl DownloaderManager {
                     error: Some(format!("Failed to prepare downloader: {:#}", e)),
                     config_id: Some(config_id),
                     is_donation_configured: false,
+                    needs_setup: false,
                 }
                 .send_signal_to_dart();
                 Err(e)

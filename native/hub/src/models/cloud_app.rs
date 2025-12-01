@@ -3,6 +3,15 @@ use std::str::FromStr;
 use lazy_regex::lazy_regex;
 use rinf::SignalPiece;
 use serde::{Deserialize, Deserializer, Serialize};
+
+/// Popularity percentage for different time windows.
+#[derive(Serialize, Deserialize, Debug, Clone, SignalPiece)]
+pub(crate) struct Popularity {
+    pub day_1: Option<u8>,
+    pub day_7: Option<u8>,
+    pub day_30: Option<u8>,
+}
+
 /// Custom helper used only during deserialization from CSV/remote list.
 /// This allows us to keep one public struct while still supporting
 /// header aliases and custom parsing logic.
@@ -35,7 +44,7 @@ fn normalize_package_name(name: &str) -> String {
     re.replace_all(name, "").into_owned()
 }
 
-/// A cloud app from the local device.
+/// A cloud app from the remote repository.
 #[derive(Serialize, Debug, Clone, SignalPiece)]
 pub(crate) struct CloudApp {
     pub app_name: String,
@@ -46,6 +55,7 @@ pub(crate) struct CloudApp {
     pub version_code: u32,
     pub last_updated: String,
     pub size: u64,
+    pub popularity: Option<Popularity>,
 }
 
 impl<'de> Deserialize<'de> for CloudApp {
@@ -65,6 +75,7 @@ impl<'de> Deserialize<'de> for CloudApp {
             version_code: helper.version_code,
             last_updated: helper.last_updated,
             size,
+            popularity: None,
         })
     }
 }

@@ -581,8 +581,16 @@ impl Downloader {
             repo.load_app_list(storage, list_path, &cache_dir, &client, cancellation_token.clone());
 
         match tokio::time::timeout(timeout, fut).await {
-            Ok(Ok(result)) => {
+            Ok(Ok(mut result)) => {
                 debug!(len = result.apps.len(), "Loaded app list successfully");
+
+                if !result.apps.is_empty()
+                    && let Err(e) =
+                        cloud_api::load_popularity_for_apps(&client, &mut result.apps).await
+                {
+                    warn!(error = e.as_ref() as &dyn Error, "Failed to load popularity data");
+                }
+
                 {
                     let mut cache = self.cloud_apps.lock().await;
                     *cache = result.apps.clone();

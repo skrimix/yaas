@@ -1,11 +1,14 @@
+use std::collections::HashMap;
+
 use anyhow::{Result, ensure};
 use reqwest::header::{ACCEPT, HeaderMap, HeaderValue};
+use serde::Deserialize;
 use serde_json::json;
 use tracing::{debug, instrument};
 
 use crate::{
     adb::PackageName,
-    models::{AppApiResponse, signals::cloud_apps::reviews::AppReview},
+    models::{AppApiResponse, CloudApp, Popularity, signals::cloud_apps::reviews::AppReview},
 };
 
 #[instrument(level = "debug", skip(client), err)]
@@ -64,6 +67,84 @@ pub(super) async fn fetch_app_reviews(
     response.error_for_status_ref()?;
     let payload: ReviewsResponse = response.json().await?;
     Ok(payload)
+}
+
+#[derive(Deserialize, Debug)]
+struct PopularityEntry {
+    package_name: String,
+    #[serde(rename = "1D")]
+    day_1: u64,
+    #[serde(rename = "7D")]
+    day_7: u64,
+    #[serde(rename = "30D")]
+    day_30: u64,
+}
+
+/// Fetches popularity data from the QLoader API and enriches the given apps in place.
+///
+/// Popularity is normalized per window (1D/7D/30D) so that the most popular
+/// app in each window gets 100 and others are scaled proportionally.
+#[instrument(level = "debug", skip(client, apps), err)]
+pub(super) async fn load_popularity_for_apps(
+    client: &reqwest::Client,
+    apps: &mut [CloudApp],
+) -> Result<()> {
+    if apps.is_empty() {
+        return Ok(());
+    }
+
+    let url = "https://qloader.5698452.xyz/api/v1/popularity";
+    debug!(%url, "Fetching app popularity from QLoader API");
+
+    let resp = client.get(url).send().await?;
+    resp.error_for_status_ref()?;
+
+    let popularity: Vec<PopularityEntry> = resp.json().await?;
+    if popularity.is_empty() {
+        debug!("Popularity API returned empty result");
+        return Ok(());
+    }
+
+    let mut max_1d: u64 = 0;
+    let mut max_7d: u64 = 0;
+    let mut max_30d: u64 = 0;
+    let mut by_package: HashMap<&str, &PopularityEntry> = HashMap::new();
+
+    for entry in &popularity {
+        max_1d = max_1d.max(entry.day_1);
+        max_7d = max_7d.max(entry.day_7);
+        max_30d = max_30d.max(entry.day_30);
+        by_package.insert(entry.package_name.as_str(), entry);
+    }
+
+    if max_1d == 0 && max_7d == 0 && max_30d == 0 {
+        debug!("Popularity data only contains zeros, skipping normalization");
+        return Ok(());
+    }
+
+    let normalize = |value: u64, max: u64| -> Option<u8> {
+        if max == 0 || value == 0 {
+            return None;
+        }
+        let pct = (value as f64 / max as f64 * 100.0).round();
+        Some(pct.clamp(0.0, 100.0) as u8)
+    };
+
+    let mut count: u32 = 0;
+    for app in apps.iter_mut() {
+        if let Some(entry) = by_package.get(app.true_package_name.as_str()) {
+            count += 1;
+            let p1 = normalize(entry.day_1, max_1d);
+            let p7 = normalize(entry.day_7, max_7d);
+            let p30 = normalize(entry.day_30, max_30d);
+            if p1.is_some() || p7.is_some() || p30.is_some() {
+                app.popularity = Some(Popularity { day_1: p1, day_7: p7, day_30: p30 });
+            }
+        }
+    }
+
+    debug!(count, "Applied popularity data to app list");
+    Ok(())
 }
 
 #[instrument(level = "debug", skip(client), err)]

@@ -651,10 +651,9 @@ class _LogsScreenState extends State<LogsScreen> {
                         .map((e) => '${e.key}=${e.value}')
                         .join(' ');
                     buffer.writeln(
-                        '  ${isLast ? '└─' : '├─'} $spanName [id: ${span.id}] with $params');
+                        '  ${isLast ? '└─' : '├─'} $spanName with $params');
                   } else {
-                    buffer.writeln(
-                        '  ${isLast ? '└─' : '├─'} $spanName [id: ${span.id}]');
+                    buffer.writeln('  ${isLast ? '└─' : '├─'} $spanName');
                   }
                 }
               }

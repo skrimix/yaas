@@ -11,7 +11,7 @@ import 'package:url_launcher/url_launcher.dart';
 import '../../providers/settings_state.dart';
 import '../../navigation.dart';
 import '../../src/l10n/app_localizations.dart';
-import '../common/downloader_config_from_url_dialog.dart';
+import '../dialogs/downloader_config_from_url_dialog.dart';
 
 enum SettingTextField {
   rcloneRemoteName,

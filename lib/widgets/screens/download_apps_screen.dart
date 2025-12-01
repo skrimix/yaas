@@ -11,8 +11,8 @@ import '../../src/bindings/bindings.dart';
 import '../../providers/device_state.dart';
 import '../../providers/settings_state.dart';
 import '../../utils/utils.dart';
-import '../app_management/cloud_app_list.dart';
-import '../common/downloader_config_from_url_dialog.dart';
+import '../cloud_apps/cloud_app_list.dart';
+import '../dialogs/downloader_config_from_url_dialog.dart';
 
 enum SortOption {
   name,

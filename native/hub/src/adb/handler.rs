@@ -178,7 +178,6 @@ impl AdbHandler {
                             }
                         }
 
-                        // Update preferred connection type
                         let new_connection_type = settings.preferred_connection_type;
                         if new_connection_type != *handle.preferred_connection_type.read().await {
                             info!(?new_connection_type, "Preferred connection type changed");

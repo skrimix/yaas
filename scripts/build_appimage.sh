@@ -27,8 +27,12 @@ require_cmd fastforge
 require_cmd appimagetool
 require_cmd curl
 require_cmd tar
+require_cmd rinf
 
 mkdir -p dist
+
+echo "==> Generating Rinf bindings..."
+rinf gen
 
 echo "==> Building AppImage with fastforge..."
 fastforge package --platform linux --targets appimage --skip-clean

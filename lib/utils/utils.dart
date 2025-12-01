@@ -3,6 +3,7 @@ import 'package:flutter/services.dart';
 import 'package:intl/intl.dart';
 import 'package:system_date_time_format/system_date_time_format.dart';
 import 'package:toastification/toastification.dart';
+import '../src/bindings/bindings.dart';
 import '../src/l10n/app_localizations.dart';
 
 void copyToClipboard(BuildContext context, String text,
@@ -30,4 +31,38 @@ String? formatDateTime(BuildContext context, DateTime dateTime) {
     return null;
   }
   return DateFormat('$datePattern $timePattern').format(dateTime);
+}
+
+/// Shows a confirmation dialog when attempting to downgrade an app.
+/// Returns true if the user confirms, false otherwise.
+Future<bool> showDowngradeConfirmDialog(
+  BuildContext context,
+  InstalledPackage installed,
+  CloudApp target,
+) async {
+  final l10n = AppLocalizations.of(context);
+  final res = await showDialog<bool>(
+    context: context,
+    builder: (context) => AlertDialog(
+      title: Text(l10n.downgradeAppTitle),
+      content: Text(l10n.downgradeConfirmMessage('${target.versionCode}')),
+      actions: [
+        TextButton(
+          onPressed: () => Navigator.of(context).pop(false),
+          child: Text(l10n.commonCancel),
+        ),
+        FilledButton(
+          style: ButtonStyle(
+            backgroundColor:
+                WidgetStatePropertyAll(Theme.of(context).colorScheme.error),
+            foregroundColor:
+                WidgetStatePropertyAll(Theme.of(context).colorScheme.onError),
+          ),
+          onPressed: () => Navigator.of(context).pop(true),
+          child: Text(l10n.commonConfirm),
+        ),
+      ],
+    ),
+  );
+  return res ?? false;
 }

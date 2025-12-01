@@ -28,7 +28,7 @@ class CloudAppDetailsDialog extends StatefulWidget {
 
   final CachedAppData cachedApp;
   final void Function(String fullName, String truePackageName) onDownload;
-  final void Function(String fullName, String truePackageName) onInstall;
+  final Future<void> Function(BuildContext context) onInstall;
 
   @override
   State<CloudAppDetailsDialog> createState() => _CloudAppDetailsDialogState();
@@ -115,49 +115,6 @@ class _CloudAppDetailsDialogState extends State<CloudAppDetailsDialog> {
     _reviewsSub?.cancel();
     _descScrollController.dispose();
     super.dispose();
-  }
-
-  Future<bool> _confirmDowngrade(
-    BuildContext context,
-    InstalledPackage installed,
-    CloudApp target,
-  ) async {
-    final l10n = AppLocalizations.of(context);
-    final res = await showDialog<bool>(
-      context: context,
-      builder: (context) => AlertDialog(
-        title: Text(l10n.downgradeAppTitle),
-        content: Text(l10n.downgradeConfirmMessage('${target.versionCode}')),
-        actions: [
-          TextButton(
-            onPressed: () => Navigator.of(context).pop(false),
-            child: Text(l10n.commonCancel),
-          ),
-          FilledButton(
-            style: ButtonStyle(
-              backgroundColor:
-                  WidgetStatePropertyAll(Theme.of(context).colorScheme.error),
-              foregroundColor:
-                  WidgetStatePropertyAll(Theme.of(context).colorScheme.onError),
-            ),
-            onPressed: () => Navigator.of(context).pop(true),
-            child: Text(l10n.commonConfirm),
-          ),
-        ],
-      ),
-    );
-    return res ?? false;
-  }
-
-  Future<void> _handleInstall(BuildContext context) async {
-    final deviceState = context.read<DeviceState>();
-    final app = widget.cachedApp.app;
-    final installed = deviceState.findInstalled(app.packageName);
-    if (installed != null && installed.versionCode.toInt() > app.versionCode) {
-      final ok = await _confirmDowngrade(context, installed, app);
-      if (!ok) return;
-    }
-    widget.onInstall(app.fullName, app.truePackageName);
   }
 
   @override
@@ -331,8 +288,9 @@ class _CloudAppDetailsDialogState extends State<CloudAppDetailsDialog> {
         ),
         Consumer<DeviceState>(builder: (context, deviceState, _) {
           return FilledButton.icon(
-            onPressed:
-                deviceState.isConnected ? () => _handleInstall(context) : null,
+            onPressed: deviceState.isConnected
+                ? () => widget.onInstall(context)
+                : null,
             icon: const Icon(Icons.install_mobile),
             label: Text(deviceState.isConnected
                 ? l10n.downloadAndInstall

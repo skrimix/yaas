@@ -393,7 +393,8 @@ class _ManageAppsScreenState extends State<ManageAppsScreen> {
                             onPressed: canInstall
                                 ? () async {
                                     if (isOlder) {
-                                      final confirmed = await _confirmDowngrade(
+                                      final confirmed =
+                                          await showDowngradeConfirmDialog(
                                         context,
                                         app,
                                         cloudApp,
@@ -512,7 +513,7 @@ class _ManageAppsScreenState extends State<ManageAppsScreen> {
                   onPressed: enable
                       ? () async {
                           if (isOlder) {
-                            final confirmed = await _confirmDowngrade(
+                            final confirmed = await showDowngradeConfirmDialog(
                               context,
                               app,
                               newestCloudApp,
@@ -567,38 +568,6 @@ class _ManageAppsScreenState extends State<ManageAppsScreen> {
       return '${installed.versionName} (${installed.versionCode})';
     }
     return '${installed.versionName} (${installed.versionCode}) → $target';
-  }
-
-  Future<bool> _confirmDowngrade(
-    BuildContext context,
-    InstalledPackage installed,
-    CloudApp target,
-  ) async {
-    final l10n = AppLocalizations.of(context);
-    final res = await showDialog<bool>(
-      context: context,
-      builder: (context) => AlertDialog(
-        title: Text(l10n.downgradeAppTitle),
-        content: Text(l10n.downgradeConfirmMessage('${target.versionCode}')),
-        actions: [
-          TextButton(
-            onPressed: () => Navigator.of(context).pop(false),
-            child: Text(l10n.commonCancel),
-          ),
-          FilledButton(
-            style: ButtonStyle(
-              backgroundColor:
-                  WidgetStatePropertyAll(Theme.of(context).colorScheme.error),
-              foregroundColor:
-                  WidgetStatePropertyAll(Theme.of(context).colorScheme.onError),
-            ),
-            onPressed: () => Navigator.of(context).pop(true),
-            child: Text(l10n.commonConfirm),
-          ),
-        ],
-      ),
-    );
-    return res ?? false;
   }
 
   Widget _buildAppList(List<InstalledPackage> apps) {

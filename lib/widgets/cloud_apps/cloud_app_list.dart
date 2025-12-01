@@ -227,7 +227,7 @@ class CloudAppListItem extends StatelessWidget {
                       builder: (context) => CloudAppDetailsDialog(
                         cachedApp: cachedApp,
                         onDownload: onDownload,
-                        onInstall: onInstall,
+                        onInstall: _handleInstall,
                       ),
                     );
                   },
@@ -271,7 +271,7 @@ class CloudAppListItem extends StatelessWidget {
     final installed = deviceState.findInstalled(cachedApp.app.packageName);
     if (installed != null &&
         installed.versionCode.toInt() > cachedApp.app.versionCode) {
-      final confirmed = await _confirmDowngrade(
+      final confirmed = await showDowngradeConfirmDialog(
         context,
         installed,
         cachedApp.app,
@@ -279,38 +279,6 @@ class CloudAppListItem extends StatelessWidget {
       if (!confirmed) return;
     }
     onInstall(cachedApp.app.fullName, cachedApp.app.truePackageName);
-  }
-
-  Future<bool> _confirmDowngrade(
-    BuildContext context,
-    InstalledPackage installed,
-    CloudApp target,
-  ) async {
-    final l10n = AppLocalizations.of(context);
-    final res = await showDialog<bool>(
-      context: context,
-      builder: (context) => AlertDialog(
-        title: Text(l10n.downgradeAppTitle),
-        content: Text(l10n.downgradeConfirmMessage('${target.versionCode}')),
-        actions: [
-          TextButton(
-            onPressed: () => Navigator.of(context).pop(false),
-            child: Text(l10n.commonCancel),
-          ),
-          FilledButton(
-            style: ButtonStyle(
-              backgroundColor:
-                  WidgetStatePropertyAll(Theme.of(context).colorScheme.error),
-              foregroundColor:
-                  WidgetStatePropertyAll(Theme.of(context).colorScheme.onError),
-            ),
-            onPressed: () => Navigator.of(context).pop(true),
-            child: Text(l10n.commonConfirm),
-          ),
-        ],
-      ),
-    );
-    return res ?? false;
   }
 }
 

@@ -97,7 +97,7 @@ jobs:
         if: matrix.target == 'linux'
         uses: awalsh128/cache-apt-pkgs-action@latest
         with:
-          packages: ninja-build libgtk-3-dev libasound2-dev libmpv-dev locate
+          packages: ninja-build libgtk-3-dev libasound2-dev libmpv-dev locate libmimalloc-dev libmimalloc2.0
           version: 1
       
       - name: Install appimagetool (Linux)

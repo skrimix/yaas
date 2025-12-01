@@ -300,11 +300,11 @@ class _SettingsScreenState extends State<SettingsScreen> {
           l10n.settingsNavigationRailLabelsAll,
       };
 
-  // String _formatConnectionKind(AppLocalizations l10n, ConnectionKind type) =>
-  //     switch (type) {
-  //       ConnectionKind.usb => l10n.settingsConnectionUsb,
-  //       ConnectionKind.wireless => l10n.settingsConnectionWireless,
-  //     };
+  String _formatConnectionKind(AppLocalizations l10n, ConnectionKind type) =>
+      switch (type) {
+        ConnectionKind.usb => l10n.settingsConnectionUsb,
+        ConnectionKind.wireless => l10n.settingsConnectionWireless,
+      };
 
   @override
   Widget build(BuildContext context) {
@@ -574,30 +574,22 @@ class _SettingsScreenState extends State<SettingsScreen> {
               });
             },
           ),
-          // TODO: implement
-          // _buildDropdownSetting<ConnectionKind>(
-          //   label: l10n.settingsPreferredConnection,
-          //   value: _currentFormSettings.preferredConnectionType,
-          //   items: ConnectionKind.values.map((type) {
-          //     return DropdownMenuItem(
-          //       value: type,
-          //       child: Text(_formatConnectionKind(l10n, type)),
-          //     );
-          //   }).toList(),
-          //   onChanged: (value) {
-          //     if (value != null) {
-          //       setState(() => _currentFormSettings = _currentFormSettings
-          //           .copyWith(preferredConnectionType: value));
-          //       _checkForChanges();
-          //     }
-          //   },
-          // ),
-          _buildDropdownSetting<ConnectionKind?>(
+          _buildDropdownSetting<ConnectionKind>(
             label: l10n.settingsPreferredConnection,
-            value: null,
-            items: [],
-            onChanged: null,
-            disabledHint: const Text('Not implemented'),
+            value: _currentFormSettings.preferredConnectionType,
+            items: ConnectionKind.values.map((type) {
+              return DropdownMenuItem(
+                value: type,
+                child: Text(_formatConnectionKind(l10n, type)),
+              );
+            }).toList(),
+            onChanged: (value) {
+              if (value != null) {
+                setState(() => _currentFormSettings = _currentFormSettings
+                    .copyWith(preferredConnectionType: value));
+                _checkForChanges();
+              }
+            },
           ),
           if (Platform.isWindows)
             Padding(

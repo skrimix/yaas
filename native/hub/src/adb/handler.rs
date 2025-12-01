@@ -27,7 +27,7 @@ use super::device::AdbDevice;
 use crate::{
     adb::device::{BackupOptions, SideloadProgress},
     models::{
-        Settings,
+        ConnectionKind, Settings,
         signals::{
             adb::{
                 command::*,
@@ -95,6 +95,8 @@ pub(crate) struct AdbHandler {
     device_data_cache: RwLock<HashMap<String, CachedDeviceData>>,
     /// Whether mDNS auto-connect is enabled
     mdns_auto_connect: bool,
+    /// Preferred connection type (USB or Wireless) for auto-connect
+    preferred_connection_type: RwLock<ConnectionKind>,
 }
 
 impl AdbHandler {
@@ -125,6 +127,7 @@ impl AdbHandler {
             cancel_token: RwLock::new(CancellationToken::new()),
             device_data_cache: RwLock::new(HashMap::new()),
             mdns_auto_connect: first_settings.mdns_auto_connect,
+            preferred_connection_type: RwLock::new(first_settings.preferred_connection_type),
         });
         tokio::spawn(
             {
@@ -173,6 +176,13 @@ impl AdbHandler {
                                 error!(error = e.as_ref() as &dyn Error, "Failed to restart ADB");
                                 // TODO: report this to the UI
                             }
+                        }
+
+                        // Update preferred connection type
+                        let new_connection_type = settings.preferred_connection_type;
+                        if new_connection_type != *handle.preferred_connection_type.read().await {
+                            info!(?new_connection_type, "Preferred connection type changed");
+                            *handle.preferred_connection_type.write().await = new_connection_type;
                         }
                     }
 
@@ -363,7 +373,8 @@ impl AdbHandler {
                 && devices.iter().any(|d| d.state == DeviceState::Device)
             {
                 info!("Found available device, auto-connecting");
-                if let Err(e) = self.connect_device(None, true).await {
+                let preferred = *self.preferred_connection_type.read().await;
+                if let Err(e) = self.connect_device(None, preferred).await {
                     error!(error = e.as_ref() as &dyn Error, "Auto-connect failed");
                 }
             }
@@ -610,7 +621,8 @@ impl AdbHandler {
                     return Ok(());
                 }
 
-                let result = self.connect_device(Some(&serial), true).await;
+                let preferred = *self.preferred_connection_type.read().await;
+                let result = self.connect_device(Some(&serial), preferred).await;
 
                 AdbCommandCompletedEvent {
                     command_type: AdbCommandKind::ConnectTo,
@@ -680,9 +692,10 @@ impl AdbHandler {
 
                         tokio::time::sleep(Duration::from_millis(300)).await;
 
+                        let preferred = *self.preferred_connection_type.read().await;
                         let mut last_err: Option<anyhow::Error> = None;
                         for attempt in 1..=MAX_SWITCH_ATTEMPTS {
-                            match self.connect_device(Some(&serial), true).await {
+                            match self.connect_device(Some(&serial), preferred).await {
                                 Ok(_) => {
                                     last_err = None;
                                     break;
@@ -793,10 +806,14 @@ impl AdbHandler {
     ///
     /// # Arguments
     /// * `serial` - Optional serial number to target. If None, connects to the first available device.
-    /// * `prefer_usb` - If true, prefers USB devices over wireless. Otherwise, prefers wireless. Ignored if `serial` is provided.
+    /// * `preferred_connection` - Preferred connection type. Ignored if `serial` is provided.
     #[instrument(skip(self), err, ret)]
-    async fn connect_device(&self, serial: Option<&str>, prefer_usb: bool) -> Result<AdbDevice> {
-        // TODO: replace `prefer_usb` with an enum from settings when added
+    async fn connect_device(
+        &self,
+        serial: Option<&str>,
+        preferred_connection: ConnectionKind,
+    ) -> Result<AdbDevice> {
+        let prefer_usb = preferred_connection == ConnectionKind::Usb;
         let adb_host = self.adb_host.clone();
         let mut devices = adb_host
             .devices::<Vec<_>>()

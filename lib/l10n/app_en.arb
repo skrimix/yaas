@@ -693,5 +693,17 @@
     "donateNoAppsWithFilters": "No apps match the current filters",
     "donateLoadingCloudApps": "Loading cloud apps list...",
     "copyDisplayName": "Copy display name",
-    "donateDownloaderNotAvailable": "Downloader not available"
+    "donateDownloaderNotAvailable": "Downloader not available",
+    "popularity": "Popularity",
+    "popularityDay1": "24h",
+    "popularityDay7": "7 days",
+    "popularityDay30": "30 days",
+    "popularityPercent": "{percent}%",
+    "@popularityPercent": {
+        "placeholders": {
+            "percent": {"type": "int"}
+        }
+    },
+    "sortPopularityMost": "Popularity (Most popular)",
+    "sortPopularityLeast": "Popularity (Least popular)"
 }

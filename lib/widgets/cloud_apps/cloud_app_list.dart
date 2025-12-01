@@ -148,6 +148,7 @@ class CloudAppListItem extends StatelessWidget {
           onPrimaryTap:
               showCheckbox ? () => onSelectionChanged(!isSelected) : null,
           child: ListTile(
+            // minVerticalPadding: 0,
             leading: showCheckbox
                 ? Checkbox(
                     value: isSelected,
@@ -184,7 +185,19 @@ class CloudAppListItem extends StatelessWidget {
             trailing: Row(
               mainAxisSize: MainAxisSize.min,
               children: [
-                _InstalledStatusBadge(app: cachedApp.app),
+                Stack(
+                  alignment: Alignment.centerRight,
+                  children: [
+                    _InstalledStatusBadge(app: cachedApp.app),
+                    Container(
+                      transform: Matrix4.translationValues(0.0, 12.0, 0.0),
+                      child: Align(
+                        alignment: Alignment.bottomRight,
+                        child: _PopularityIndicator(app: cachedApp.app),
+                      ),
+                    ),
+                  ],
+                ),
                 const SizedBox(width: 8),
                 Consumer<SettingsState>(
                   builder: (context, settings, _) {
@@ -353,32 +366,90 @@ class _InstalledStatusBadge extends StatelessWidget {
       return Tooltip(
         message: tooltip,
         waitDuration: const Duration(milliseconds: 300),
-        child: Padding(
-          padding: const EdgeInsets.only(top: 6),
-          child: Container(
-            padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 4),
-            decoration: BoxDecoration(
-              color: Colors.transparent,
-              borderRadius: BorderRadius.circular(999),
-              border: Border.all(color: border.withValues(alpha: 0.7)),
-            ),
-            child: Row(
-              mainAxisSize: MainAxisSize.min,
-              children: [
-                Icon(icon, size: 14, color: fg),
-                const SizedBox(width: 6),
-                Text(
-                  label,
-                  style: Theme.of(context)
-                      .textTheme
-                      .labelSmall
-                      ?.copyWith(color: fg),
-                ),
-              ],
-            ),
+        child: Container(
+          padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 4),
+          decoration: BoxDecoration(
+            color: Colors.transparent,
+            borderRadius: BorderRadius.circular(999),
+            border: Border.all(color: border.withValues(alpha: 0.7)),
+          ),
+          child: Row(
+            mainAxisSize: MainAxisSize.min,
+            children: [
+              Icon(icon, size: 14, color: fg),
+              const SizedBox(width: 6),
+              Text(
+                label,
+                style:
+                    Theme.of(context).textTheme.labelSmall?.copyWith(color: fg),
+              ),
+            ],
           ),
         ),
       );
     });
+  }
+}
+
+class _PopularityIndicator extends StatelessWidget {
+  const _PopularityIndicator({required this.app});
+
+  final CloudApp app;
+
+  @override
+  Widget build(BuildContext context) {
+    final pop = app.popularity;
+    if (pop == null) return const SizedBox.shrink();
+
+    final l10n = AppLocalizations.of(context);
+    final theme = Theme.of(context);
+    final scheme = theme.colorScheme;
+    final settingsState = context.watch<SettingsState>();
+    final selectedRange = settingsState.popularityRange;
+
+    // Get value based on selected range, with fallback
+    final (value, periodLabel) = _getValueForRange(pop, selectedRange, l10n);
+
+    // Subtle colors based on popularity value
+    final Color iconColor;
+    if (value >= 70) {
+      iconColor = Colors.orange.shade700;
+    } else if (value >= 40) {
+      iconColor = Colors.orange.shade400;
+    } else {
+      iconColor = scheme.onSurfaceVariant.withValues(alpha: 0.5);
+    }
+
+    final textColor = scheme.onSurfaceVariant.withValues(alpha: 0.6);
+
+    return Row(
+      mainAxisSize: MainAxisSize.min,
+      children: [
+        Icon(
+          Icons.local_fire_department_rounded,
+          size: 16,
+          color: iconColor,
+        ),
+        const SizedBox(width: 2),
+        Text(
+          l10n.popularityPercent(value),
+          style: theme.textTheme.labelMedium?.copyWith(
+            color: textColor,
+          ),
+        ),
+      ],
+    );
+  }
+
+  (int, String) _getValueForRange(
+    Popularity pop,
+    PopularityRange range,
+    AppLocalizations l10n,
+  ) {
+    return switch (range) {
+      PopularityRange.day1 => (pop.day1 ?? 0, l10n.popularityDay1),
+      PopularityRange.day7 => (pop.day7 ?? 0, l10n.popularityDay7),
+      PopularityRange.day30 => (pop.day30 ?? 0, l10n.popularityDay30),
+    };
   }
 }

@@ -2804,6 +2804,54 @@ abstract class AppLocalizations {
   /// In en, this message translates to:
   /// **'Downloader not available'**
   String get donateDownloaderNotAvailable;
+
+  /// No description provided for @popularity.
+  ///
+  /// In en, this message translates to:
+  /// **'Popularity'**
+  String get popularity;
+
+  /// No description provided for @popularityDay1.
+  ///
+  /// In en, this message translates to:
+  /// **'24h'**
+  String get popularityDay1;
+
+  /// No description provided for @popularityDay7.
+  ///
+  /// In en, this message translates to:
+  /// **'7 days'**
+  String get popularityDay7;
+
+  /// No description provided for @popularityDay30.
+  ///
+  /// In en, this message translates to:
+  /// **'30 days'**
+  String get popularityDay30;
+
+  /// No description provided for @popularityTooltip.
+  ///
+  /// In en, this message translates to:
+  /// **'Popularity: {percent}% (last {period})'**
+  String popularityTooltip(int percent, String period);
+
+  /// No description provided for @popularityPercent.
+  ///
+  /// In en, this message translates to:
+  /// **'{percent}%'**
+  String popularityPercent(int percent);
+
+  /// No description provided for @sortPopularityMost.
+  ///
+  /// In en, this message translates to:
+  /// **'Popularity (Most popular)'**
+  String get sortPopularityMost;
+
+  /// No description provided for @sortPopularityLeast.
+  ///
+  /// In en, this message translates to:
+  /// **'Popularity (Least popular)'**
+  String get sortPopularityLeast;
 }
 
 class _AppLocalizationsDelegate

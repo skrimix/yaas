@@ -18,6 +18,7 @@ enum SortOption {
   name,
   date,
   size,
+  popularity,
 }
 
 class DownloadAppsScreen extends StatefulWidget {
@@ -72,8 +73,9 @@ class _DownloadAppsScreenState extends State<DownloadAppsScreen> {
   }
 
   List<CachedAppData> _sortApps(List<CloudApp> apps) {
+    final popRange = context.read<SettingsState>().popularityRange;
     final newSortKey =
-        '${_sortOption}_${_sortAscending}_${identityHashCode(apps)}_${apps.length}';
+        '${_sortOption}_${_sortAscending}_${popRange}_${identityHashCode(apps)}_${apps.length}';
     if (_sortedApps != null && newSortKey == _lastSortKey) {
       return _sortedApps!;
     }
@@ -100,6 +102,11 @@ class _DownloadAppsScreenState extends State<DownloadAppsScreen> {
         case SortOption.size:
           comparison = a.app.size.toBigInt().compareTo(b.app.size.toBigInt());
           break;
+        case SortOption.popularity:
+          final popA = _getPopularityValue(a.app.popularity, popRange);
+          final popB = _getPopularityValue(b.app.popularity, popRange);
+          comparison = popA.compareTo(popB);
+          break;
       }
       return _sortAscending ? comparison : -comparison;
     });
@@ -107,6 +114,15 @@ class _DownloadAppsScreenState extends State<DownloadAppsScreen> {
     _lastSortKey = newSortKey;
     _sortedApps = cachedApps;
     return cachedApps;
+  }
+
+  int _getPopularityValue(Popularity? pop, PopularityRange range) {
+    if (pop == null) return 0;
+    return switch (range) {
+      PopularityRange.day1 => pop.day1 ?? pop.day7 ?? pop.day30 ?? 0,
+      PopularityRange.day7 => pop.day7 ?? pop.day30 ?? pop.day1 ?? 0,
+      PopularityRange.day30 => pop.day30 ?? pop.day7 ?? pop.day1 ?? 0,
+    };
   }
 
   void _resetScroll() {
@@ -456,6 +472,30 @@ class _DownloadAppsScreenState extends State<DownloadAppsScreen> {
             ],
           ),
         ),
+        PopupMenuItem(
+          value: (SortOption.popularity, false),
+          child: Row(
+            children: [
+              Icon(_sortOption == SortOption.popularity && !_sortAscending
+                  ? Icons.radio_button_checked
+                  : Icons.radio_button_unchecked),
+              const SizedBox(width: 8),
+              Text(l10n.sortPopularityMost),
+            ],
+          ),
+        ),
+        PopupMenuItem(
+          value: (SortOption.popularity, true),
+          child: Row(
+            children: [
+              Icon(_sortOption == SortOption.popularity && _sortAscending
+                  ? Icons.radio_button_checked
+                  : Icons.radio_button_unchecked),
+              const SizedBox(width: 8),
+              Text(l10n.sortPopularityLeast),
+            ],
+          ),
+        ),
       ],
       onSelected: (value) {
         setState(() {
@@ -468,6 +508,7 @@ class _DownloadAppsScreenState extends State<DownloadAppsScreen> {
           SortOption.name => 'name',
           SortOption.date => 'date',
           SortOption.size => 'size',
+          SortOption.popularity => 'popularity',
         };
         context.read<AppState>().setDownloadSort(sortKey, _sortAscending);
       },
@@ -554,6 +595,7 @@ class _DownloadAppsScreenState extends State<DownloadAppsScreen> {
     _sortOption = switch (key) {
       'date' => SortOption.date,
       'size' => SortOption.size,
+      'popularity' => SortOption.popularity,
       _ => SortOption.name,
     };
     _sortAscending = appState.downloadSortAscending;
@@ -575,6 +617,94 @@ class _DownloadAppsScreenState extends State<DownloadAppsScreen> {
     });
 
     _initialized = true;
+  }
+
+  Widget _buildPopularityRangeButton() {
+    final l10n = AppLocalizations.of(context);
+    final settingsState = context.watch<SettingsState>();
+    final range = settingsState.popularityRange;
+
+    final rangeLabel = switch (range) {
+      PopularityRange.day1 => l10n.popularityDay1,
+      PopularityRange.day7 => l10n.popularityDay7,
+      PopularityRange.day30 => l10n.popularityDay30,
+    };
+
+    return PopupMenuButton<PopularityRange>(
+      tooltip: l10n.popularity,
+      initialValue: range,
+      onSelected: (value) {
+        settingsState.setPopularityRange(value);
+        // Force re-sort if sorting by popularity
+        if (_sortOption == SortOption.popularity) {
+          setState(() {
+            _lastSortKey = null;
+            _sortedApps = null;
+          });
+        }
+      },
+      itemBuilder: (context) => [
+        PopupMenuItem(
+          enabled: false,
+          child: Text(l10n.popularity),
+        ),
+        PopupMenuItem(
+          value: PopularityRange.day1,
+          child: Row(
+            children: [
+              Icon(range == PopularityRange.day1
+                  ? Icons.radio_button_checked
+                  : Icons.radio_button_unchecked),
+              const SizedBox(width: 8),
+              Text(l10n.popularityDay1),
+            ],
+          ),
+        ),
+        PopupMenuItem(
+          value: PopularityRange.day7,
+          child: Row(
+            children: [
+              Icon(range == PopularityRange.day7
+                  ? Icons.radio_button_checked
+                  : Icons.radio_button_unchecked),
+              const SizedBox(width: 8),
+              Text(l10n.popularityDay7),
+            ],
+          ),
+        ),
+        PopupMenuItem(
+          value: PopularityRange.day30,
+          child: Row(
+            children: [
+              Icon(range == PopularityRange.day30
+                  ? Icons.radio_button_checked
+                  : Icons.radio_button_unchecked),
+              const SizedBox(width: 8),
+              Text(l10n.popularityDay30),
+            ],
+          ),
+        ),
+      ],
+      child: Padding(
+        padding: const EdgeInsets.symmetric(horizontal: 8),
+        child: Row(
+          mainAxisSize: MainAxisSize.min,
+          children: [
+            Icon(
+              Icons.local_fire_department_rounded,
+              size: 18,
+              color: Theme.of(context).colorScheme.onSurfaceVariant,
+            ),
+            const SizedBox(width: 4),
+            Text(
+              rangeLabel,
+              style: Theme.of(context).textTheme.bodySmall,
+            ),
+            const Icon(Icons.arrow_drop_down, size: 18),
+          ],
+        ),
+      ),
+    );
   }
 
   Widget _buildFilterButton() {
@@ -801,6 +931,7 @@ class _DownloadAppsScreenState extends State<DownloadAppsScreen> {
                           tooltip: l10n.multiSelect,
                           onPressed: _toggleCheckboxVisibility,
                         ),
+                        _buildPopularityRangeButton(),
                         // TODO: add search result sorting?
                         _buildSortButton(_searchQuery.isEmpty),
                         IconButton(

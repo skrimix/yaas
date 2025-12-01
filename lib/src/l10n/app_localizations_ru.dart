@@ -1484,4 +1484,32 @@ class AppLocalizationsRu extends AppLocalizations {
 
   @override
   String get donateDownloaderNotAvailable => 'Загрузчик не доступен';
+
+  @override
+  String get popularity => 'Популярность';
+
+  @override
+  String get popularityDay1 => '24ч';
+
+  @override
+  String get popularityDay7 => '7 дней';
+
+  @override
+  String get popularityDay30 => '30 дней';
+
+  @override
+  String popularityTooltip(int percent, String period) {
+    return 'Популярность: $percent% (за $period)';
+  }
+
+  @override
+  String popularityPercent(int percent) {
+    return '$percent%';
+  }
+
+  @override
+  String get sortPopularityMost => 'Популярность (от большей)';
+
+  @override
+  String get sortPopularityLeast => 'Популярность (от меньшей)';
 }

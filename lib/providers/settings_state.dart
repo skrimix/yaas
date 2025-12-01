@@ -22,6 +22,7 @@ class SettingsState extends ChangeNotifier {
     themePreference: ThemePreference.dark,
     favoritePackages: const [],
     mdnsAutoConnect: true,
+    popularityRange: PopularityRange.day7,
   );
 
   bool _isLoading = false;
@@ -78,8 +79,6 @@ class SettingsState extends ChangeNotifier {
       _rcloneRemotes = List.unmodifiable(msg.remotes.toSet().toList());
       _remotesError = msg.error;
       _isRemotesLoading = false;
-      // Keep current remote as custom if not in list
-      // (UI will treat as custom when not found)
       notifyListeners();
     });
 
@@ -139,6 +138,7 @@ class SettingsState extends ChangeNotifier {
           ? null
           : _downloaderInitBytes / _downloaderInitTotal!;
   bool get isDownloaderDonationConfigured => _downloaderIsDonationConfigured;
+  PopularityRange get popularityRange => _settings.popularityRange;
   Locale? get locale {
     final code = _settings.localeCode;
     if (code == 'system' || code.isEmpty) return null;
@@ -166,6 +166,13 @@ class SettingsState extends ChangeNotifier {
 
   Future<void> setThemePreference(ThemePreference pref) async {
     _settings = _settings.copyWith(themePreference: pref);
+    notifyListeners();
+    SaveSettingsRequest(settings: _settings).sendSignalToRust();
+  }
+
+  Future<void> setPopularityRange(PopularityRange range) async {
+    if (_settings.popularityRange == range) return;
+    _settings = _settings.copyWith(popularityRange: range);
     notifyListeners();
     SaveSettingsRequest(settings: _settings).sendSignalToRust();
   }

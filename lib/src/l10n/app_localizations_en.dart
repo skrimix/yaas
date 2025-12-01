@@ -1468,4 +1468,32 @@ class AppLocalizationsEn extends AppLocalizations {
 
   @override
   String get donateDownloaderNotAvailable => 'Downloader not available';
+
+  @override
+  String get popularity => 'Popularity';
+
+  @override
+  String get popularityDay1 => '24h';
+
+  @override
+  String get popularityDay7 => '7 days';
+
+  @override
+  String get popularityDay30 => '30 days';
+
+  @override
+  String popularityTooltip(int percent, String period) {
+    return 'Popularity: $percent% (last $period)';
+  }
+
+  @override
+  String popularityPercent(int percent) {
+    return '$percent%';
+  }
+
+  @override
+  String get sortPopularityMost => 'Popularity (Most popular)';
+
+  @override
+  String get sortPopularityLeast => 'Popularity (Least popular)';
 }

@@ -219,7 +219,7 @@ class _CloudAppDetailsDialogState extends State<CloudAppDetailsDialog> {
                             child: Column(
                               crossAxisAlignment: CrossAxisAlignment.start,
                               children: [
-                                // Size and rating row
+                                // Size, rating, and popularity row
                                 Wrap(
                                   spacing: 12,
                                   runSpacing: 4,
@@ -257,6 +257,7 @@ class _CloudAppDetailsDialogState extends State<CloudAppDetailsDialog> {
                                           ],
                                         ],
                                       ),
+                                    _buildPopularityChip(context),
                                   ],
                                 ),
                                 const SizedBox(height: 8),
@@ -348,6 +349,69 @@ class _CloudAppDetailsDialogState extends State<CloudAppDetailsDialog> {
 
   String _formatRating(double rating) {
     return rating.toStringAsFixed(2);
+  }
+
+  Widget _buildPopularityChip(BuildContext context) {
+    final pop = widget.cachedApp.app.popularity;
+    if (pop == null) return const SizedBox.shrink();
+
+    final l10n = AppLocalizations.of(context);
+    final theme = Theme.of(context);
+    final scheme = theme.colorScheme;
+
+    // Build list of all popularity values (show 0 if not available)
+    final items = <({int value, String period})>[
+      (value: pop.day1 ?? 0, period: l10n.popularityDay1),
+      (value: pop.day7 ?? 0, period: l10n.popularityDay7),
+      (value: pop.day30 ?? 0, period: l10n.popularityDay30),
+    ];
+
+    // Subtle icon color based on highest value
+    final maxValue = items.map((e) => e.value).reduce((a, b) => a > b ? a : b);
+    final Color iconColor;
+    if (maxValue >= 70) {
+      iconColor = Colors.orange.shade700;
+    } else if (maxValue >= 40) {
+      iconColor = Colors.orange.shade400;
+    } else {
+      iconColor = scheme.onSurfaceVariant.withValues(alpha: 0.6);
+    }
+
+    return Row(
+      mainAxisSize: MainAxisSize.min,
+      children: [
+        Icon(
+          Icons.local_fire_department_rounded,
+          size: 14,
+          color: iconColor,
+        ),
+        const SizedBox(width: 4),
+        ...items.map((item) {
+          final isLast = item == items.last;
+          return Row(
+            mainAxisSize: MainAxisSize.min,
+            children: [
+              Text(
+                '${item.period}: ${item.value}%',
+                style: theme.textTheme.bodySmall?.copyWith(
+                  color: scheme.onSurfaceVariant.withValues(alpha: 0.8),
+                ),
+              ),
+              if (!isLast)
+                Padding(
+                  padding: const EdgeInsets.symmetric(horizontal: 6),
+                  child: Text(
+                    '•',
+                    style: TextStyle(
+                      color: scheme.onSurfaceVariant.withValues(alpha: 0.4),
+                    ),
+                  ),
+                ),
+            ],
+          );
+        }),
+      ],
+    );
   }
 
   String _buildCopyBuffer(AppLocalizations l10n, String effectiveTitle) {

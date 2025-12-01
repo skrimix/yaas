@@ -687,5 +687,17 @@
     "donateNoAppsWithFilters": "Нет приложений, соответствующих фильтрам",
     "donateLoadingCloudApps": "Загрузка списка приложений...",
     "copyDisplayName": "Скопировать отображаемое имя",
-    "donateDownloaderNotAvailable": "Загрузчик не доступен"
+    "donateDownloaderNotAvailable": "Загрузчик не доступен",
+    "popularity": "Популярность",
+    "popularityDay1": "24ч",
+    "popularityDay7": "7 дней",
+    "popularityDay30": "30 дней",
+    "popularityPercent": "{percent}%",
+    "@popularityPercent": {
+        "placeholders": {
+            "percent": {"type": "int"}
+        }
+    },
+    "sortPopularityMost": "Популярность (от большей)",
+    "sortPopularityLeast": "Популярность (от меньшей)"
 }

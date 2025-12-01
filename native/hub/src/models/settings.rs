@@ -34,6 +34,15 @@ pub(crate) enum ConnectionKind {
 }
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize, SignalPiece, Default)]
+#[serde(rename_all = "snake_case")]
+pub(crate) enum PopularityRange {
+    Day1,
+    #[default]
+    Day7,
+    Day30,
+}
+
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize, SignalPiece, Default)]
 pub(crate) enum DownloadCleanupPolicy {
     #[default]
     DeleteAfterInstall,
@@ -69,6 +78,8 @@ pub(crate) struct Settings {
     favorite_packages: Vec<String>,
     /// Discover and auto-connect ADB over Wi‑Fi devices via mDNS
     pub mdns_auto_connect: bool,
+    /// Popularity display range
+    popularity_range: PopularityRange,
 }
 
 impl Default for Settings {
@@ -100,6 +111,7 @@ impl Default for Settings {
             theme_preference: ThemePreference::Dark,
             favorite_packages: Vec::new(),
             mdns_auto_connect: true,
+            popularity_range: PopularityRange::default(),
         }
     }
 }

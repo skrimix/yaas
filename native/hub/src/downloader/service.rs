@@ -32,6 +32,7 @@ use crate::{
             },
             downloads_local::DownloadsChanged,
             storage::remotes::{GetRcloneRemotesRequest, RcloneRemotesChanged},
+            system::Toast,
         },
     },
     settings::SettingsHandler,
@@ -584,11 +585,18 @@ impl Downloader {
             Ok(Ok(mut result)) => {
                 debug!(len = result.apps.len(), "Loaded app list successfully");
 
+                // TODO: load popularity data in background?
                 if !result.apps.is_empty()
                     && let Err(e) =
                         cloud_api::load_popularity_for_apps(&client, &mut result.apps).await
                 {
                     warn!(error = e.as_ref() as &dyn Error, "Failed to load popularity data");
+                    Toast::send(
+                        "Error".to_string(),
+                        format!("Failed to load popularity data: {e:#}"),
+                        true,
+                        Some(Duration::from_secs(5)),
+                    );
                 }
 
                 {

@@ -1,6 +1,6 @@
-use std::collections::HashMap;
+use std::{collections::HashMap, time::Duration};
 
-use anyhow::{Result, ensure};
+use anyhow::{Context, Result, ensure};
 use reqwest::header::{ACCEPT, HeaderMap, HeaderValue};
 use serde::Deserialize;
 use serde_json::json;
@@ -96,8 +96,13 @@ pub(super) async fn load_popularity_for_apps(
     let url = "https://qloader.5698452.xyz/api/v1/popularity";
     debug!(%url, "Fetching app popularity from QLoader API");
 
-    let resp = client.get(url).send().await?;
-    resp.error_for_status_ref()?;
+    let resp = client
+        .get(url)
+        .timeout(Duration::from_secs(5))
+        .send()
+        .await
+        .context("Failed to fetch popularity data")?;
+    resp.error_for_status_ref().context("Failed to fetch popularity data")?;
 
     let popularity: Vec<PopularityEntry> = resp.json().await?;
     if popularity.is_empty() {

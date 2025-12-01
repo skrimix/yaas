@@ -185,6 +185,7 @@ class CloudAppListItem extends StatelessWidget {
             trailing: Row(
               mainAxisSize: MainAxisSize.min,
               children: [
+                // This stinks, but idk how to align everything properly without reworking the whole layout
                 Stack(
                   alignment: Alignment.centerRight,
                   children: [
@@ -407,10 +408,8 @@ class _PopularityIndicator extends StatelessWidget {
     final settingsState = context.watch<SettingsState>();
     final selectedRange = settingsState.popularityRange;
 
-    // Get value based on selected range, with fallback
     final (value, periodLabel) = _getValueForRange(pop, selectedRange, l10n);
 
-    // Subtle colors based on popularity value
     final Color iconColor;
     if (value >= 70) {
       iconColor = Colors.orange.shade700;

@@ -2829,12 +2829,6 @@ abstract class AppLocalizations {
   /// **'30 days'**
   String get popularityDay30;
 
-  /// No description provided for @popularityTooltip.
-  ///
-  /// In en, this message translates to:
-  /// **'Popularity: {percent}% (last {period})'**
-  String popularityTooltip(int percent, String period);
-
   /// No description provided for @popularityPercent.
   ///
   /// In en, this message translates to:

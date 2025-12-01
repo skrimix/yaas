@@ -1498,11 +1498,6 @@ class AppLocalizationsRu extends AppLocalizations {
   String get popularityDay30 => '30 дней';
 
   @override
-  String popularityTooltip(int percent, String period) {
-    return 'Популярность: $percent% (за $period)';
-  }
-
-  @override
   String popularityPercent(int percent) {
     return '$percent%';
   }

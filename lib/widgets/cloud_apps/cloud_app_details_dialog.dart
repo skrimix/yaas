@@ -359,14 +359,12 @@ class _CloudAppDetailsDialogState extends State<CloudAppDetailsDialog> {
     final theme = Theme.of(context);
     final scheme = theme.colorScheme;
 
-    // Build list of all popularity values (show 0 if not available)
     final items = <({int value, String period})>[
       (value: pop.day1 ?? 0, period: l10n.popularityDay1),
       (value: pop.day7 ?? 0, period: l10n.popularityDay7),
       (value: pop.day30 ?? 0, period: l10n.popularityDay30),
     ];
 
-    // Subtle icon color based on highest value
     final maxValue = items.map((e) => e.value).reduce((a, b) => a > b ? a : b);
     final Color iconColor;
     if (maxValue >= 70) {

@@ -94,7 +94,7 @@ pub(super) async fn load_popularity_for_apps(
     }
 
     let url = "https://qloader.5698452.xyz/api/v1/popularity";
-    debug!(%url, "Fetching app popularity from QLoader API");
+    debug!(%url, "Fetching app popularity");
 
     let resp = client
         .get(url)

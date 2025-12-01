@@ -1482,11 +1482,6 @@ class AppLocalizationsEn extends AppLocalizations {
   String get popularityDay30 => '30 days';
 
   @override
-  String popularityTooltip(int percent, String period) {
-    return 'Popularity: $percent% (last $period)';
-  }
-
-  @override
   String popularityPercent(int percent) {
     return '$percent%';
   }

@@ -65,7 +65,26 @@ impl DownloaderConfig {
     }
 }
 
-// TODO: add test-only constructor for DownloaderConfig
+#[cfg(test)]
+impl Default for DownloaderConfig {
+    fn default() -> Self {
+        Self {
+            id: "test".to_string(),
+            rclone_path: RclonePath::Single("/bin/echo".to_string()),
+            rclone_config_path: None,
+            remote_name_filter_regex: None,
+            disable_randomize_remote: false,
+            donation_remote_name: None,
+            donation_remote_path: None,
+            donation_blacklist_path: None,
+            layout: RepoLayoutKind::Ffa,
+            root_dir: default_root_dir(),
+            list_path: default_list_path(),
+            vrp_public_url: String::new(),
+            config_update_url: None,
+        }
+    }
+}
 
 #[derive(Debug, Clone, Copy, Deserialize, PartialEq, Eq)]
 #[serde(rename_all = "kebab-case")]

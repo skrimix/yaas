@@ -292,23 +292,14 @@ mod tests {
     };
 
     use super::*;
-    use crate::downloader::config::{RclonePath, RepoLayoutKind};
+    use crate::downloader::config::RclonePath;
 
     fn cfg_local(bin: &str, conf: &str) -> DownloaderConfig {
         DownloaderConfig {
-            id: "test".to_string(),
             rclone_path: RclonePath::Single(bin.to_string()),
             rclone_config_path: Some(conf.to_string()),
-            donation_remote_name: None,
-            donation_remote_path: None,
-            donation_blacklist_path: None,
-            remote_name_filter_regex: None,
             disable_randomize_remote: true,
-            layout: RepoLayoutKind::Ffa,
-            root_dir: "Quest Games".to_string(),
-            list_path: "FFA.txt".to_string(),
-            vrp_public_url: "".to_string(),
-            config_update_url: None,
+            ..Default::default()
         }
     }
 
@@ -326,19 +317,10 @@ mod tests {
     async fn prepare_artifacts_errors_when_mixed_url_and_local() {
         let dir = tempdir().unwrap();
         let cfg = DownloaderConfig {
-            id: "test".to_string(),
             rclone_path: RclonePath::Single("http://127.0.0.1/rclone".to_string()),
             rclone_config_path: Some("/tmp/rclone.conf".to_string()),
-            donation_remote_name: None,
-            donation_remote_path: None,
-            donation_blacklist_path: None,
-            remote_name_filter_regex: None,
             disable_randomize_remote: true,
-            layout: RepoLayoutKind::Ffa,
-            root_dir: "Quest Games".to_string(),
-            list_path: "FFA.txt".to_string(),
-            vrp_public_url: "".to_string(),
-            config_update_url: None,
+            ..Default::default()
         };
         let err =
             prepare_artifacts(dir.path(), &cfg).await.expect_err("Prepare artifacts should fail");
@@ -397,19 +379,10 @@ mod tests {
             .await;
 
         let cfg = DownloaderConfig {
-            id: "test".to_string(),
             rclone_path: RclonePath::Single(format!("{}{}", server.uri(), bin_path)),
             rclone_config_path: Some(format!("{}{}", server.uri(), conf_path)),
-            donation_remote_name: None,
-            donation_remote_path: None,
-            donation_blacklist_path: None,
-            remote_name_filter_regex: None,
             disable_randomize_remote: true,
-            layout: RepoLayoutKind::Ffa,
-            root_dir: "Quest Games".to_string(),
-            list_path: "FFA.txt".to_string(),
-            vrp_public_url: "".to_string(),
-            config_update_url: None,
+            ..Default::default()
         };
 
         // First run downloads both files

@@ -66,10 +66,10 @@ fi
 install -Dm755 "$found" squashfs-root/usr/bin/7zzs
 
 sed -i '/^exec/i export PATH="$PWD/usr/bin:$PATH"' squashfs-root/AppRun
+sed -i '/^exec /{/\"\$@\"/!s/$/ "$@"/}' squashfs-root/AppRun
 cat squashfs-root/AppRun
 
 appimagetool --no-appstream squashfs-root "$app"
 rm -rf squashfs-root
 
 echo "==> AppImage ready at $OUTPUT_APPIMAGE"
-

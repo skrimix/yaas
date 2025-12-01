@@ -106,7 +106,8 @@ async fn init(portable_mode: bool) {
     }
     // Log and send version/build info
     info!(
-        "Starting YAAS backend | version={} | commit={}{} | profile={} | rustc={} | built={}",
+        "Starting YAAS backend {}| version={} | commit={}{} | profile={} | rustc={} | built={}",
+        if portable_mode { "(portable mode)" } else { "" },
         built_info::PKG_VERSION,
         built_info::GIT_COMMIT_HASH_SHORT.unwrap_or("unknown"),
         if built_info::GIT_DIRTY.unwrap_or(false) { " (dirty)" } else { "" },

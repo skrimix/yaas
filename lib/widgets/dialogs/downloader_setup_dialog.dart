@@ -42,6 +42,7 @@ class _DownloaderSetupDialogState extends State<DownloaderSetupDialog> {
   _VrgRusTestState _vrgRusTestState = _VrgRusTestState.idle;
   String? _vrgRusErrorMessage;
   int? _vrgRusErrorMessageCode;
+  String? _ipCountryCode;
 
   @override
   void initState() {
@@ -129,11 +130,34 @@ class _DownloaderSetupDialogState extends State<DownloaderSetupDialog> {
   bool get _vrgRusTestCompleted => _vrgRusTestState == _VrgRusTestState.success;
   // _vrgRusTestState == _VrgRusTestState.noAccess;
 
+  Future<String?> _fetchCountryCode() async {
+    try {
+      final client = HttpClient()
+        ..connectionTimeout = const Duration(seconds: 5);
+      try {
+        final request = await client.getUrl(
+          Uri.parse('https://ifconfig.co/country-iso'),
+        );
+        final response = await request.close();
+        if (response.statusCode == 200) {
+          final body = await response.transform(utf8.decoder).join();
+          return body.trim();
+        }
+      } finally {
+        client.close();
+      }
+    } catch (e) {
+      debugPrint('Error fetching country code: $e');
+    }
+    return null;
+  }
+
   Future<void> _testVrgRusAccess() async {
     if (_vrgRusTestState == _VrgRusTestState.inProgress) return;
     setState(() {
       _vrgRusTestState = _VrgRusTestState.inProgress;
       _vrgRusErrorMessage = null;
+      _ipCountryCode = null;
     });
     try {
       final client = HttpClient()
@@ -156,16 +180,22 @@ class _DownloaderSetupDialogState extends State<DownloaderSetupDialog> {
             _vrgRusErrorMessage = null;
           });
         } else if (response.statusCode == 403) {
+          final country = await _fetchCountryCode();
+          if (!mounted) return;
           setState(() {
             _vrgRusTestState = _VrgRusTestState.noAccess;
             _vrgRusErrorMessage = body.trim().isNotEmpty ? body.trim() : null;
             _vrgRusErrorMessageCode = response.statusCode;
+            _ipCountryCode = country;
           });
         } else {
+          final country = await _fetchCountryCode();
+          if (!mounted) return;
           setState(() {
             _vrgRusTestState = _VrgRusTestState.noAccess;
             _vrgRusErrorMessage = body.trim().isNotEmpty ? body.trim() : null;
             _vrgRusErrorMessageCode = response.statusCode;
+            _ipCountryCode = country;
           });
         }
       } finally {
@@ -174,10 +204,13 @@ class _DownloaderSetupDialogState extends State<DownloaderSetupDialog> {
     } catch (e) {
       debugPrint('Error testing VRG Rus access: $e');
       if (!mounted) return;
+      final country = await _fetchCountryCode();
+      if (!mounted) return;
       setState(() {
         _vrgRusTestState = _VrgRusTestState.noAccess;
         _vrgRusErrorMessage = e.toString();
         _vrgRusErrorMessageCode = 0;
+        _ipCountryCode = country;
       });
     }
   }
@@ -315,6 +348,20 @@ class _DownloaderSetupDialogState extends State<DownloaderSetupDialog> {
                                   color: Theme.of(context).colorScheme.error,
                                 ),
                           ),
+                          if (_ipCountryCode != null) ...[
+                            const SizedBox(height: 2),
+                            Text(
+                              l10n.downloaderConfigVrgRusTestLocation(
+                                _ipCountryCode!,
+                              ),
+                              style: Theme.of(context)
+                                  .textTheme
+                                  .bodySmall
+                                  ?.copyWith(
+                                    color: Theme.of(context).colorScheme.error,
+                                  ),
+                            ),
+                          ],
                         ],
                       ],
                     ),

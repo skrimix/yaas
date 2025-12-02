@@ -428,6 +428,12 @@ abstract class AppLocalizations {
   /// **'Error ({code}): {error}'**
   String downloaderConfigVrgRusTestError(int code, String error);
 
+  /// No description provided for @downloaderConfigVrgRusTestLocation.
+  ///
+  /// In en, this message translates to:
+  /// **'IP region: {country}'**
+  String downloaderConfigVrgRusTestLocation(String country);
+
   /// No description provided for @downloaderConfigVrgRusTestRequiredTooltip.
   ///
   /// In en, this message translates to:

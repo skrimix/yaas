@@ -181,6 +181,11 @@ class AppLocalizationsEn extends AppLocalizations {
   }
 
   @override
+  String downloaderConfigVrgRusTestLocation(String country) {
+    return 'IP region: $country';
+  }
+
+  @override
   String get downloaderConfigVrgRusTestRequiredTooltip =>
       'Pass the access test first, or select another server.';
 

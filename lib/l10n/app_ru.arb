@@ -73,6 +73,14 @@
       }
     }
   },
+  "downloaderConfigVrgRusTestLocation": "Регион IP: {country}",
+  "@downloaderConfigVrgRusTestLocation": {
+    "placeholders": {
+      "country": {
+        "type": "String"
+      }
+    }
+  },
   "downloaderConfigVrgRusTestRequiredTooltip": "Сначала пройдите проверку доступа, либо выберите другой сервер.",
   "downloaderConfigNotConfiguredTitle": "Облачный загрузчик не настроен",
   "downloaderConfigNotConfiguredDesc": "Установите файл downloader.json, чтобы включить загрузку приложений из облака.",

@@ -180,6 +180,13 @@ class SettingsState extends ChangeNotifier {
     SaveSettingsRequest(settings: _settings).sendSignalToRust();
   }
 
+  Future<void> setRcloneRemoteName(String name) async {
+    if (_settings.rcloneRemoteName == name) return;
+    _settings = _settings.copyWith(rcloneRemoteName: name);
+    notifyListeners();
+    SaveSettingsRequest(settings: _settings).sendSignalToRust();
+  }
+
   Future<void> refreshRcloneRemotes() async {
     _isRemotesLoading = true;
     _remotesError = null;

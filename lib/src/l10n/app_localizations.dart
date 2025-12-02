@@ -470,6 +470,18 @@ abstract class AppLocalizations {
   /// **'Loading apps...'**
   String get loadingApps;
 
+  /// No description provided for @loadingAppsSlowHint.
+  ///
+  /// In en, this message translates to:
+  /// **'Loading is taking too long? You can try a different remote.'**
+  String get loadingAppsSlowHint;
+
+  /// No description provided for @loadingAppsSlowHintButton.
+  ///
+  /// In en, this message translates to:
+  /// **'Switch remote'**
+  String get loadingAppsSlowHintButton;
+
   /// No description provided for @settingsSectionAppearance.
   ///
   /// In en, this message translates to:

@@ -80,6 +80,8 @@
   "downloaderConfigInstalling": "Installing...",
   "downloaderConfigInstallFailed": "Failed to install downloader config",
   "loadingApps": "Loading apps...",
+    "loadingAppsSlowHint": "Loading is taking too long? You can try a different remote.",
+    "loadingAppsSlowHintButton": "Switch remote",
     "settingsSectionAppearance": "Appearance",
     "settingsUseSystemColor": "Use system color",
     "settingsSeedColor": "Accent color",

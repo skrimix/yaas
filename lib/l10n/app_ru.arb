@@ -80,6 +80,8 @@
   "downloaderConfigInstalling": "Установка...",
   "downloaderConfigInstallFailed": "Не удалось установить конфигурацию загрузчика",
   "loadingApps": "Загрузка списка приложений...",
+    "loadingAppsSlowHint": "Загрузка занимает слишком долго? Можете попробовать другое хранилище.",
+    "loadingAppsSlowHintButton": "Выбрать хранилище",
     "settingsSectionAppearance": "Оформление",
     "settingsUseSystemColor": "Использовать системный цвет",
     "settingsSeedColor": "Акцентный цвет",

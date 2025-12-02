@@ -851,13 +851,64 @@ class _DownloadAppsScreenState extends State<DownloadAppsScreen> {
         if (cloudAppsState.isLoading &&
             !showDownloaderInit &&
             !showDownloaderError) {
+          final remotes = settingsState.rcloneRemotes;
+          final currentRemote = settingsState.settings.rcloneRemoteName;
+          final showSlowHint =
+              cloudAppsState.isLoadingSlow && remotes.length > 1;
           return Center(
             child: Column(
               mainAxisSize: MainAxisSize.min,
               children: [
                 const CircularProgressIndicator(),
                 const SizedBox(height: 12),
-                Text(AppLocalizations.of(context).loadingApps),
+                Text(l10n.loadingApps),
+                if (showSlowHint) ...[
+                  const SizedBox(height: 12),
+                  Text(
+                    l10n.loadingAppsSlowHint,
+                    style: Theme.of(context).textTheme.bodySmall?.copyWith(
+                          color: Theme.of(context).colorScheme.outline,
+                        ),
+                    textAlign: TextAlign.center,
+                  ),
+                  const SizedBox(height: 8),
+                  PopupMenuButton<String>(
+                    initialValue:
+                        remotes.contains(currentRemote) ? currentRemote : null,
+                    // No animation to avoid "deactivated widget" errors when showSlowHint resets
+                    popUpAnimationStyle: AnimationStyle.noAnimation,
+                    onSelected: (value) {
+                      if (value != currentRemote) {
+                        settingsState.setRcloneRemoteName(value);
+                      }
+                    },
+                    itemBuilder: (context) => remotes
+                        .map((r) => PopupMenuItem(
+                              value: r,
+                              child: Row(
+                                children: [
+                                  if (r == currentRemote)
+                                    Icon(Icons.check,
+                                        size: 18,
+                                        color: Theme.of(context)
+                                            .colorScheme
+                                            .primary)
+                                  else
+                                    const SizedBox(width: 18),
+                                  const SizedBox(width: 8),
+                                  Text(r),
+                                ],
+                              ),
+                            ))
+                        .toList(),
+                    child: Text(
+                      l10n.loadingAppsSlowHintButton,
+                      style: Theme.of(context).textTheme.bodySmall?.copyWith(
+                            color: Theme.of(context).colorScheme.primary,
+                          ),
+                    ),
+                  ),
+                ],
               ],
             ),
           );

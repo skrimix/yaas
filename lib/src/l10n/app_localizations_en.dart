@@ -206,6 +206,13 @@ class AppLocalizationsEn extends AppLocalizations {
   String get loadingApps => 'Loading apps...';
 
   @override
+  String get loadingAppsSlowHint =>
+      'Loading is taking too long? You can try a different remote.';
+
+  @override
+  String get loadingAppsSlowHintButton => 'Switch remote';
+
+  @override
   String get settingsSectionAppearance => 'Appearance';
 
   @override

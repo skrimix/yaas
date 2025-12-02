@@ -209,6 +209,13 @@ class AppLocalizationsRu extends AppLocalizations {
   String get loadingApps => 'Загрузка списка приложений...';
 
   @override
+  String get loadingAppsSlowHint =>
+      'Загрузка занимает слишком долго? Можете попробовать другое хранилище.';
+
+  @override
+  String get loadingAppsSlowHintButton => 'Выбрать хранилище';
+
+  @override
   String get settingsSectionAppearance => 'Оформление';
 
   @override

@@ -1,18 +1,25 @@
+import 'dart:async';
+
 import 'package:flutter/material.dart';
 import '../src/bindings/bindings.dart';
 
 class CloudAppsState extends ChangeNotifier {
+  static const _slowLoadingThreshold = Duration(seconds: 5);
+
   List<CloudApp> _apps = [];
   String? _error;
   bool _isLoading = false;
+  bool _isLoadingSlow = false;
   String _mediaBaseUrl = '';
   String? _mediaCacheDir;
   final Map<String, int> _maxVersionCodeByPackage = {};
   final Set<String> _donationBlacklist = {};
+  Timer? _slowLoadingTimer;
 
   List<CloudApp> get apps => _apps;
   String? get error => _error;
   bool get isLoading => _isLoading;
+  bool get isLoadingSlow => _isLoadingSlow;
   String get mediaBaseUrl => _mediaBaseUrl;
   String? get mediaCacheDir => _mediaCacheDir;
   Set<String> get donationBlacklist => _donationBlacklist;
@@ -33,6 +40,9 @@ class CloudAppsState extends ChangeNotifier {
     CloudAppsChangedEvent.rustSignalStream.listen((event) {
       _isLoading = event.message.isLoading;
       _error = event.message.error;
+
+      _restartSlowLoadingTimer();
+
       final blacklist = event.message.donationBlacklist;
       if (blacklist != null) {
         _donationBlacklist
@@ -57,6 +67,9 @@ class CloudAppsState extends ChangeNotifier {
         _error = null;
         _donationBlacklist.clear();
         _isLoading = false;
+        _isLoadingSlow = false;
+        _slowLoadingTimer?.cancel();
+        _slowLoadingTimer = null;
         notifyListeners();
       } else {
         // Kick off a load when downloader becomes available and we have nothing yet
@@ -88,6 +101,21 @@ class CloudAppsState extends ChangeNotifier {
   void _setApps(List<CloudApp> newApps) {
     _apps = newApps;
     _rebuildIndex();
+  }
+
+  void _restartSlowLoadingTimer() {
+    _slowLoadingTimer?.cancel();
+    _slowLoadingTimer = null;
+    _isLoadingSlow = false;
+
+    if (_isLoading) {
+      _slowLoadingTimer = Timer(_slowLoadingThreshold, () {
+        if (_isLoading) {
+          _isLoadingSlow = true;
+          notifyListeners();
+        }
+      });
+    }
   }
 
   void refresh() {

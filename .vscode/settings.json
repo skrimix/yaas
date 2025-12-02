@@ -2,5 +2,8 @@
     "git.pullTags": false,
     "dart.analysisExcludedFolders": [
         "build"
+    ],
+    "arb-editor.suppressedWarnings": [
+        "missing_metadata_for_key"
     ]
 }

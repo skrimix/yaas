@@ -56,9 +56,9 @@ pub(crate) struct AdbDevice {
     pub name: Option<String>,
     /// Product identifier from device
     pub product: String,
-    /// Unique device serial number
+    /// Unique device serial number (reported by ADB, e.g. `1WMHH000M12345` for USB devices, `192.168.1.100:5555` for wireless devices)
     pub serial: String,
-    /// True device serial number
+    /// True device serial number (reported by the device, e.g. `1WMHH000M12345`)
     pub true_serial: String,
     /// ADB transport ID
     pub transport_id: String,

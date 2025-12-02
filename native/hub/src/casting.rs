@@ -152,17 +152,6 @@ impl CastingManager {
 
         use crate::models::signals::system::Toast;
 
-        if wireless {
-            // TODO: Support wireless devices for casting
-            Toast::send(
-                "Casting not supported for wireless".to_string(),
-                "Please connect the headset via USB to start casting.".to_string(),
-                true,
-                None,
-            );
-            bail!("Casting not supported for wireless");
-        }
-
         // Resolve Casting.exe path (installed under app data directory)
         let exe_path: PathBuf =
             std::env::current_dir().unwrap_or_default().join("Casting").join("Casting.exe");
@@ -193,14 +182,26 @@ impl CastingManager {
         cmd.arg("--launch-surface").arg("MQDH");
         let target_json = format!("{{\"id\":\"{}\"}}", device_serial);
         cmd.arg("--target-device").arg(target_json);
-        cmd.arg("--features").args([
-            "input_forwarding",
-            "input_forwarding_gaze_click",
-            "input_forwarding_text_input_forwarding",
-            "image_stabilization",
-            "update_device_fov_via_openxr_api",
-            "panel_streaming",
-        ]);
+        // Features differ based on connection type
+        if wireless {
+            cmd.arg("--features").args([
+                "input_forwarding",
+                "input_forwarding_gaze_click",
+                "input_forwarding_text_input_forwarding",
+                "image_stabilization",
+                "update_device_fov_via_openxr_api",
+                "wireless_casting",
+            ]);
+        } else {
+            cmd.arg("--features").args([
+                "input_forwarding",
+                "input_forwarding_gaze_click",
+                "input_forwarding_text_input_forwarding",
+                "image_stabilization",
+                "update_device_fov_via_openxr_api",
+                "panel_streaming",
+            ]);
+        }
 
         match cmd.spawn() {
             Ok(_child) => Ok(()),

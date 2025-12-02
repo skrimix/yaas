@@ -149,23 +149,6 @@ class DeviceActionsCard extends StatelessWidget {
     final device = context.read<DeviceState>();
     if (!device.isConnected) return;
 
-    // Quick reject for wireless devices
-    if (device.isWireless) {
-      await showDialog(
-        context: context,
-        builder: (ctx) => AlertDialog(
-          title: Text(l10n.commonError),
-          content: Text(l10n.castingWirelessUnsupported),
-          actions: [
-            TextButton(
-                onPressed: () => Navigator.pop(ctx),
-                child: Text(l10n.commonClose)),
-          ],
-        ),
-      );
-      return;
-    }
-
     // Check if installed
     final statusFuture = CastingStatusChanged.rustSignalStream.first;
     const GetCastingStatusRequest().sendSignalToRust();

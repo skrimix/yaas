@@ -475,7 +475,7 @@ impl AdbHandler {
 
                     let device = self.current_device().await?;
                     let wireless = device.is_wireless;
-                    let device_serial = &device.serial;
+                    let device_serial = &device.true_serial;
 
                     match CastingManager::start_casting(&adb_path_buf, device_serial, wireless)
                         .await

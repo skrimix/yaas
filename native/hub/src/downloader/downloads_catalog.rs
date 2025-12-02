@@ -138,6 +138,9 @@ impl DownloadsCatalog {
             .with_context(|| format!("Failed to read {}", root.display()))?;
         while let Some(entry) = rd.next_entry().await? {
             let p = entry.path();
+            if p.file_name().and_then(|n| n.to_str()).unwrap_or("").to_lowercase() == "_upload" {
+                continue;
+            }
             let meta = match entry.metadata().await {
                 Ok(m) => m,
                 Err(_) => continue,

@@ -1,3 +1,5 @@
+import 'dart:async';
+
 import 'package:flutter/material.dart';
 import 'package:file_picker/file_picker.dart';
 import 'package:flutter/services.dart';
@@ -76,7 +78,7 @@ class _LocalSideloadScreenState extends State<LocalSideloadScreen> {
     }
   }
 
-  bool _install() {
+  Future<bool> _install() async {
     final path = _pathController.text;
     if (path.isEmpty) return false;
 
@@ -92,6 +94,11 @@ class _LocalSideloadScreenState extends State<LocalSideloadScreen> {
       return false;
     }
 
+    final size = SideloadUtils.calculateSize(path, _isDirectory);
+    if (!mounted) return false;
+    final proceed = await SideloadUtils.confirmIfLowSpace(context, size);
+    if (!proceed) return false;
+
     SideloadUtils.installApp(path, _isDirectory);
 
     _pathController.clear();
@@ -103,7 +110,7 @@ class _LocalSideloadScreenState extends State<LocalSideloadScreen> {
         (event.logicalKey == LogicalKeyboardKey.enter ||
             event.logicalKey == LogicalKeyboardKey.numpadEnter) &&
         _pathController.text.isNotEmpty) {
-      _install();
+      unawaited(_install());
       return true;
     }
     return false;
@@ -229,7 +236,7 @@ class _LocalSideloadScreenState extends State<LocalSideloadScreen> {
 class _AnimatedSideloadButton extends StatefulWidget {
   final bool isEnabled;
   final bool isDirectory;
-  final bool Function() onPressed;
+  final Future<bool> Function() onPressed;
 
   const _AnimatedSideloadButton({
     required this.isEnabled,
@@ -247,6 +254,7 @@ class _AnimatedSideloadButtonState extends State<_AnimatedSideloadButton>
   late AnimationController _controller;
 
   bool _showSuccess = false;
+  bool _isProcessing = false;
 
   @override
   void initState() {
@@ -264,10 +272,13 @@ class _AnimatedSideloadButtonState extends State<_AnimatedSideloadButton>
     super.dispose();
   }
 
-  void _onPressed() {
-    if (_showSuccess || !widget.isEnabled) return;
+  Future<void> _onPressed() async {
+    if (_showSuccess || !widget.isEnabled || _isProcessing) return;
 
-    final success = widget.onPressed();
+    setState(() => _isProcessing = true);
+    final success = await widget.onPressed();
+    if (!mounted) return;
+    setState(() => _isProcessing = false);
 
     if (success) {
       setState(() {
@@ -293,8 +304,9 @@ class _AnimatedSideloadButtonState extends State<_AnimatedSideloadButton>
   @override
   Widget build(BuildContext context) {
     final l10n = AppLocalizations.of(context);
+    final canPress = widget.isEnabled && !_showSuccess && !_isProcessing;
     return FilledButton.icon(
-      onPressed: widget.isEnabled && !_showSuccess ? _onPressed : null,
+      onPressed: canPress ? _onPressed : null,
       icon: AnimatedSwitcher(
         duration: const Duration(milliseconds: 200),
         child: _showSuccess

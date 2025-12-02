@@ -1,6 +1,5 @@
 import 'package:flutter/material.dart';
 import 'package:provider/provider.dart';
-import 'package:proper_filesize/proper_filesize.dart' as filesize;
 import '../../providers/settings_state.dart';
 import '../../src/l10n/app_localizations.dart';
 import '../../providers/device_state.dart';
@@ -63,16 +62,6 @@ class _DonateAppsScreenState extends State<DonateAppsScreen> {
     return packageName.startsWith('com.oculus.') ||
         packageName.startsWith('com.meta.') ||
         packageName.contains('.environment.');
-  }
-
-  String _formatSize(int bytes) {
-    return filesize.FileSize.fromBytes(bytes).toString(
-      unit: filesize.Unit.auto(
-        size: bytes,
-        baseType: filesize.BaseType.metric,
-      ),
-      decimals: 2,
-    );
   }
 
   List<_FilteredApp> _getFilteredApps(
@@ -189,7 +178,7 @@ class _DonateAppsScreenState extends State<DonateAppsScreen> {
         final appName = app.label.isNotEmpty ? app.label : app.packageName;
         final theme = Theme.of(context);
         final textTheme = theme.textTheme;
-        final appSize = _formatSize(app.size.app.toInt());
+        final appSize = formatSize(app.size.app.toInt(), 2);
 
         return Card(
           margin: const EdgeInsets.symmetric(horizontal: 16, vertical: 2),

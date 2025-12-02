@@ -70,6 +70,13 @@ class _DownloadsScreenState extends State<DownloadsScreen> {
     await _loadDownloads();
   }
 
+  Future<void> _installEntry(DownloadEntry entry) async {
+    final size = entry.totalSize.toInt();
+    final proceed = await SideloadUtils.confirmIfLowSpace(context, size);
+    if (!proceed) return;
+    SideloadUtils.installApp(entry.path, true);
+  }
+
   @override
   Widget build(BuildContext context) {
     final l10n = AppLocalizations.of(context);
@@ -119,8 +126,7 @@ class _DownloadsScreenState extends State<DownloadsScreen> {
                                 newestDownloadedForPackage:
                                     _latestDownloadedByPackage[
                                         _entries[index].packageName ?? ''],
-                                onInstall: () => SideloadUtils.installApp(
-                                    _entries[index].path, true),
+                                onInstall: () => _installEntry(_entries[index]),
                                 onOpenFolder: () =>
                                     _openFolder(_entries[index].path),
                                 onDelete: () =>

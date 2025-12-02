@@ -1491,4 +1491,15 @@ class AppLocalizationsEn extends AppLocalizations {
 
   @override
   String get sortPopularityLeast => 'Popularity (Least popular)';
+
+  @override
+  String get lowSpaceWarningTitle => 'Low Storage Space';
+
+  @override
+  String lowSpaceWarningMessage(String threshold, String remaining) {
+    return 'This installation will leave less than $threshold of free space on the device (<=$remaining remaining). Do you want to continue?';
+  }
+
+  @override
+  String get lowSpaceWarningContinue => 'Continue anyway';
 }

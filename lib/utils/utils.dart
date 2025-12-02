@@ -3,6 +3,7 @@ import 'package:flutter/services.dart';
 import 'package:intl/intl.dart';
 import 'package:system_date_time_format/system_date_time_format.dart';
 import 'package:toastification/toastification.dart';
+import 'package:proper_filesize/proper_filesize.dart' as filesize;
 import '../src/bindings/bindings.dart';
 import '../src/l10n/app_localizations.dart';
 
@@ -65,4 +66,14 @@ Future<bool> showDowngradeConfirmDialog(
     ),
   );
   return res ?? false;
+}
+
+String formatSize(int bytes, int decimals) {
+  return filesize.FileSize.fromBytes(bytes).toString(
+    unit: filesize.Unit.auto(
+      size: bytes,
+      baseType: filesize.BaseType.metric,
+    ),
+    decimals: decimals,
+  );
 }

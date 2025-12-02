@@ -1507,4 +1507,15 @@ class AppLocalizationsRu extends AppLocalizations {
 
   @override
   String get sortPopularityLeast => 'Популярность (от меньшей)';
+
+  @override
+  String get lowSpaceWarningTitle => 'Мало места на устройстве';
+
+  @override
+  String lowSpaceWarningMessage(String threshold, String remaining) {
+    return 'После установки на устройстве останется менее $threshold свободного места (останется <=$remaining). Продолжить?';
+  }
+
+  @override
+  String get lowSpaceWarningContinue => 'Всё равно продолжить';
 }

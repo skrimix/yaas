@@ -56,6 +56,11 @@ class _DragDropOverlayState extends State<DragDropOverlay> {
       return;
     }
 
+    // First pass: validate all items and collect info
+    final installItems = <({String path, bool isDirectory})>[];
+    final backupItems = <String>[];
+    int totalInstallSize = 0;
+
     for (final file in others) {
       final path = file.path;
       final isDirectory = FileSystemEntity.isDirectorySync(path);
@@ -79,10 +84,25 @@ class _DragDropOverlayState extends State<DragDropOverlay> {
       }
 
       if (isBackup) {
-        SideloadUtils.restoreBackup(path);
+        backupItems.add(path);
       } else {
-        SideloadUtils.installApp(path, isDirectory);
+        installItems.add((path: path, isDirectory: isDirectory));
+        totalInstallSize += SideloadUtils.calculateSize(path, isDirectory);
       }
+    }
+
+    if (installItems.isNotEmpty) {
+      if (!mounted) return;
+      final proceed =
+          await SideloadUtils.confirmIfLowSpace(context, totalInstallSize);
+      if (!proceed) return;
+    }
+
+    for (final backup in backupItems) {
+      SideloadUtils.restoreBackup(backup);
+    }
+    for (final item in installItems) {
+      SideloadUtils.installApp(item.path, item.isDirectory);
     }
   }
 

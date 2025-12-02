@@ -2,7 +2,6 @@ import 'package:flutter/material.dart';
 import '../../src/l10n/app_localizations.dart';
 import 'package:flutter/services.dart';
 import 'package:provider/provider.dart';
-import 'package:proper_filesize/proper_filesize.dart' as filesize;
 import '../../providers/device_state.dart';
 import '../../providers/cloud_apps_state.dart';
 import '../../providers/app_state.dart';
@@ -12,6 +11,7 @@ import '../common/animated_adb_button.dart';
 import '../common/no_device_connected_indicator.dart';
 import '../dialogs/animated_uninstall_dialog.dart';
 import '../dialogs/backup_options_dialog.dart';
+import '../../utils/sideload_utils.dart';
 
 const _animationDuration = Duration(milliseconds: 200);
 const _cardPadding = EdgeInsets.symmetric(horizontal: 16.0, vertical: 4.0);
@@ -170,20 +170,10 @@ class _ManageAppsScreenState extends State<ManageAppsScreen> {
     return _sortApps(filtered);
   }
 
-  String _formatSize(int bytes) {
-    return filesize.FileSize.fromBytes(bytes).toString(
-      unit: filesize.Unit.auto(
-        size: bytes,
-        baseType: filesize.BaseType.metric,
-      ),
-      decimals: 2,
-    );
-  }
-
   String _formatAppSize(AppSize size) {
     final totalBytes =
         size.app.toInt() + size.data.toInt() + size.cache.toInt();
-    return _formatSize(totalBytes);
+    return formatSize(totalBytes, 2);
   }
 
   Widget _buildCopyableText(String text, bool showTooltip) {
@@ -215,9 +205,9 @@ class _ManageAppsScreenState extends State<ManageAppsScreen> {
         '${l10n.detailsIsLaunchable} ${app.launchable ? l10n.commonYes : l10n.commonNo}\n'
         '${l10n.detailsIsSystem} ${app.system ? l10n.commonYes : l10n.commonNo}\n'
         '${l10n.detailsStorageUsage}\n'
-        '  ${l10n.detailsApp} ${_formatSize(app.size.app.toInt())}\n'
-        '  ${l10n.detailsData} ${_formatSize(app.size.data.toInt())}\n'
-        '  ${l10n.detailsCache} ${_formatSize(app.size.cache.toInt())}\n'
+        '  ${l10n.detailsApp} ${formatSize(app.size.app.toInt(), 2)}\n'
+        '  ${l10n.detailsData} ${formatSize(app.size.data.toInt(), 2)}\n'
+        '  ${l10n.detailsCache} ${formatSize(app.size.cache.toInt(), 2)}\n'
         '  ${l10n.detailsTotal} ${_formatAppSize(app.size)}';
   }
 
@@ -264,12 +254,12 @@ class _ManageAppsScreenState extends State<ManageAppsScreen> {
             ...() {
               final l10n = AppLocalizations.of(context);
               return [
-                _buildDetailsRow(
-                    l10n.detailsApp, _formatSize(app.size.app.toInt()), false),
+                _buildDetailsRow(l10n.detailsApp,
+                    formatSize(app.size.app.toInt(), 2), false),
                 _buildDetailsRow(l10n.detailsData,
-                    _formatSize(app.size.data.toInt()), false),
+                    formatSize(app.size.data.toInt(), 2), false),
                 _buildDetailsRow(l10n.detailsCache,
-                    _formatSize(app.size.cache.toInt()), false),
+                    formatSize(app.size.cache.toInt(), 2), false),
               ];
             }(),
             const Divider(height: 4),
@@ -403,8 +393,10 @@ class _ManageAppsScreenState extends State<ManageAppsScreen> {
                                     }
                                     if (!context.mounted) return;
                                     Navigator.of(context).pop();
-                                    _installCloudApp(cloudApp.fullName,
-                                        cloudApp.truePackageName);
+                                    _installCloudApp(
+                                        cloudApp.fullName,
+                                        cloudApp.truePackageName,
+                                        cloudApp.size.toInt());
                                   }
                                 : null,
                             child: Text(isNewer
@@ -431,7 +423,10 @@ class _ManageAppsScreenState extends State<ManageAppsScreen> {
     );
   }
 
-  void _installCloudApp(String appFullName, String truePackageName) {
+  Future<void> _installCloudApp(
+      String appFullName, String truePackageName, int size) async {
+    final proceed = await SideloadUtils.confirmIfLowSpace(context, size);
+    if (!proceed) return;
     TaskRequest(
       task: TaskDownloadInstall(field0: appFullName, field1: truePackageName),
     ).sendSignalToRust();
@@ -520,8 +515,10 @@ class _ManageAppsScreenState extends State<ManageAppsScreen> {
                             );
                             if (!confirmed) return;
                           }
-                          _installCloudApp(newestCloudApp.fullName,
-                              newestCloudApp.truePackageName);
+                          _installCloudApp(
+                              newestCloudApp.fullName,
+                              newestCloudApp.truePackageName,
+                              newestCloudApp.size.toInt());
                         }
                       : null,
                 );

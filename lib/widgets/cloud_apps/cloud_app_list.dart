@@ -36,7 +36,7 @@ class CloudAppList extends StatelessWidget {
   final ValueChanged<String>? onSelectionChanged;
   final ScrollController scrollController;
   final Function(String, String) onDownload;
-  final Function(String, String) onInstall;
+  final Function(String, String, int) onInstall;
   final bool isSearching;
 
   const CloudAppList({
@@ -111,7 +111,7 @@ class CloudAppListItem extends StatelessWidget {
   final ValueChanged<bool> onSelectionChanged;
   final bool showCheckbox;
   final Function(String, String) onDownload;
-  final Function(String, String) onInstall;
+  final Function(String, String, int) onInstall;
 
   @override
   Widget build(BuildContext context) {
@@ -278,7 +278,8 @@ class CloudAppListItem extends StatelessWidget {
       );
       if (!confirmed) return;
     }
-    onInstall(cachedApp.app.fullName, cachedApp.app.truePackageName);
+    onInstall(cachedApp.app.fullName, cachedApp.app.truePackageName,
+        cachedApp.app.size.toInt());
   }
 }
 

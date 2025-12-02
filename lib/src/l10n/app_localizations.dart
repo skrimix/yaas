@@ -2846,6 +2846,24 @@ abstract class AppLocalizations {
   /// In en, this message translates to:
   /// **'Popularity (Least popular)'**
   String get sortPopularityLeast;
+
+  /// No description provided for @lowSpaceWarningTitle.
+  ///
+  /// In en, this message translates to:
+  /// **'Low Storage Space'**
+  String get lowSpaceWarningTitle;
+
+  /// No description provided for @lowSpaceWarningMessage.
+  ///
+  /// In en, this message translates to:
+  /// **'This installation will leave less than {threshold} of free space on the device (<={remaining} remaining). Do you want to continue?'**
+  String lowSpaceWarningMessage(String threshold, String remaining);
+
+  /// No description provided for @lowSpaceWarningContinue.
+  ///
+  /// In en, this message translates to:
+  /// **'Continue anyway'**
+  String get lowSpaceWarningContinue;
 }
 
 class _AppLocalizationsDelegate

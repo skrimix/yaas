@@ -2,7 +2,6 @@ import 'dart:async';
 import 'dart:math' as math;
 import 'package:flutter/material.dart';
 import 'package:provider/provider.dart';
-import 'package:proper_filesize/proper_filesize.dart' as filesize;
 import 'package:intl/intl.dart';
 import '../../src/l10n/app_localizations.dart';
 import '../../providers/cloud_apps_state.dart';
@@ -11,6 +10,7 @@ import '../../src/bindings/bindings.dart';
 import '../../providers/device_state.dart';
 import '../../providers/settings_state.dart';
 import '../../utils/utils.dart';
+import '../../utils/sideload_utils.dart';
 import '../cloud_apps/cloud_app_list.dart';
 import '../dialogs/downloader_config_from_url_dialog.dart';
 
@@ -53,16 +53,6 @@ class _DownloadAppsScreenState extends State<DownloadAppsScreen> {
     super.dispose();
   }
 
-  String _formatSize(int bytes) {
-    return filesize.FileSize.fromBytes(bytes).toString(
-      unit: filesize.Unit.auto(
-        size: bytes,
-        baseType: filesize.BaseType.metric,
-      ),
-      decimals: 2,
-    );
-  }
-
   String _formatDate(String utcDate) {
     try {
       final date = DateFormat('yyyy-MM-dd HH:mm').parseUtc(utcDate);
@@ -83,7 +73,7 @@ class _DownloadAppsScreenState extends State<DownloadAppsScreen> {
     final cachedApps = apps
         .map((app) => CachedAppData(
               app: app,
-              formattedSize: _formatSize(app.size.toInt()),
+              formattedSize: formatSize(app.size.toInt(), 2),
               formattedDate: _formatDate(app.lastUpdated),
               fullNameLower: app.fullName.toLowerCase(),
               packageNameLower: app.packageName.toLowerCase(),
@@ -320,7 +310,10 @@ class _DownloadAppsScreenState extends State<DownloadAppsScreen> {
     appState.setDownloadShowOnlySelected(false);
   }
 
-  void _install(String appFullName, String truePackageName) {
+  Future<void> _install(
+      String appFullName, String truePackageName, int size) async {
+    final proceed = await SideloadUtils.confirmIfLowSpace(context, size);
+    if (!proceed) return;
     TaskRequest(
       task: TaskDownloadInstall(field0: appFullName, field1: truePackageName),
     ).sendSignalToRust();
@@ -733,7 +726,7 @@ class _DownloadAppsScreenState extends State<DownloadAppsScreen> {
         .toList();
     final totalSize =
         selectedApps.fold<int>(0, (sum, app) => sum + app.app.size.toInt());
-    final formattedTotalSize = _formatSize(totalSize);
+    final formattedTotalSize = formatSize(totalSize, 2);
     final l10n = AppLocalizations.of(context);
 
     return Container(
@@ -783,8 +776,21 @@ class _DownloadAppsScreenState extends State<DownloadAppsScreen> {
                             await _confirmDowngrades(context, downgrades);
                         if (!proceed) return;
 
+                        final totalSize = selectedApps.fold<int>(
+                          0,
+                          (sum, app) => sum + app.app.size.toInt(),
+                        );
+                        if (!context.mounted) return;
+                        final spaceOk = await SideloadUtils.confirmIfLowSpace(
+                            context, totalSize);
+                        if (!spaceOk) return;
+
                         for (final app in selectedApps) {
-                          _install(app.app.fullName, app.app.truePackageName);
+                          TaskRequest(
+                            task: TaskDownloadInstall(
+                                field0: app.app.fullName,
+                                field1: app.app.truePackageName),
+                          ).sendSignalToRust();
                         }
                         _clearSelection();
                       }

@@ -705,5 +705,20 @@
         }
     },
     "sortPopularityMost": "Popularity (Most popular)",
-    "sortPopularityLeast": "Popularity (Least popular)"
+    "sortPopularityLeast": "Popularity (Least popular)",
+    "lowSpaceWarningTitle": "Low Storage Space",
+    "lowSpaceWarningMessage": "This installation will leave less than {threshold} of free space on the device (<={remaining} remaining). Do you want to continue?",
+    "@lowSpaceWarningMessage": {
+        "placeholders": {
+            "threshold": {
+                "type": "String",
+                "example": "2 GB"
+            },
+            "remaining": {
+                "type": "String",
+                "example": "1.5 GB"
+            }
+        }
+    },
+    "lowSpaceWarningContinue": "Continue anyway"
 }

@@ -699,5 +699,20 @@
         }
     },
     "sortPopularityMost": "Популярность (от большей)",
-    "sortPopularityLeast": "Популярность (от меньшей)"
+    "sortPopularityLeast": "Популярность (от меньшей)",
+    "lowSpaceWarningTitle": "Мало места на устройстве",
+    "lowSpaceWarningMessage": "После установки на устройстве останется менее {threshold} свободного места (останется <={remaining}). Продолжить?",
+    "@lowSpaceWarningMessage": {
+        "placeholders": {
+            "threshold": {
+                "type": "String",
+                "example": "2 GB"
+            },
+            "remaining": {
+                "type": "String",
+                "example": "1.5 GB"
+            }
+        }
+    },
+    "lowSpaceWarningContinue": "Всё равно продолжить"
 }

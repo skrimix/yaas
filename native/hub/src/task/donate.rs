@@ -1,4 +1,4 @@
-use std::{error::Error, time::Duration};
+use std::{error::Error, path::PathBuf, time::Duration};
 
 use anyhow::{Context, Result, anyhow, ensure};
 use tokio::sync::mpsc;
@@ -10,6 +10,45 @@ use crate::{
     adb::PackageName, apk::get_apk_info, archive::create_zip_from_dir,
     downloader::RcloneTransferStats, models::signals::task::TaskStatus,
 };
+
+/// Guard that cleans up temporary files/directories when dropped.
+/// Paths are removed in reverse order of addition.
+struct CleanupGuard {
+    paths: Vec<PathBuf>,
+}
+
+impl CleanupGuard {
+    fn new() -> Self {
+        Self { paths: Vec::new() }
+    }
+
+    fn add_path(&mut self, path: PathBuf) {
+        self.paths.push(path);
+    }
+}
+
+impl Drop for CleanupGuard {
+    fn drop(&mut self) {
+        for path in self.paths.iter().rev() {
+            if path.exists() {
+                let result = if path.is_dir() {
+                    std::fs::remove_dir_all(path)
+                } else {
+                    std::fs::remove_file(path)
+                };
+                if let Err(e) = result {
+                    warn!(
+                        error = &e as &dyn Error,
+                        path = %path.display(),
+                        "Failed to clean up temporary path during donation cleanup"
+                    );
+                } else {
+                    debug!(path = %path.display(), "Cleaned up temporary path");
+                }
+            }
+        }
+    }
+}
 
 impl TaskManager {
     #[instrument(skip(self, update_progress, token))]
@@ -42,6 +81,9 @@ impl TaskManager {
             format!("Failed to create upload directory {}", upload_root.display())
         })?;
 
+        // Guard to clean up temporary files on cancel/error/drop.
+        let mut cleanup_guard = CleanupGuard::new();
+
         let pkg_for_pull = package.clone();
         let dest_root_clone = upload_root.clone();
         let pulled_dir = self
@@ -63,6 +105,8 @@ impl TaskManager {
                 },
             )
             .await?;
+
+        cleanup_guard.add_path(pulled_dir.clone());
 
         if token.is_cancelled() {
             warn!("Task was cancelled after pull step");
@@ -111,13 +155,7 @@ impl TaskManager {
                 .await
                 .context("Failed to create archive from pulled app")?;
 
-        if let Err(e) = tokio::fs::remove_dir_all(&pulled_dir).await {
-            warn!(
-                error = &e as &dyn Error,
-                path = %pulled_dir.display(),
-                "Failed to clean up pulled app directory after donation"
-            );
-        }
+        cleanup_guard.add_path(archive_path.clone());
 
         if token.is_cancelled() {
             warn!("Task was cancelled after archive preparation step");
@@ -231,6 +269,8 @@ impl TaskManager {
         }
 
         upload_result.unwrap();
+
+        // drop(cleanup_guard);
 
         Ok(())
     }

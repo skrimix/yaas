@@ -20,8 +20,8 @@ const _kDownloaderTemplateVrgRusUrl =
 const _kDownloaderTemplateNifUrl =
     'https://qloader.5698452.xyz/files/rclone/config/downloader_nif.json';
 
-class DownloaderConfigFromUrlDialog extends StatefulWidget {
-  const DownloaderConfigFromUrlDialog({
+class DownloaderSetupDialog extends StatefulWidget {
+  const DownloaderSetupDialog({
     super.key,
     this.initialConfigId,
   });
@@ -29,12 +29,10 @@ class DownloaderConfigFromUrlDialog extends StatefulWidget {
   final String? initialConfigId;
 
   @override
-  State<DownloaderConfigFromUrlDialog> createState() =>
-      _DownloaderConfigFromUrlDialogState();
+  State<DownloaderSetupDialog> createState() => _DownloaderSetupDialogState();
 }
 
-class _DownloaderConfigFromUrlDialogState
-    extends State<DownloaderConfigFromUrlDialog> {
+class _DownloaderSetupDialogState extends State<DownloaderSetupDialog> {
   late String _selectedTemplateId;
   final TextEditingController _urlController = TextEditingController();
   StreamSubscription<RustSignalPack<DownloaderConfigInstallResult>>?

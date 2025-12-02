@@ -12,7 +12,7 @@ import '../../providers/settings_state.dart';
 import '../../utils/utils.dart';
 import '../../utils/sideload_utils.dart';
 import '../cloud_apps/cloud_app_list.dart';
-import '../dialogs/downloader_config_from_url_dialog.dart';
+import '../dialogs/downloader_setup_dialog.dart';
 
 enum SortOption {
   name,
@@ -1175,7 +1175,7 @@ class _DownloadAppsScreenState extends State<DownloadAppsScreen> {
                 await showDialog<void>(
                   context: context,
                   barrierDismissible: false,
-                  builder: (ctx) => DownloaderConfigFromUrlDialog(
+                  builder: (ctx) => DownloaderSetupDialog(
                     initialConfigId: settingsState.downloaderConfigId,
                   ),
                 );

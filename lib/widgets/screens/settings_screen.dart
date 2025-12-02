@@ -11,7 +11,7 @@ import 'package:url_launcher/url_launcher.dart';
 import '../../providers/settings_state.dart';
 import '../../navigation.dart';
 import '../../src/l10n/app_localizations.dart';
-import '../dialogs/downloader_config_from_url_dialog.dart';
+import '../dialogs/downloader_setup_dialog.dart';
 
 enum SettingTextField {
   rcloneRemoteName,
@@ -270,7 +270,7 @@ class _SettingsScreenState extends State<SettingsScreen> {
     await showDialog<void>(
       context: context,
       barrierDismissible: false,
-      builder: (ctx) => DownloaderConfigFromUrlDialog(
+      builder: (ctx) => DownloaderSetupDialog(
         initialConfigId: currentConfigId,
       ),
     );

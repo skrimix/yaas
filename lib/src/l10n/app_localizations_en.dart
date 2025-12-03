@@ -1260,6 +1260,9 @@ class AppLocalizationsEn extends AppLocalizations {
   String get tasksEmptyRecent => 'No recent tasks';
 
   @override
+  String get clearRecentTasks => 'Clear recent tasks';
+
+  @override
   String get cancelTask => 'Cancel Task';
 
   @override

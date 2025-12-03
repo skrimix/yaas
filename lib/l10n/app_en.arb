@@ -607,6 +607,7 @@
     "tasksTabRecent": "Recent",
     "tasksEmptyActive": "No active tasks",
     "tasksEmptyRecent": "No recent tasks",
+    "clearRecentTasks": "Clear recent tasks",
     "cancelTask": "Cancel Task",
     "taskKindDownload": "Download",
     "taskKindDownloadInstall": "Download & Install",

@@ -2408,6 +2408,12 @@ abstract class AppLocalizations {
   /// **'No recent tasks'**
   String get tasksEmptyRecent;
 
+  /// No description provided for @clearRecentTasks.
+  ///
+  /// In en, this message translates to:
+  /// **'Clear recent tasks'**
+  String get clearRecentTasks;
+
   /// No description provided for @cancelTask.
   ///
   /// In en, this message translates to:

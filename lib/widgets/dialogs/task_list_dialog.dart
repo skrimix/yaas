@@ -283,6 +283,7 @@ class _TaskListDialogState extends State<TaskListDialog>
 
   @override
   Widget build(BuildContext context) {
+    final l10n = AppLocalizations.of(context);
     return Dialog(
       child: ConstrainedBox(
         constraints: const BoxConstraints(maxWidth: 600, maxHeight: 400),
@@ -294,13 +295,27 @@ class _TaskListDialogState extends State<TaskListDialog>
               Row(
                 children: [
                   Text(
-                    AppLocalizations.of(context).tasksTitle,
+                    l10n.tasksTitle,
                     style: TextStyle(
                       fontSize: 20,
                       fontWeight: FontWeight.bold,
                     ),
                   ),
                   const Spacer(),
+                  Consumer<TaskState>(
+                    builder: (context, taskState, _) {
+                      if (taskState.recentTasks.isEmpty) {
+                        return const SizedBox.shrink();
+                      }
+                      return IconButton(
+                        icon: const Icon(Icons.delete_sweep_outlined),
+                        tooltip: l10n.clearRecentTasks,
+                        onPressed: () {
+                          taskState.clearRecentTasks();
+                        },
+                      );
+                    },
+                  ),
                   IconButton(
                     icon: const Icon(Icons.close),
                     onPressed: () => Navigator.of(context).pop(),
@@ -310,7 +325,6 @@ class _TaskListDialogState extends State<TaskListDialog>
               Expanded(
                 child: Consumer<TaskState>(
                   builder: (context, taskState, child) {
-                    final l10n = AppLocalizations.of(context);
                     _handleTaskStateChange(taskState);
                     final activeCount = taskState.activeTasks.length;
                     final recentCount = taskState.recentTasks.length;

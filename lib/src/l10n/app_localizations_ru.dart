@@ -1276,6 +1276,9 @@ class AppLocalizationsRu extends AppLocalizations {
   String get tasksEmptyRecent => 'Нет недавних задач';
 
   @override
+  String get clearRecentTasks => 'Очистить недавние задачи';
+
+  @override
   String get cancelTask => 'Отменить задачу';
 
   @override

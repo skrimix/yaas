@@ -71,6 +71,14 @@ class TaskState extends ChangeNotifier {
       _tasks.values.where((task) => task.isFinished).toList()
         ..sort((a, b) => b.endTime!.compareTo(a.endTime!));
 
+  int get failedTaskCount =>
+      _tasks.values.where((task) => task.status == TaskStatus.failed).length;
+
+  void clearRecentTasks() {
+    _tasks.removeWhere((_, task) => task.isFinished);
+    notifyListeners();
+  }
+
   TaskState() {
     TaskProgress.rustSignalStream.listen((event) {
       final progress = event.message;

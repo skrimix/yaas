@@ -142,6 +142,8 @@ impl Downloader {
         let root_dir = config.root_dir.clone();
         let list_path = config.list_path.clone();
 
+        let cancel_token = CancellationToken::new();
+
         let handle = Arc::new(Self {
             config,
             cache_dir,
@@ -153,9 +155,9 @@ impl Downloader {
             donation_blacklist: Arc::new(Mutex::new(Vec::new())),
             storage: RwLock::new(storage),
             download_dir: RwLock::new(settings.downloads_location()),
-            current_load_token: RwLock::new(CancellationToken::new()),
+            current_load_token: RwLock::new(cancel_token.child_token()),
             write_legacy_release_json: RwLock::new(settings.write_legacy_release_json),
-            cancel_token: CancellationToken::new(),
+            cancel_token,
             http_client,
             repo,
             installation_id: settings.installation_id.clone(),
@@ -247,7 +249,7 @@ impl Downloader {
                             if new_storage != *handle.storage.read().await {
                                 info!("Rclone storage config changed, recreating and refreshing app list");
                                 handle.current_load_token.read().await.cancel();
-                                let new_token = CancellationToken::new();
+                                let new_token = handle.cancel_token.child_token();
                                 *handle.current_load_token.write().await = new_token.clone();
 
                                 *handle.storage.write().await = new_storage;
@@ -415,7 +417,7 @@ impl Downloader {
                 request = load_cloud_apps_receiver.recv() => {
                     if let Some(request) = request {
                         debug!(refresh = request.message.refresh, "Received LoadCloudAppsRequest");
-                        let new_token = CancellationToken::new();
+                        let new_token = self.cancel_token.child_token();
                         {
                             let mut guard = self.current_load_token.write().await;
                             guard.cancel();

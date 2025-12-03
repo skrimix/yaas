@@ -26,7 +26,7 @@ class SideloadUtils {
           (entity.path.toLowerCase().endsWith('.apk') ||
               entity.path.toLowerCase() == 'install.txt'));
     } catch (e) {
-      // TODO: log error
+      debugPrint('Error checking directory validity: $e');
       return false;
     }
   }

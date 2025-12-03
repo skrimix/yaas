@@ -105,9 +105,10 @@ class _YAASAppState extends State<YAASApp> {
       },
     );
 
-    // Kick off the initial load of some providers
+    // Initialize some providers.
     WidgetsBinding.instance.addPostFrameCallback((_) {
-      context.read<CloudAppsState>().load();
+      context.read<
+          CloudAppsState>(); // Do not call load() here, it will be called when the downloader becomes available.
       context.read<SettingsState>().load();
     });
 

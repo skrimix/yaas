@@ -589,6 +589,7 @@ impl Downloader {
 
                 // Cache and send without popularity
                 {
+                    // TODO: Should we hold the lock for the whole duration of the load?
                     let mut cache = self.cloud_apps.lock().await;
                     *cache = result.apps.clone();
                 }
@@ -606,6 +607,7 @@ impl Downloader {
                     let cancel = cancellation_token.clone();
                     tokio::spawn(
                         async move {
+                            // BUG: If this is cancelled by another non-force_refresh load, we get left with no popularity data, since the second load will use the cache.
                             cancel
                                 .run_until_cancelled(async {
                                     let mut apps = {

@@ -44,6 +44,7 @@ class _DownloadAppsScreenState extends State<DownloadAppsScreen> {
   String? _lastSearchQuery;
   Timer? _searchDebounceTimer;
   bool _initialized = false;
+  int? _lastAppsIdentity;
 
   @override
   void dispose() {
@@ -308,6 +309,24 @@ class _DownloadAppsScreenState extends State<DownloadAppsScreen> {
     appState.setDownloadSelectedFullNames(_selectedFullNames);
     appState.setDownloadShowCheckboxes(false);
     appState.setDownloadShowOnlySelected(false);
+  }
+
+  void _cleanupStaleSelections(List<CloudApp> apps) {
+    final availableFullNames = apps.map((a) => a.fullName).toSet();
+    final stale = _selectedFullNames.difference(availableFullNames);
+    if (stale.isEmpty) return;
+
+    setState(() {
+      _selectedFullNames.removeAll(stale);
+      if (_selectedFullNames.isEmpty) {
+        _showCheckboxes = false;
+        _showOnlySelected = false;
+      }
+    });
+    final appState = context.read<AppState>();
+    appState.setDownloadSelectedFullNames(_selectedFullNames);
+    appState.setDownloadShowCheckboxes(_showCheckboxes);
+    appState.setDownloadShowOnlySelected(_showOnlySelected);
   }
 
   Future<void> _install(
@@ -842,6 +861,20 @@ class _DownloadAppsScreenState extends State<DownloadAppsScreen> {
     final settingsState = context.watch<SettingsState>();
     return Consumer<CloudAppsState>(
       builder: (context, cloudAppsState, _) {
+        // Cleanup stale selections when apps list changes
+        final currentAppsIdentity = identityHashCode(cloudAppsState.apps);
+        if (_lastAppsIdentity != null &&
+            _lastAppsIdentity != currentAppsIdentity &&
+            _selectedFullNames.isNotEmpty) {
+          final apps = cloudAppsState.apps;
+          WidgetsBinding.instance.addPostFrameCallback((_) {
+            if (mounted) {
+              _cleanupStaleSelections(apps);
+            }
+          });
+        }
+        _lastAppsIdentity = currentAppsIdentity;
+
         final l10n = AppLocalizations.of(context);
         final showDownloaderInit = settingsState.isDownloaderInitializing;
         final showDownloaderError =

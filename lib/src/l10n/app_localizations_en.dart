@@ -55,6 +55,11 @@ class AppLocalizationsEn extends AppLocalizations {
   String get settingsSaveChanges => 'Save Changes';
 
   @override
+  String settingsSaveError(String error) {
+    return 'Failed to save settings: $error';
+  }
+
+  @override
   String get settingsSectionGeneral => 'General';
 
   @override

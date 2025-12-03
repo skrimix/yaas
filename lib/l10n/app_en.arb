@@ -15,6 +15,14 @@
     "settingsResetToDefaults": "Reset to Defaults",
     "settingsRevertChangesTooltip": "Revert Changes\n(Shift+Click to reset to defaults)",
     "settingsSaveChanges": "Save Changes",
+    "settingsSaveError": "Failed to save settings: {error}",
+    "@settingsSaveError": {
+        "placeholders": {
+            "error": {
+                "type": "String"
+            }
+        }
+    },
     "settingsSectionGeneral": "General",
     "settingsLanguage": "Language",
     "settingsNavigationRailLabels": "Navigation rail labels",

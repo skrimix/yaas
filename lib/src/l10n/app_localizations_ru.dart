@@ -55,6 +55,11 @@ class AppLocalizationsRu extends AppLocalizations {
   String get settingsSaveChanges => 'Сохранить изменения';
 
   @override
+  String settingsSaveError(String error) {
+    return 'Не удалось сохранить настройки: $error';
+  }
+
+  @override
   String get settingsSectionGeneral => 'Общие';
 
   @override

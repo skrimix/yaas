@@ -188,6 +188,12 @@ abstract class AppLocalizations {
   /// **'Save Changes'**
   String get settingsSaveChanges;
 
+  /// No description provided for @settingsSaveError.
+  ///
+  /// In en, this message translates to:
+  /// **'Failed to save settings: {error}'**
+  String settingsSaveError(String error);
+
   /// No description provided for @settingsSectionGeneral.
   ///
   /// In en, this message translates to:

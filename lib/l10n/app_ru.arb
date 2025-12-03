@@ -15,6 +15,14 @@
     "settingsResetToDefaults": "Сбросить по умолчанию",
     "settingsRevertChangesTooltip": "Отменить изменения\n(Shift+Клик для полного сброса)",
     "settingsSaveChanges": "Сохранить изменения",
+    "settingsSaveError": "Не удалось сохранить настройки: {error}",
+    "@settingsSaveError": {
+        "placeholders": {
+            "error": {
+                "type": "String"
+            }
+        }
+    },
     "settingsSectionGeneral": "Общие",
     "settingsLanguage": "Язык",
     "settingsNavigationRailLabels": "Подписи панели навигации",

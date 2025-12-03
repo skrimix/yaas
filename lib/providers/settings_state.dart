@@ -43,8 +43,17 @@ class SettingsState extends ChangeNotifier {
   bool _isRemotesLoading = true;
   String? _remotesError;
 
+  final List<void Function(String error)> _saveErrorCallbacks = [];
+
   SettingsState() {
     _registerSignalHandlers();
+  }
+
+  /// Register a callback to be notified when settings save fails.
+  /// Returns a function to unregister the callback.
+  VoidCallback addSaveErrorListener(void Function(String error) callback) {
+    _saveErrorCallbacks.add(callback);
+    return () => _saveErrorCallbacks.remove(callback);
   }
 
   void _setIsLoading(bool isLoading) {
@@ -71,7 +80,12 @@ class SettingsState extends ChangeNotifier {
     });
 
     SettingsSavedEvent.rustSignalStream.listen((event) {
-      _error = event.message.error; // TODO: Show a toast if there is an error
+      _error = event.message.error;
+      if (_error != null) {
+        for (final callback in _saveErrorCallbacks) {
+          callback(_error!);
+        }
+      }
       _setIsLoading(false);
     });
 

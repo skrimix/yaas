@@ -11,6 +11,7 @@ import 'package:url_launcher/url_launcher.dart';
 import '../../providers/settings_state.dart';
 import '../../navigation.dart';
 import '../../src/l10n/app_localizations.dart';
+import '../../utils/sideload_utils.dart';
 import '../dialogs/downloader_setup_dialog.dart';
 
 enum SettingTextField {
@@ -54,6 +55,7 @@ class _SettingsScreenState extends State<SettingsScreen> {
   bool _seedColorCustom = false;
   final TextEditingController _customColorController = TextEditingController();
   bool _castingStatusRequested = false;
+  VoidCallback? _unregisterSaveErrorListener;
 
   @override
   void initState() {
@@ -72,13 +74,22 @@ class _SettingsScreenState extends State<SettingsScreen> {
     _updateAllControllers();
 
     settingsState.addListener(_onSettingsProviderUpdated);
+    _unregisterSaveErrorListener =
+        settingsState.addSaveErrorListener(_onSettingsSaveError);
 
     HardwareKeyboard.instance.addHandler(_handleKeyEvent);
+  }
+
+  void _onSettingsSaveError(String error) {
+    if (!mounted) return;
+    final l10n = AppLocalizations.of(context);
+    SideloadUtils.showErrorToast(context, l10n.settingsSaveError(error));
   }
 
   @override
   void dispose() {
     _settingsState?.removeListener(_onSettingsProviderUpdated);
+    _unregisterSaveErrorListener?.call();
     for (final controller in _textControllers.values) {
       controller.dispose();
     }

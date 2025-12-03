@@ -174,7 +174,12 @@ impl AdbHandler {
                             *handle.adb_path.write().await = new_adb_path;
                             if let Err(e) = handle.clone().restart_adb().await {
                                 error!(error = e.as_ref() as &dyn Error, "Failed to restart ADB");
-                                // TODO: report this to the UI
+                                Toast::send(
+                                    "Failed to restart ADB".to_string(),
+                                    format!("{e}"),
+                                    true,
+                                    Some(Duration::from_secs(5)),
+                                );
                             }
                         }
 

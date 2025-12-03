@@ -16,7 +16,7 @@ const _kDownloaderTemplateCustomId = 'custom';
 const _kDownloaderTemplateVrpUrl =
     'https://github.com/skrimix/yaas/releases/download/files/downloader_vrp.json';
 const _kDownloaderTemplateVrgRusUrl =
-    'https://qloader.5698452.xyz/files/rclone/config/downloader_ru.json';
+    'https://github.com/skrimix/yaas/releases/download/files/downloader_ru.json';
 const _kDownloaderTemplateNifUrl =
     'https://qloader.5698452.xyz/files/rclone/config/downloader_nif.json';
 

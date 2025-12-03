@@ -104,11 +104,14 @@ pub(super) async fn load_popularity_for_apps(
         .context("Failed to fetch popularity data")?;
     resp.error_for_status_ref().context("Failed to fetch popularity data")?;
 
-    let popularity: Vec<PopularityEntry> = resp.json().await?;
+    let mut popularity: Vec<PopularityEntry> = resp.json().await?;
     if popularity.is_empty() {
         debug!("Popularity API returned empty result");
         return Ok(());
     }
+
+    // Filter for packages we have, so we have more relevant relative numbers
+    popularity.retain(|p| apps.iter().any(|a| a.true_package_name == p.package_name));
 
     let mut max_1d: u64 = 0;
     let mut max_7d: u64 = 0;

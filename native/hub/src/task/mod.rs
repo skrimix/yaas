@@ -5,6 +5,7 @@ mod donate;
 mod download;
 mod install;
 mod manager;
+pub(crate) use donate::DONATE_TMP_DIR;
 pub(crate) use manager::TaskManager;
 
 macro_rules! acquire_permit_or_cancel {

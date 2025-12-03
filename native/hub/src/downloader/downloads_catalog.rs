@@ -16,6 +16,7 @@ use tracing::{Span, debug, error, info, instrument, trace, warn};
 use crate::{
     downloader::metadata::read_download_metadata,
     models::{DownloadCleanupPolicy, Settings, signals::downloads_local::*},
+    task::DONATE_TMP_DIR,
 };
 
 #[derive(Debug, Clone)]
@@ -138,7 +139,8 @@ impl DownloadsCatalog {
             .with_context(|| format!("Failed to read {}", root.display()))?;
         while let Some(entry) = rd.next_entry().await? {
             let p = entry.path();
-            if p.file_name().and_then(|n| n.to_str()).unwrap_or("").to_lowercase() == "_upload" {
+            if p.file_name().and_then(|n| n.to_str()).unwrap_or("").to_lowercase() == DONATE_TMP_DIR
+            {
                 continue;
             }
             let meta = match entry.metadata().await {

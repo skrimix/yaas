@@ -11,6 +11,8 @@ use crate::{
     downloader::RcloneTransferStats, models::signals::task::TaskStatus,
 };
 
+pub(crate) const DONATE_TMP_DIR: &str = "_upload";
+
 /// Guard that cleans up temporary files/directories when dropped.
 /// Paths are removed in reverse order of addition.
 struct CleanupGuard {
@@ -76,7 +78,7 @@ impl TaskManager {
         // Use downloads location as the base for temporary donation directories and archives.
         let settings = self.settings.read().await.clone();
         let downloads_root = settings.downloads_location();
-        let upload_root = downloads_root.join("_upload");
+        let upload_root = downloads_root.join(DONATE_TMP_DIR);
         tokio::fs::create_dir_all(&upload_root).await.with_context(|| {
             format!("Failed to create upload directory {}", upload_root.display())
         })?;

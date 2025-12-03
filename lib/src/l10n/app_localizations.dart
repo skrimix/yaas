@@ -1838,6 +1838,12 @@ abstract class AppLocalizations {
   /// **'Refresh'**
   String get refresh;
 
+  /// No description provided for @refreshAppsList.
+  ///
+  /// In en, this message translates to:
+  /// **'Refresh apps list'**
+  String get refreshAppsList;
+
   /// No description provided for @showingSelectedOnly.
   ///
   /// In en, this message translates to:

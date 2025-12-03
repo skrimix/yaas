@@ -468,6 +468,7 @@
     "underConstruction": "В разработке",
     "multiSelect": "Множественный выбор",
     "refresh": "Обновить",
+    "refreshAppsList": "Обновить список приложений",
     "showingSelectedOnly": "Показаны только выбранные",
     "deviceTitle": "Устройство",
     "leftController": "Левый контроллер",

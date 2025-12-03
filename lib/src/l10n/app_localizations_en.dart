@@ -961,6 +961,9 @@ class AppLocalizationsEn extends AppLocalizations {
   String get refresh => 'Refresh';
 
   @override
+  String get refreshAppsList => 'Refresh apps list';
+
+  @override
   String get showingSelectedOnly => 'Showing selected items only';
 
   @override

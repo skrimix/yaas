@@ -8,6 +8,7 @@ import '../../providers/app_state.dart';
 import '../../src/bindings/bindings.dart';
 import '../../utils/utils.dart';
 import '../common/animated_adb_button.dart';
+import '../common/animated_refresh_button.dart';
 import '../common/no_device_connected_indicator.dart';
 import '../dialogs/animated_uninstall_dialog.dart';
 import '../dialogs/backup_options_dialog.dart';
@@ -696,53 +697,66 @@ class _ManageAppsScreenState extends State<ManageAppsScreen> {
           body: SafeArea(
             child: Column(
               children: [
-                // TODO: Add refresh button
                 Padding(
                   padding: _segmentPadding,
-                  child: SegmentedButton<AppCategory>(
-                    segments: [
-                      ButtonSegment(
-                        value: AppCategory.vr,
-                        label: Text(
-                            l10n.segmentVrApps(_cachedVrApps?.length ?? 0)),
+                  child: Row(
+                    mainAxisAlignment: MainAxisAlignment.center,
+                    children: [
+                      SegmentedButton<AppCategory>(
+                        segments: [
+                          ButtonSegment(
+                            value: AppCategory.vr,
+                            label: Text(
+                                l10n.segmentVrApps(_cachedVrApps?.length ?? 0)),
+                          ),
+                          ButtonSegment(
+                            value: AppCategory.other,
+                            label: Text(l10n.segmentOtherApps(
+                                _cachedOtherApps?.length ?? 0)),
+                          ),
+                          ButtonSegment(
+                            value: AppCategory.system,
+                            label: Text(l10n.segmentSystemApps(
+                                _cachedSystemApps?.length ?? 0)),
+                          ),
+                        ],
+                        selected: {_selectedCategory},
+                        onSelectionChanged: (Set<AppCategory> newSelection) {
+                          setState(() {
+                            _selectedCategory = newSelection.first;
+                          });
+                          // Persist selected category
+                          final idx =
+                              AppCategory.values.indexOf(_selectedCategory);
+                          final appState = context.read<AppState>();
+                          appState.setManageAppsCategoryIndex(idx);
+                          // Restore saved scroll for the newly selected category
+                          WidgetsBinding.instance.addPostFrameCallback((_) {
+                            final controller =
+                                _scrollControllers[_selectedCategory]!;
+                            if (controller.hasClients) {
+                              final target =
+                                  appState.getManageScrollOffset(idx);
+                              final max = controller.position.maxScrollExtent;
+                              controller.jumpTo(target.clamp(0.0, max));
+                            }
+                          });
+                        },
+                        style: ButtonStyle(
+                          visualDensity: VisualDensity.compact,
+                          padding: WidgetStateProperty.all<EdgeInsets>(
+                            _buttonPadding,
+                          ),
+                        ),
                       ),
-                      ButtonSegment(
-                        value: AppCategory.other,
-                        label: Text(l10n
-                            .segmentOtherApps(_cachedOtherApps?.length ?? 0)),
-                      ),
-                      ButtonSegment(
-                        value: AppCategory.system,
-                        label: Text(l10n
-                            .segmentSystemApps(_cachedSystemApps?.length ?? 0)),
+                      const SizedBox(width: 8),
+                      AnimatedRefreshButton(
+                        deviceState: deviceState,
+                        tooltip: l10n.refreshAppsList,
+                        size: 40,
+                        iconSize: 24,
                       ),
                     ],
-                    selected: {_selectedCategory},
-                    onSelectionChanged: (Set<AppCategory> newSelection) {
-                      setState(() {
-                        _selectedCategory = newSelection.first;
-                      });
-                      // Persist selected category
-                      final idx = AppCategory.values.indexOf(_selectedCategory);
-                      final appState = context.read<AppState>();
-                      appState.setManageAppsCategoryIndex(idx);
-                      // Restore saved scroll for the newly selected category
-                      WidgetsBinding.instance.addPostFrameCallback((_) {
-                        final controller =
-                            _scrollControllers[_selectedCategory]!;
-                        if (controller.hasClients) {
-                          final target = appState.getManageScrollOffset(idx);
-                          final max = controller.position.maxScrollExtent;
-                          controller.jumpTo(target.clamp(0.0, max));
-                        }
-                      });
-                    },
-                    style: ButtonStyle(
-                      visualDensity: VisualDensity.compact,
-                      padding: WidgetStateProperty.all<EdgeInsets>(
-                        _buttonPadding,
-                      ),
-                    ),
                   ),
                 ),
                 Expanded(

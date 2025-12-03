@@ -474,6 +474,7 @@
     "underConstruction": "Under construction",
     "multiSelect": "Multi-select",
     "refresh": "Refresh",
+    "refreshAppsList": "Refresh apps list",
     "showingSelectedOnly": "Showing selected items only",
     "deviceTitle": "Device",
     "leftController": "Left Controller",

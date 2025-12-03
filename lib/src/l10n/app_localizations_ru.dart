@@ -975,6 +975,9 @@ class AppLocalizationsRu extends AppLocalizations {
   String get refresh => 'Обновить';
 
   @override
+  String get refreshAppsList => 'Обновить список приложений';
+
+  @override
   String get showingSelectedOnly => 'Показаны только выбранные';
 
   @override

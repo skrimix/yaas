@@ -11,6 +11,7 @@ import '../../providers/task_state.dart';
 import '../../utils/utils.dart';
 import '../dialogs/task_list_dialog.dart';
 import '../dialogs/connection_diagnostics_dialog.dart';
+import 'animated_refresh_button.dart';
 
 class StatusBar extends StatelessWidget {
   const StatusBar({super.key});
@@ -168,7 +169,10 @@ class StatusBar extends StatelessWidget {
   }
 
   Widget _buildRefreshButton(DeviceState deviceState, AppLocalizations l10n) {
-    return _AnimatedRefreshButton(deviceState: deviceState, l10n: l10n);
+    return AnimatedRefreshButton(
+      deviceState: deviceState,
+      tooltip: l10n.refreshAllData,
+    );
   }
 
   Widget _buildTaskStatus(
@@ -279,16 +283,6 @@ class StatusBar extends StatelessWidget {
       },
     );
   }
-}
-
-class _AnimatedRefreshButton extends StatefulWidget {
-  final DeviceState deviceState;
-  final AppLocalizations l10n;
-
-  const _AnimatedRefreshButton({required this.deviceState, required this.l10n});
-
-  @override
-  State<_AnimatedRefreshButton> createState() => _AnimatedRefreshButtonState();
 }
 
 class _DeviceSwitcherLabel extends StatefulWidget {
@@ -535,161 +529,6 @@ class _DeviceSwitcherLabelState extends State<_DeviceSwitcherLabel>
               ),
             );
           },
-        ),
-      ),
-    );
-  }
-}
-
-class _AnimatedRefreshButtonState extends State<_AnimatedRefreshButton>
-    with TickerProviderStateMixin {
-  late AnimationController _rotationController;
-  late AnimationController _successController;
-  late Animation<double> _rotation;
-  late Animation<double> _checkmarkScale;
-
-  bool _isRefreshing = false;
-  bool _showCheckmark = false;
-  DateTime? _lastDeviceUpdate;
-
-  @override
-  void initState() {
-    super.initState();
-
-    // Animation for spinning refresh icon
-    _rotationController = AnimationController(
-      duration: const Duration(milliseconds: 1000),
-      vsync: this,
-    );
-    _rotation = Tween<double>(begin: 0, end: 1).animate(_rotationController);
-
-    // Animation for checkmark appearance
-    _successController = AnimationController(
-      duration: const Duration(milliseconds: 300),
-      vsync: this,
-    );
-    _checkmarkScale = Tween<double>(begin: 0, end: 1).animate(
-      CurvedAnimation(parent: _successController, curve: Curves.elasticOut),
-    );
-
-    // Listen for device updates to trigger success animation
-    widget.deviceState.addListener(_onDeviceStateChanged);
-    _lastDeviceUpdate = DateTime.now();
-  }
-
-  @override
-  void dispose() {
-    widget.deviceState.removeListener(_onDeviceStateChanged);
-    _rotationController.dispose();
-    _successController.dispose();
-    super.dispose();
-  }
-
-  void _onDeviceStateChanged() {
-    if (_isRefreshing && widget.deviceState.device != null) {
-      final now = DateTime.now();
-      // Trigger success animation if device was updated shortly after refresh
-      if (_lastDeviceUpdate != null &&
-          now.difference(_lastDeviceUpdate!).inSeconds <= 5) {
-        _showSuccess();
-      }
-    }
-  }
-
-  void _onRefreshPressed() {
-    if (_isRefreshing || _showCheckmark) return;
-
-    setState(() {
-      _isRefreshing = true;
-      _showCheckmark = false;
-    });
-
-    _rotationController.repeat();
-    _lastDeviceUpdate = DateTime.now();
-
-    signals.AdbRequest(
-            command: signals.AdbCommandRefreshDevice(), commandKey: '')
-        .sendSignalToRust();
-
-    // Fallback: stop spinning after 5 seconds
-    Future.delayed(const Duration(seconds: 5), () {
-      if (_isRefreshing && mounted) {
-        _stopRefreshing();
-      }
-    });
-  }
-
-  void _showSuccess() {
-    if (!mounted) return;
-
-    _rotationController.stop();
-    setState(() {
-      _isRefreshing = false;
-      _showCheckmark = true;
-    });
-
-    _successController.forward().then((_) {
-      Future.delayed(const Duration(milliseconds: 800), () {
-        if (mounted) {
-          _successController.reverse().then((_) {
-            if (mounted) {
-              setState(() {
-                _showCheckmark = false;
-              });
-            }
-          });
-        }
-      });
-    });
-  }
-
-  void _stopRefreshing() {
-    if (!mounted) return;
-
-    _rotationController.stop();
-    setState(() {
-      _isRefreshing = false;
-    });
-  }
-
-  @override
-  Widget build(BuildContext context) {
-    return Tooltip(
-      message: widget.l10n.refreshAllData,
-      child: SizedBox(
-        width: 23,
-        height: 23,
-        child: IconButton(
-          onPressed: _onRefreshPressed,
-          icon: AnimatedSwitcher(
-            duration: const Duration(milliseconds: 200),
-            child: _showCheckmark
-                ? ScaleTransition(
-                    key: const Key('checkmark'),
-                    scale: _checkmarkScale,
-                    child: Icon(
-                      Icons.check,
-                      color: Colors.green,
-                      size: 16,
-                    ),
-                  )
-                : _isRefreshing
-                    ? RotationTransition(
-                        key: const Key('spinning'),
-                        turns: _rotation,
-                        child: const Icon(
-                          Icons.refresh,
-                          size: 16,
-                        ),
-                      )
-                    : const Icon(
-                        Icons.refresh,
-                        key: Key('idle'),
-                        size: 16,
-                      ),
-          ),
-          padding: EdgeInsets.zero,
-          iconSize: 16,
         ),
       ),
     );

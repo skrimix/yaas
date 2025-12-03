@@ -62,8 +62,53 @@ where
 }
 
 #[derive(Debug, Clone, Deserialize)]
-struct RcloneStatLine {
-    stats: RcloneTransferStats,
+struct RcloneJsonLogLine {
+    time: String,
+    level: String,
+    msg: String,
+    #[serde(default)]
+    object: Option<String>,
+    #[serde(default)]
+    stats: Option<RcloneTransferStats>,
+}
+
+impl RcloneJsonLogLine {
+    /// Converts to human-readable format like "2025/12/03 16:25:39 ERROR : object: message"
+    fn to_human_readable(&self) -> String {
+        let formatted_time = self.format_time();
+        let level_upper = self.level.to_uppercase();
+        match &self.object {
+            Some(obj) => {
+                format!("{} {} : {}: {}", formatted_time, level_upper, obj, self.msg.trim())
+            }
+            None => format!("{} {} : {}", formatted_time, level_upper, self.msg.trim()),
+        }
+    }
+
+    /// Formats ISO timestamp to rclone's default format.
+    /// Input: "2025-12-03T16:18:24.677508041+03:00"
+    /// Output: "2025/12/03 16:18:24"
+    fn format_time(&self) -> String {
+        if let Some(t_pos) = self.time.find('T') {
+            let date_part = &self.time[..t_pos];
+            let time_start = t_pos + 1;
+            // HH:MM:SS is 8 characters
+            let time_end = (time_start + 8).min(self.time.len());
+            let time_part = &self.time[time_start..time_end];
+            let formatted_date = date_part.replace('-', "/");
+            format!("{} {}", formatted_date, time_part)
+        } else {
+            self.time.clone()
+        }
+    }
+}
+
+/// Converts a JSON log line to human-readable format, or returns the original line if parsing fails.
+fn convert_json_log_line(line: &str) -> String {
+    match serde_json::from_str::<RcloneJsonLogLine>(line) {
+        Ok(log_line) => log_line.to_human_readable(),
+        Err(_) => line.to_string(),
+    }
 }
 
 #[derive(Debug)]
@@ -262,27 +307,23 @@ impl RcloneClient {
 
             if let (Some(stats_tx), Some(total_bytes)) = (stats_tx, total_bytes) {
                 while let Some(line) = lines.next_line().await? {
-                    if !line.contains("\"stats\":") {
-                        stderr_lines.push(line);
-                        continue;
-                    }
-                    match serde_json::from_str::<RcloneStatLine>(&line) {
-                        Ok(stat_line) => {
-                            trace!(?stat_line, "parsed rclone stat line");
-                            let mut stats = stat_line.stats;
-                            stats.total_bytes = total_bytes;
-                            trace!(?stats, "sending stats update");
-                            if stats_tx.send(stats).is_err() {
-                                warn!("Stats receiver dropped, stopping stats processing.");
-                                break;
+                    match serde_json::from_str::<RcloneJsonLogLine>(&line) {
+                        Ok(log_line) => {
+                            if let Some(mut stats) = log_line.stats {
+                                trace!(?stats, "parsed rclone stats");
+                                stats.total_bytes = total_bytes;
+                                trace!(?stats, "sending stats update");
+                                if stats_tx.send(stats).is_err() {
+                                    warn!("Stats receiver dropped, stopping stats processing.");
+                                    break;
+                                }
+                            } else {
+                                // No stats field, convert to human-readable format
+                                stderr_lines.push(log_line.to_human_readable());
                             }
                         }
                         Err(_) => {
-                            // debug!(
-                            //     line = %line,
-                            //     error = &e as &dyn Error,
-                            //     "Error parsing rclone stat line"
-                            // );
+                            // Not valid JSON, keep raw line
                             stderr_lines.push(line);
                         }
                     }
@@ -295,7 +336,11 @@ impl RcloneClient {
                 false => {
                     // Read any remaining lines (for non-stats case where loop didn't run)
                     while let Some(line) = lines.next_line().await? {
-                        stderr_lines.push(line);
+                        if use_json_log {
+                            stderr_lines.push(convert_json_log_line(&line));
+                        } else {
+                            stderr_lines.push(line);
+                        }
                     }
                     let stderr_str = stderr_lines.join("\n");
                     error!(code = status.code().unwrap_or(-1), stderr = %stderr_str, "rclone transfer failed");
@@ -562,5 +607,120 @@ mod tests {
 
         assert_eq!(base, same, "identical bandwidth limits should be equal");
         assert_ne!(base, with_limit, "changing bandwidth limit should change storage equality");
+    }
+
+    #[test]
+    fn parse_json_log_line_with_object() {
+        let json = r#"{"time":"2025-12-03T16:18:24.49104384+03:00","level":"error","msg":"error reading source root directory: directory not found","object":"webdav root 'Quest Games/A Fishermans Tale v16+1.064 -QU'","objectType":"*webdav.Fs","source":"slog/logger.go:256"}"#;
+        let parsed: RcloneJsonLogLine = serde_json::from_str(json).unwrap();
+
+        assert_eq!(parsed.level, "error");
+        assert_eq!(parsed.msg, "error reading source root directory: directory not found");
+        assert_eq!(
+            parsed.object,
+            Some("webdav root 'Quest Games/A Fishermans Tale v16+1.064 -QU'".to_string())
+        );
+        assert!(parsed.stats.is_none());
+    }
+
+    #[test]
+    fn parse_json_log_line_without_object() {
+        let json = r#"{"time":"2025-12-03T16:18:24.491141917+03:00","level":"error","msg":"Attempt 1/3 failed with 1 errors and: directory not found","source":"slog/logger.go:256"}"#;
+        let parsed: RcloneJsonLogLine = serde_json::from_str(json).unwrap();
+
+        assert_eq!(parsed.level, "error");
+        assert_eq!(parsed.msg, "Attempt 1/3 failed with 1 errors and: directory not found");
+        assert!(parsed.object.is_none());
+        assert!(parsed.stats.is_none());
+    }
+
+    #[test]
+    fn parse_json_log_line_with_stats() {
+        let json = r#"{"time":"2025-12-03T16:36:50.513851561+03:00","level":"info","msg":"\nTransferred: ...","stats":{"bytes":39841792,"checks":0,"deletedDirs":0,"deletes":0,"elapsedTime":2.000537856,"errors":0,"eta":3,"fatalError":false,"listed":1,"renames":0,"retryError":false,"serverSideCopies":0,"serverSideCopyBytes":0,"serverSideMoveBytes":0,"serverSideMoves":0,"speed":19920887.154321734,"totalBytes":107369499,"totalChecks":0,"totalTransfers":1,"transferTime":1.907390027,"transfers":0},"source":"slog/logger.go:256"}"#;
+        let parsed: RcloneJsonLogLine = serde_json::from_str(json).unwrap();
+
+        assert_eq!(parsed.level, "info");
+        assert!(parsed.stats.is_some());
+
+        let stats = parsed.stats.unwrap();
+        assert_eq!(stats.bytes, 39841792);
+        assert_eq!(stats.total_bytes, 107369499);
+        assert_eq!(stats.speed, 19920887); // truncated from float
+    }
+
+    #[test]
+    fn to_human_readable_with_object() {
+        let log_line = RcloneJsonLogLine {
+            time: "2025-12-03T16:18:24.49104384+03:00".to_string(),
+            level: "error".to_string(),
+            msg: "error reading source root directory: directory not found".to_string(),
+            object: Some("webdav root 'Quest Games/Test'".to_string()),
+            stats: None,
+        };
+
+        let human = log_line.to_human_readable();
+        assert_eq!(
+            human,
+            "2025/12/03 16:18:24 ERROR : webdav root 'Quest Games/Test': error reading source \
+             root directory: directory not found"
+        );
+    }
+
+    #[test]
+    fn to_human_readable_without_object() {
+        let log_line = RcloneJsonLogLine {
+            time: "2025-12-03T16:18:24.491141917+03:00".to_string(),
+            level: "error".to_string(),
+            msg: "Attempt 1/3 failed with 1 errors and: directory not found".to_string(),
+            object: None,
+            stats: None,
+        };
+
+        let human = log_line.to_human_readable();
+        assert_eq!(
+            human,
+            "2025/12/03 16:18:24 ERROR : Attempt 1/3 failed with 1 errors and: directory not found"
+        );
+    }
+
+    #[test]
+    fn to_human_readable_notice_level() {
+        let log_line = RcloneJsonLogLine {
+            time: "2025-12-03T16:18:24.677564739+03:00".to_string(),
+            level: "notice".to_string(),
+            msg: "Failed to sync: directory not found".to_string(),
+            object: None,
+            stats: None,
+        };
+
+        let human = log_line.to_human_readable();
+        assert_eq!(human, "2025/12/03 16:18:24 NOTICE : Failed to sync: directory not found");
+    }
+
+    #[test]
+    fn format_time_iso_to_rclone() {
+        let log_line = RcloneJsonLogLine {
+            time: "2025-12-03T16:18:24.677508041+03:00".to_string(),
+            level: "info".to_string(),
+            msg: "test".to_string(),
+            object: None,
+            stats: None,
+        };
+
+        assert_eq!(log_line.format_time(), "2025/12/03 16:18:24");
+    }
+
+    #[test]
+    fn convert_json_log_line_valid() {
+        let json = r#"{"time":"2025-12-03T16:25:39.000000000+03:00","level":"error","msg":"test message","source":"test"}"#;
+        let result = convert_json_log_line(json);
+        assert_eq!(result, "2025/12/03 16:25:39 ERROR : test message");
+    }
+
+    #[test]
+    fn convert_json_log_line_invalid_returns_original() {
+        let invalid = "not valid json at all";
+        let result = convert_json_log_line(invalid);
+        assert_eq!(result, invalid);
     }
 }

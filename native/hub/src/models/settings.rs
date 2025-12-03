@@ -117,7 +117,7 @@ impl Default for Settings {
 }
 
 impl Settings {
-    pub fn new(portable_mode: bool) -> Self {
+    pub(crate) fn new(portable_mode: bool) -> Self {
         let mut settings = Settings::default();
 
         if portable_mode {
@@ -128,7 +128,7 @@ impl Settings {
         settings
     }
 
-    pub fn load_from_file(settings_file: &Path, portable_mode: bool) -> Result<Self> {
+    pub(crate) fn load_from_file(settings_file: &Path, portable_mode: bool) -> Result<Self> {
         let file_content =
             fs::read_to_string(settings_file).context("Failed to read settings file")?;
 
@@ -170,7 +170,7 @@ impl Settings {
         Ok(settings)
     }
 
-    pub fn save_to_file(&self, settings_file: &Path) -> Result<()> {
+    pub(crate) fn save_to_file(&self, settings_file: &Path) -> Result<()> {
         // TODO: Validate settings
 
         let settings_json =
@@ -179,11 +179,11 @@ impl Settings {
         Ok(())
     }
 
-    pub fn downloads_location(&self) -> PathBuf {
+    pub(crate) fn downloads_location(&self) -> PathBuf {
         PathBuf::from(&self.downloads_location)
     }
 
-    pub fn backups_location(&self) -> PathBuf {
+    pub(crate) fn backups_location(&self) -> PathBuf {
         PathBuf::from(&self.backups_location)
     }
 }

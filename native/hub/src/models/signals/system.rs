@@ -48,7 +48,12 @@ pub(crate) struct AppVersionInfo {
 }
 
 impl Toast {
-    pub fn send(title: String, description: String, error: bool, duration: Option<Duration>) {
+    pub(crate) fn send(
+        title: String,
+        description: String,
+        error: bool,
+        duration: Option<Duration>,
+    ) {
         let duration_ms = duration.map(|d| d.as_millis() as u32);
         debug!(
             title = title,

@@ -45,8 +45,8 @@ pub(crate) struct Downloader {
     rclone_config_path: PathBuf,
     root_dir: String,
     list_path: String,
-    cloud_apps: Mutex<Vec<CloudApp>>,
-    donation_blacklist: Mutex<Vec<String>>,
+    cloud_apps: Arc<Mutex<Vec<CloudApp>>>,
+    donation_blacklist: Arc<Mutex<Vec<String>>>,
     storage: RwLock<RcloneStorage>,
     download_dir: RwLock<PathBuf>,
     current_load_token: RwLock<CancellationToken>,
@@ -149,8 +149,8 @@ impl Downloader {
             rclone_config_path,
             root_dir,
             list_path,
-            cloud_apps: Mutex::new(Vec::new()),
-            donation_blacklist: Mutex::new(Vec::new()),
+            cloud_apps: Arc::new(Mutex::new(Vec::new())),
+            donation_blacklist: Arc::new(Mutex::new(Vec::new())),
             storage: RwLock::new(storage),
             download_dir: RwLock::new(settings.downloads_location()),
             current_load_token: RwLock::new(CancellationToken::new()),
@@ -582,23 +582,10 @@ impl Downloader {
             repo.load_app_list(storage, list_path, &cache_dir, &client, cancellation_token.clone());
 
         match tokio::time::timeout(timeout, fut).await {
-            Ok(Ok(mut result)) => {
+            Ok(Ok(result)) => {
                 debug!(len = result.apps.len(), "Loaded app list successfully");
 
-                // TODO: load popularity data in background?
-                if !result.apps.is_empty()
-                    && let Err(e) =
-                        cloud_api::load_popularity_for_apps(&client, &mut result.apps).await
-                {
-                    warn!(error = e.as_ref() as &dyn Error, "Failed to load popularity data");
-                    Toast::send(
-                        "Error".to_string(),
-                        format!("Failed to load popularity data: {e:#}"),
-                        true,
-                        Some(Duration::from_secs(5)),
-                    );
-                }
-
+                // Cache and send without popularity
                 {
                     let mut cache = self.cloud_apps.lock().await;
                     *cache = result.apps.clone();
@@ -607,7 +594,59 @@ impl Downloader {
                     let mut blacklist_cache = self.donation_blacklist.lock().await;
                     *blacklist_cache = result.donation_blacklist.clone();
                 }
-                send_event(false, Some(result.apps), Some(result.donation_blacklist), None);
+                send_event(false, Some(result.apps.clone()), Some(result.donation_blacklist), None);
+
+                // Load popularity data in background and send updated list if successful
+                if !result.apps.is_empty() {
+                    let cloud_apps_cache = Arc::clone(&self.cloud_apps);
+                    let donation_blacklist_cache = Arc::clone(&self.donation_blacklist);
+                    let client = client.clone();
+                    let cancel = cancellation_token.clone();
+                    tokio::spawn(
+                        async move {
+                            cancel
+                                .run_until_cancelled(async {
+                                    let mut apps = {
+                                        let cache = cloud_apps_cache.lock().await;
+                                        cache.clone()
+                                    };
+
+                                    match cloud_api::load_popularity_for_apps(&client, &mut apps)
+                                        .await
+                                    {
+                                        Ok(()) => {
+                                            debug!(
+                                                "Popularity data loaded, sending updated app list"
+                                            );
+                                            {
+                                                let mut cache = cloud_apps_cache.lock().await;
+                                                *cache = apps.clone();
+                                            }
+                                            let blacklist = {
+                                                let cache = donation_blacklist_cache.lock().await;
+                                                cache.clone()
+                                            };
+                                            send_event(false, Some(apps), Some(blacklist), None);
+                                        }
+                                        Err(e) => {
+                                            warn!(
+                                                error = e.as_ref() as &dyn Error,
+                                                "Failed to load popularity data"
+                                            );
+                                            Toast::send(
+                                                "Error".to_string(),
+                                                format!("Failed to load popularity data: {e:#}"),
+                                                true,
+                                                Some(Duration::from_secs(5)),
+                                            );
+                                        }
+                                    }
+                                })
+                                .await;
+                        }
+                        .instrument(info_span!("task_load_popularity")),
+                    );
+                }
             }
             Ok(Err(e)) => {
                 if cancellation_token.is_cancelled() {

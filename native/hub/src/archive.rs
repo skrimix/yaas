@@ -3,7 +3,7 @@ use std::{
     io,
     path::{Path, PathBuf},
     process::Stdio,
-    sync::LazyLock,
+    sync::Mutex,
 };
 
 use anyhow::{Context, Result, anyhow, ensure};
@@ -13,8 +13,8 @@ use tracing::{debug, instrument};
 
 use crate::utils::resolve_binary_path;
 
-// TODO: run resolve every time if not found
-static SEVENZ_PATH: LazyLock<Option<PathBuf>> = LazyLock::new(|| resolve_7z_path().ok());
+/// Cached 7-Zip binary path. Re-resolved if missing or if the cached path no longer exists.
+static SEVENZ_PATH: Mutex<Option<PathBuf>> = Mutex::new(None);
 
 #[instrument(level = "debug", err)]
 fn resolve_7z_path() -> Result<PathBuf> {
@@ -34,12 +34,29 @@ fn resolve_7z_path() -> Result<PathBuf> {
     Err(anyhow!("7-Zip binary not found (tried {:?})", CANDIDATES))
 }
 
+/// Gets the 7-Zip binary path, using a cached value if available and still valid.
+/// Re-resolves the path if not cached or if the cached path no longer exists.
+fn get_7z_path() -> Result<PathBuf> {
+    let mut guard = SEVENZ_PATH.lock().unwrap();
+
+    if let Some(path) = guard.as_ref() {
+        if path.exists() {
+            return Ok(path.clone());
+        }
+        debug!("Cached 7-Zip path no longer exists, re-resolving");
+    }
+
+    let path = resolve_7z_path()?;
+    *guard = Some(path.clone());
+    Ok(path)
+}
+
 async fn run_7z<I, S>(args: I, cancel: Option<&CancellationToken>) -> Result<()>
 where
     I: IntoIterator<Item = S>,
     S: AsRef<OsStr>,
 {
-    let bin = SEVENZ_PATH.clone().context("No 7-Zip binary found")?;
+    let bin = get_7z_path()?;
 
     let mut cmd = TokioCommand::new(&bin);
     cmd.args(args).stdin(Stdio::null()).stdout(Stdio::null()).stderr(Stdio::piped());
@@ -191,7 +208,7 @@ where
     I: IntoIterator<Item = S>,
     S: AsRef<OsStr>,
 {
-    let bin = SEVENZ_PATH.clone().context("No 7-Zip binary found")?;
+    let bin = get_7z_path()?;
 
     let output = TokioCommand::new(&bin)
         .args(args)

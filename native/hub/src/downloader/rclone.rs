@@ -257,9 +257,15 @@ impl RcloneClient {
         let mut lines = BufReader::new(stderr).lines();
 
         let transfer_future = async {
+            // Collect non-stat lines for error reporting
+            let mut stderr_lines: Vec<String> = Vec::new();
+
             if let (Some(stats_tx), Some(total_bytes)) = (stats_tx, total_bytes) {
                 while let Some(line) = lines.next_line().await? {
-                    let line: String = line;
+                    if !line.contains("\"stats\":") {
+                        stderr_lines.push(line);
+                        continue;
+                    }
                     match serde_json::from_str::<RcloneStatLine>(&line) {
                         Ok(stat_line) => {
                             trace!(?stat_line, "parsed rclone stat line");
@@ -271,12 +277,13 @@ impl RcloneClient {
                                 break;
                             }
                         }
-                        Err(e) => {
-                            debug!(
-                                line = line,
-                                error = &e as &dyn Error,
-                                "Error parsing rclone stat line"
-                            );
+                        Err(_) => {
+                            // debug!(
+                            //     line = %line,
+                            //     error = &e as &dyn Error,
+                            //     "Error parsing rclone stat line"
+                            // );
+                            stderr_lines.push(line);
                         }
                     }
                 }
@@ -286,10 +293,11 @@ impl RcloneClient {
             match status.success() {
                 true => Ok(()),
                 false => {
-                    let mut stderr_str = String::new();
+                    // Read any remaining lines (for non-stats case where loop didn't run)
                     while let Some(line) = lines.next_line().await? {
-                        stderr_str.push_str(&line);
+                        stderr_lines.push(line);
                     }
+                    let stderr_str = stderr_lines.join("\n");
                     error!(code = status.code().unwrap_or(-1), stderr = %stderr_str, "rclone transfer failed");
                     Err(anyhow!(
                         "rclone failed with exit code: {}, stderr: {}",

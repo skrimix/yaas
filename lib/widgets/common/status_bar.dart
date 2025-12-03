@@ -331,7 +331,9 @@ class _DeviceSwitcherLabelState extends State<_DeviceSwitcherLabel>
         ? device.deviceSerial
         : null;
 
-    // TODO: can we calculate this dynamically?
+    // Menu width is hardcoded because Flutter's MenuAnchor doesn't support
+    // intrinsic width calculation well, and using LayoutBuilder causes issues
+    // with menu positioning. The values accommodate typical device serials.
     final menuWidth = anyWireless ? 400.0 : 360.0;
     List<Widget> buildMenuItems() {
       final l10n = AppLocalizations.of(context);

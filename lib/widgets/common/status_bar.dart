@@ -185,6 +185,7 @@ class StatusBar extends StatelessWidget {
     final hasActiveTasks = activeTasks.isNotEmpty;
     final hasRecentTasks = recentTasks.isNotEmpty;
     final progress = hasActiveTasks ? activeTasks.first.stepProgress : null;
+    final failedCount = taskState.failedTaskCount;
 
     return Material(
       color: Colors.transparent,
@@ -212,17 +213,27 @@ class StatusBar extends StatelessWidget {
               Text(l10n.activeTasks(activeTasks.length)),
             ] else ...[
               Icon(
-                hasRecentTasks ? Icons.task_alt : Icons.check_circle_outline,
+                failedCount > 0
+                    ? Icons.error_outline
+                    : hasRecentTasks
+                        ? Icons.task_alt
+                        : Icons.check_circle_outline,
                 size: 16,
-                color: Theme.of(context).colorScheme.onSurface.withValues(
-                      alpha: hasRecentTasks ? 1.0 : 0.5,
-                    ),
+                color: failedCount > 0
+                    ? Theme.of(context).colorScheme.error
+                    : Theme.of(context).colorScheme.onSurface.withValues(
+                          alpha: hasRecentTasks ? 1.0 : 0.5,
+                        ),
               ),
-              if (hasRecentTasks || true) ...[
-                // TODO: show task error count badge
-                // TODO: show task count?
-                // TODO: add recent task clearing
-                const SizedBox(width: 8),
+              const SizedBox(width: 8),
+              if (failedCount > 0) ...[
+                Text(
+                  l10n.failedTasks(failedCount),
+                  style: TextStyle(
+                    color: Theme.of(context).colorScheme.error,
+                  ),
+                ),
+              ] else ...[
                 Text(
                   l10n.viewTasks,
                   style: TextStyle(

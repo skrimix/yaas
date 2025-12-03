@@ -1263,6 +1263,17 @@ class AppLocalizationsEn extends AppLocalizations {
   String get clearRecentTasks => 'Clear recent tasks';
 
   @override
+  String failedTasks(int count) {
+    String _temp0 = intl.Intl.pluralLogic(
+      count,
+      locale: localeName,
+      other: '$count failed tasks',
+      one: '$count failed task',
+    );
+    return '$_temp0';
+  }
+
+  @override
   String get cancelTask => 'Cancel Task';
 
   @override

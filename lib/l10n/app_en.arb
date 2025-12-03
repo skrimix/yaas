@@ -608,6 +608,13 @@
     "tasksEmptyActive": "No active tasks",
     "tasksEmptyRecent": "No recent tasks",
     "clearRecentTasks": "Clear recent tasks",
+    "failedTasks": "{count, plural, one {{count} failed task} other {{count} failed tasks}}",
+    "@failedTasks": {
+        "description": "Failed tasks count in status bar",
+        "placeholders": {
+            "count": {"type": "int"}
+        }
+    },
     "cancelTask": "Cancel Task",
     "taskKindDownload": "Download",
     "taskKindDownloadInstall": "Download & Install",

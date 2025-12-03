@@ -1279,6 +1279,19 @@ class AppLocalizationsRu extends AppLocalizations {
   String get clearRecentTasks => 'Очистить недавние задачи';
 
   @override
+  String failedTasks(int count) {
+    String _temp0 = intl.Intl.pluralLogic(
+      count,
+      locale: localeName,
+      other: '$count неудачных задач',
+      many: '$count неудачных задач',
+      few: '$count неудачные задачи',
+      one: '$count неудачная задача',
+    );
+    return '$_temp0';
+  }
+
+  @override
   String get cancelTask => 'Отменить задачу';
 
   @override

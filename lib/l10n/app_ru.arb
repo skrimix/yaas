@@ -602,6 +602,13 @@
     "tasksEmptyActive": "Нет активных задач",
     "tasksEmptyRecent": "Нет недавних задач",
     "clearRecentTasks": "Очистить недавние задачи",
+    "failedTasks": "{count, plural, one {{count} неудачная задача} few {{count} неудачные задачи} many {{count} неудачных задач} other {{count} неудачных задач}}",
+    "@failedTasks": {
+        "description": "Failed tasks count in status bar",
+        "placeholders": {
+            "count": {"type": "int"}
+        }
+    },
     "cancelTask": "Отменить задачу",
     "taskKindDownload": "Скачать",
     "taskKindDownloadInstall": "Скачать и установить",

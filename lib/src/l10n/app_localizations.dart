@@ -2414,6 +2414,12 @@ abstract class AppLocalizations {
   /// **'Clear recent tasks'**
   String get clearRecentTasks;
 
+  /// Failed tasks count in status bar
+  ///
+  /// In en, this message translates to:
+  /// **'{count, plural, one {{count} failed task} other {{count} failed tasks}}'**
+  String failedTasks(int count);
+
   /// No description provided for @cancelTask.
   ///
   /// In en, this message translates to:

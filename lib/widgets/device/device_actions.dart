@@ -63,35 +63,8 @@ class DeviceActionsCard extends StatelessWidget {
 
               const SizedBox(height: 16),
 
-              // Guardian
-              // TODO: Convert into a stateful toggle
-              Row(
-                children: [
-                  const Icon(Icons.security),
-                  const SizedBox(width: 8),
-                  Expanded(
-                    child: Text(l10n.deviceGuardian,
-                        style: Theme.of(context).textTheme.titleSmall),
-                  ),
-                  AnimatedAdbButton(
-                    icon: Icons.pause_circle_filled,
-                    tooltip: l10n.guardianSuspend,
-                    commandType: AdbCommandKind.guardianPausedSet,
-                    commandKey: 'suspend',
-                    onPressed: () => _send('suspend',
-                        const AdbCommandSetGuardianPaused(value: true)),
-                  ),
-                  const SizedBox(width: 8),
-                  AnimatedAdbButton(
-                    icon: Icons.play_circle_fill,
-                    tooltip: l10n.guardianResume,
-                    commandType: AdbCommandKind.guardianPausedSet,
-                    commandKey: 'resume',
-                    onPressed: () => _send('resume',
-                        const AdbCommandSetGuardianPaused(value: false)),
-                  ),
-                ],
-              ),
+              // Guardian toggle
+              const _GuardianToggle(),
 
               const SizedBox(height: 16),
 
@@ -191,6 +164,106 @@ class DeviceActionsCard extends StatelessWidget {
 
     AdbRequest(command: const AdbCommandStartCasting(), commandKey: 'cast')
         .sendSignalToRust();
+  }
+}
+
+/// Guardian toggle that shows the current state and allows toggling
+/// ON = Guardian active, OFF = Guardian suspended
+class _GuardianToggle extends StatefulWidget {
+  const _GuardianToggle();
+
+  @override
+  State<_GuardianToggle> createState() => _GuardianToggleState();
+}
+
+class _GuardianToggleState extends State<_GuardianToggle> {
+  bool _isUpdating = false;
+  StreamSubscription? _subscription;
+
+  @override
+  void initState() {
+    super.initState();
+    _subscription = AdbCommandCompletedEvent.rustSignalStream.listen((event) {
+      final message = event.message;
+      if (message.commandType == AdbCommandKind.guardianPausedSet &&
+          message.commandKey == 'guardian') {
+        if (mounted) setState(() => _isUpdating = false);
+      }
+    });
+  }
+
+  @override
+  void dispose() {
+    _subscription?.cancel();
+    super.dispose();
+  }
+
+  void _toggle(bool newActiveState) {
+    if (_isUpdating) return;
+    setState(() => _isUpdating = true);
+    // newActiveState == true means Guardian should be active (not paused)
+    AdbRequest(
+      command: AdbCommandSetGuardianPaused(value: !newActiveState),
+      commandKey: 'guardian',
+    ).sendSignalToRust();
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    final l10n = AppLocalizations.of(context);
+    final device = context.watch<DeviceState>();
+    final guardianPaused = device.guardianPaused;
+
+    // guardianActive = !guardianPaused
+    final bool? guardianActive =
+        guardianPaused != null ? !guardianPaused : null;
+    final isActive = guardianActive ?? true;
+    final theme = Theme.of(context);
+
+    return Row(
+      children: [
+        const Icon(Icons.security),
+        const SizedBox(width: 8),
+        Expanded(
+          child: Column(
+            crossAxisAlignment: CrossAxisAlignment.start,
+            children: [
+              Text(l10n.deviceGuardian, style: theme.textTheme.titleSmall),
+              Text(
+                isActive
+                    ? l10n.guardianStatusActive
+                    : l10n.guardianStatusSuspended,
+                style: theme.textTheme.bodySmall?.copyWith(
+                  color: theme.colorScheme.outline,
+                ),
+              ),
+            ],
+          ),
+        ),
+        if (_isUpdating)
+          const SizedBox(
+            width: 60,
+            height: 40,
+            child: Center(
+              child: SizedBox(
+                width: 20,
+                height: 20,
+                child: CircularProgressIndicator(strokeWidth: 2),
+              ),
+            ),
+          )
+        else
+          Switch.adaptive(
+            value: isActive,
+            onChanged: guardianActive != null ? _toggle : null,
+            activeTrackColor:
+                theme.colorScheme.primaryContainer.withValues(alpha: 0.6),
+            activeThumbColor: theme.colorScheme.primary.withValues(alpha: 0.8),
+            inactiveTrackColor: theme.colorScheme.surfaceContainerHighest,
+            inactiveThumbColor: theme.colorScheme.outline,
+          ),
+      ],
+    );
   }
 }
 

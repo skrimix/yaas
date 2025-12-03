@@ -586,12 +586,17 @@ impl AdbHandler {
             AdbCommand::SetGuardianPaused(paused) => {
                 let device = self.current_device().await?;
                 let result = device.set_guardian_paused(paused).await;
+                let success = result.is_ok();
                 AdbCommandCompletedEvent {
                     command_type: AdbCommandKind::GuardianPausedSet,
                     command_key: key.clone(),
-                    success: result.is_ok(),
+                    success,
                 }
                 .send_signal_to_dart();
+                // Refresh guardian state
+                if success {
+                    let _ = self.refresh_device().await;
+                }
                 result.map(|_| ()).context("Failed to set guardian paused state")
             }
 

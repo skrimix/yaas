@@ -35,6 +35,7 @@ class DeviceState extends ChangeNotifier {
   ControllerInfo? get rightController => _device?.controllers.right;
 
   SpaceInfo? get spaceInfo => _device?.spaceInfo;
+  bool? get guardianPaused => _device?.guardianPaused;
 
   String controllerStatusString(
       BuildContext context, ControllerInfo? controller) {

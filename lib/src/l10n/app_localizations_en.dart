@@ -625,6 +625,12 @@ class AppLocalizationsEn extends AppLocalizations {
   String get guardianResume => 'Resume Guardian';
 
   @override
+  String get guardianStatusSuspended => 'Suspended';
+
+  @override
+  String get guardianStatusActive => 'Active';
+
+  @override
   String get deviceWirelessAdb => 'Wireless ADB';
 
   @override

@@ -634,6 +634,12 @@ class AppLocalizationsRu extends AppLocalizations {
   String get guardianResume => 'Возобновить Guardian';
 
   @override
+  String get guardianStatusSuspended => 'Приостановлен';
+
+  @override
+  String get guardianStatusActive => 'Активен';
+
+  @override
   String get deviceWirelessAdb => 'Беспроводной ADB';
 
   @override

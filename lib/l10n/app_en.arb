@@ -309,6 +309,8 @@
   "deviceGuardian": "Guardian",
   "guardianSuspend": "Suspend Guardian",
   "guardianResume": "Resume Guardian",
+  "guardianStatusSuspended": "Suspended",
+  "guardianStatusActive": "Active",
   "deviceWirelessAdb": "Wireless ADB",
   "deviceEnableWirelessAdb": "Enable ADB over Wi‑Fi",
     "copiedToClipboard": "Copied to clipboard",

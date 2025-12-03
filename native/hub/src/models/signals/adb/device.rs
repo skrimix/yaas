@@ -18,6 +18,8 @@ pub(crate) struct AdbDevice {
     pub controllers: HeadsetControllersInfo,
     pub space_info: SpaceInfo,
     pub installed_packages: Vec<InstalledPackage>,
+    /// Whether the Guardian system is currently paused on the device
+    pub guardian_paused: Option<bool>,
 }
 
 #[derive(Serialize, RustSignal)]
@@ -38,6 +40,7 @@ impl From<adb::device::AdbDevice> for AdbDevice {
             controllers: device.controllers,
             space_info: device.space_info,
             installed_packages: device.installed_packages,
+            guardian_paused: device.guardian_paused,
         }
     }
 }

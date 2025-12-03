@@ -303,6 +303,8 @@
     "deviceGuardian": "Guardian",
     "guardianSuspend": "Приостановить Guardian",
     "guardianResume": "Возобновить Guardian",
+    "guardianStatusSuspended": "Приостановлен",
+    "guardianStatusActive": "Активен",
     "deviceWirelessAdb": "Беспроводной ADB",
     "deviceEnableWirelessAdb": "Включить ADB по Wi‑Fi",
     "copiedToClipboard": "Скопировано в буфер обмена",

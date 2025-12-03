@@ -73,6 +73,8 @@ pub(crate) struct AdbDevice {
     /// List of installed packages on the device
     #[debug("({} items)", installed_packages.len())]
     pub installed_packages: Vec<InstalledPackage>,
+    /// Whether the Guardian system is currently paused on the device
+    pub guardian_paused: Option<bool>,
 }
 
 impl Display for AdbDevice {
@@ -116,6 +118,7 @@ impl AdbDevice {
             controllers: HeadsetControllersInfo::default(),
             space_info: SpaceInfo::default(),
             installed_packages: Vec::new(),
+            guardian_paused: None,
         };
 
         // Refresh identity first to use manufacturer + model if available
@@ -179,7 +182,7 @@ impl AdbDevice {
             .to_string())
     }
 
-    /// Refreshes device information (packages, battery, space)
+    /// Refreshes device information (packages, battery, space, guardian)
     #[instrument(level = "debug", skip(self), err)]
     pub(super) async fn refresh(&mut self) -> Result<()> {
         let mut errors = Vec::new();
@@ -196,6 +199,10 @@ impl AdbDevice {
         if let Err(e) = self.refresh_space_info().await {
             errors.push(("space", e));
             self.space_info = SpaceInfo::default();
+        }
+        if let Err(e) = self.refresh_guardian_state().await {
+            errors.push(("guardian", e));
+            self.guardian_paused = None;
         }
 
         if !errors.is_empty() {
@@ -302,6 +309,16 @@ impl AdbDevice {
         self.shell_checked(&format!("setprop debug.oculus.guardian_pause {value}"))
             .await
             .context(format!("Failed to set guardian paused: {paused}"))?;
+        Ok(())
+    }
+
+    /// Refreshes the guardian paused state from the device
+    #[instrument(level = "debug", skip(self), err)]
+    async fn refresh_guardian_state(&mut self) -> Result<()> {
+        let output = self.shell("getprop debug.oculus.guardian_pause").await?;
+        let trimmed = output.trim();
+        // Property value is "1" for paused, "0" or empty for not paused
+        self.guardian_paused = Some(trimmed == "1");
         Ok(())
     }
 

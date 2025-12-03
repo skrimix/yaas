@@ -1214,6 +1214,18 @@ abstract class AppLocalizations {
   /// **'Resume Guardian'**
   String get guardianResume;
 
+  /// No description provided for @guardianStatusSuspended.
+  ///
+  /// In en, this message translates to:
+  /// **'Suspended'**
+  String get guardianStatusSuspended;
+
+  /// No description provided for @guardianStatusActive.
+  ///
+  /// In en, this message translates to:
+  /// **'Active'**
+  String get guardianStatusActive;
+
   /// No description provided for @deviceWirelessAdb.
   ///
   /// In en, this message translates to:

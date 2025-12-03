@@ -608,6 +608,7 @@ impl Downloader {
                     tokio::spawn(
                         async move {
                             // BUG: If this is cancelled by another non-force_refresh load, we get left with no popularity data, since the second load will use the cache.
+                            // Simply switching to Donwloader-wide cancellation token would introduce a race condition around app list read/write.
                             cancel
                                 .run_until_cancelled(async {
                                     let mut apps = {

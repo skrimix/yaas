@@ -61,7 +61,7 @@ class SideloadUtils {
       style: ToastificationStyle.flat,
       title: Text(AppLocalizations.of(context).commonError),
       description: Text(message),
-      autoCloseDuration: const Duration(seconds: 3),
+      autoCloseDuration: const Duration(seconds: 10),
       backgroundColor: Theme.of(context).colorScheme.surfaceContainer,
       borderSide: BorderSide.none,
       alignment: Alignment.bottomRight,

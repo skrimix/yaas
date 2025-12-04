@@ -8,7 +8,13 @@ pub(crate) enum AdbCommand {
     UninstallPackage(String),
     RefreshDevice,
     Reboot(RebootMode),
-    SetProximitySensor(bool),
+    /// Set proximity sensor state.
+    /// - `enabled`: true to enable sensor, false to disable
+    /// - `duration_ms`: optional duration in milliseconds for how long to disable (only used when enabled=false)
+    SetProximitySensor {
+        enabled: bool,
+        duration_ms: Option<u64>,
+    },
     SetGuardianPaused(bool),
     GetBatteryDump,
     /// Windows-only: Start Meta Quest Casting tool against the current device

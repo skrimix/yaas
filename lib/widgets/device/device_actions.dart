@@ -32,34 +32,8 @@ class DeviceActionsCard extends StatelessWidget {
                   style: Theme.of(context).textTheme.titleMedium),
               const SizedBox(height: 12),
 
-              // Proximity sensor
-              Row(
-                children: [
-                  const Icon(Icons.sensors),
-                  const SizedBox(width: 8),
-                  Expanded(
-                    child: Text(l10n.deviceProximitySensor,
-                        style: Theme.of(context).textTheme.titleSmall),
-                  ),
-                  AnimatedAdbButton(
-                    icon: Icons.sensors_off,
-                    tooltip: l10n.disableProximitySensor,
-                    commandType: AdbCommandKind.proximitySensorSet,
-                    commandKey: 'disable',
-                    onPressed: () => _send('disable',
-                        const AdbCommandSetProximitySensor(value: false)),
-                  ),
-                  const SizedBox(width: 8),
-                  AnimatedAdbButton(
-                    icon: Icons.sensors,
-                    tooltip: l10n.enableProximitySensor,
-                    commandType: AdbCommandKind.proximitySensorSet,
-                    commandKey: 'enable',
-                    onPressed: () => _send('enable',
-                        const AdbCommandSetProximitySensor(value: true)),
-                  ),
-                ],
-              ),
+              // Proximity sensor toggle
+              const _ProximityToggle(),
 
               const SizedBox(height: 16),
 
@@ -261,6 +235,155 @@ class _GuardianToggleState extends State<_GuardianToggle> {
             activeThumbColor: theme.colorScheme.primary.withValues(alpha: 0.8),
             inactiveTrackColor: theme.colorScheme.surfaceContainerHighest,
             inactiveThumbColor: theme.colorScheme.outline,
+          ),
+      ],
+    );
+  }
+}
+
+/// Proximity sensor toggle that shows the current state and allows enabling/disabling.
+class _ProximityToggle extends StatefulWidget {
+  const _ProximityToggle();
+
+  @override
+  State<_ProximityToggle> createState() => _ProximityToggleState();
+}
+
+class _ProximityToggleState extends State<_ProximityToggle> {
+  bool _isUpdating = false;
+  StreamSubscription? _subscription;
+
+  @override
+  void initState() {
+    super.initState();
+    _subscription = AdbCommandCompletedEvent.rustSignalStream.listen((event) {
+      final message = event.message;
+      if (message.commandType == AdbCommandKind.proximitySensorSet &&
+          message.commandKey == 'proximity') {
+        if (mounted) setState(() => _isUpdating = false);
+      }
+    });
+  }
+
+  @override
+  void dispose() {
+    _subscription?.cancel();
+    super.dispose();
+  }
+
+  void _enableSensor() {
+    if (_isUpdating) return;
+    setState(() => _isUpdating = true);
+    AdbRequest(
+      command:
+          const AdbCommandSetProximitySensor(enabled: true, durationMs: null),
+      commandKey: 'proximity',
+    ).sendSignalToRust();
+  }
+
+  void _disableSensor(int durationMs) {
+    if (_isUpdating) return;
+    setState(() => _isUpdating = true);
+    AdbRequest(
+      command: AdbCommandSetProximitySensor(
+        enabled: false,
+        // 0 means no limit, pass null to Rust
+        durationMs:
+            durationMs > 0 ? Uint64.fromBigInt(BigInt.from(durationMs)) : null,
+      ),
+      commandKey: 'proximity',
+    ).sendSignalToRust();
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    final l10n = AppLocalizations.of(context);
+    final device = context.watch<DeviceState>();
+    final proximityDisabled = device.proximityDisabled;
+    final theme = Theme.of(context);
+
+    final sensorDisabled = proximityDisabled == true;
+
+    return Row(
+      children: [
+        Icon(sensorDisabled ? Icons.sensors_off : Icons.sensors),
+        const SizedBox(width: 8),
+        Expanded(
+          child: Column(
+            crossAxisAlignment: CrossAxisAlignment.start,
+            children: [
+              Text(l10n.deviceProximitySensor,
+                  style: theme.textTheme.titleSmall),
+              Text(
+                proximityDisabled == null
+                    ? l10n.proximityStatusUnknown
+                    : sensorDisabled
+                        ? l10n.proximityStatusDisabled
+                        : l10n.proximityStatusEnabled,
+                style: theme.textTheme.bodySmall?.copyWith(
+                  color: theme.colorScheme.outline,
+                ),
+              ),
+            ],
+          ),
+        ),
+        if (_isUpdating)
+          const SizedBox(
+            width: 60,
+            height: 20,
+            child: Center(
+              child: SizedBox(
+                width: 20,
+                height: 20,
+                child: CircularProgressIndicator(strokeWidth: 2),
+              ),
+            ),
+          )
+        else if (sensorDisabled)
+          FilledButton.tonal(
+            onPressed: _enableSensor,
+            child: Text(l10n.proximityEnable),
+          )
+        else
+          // Sensor is enabled or unknown
+          PopupMenuButton<int>(
+            enabled: proximityDisabled != null,
+            tooltip: l10n.disableProximitySensor,
+            onSelected: _disableSensor,
+            itemBuilder: (context) => [
+              PopupMenuItem(
+                value: 2 * 60 * 60 * 1000, // 2 hours
+                child: Text(l10n.proximityDisable2h),
+              ),
+              PopupMenuItem(
+                value: 4 * 60 * 60 * 1000, // 4 hours
+                child: Text(l10n.proximityDisable4h),
+              ),
+              PopupMenuItem(
+                value: 8 * 60 * 60 * 1000, // 8 hours
+                child: Text(l10n.proximityDisable8h),
+              ),
+              PopupMenuItem(
+                value: 0, // No limit
+                child: Text(l10n.proximityDisableNoLimit),
+              ),
+            ],
+            child: Container(
+              padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 8),
+              decoration: BoxDecoration(
+                color: theme.colorScheme.surfaceContainerHighest,
+                borderRadius: BorderRadius.circular(8),
+              ),
+              child: Row(
+                mainAxisSize: MainAxisSize.min,
+                children: [
+                  Text(l10n.disable, style: theme.textTheme.labelLarge),
+                  const SizedBox(width: 4),
+                  Icon(Icons.arrow_drop_down,
+                      size: 18, color: theme.colorScheme.onSurfaceVariant),
+                ],
+              ),
+            ),
           ),
       ],
     );

@@ -743,5 +743,14 @@
             }
         }
     },
-    "lowSpaceWarningContinue": "Всё равно продолжить"
+    "lowSpaceWarningContinue": "Всё равно продолжить",
+    "proximityStatusEnabled": "Включён",
+    "proximityStatusDisabled": "Отключён",
+    "proximityStatusUnknown": "Неизвестно",
+    "proximityEnable": "Включить",
+    "disable": "Отключить",
+    "proximityDisable2h": "Отключить на 2 часа",
+    "proximityDisable4h": "Отключить на 4 часа",
+    "proximityDisable8h": "Отключить на 8 часов",
+    "proximityDisableNoLimit": "Отключить (без лимита)"
 }

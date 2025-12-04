@@ -75,6 +75,8 @@ pub(crate) struct AdbDevice {
     pub installed_packages: Vec<InstalledPackage>,
     /// Whether the Guardian system is currently paused on the device
     pub guardian_paused: Option<bool>,
+    /// Whether the proximity sensor is currently disabled (faked/overridden) on the device
+    pub proximity_disabled: Option<bool>,
 }
 
 impl Display for AdbDevice {
@@ -119,6 +121,7 @@ impl AdbDevice {
             space_info: SpaceInfo::default(),
             installed_packages: Vec::new(),
             guardian_paused: None,
+            proximity_disabled: None,
         };
 
         // Refresh identity first to use manufacturer + model if available
@@ -204,6 +207,10 @@ impl AdbDevice {
             errors.push(("guardian", e));
             self.guardian_paused = None;
         }
+        if let Err(e) = self.refresh_proximity_state().await {
+            errors.push(("proximity", e));
+            self.proximity_disabled = None;
+        }
 
         if !errors.is_empty() {
             let error_msg = errors
@@ -229,7 +236,7 @@ impl AdbDevice {
     }
 
     /// Executes a shell command on the device
-    #[instrument(level = "debug", skip(self), err)]
+    #[instrument(level = "debug", skip(self), err, ret)]
     async fn shell(&self, command: &str) -> Result<String> {
         self.inner
             .execute_host_shell_command(command)
@@ -240,7 +247,7 @@ impl AdbDevice {
 
     /// Executes a shell command and fails if exit code is non-zero.
     /// Appends `; printf '\n%s' $?` and parses the final line as the exit status.
-    #[instrument(level = "debug", skip(self), err)]
+    #[instrument(level = "debug", skip(self), err, ret)]
     async fn shell_checked(&self, command: &str) -> Result<String> {
         let shell_output = self
             .shell(&format!("{} ; printf '\\n%s' $?", command))
@@ -284,18 +291,31 @@ impl AdbDevice {
     /// Sets the proximity sensor state
     ///
     /// # Arguments
-    /// * `enabled` - Whether to enable or disable the proximity sensor
+    /// * `enabled` - Whether to enable the real proximity sensor (true) or fake it as close (false)
+    /// * `duration_ms` - Optional duration in milliseconds for disabling (only used when enabled=false)
     #[instrument(level = "debug", skip(self), err)]
-    pub(super) async fn set_proximity_sensor(&self, enabled: bool) -> Result<()> {
-        // enable => automation_disable, disable => prox_close
+    pub(super) async fn set_proximity_sensor(
+        &self,
+        enabled: bool,
+        duration_ms: Option<u64>,
+    ) -> Result<()> {
         let cmd = if enabled {
-            "am broadcast -a com.oculus.vrpowermanager.automation_disable"
+            // Enable real sensor by disabling automation
+            "am broadcast -a com.oculus.vrpowermanager.automation_disable".to_string()
         } else {
-            "am broadcast -a com.oculus.vrpowermanager.prox_close"
+            // Disable sensor (fake as close)
+            match duration_ms {
+                Some(ms) => format!(
+                    "am broadcast -a com.oculus.vrpowermanager.prox_close --ei duration {}",
+                    ms
+                ),
+                None => "am broadcast -a com.oculus.vrpowermanager.prox_close".to_string(),
+            }
         };
-        self.shell_checked(cmd)
-            .await
-            .context(format!("Failed to set proximity sensor: {enabled}"))?;
+        self.shell_checked(&cmd).await.context(format!(
+            "Failed to set proximity sensor: enabled={}, duration_ms={:?}",
+            enabled, duration_ms
+        ))?;
         Ok(())
     }
 
@@ -319,6 +339,32 @@ impl AdbDevice {
         let trimmed = output.trim();
         // Property value is "1" for paused, "0" or empty for not paused
         self.guardian_paused = Some(trimmed == "1");
+        Ok(())
+    }
+
+    /// Refreshes the proximity sensor disabled state from the device.
+    /// Parses `dumpsys oculus.internal.power.IVrPowerManager/default` output.
+    /// - `Virtual proximity state: CLOSE` => proximity disabled (faked)
+    /// - `Virtual proximity state: DISABLED` => proximity enabled (real sensor)
+    #[instrument(level = "debug", skip(self), err)]
+    async fn refresh_proximity_state(&mut self) -> Result<()> {
+        let output = self.shell("dumpsys oculus.internal.power.IVrPowerManager/default").await?;
+
+        let regex = lazy_regex!(r"^Virtual proximity state: (\w+)");
+        if let Some(captures) = regex.captures(&output)
+            && let Some(state) = captures.get(1)
+        {
+            // CLOSE means proximity is faked (sensor disabled)
+            // DISABLED means proximity override is off (sensor enabled/real)
+            match state.as_str() {
+                "CLOSE" => self.proximity_disabled = Some(true),
+                "DISABLED" => self.proximity_disabled = Some(false),
+                _ => self.proximity_disabled = None,
+            }
+            return Ok(());
+        }
+
+        self.proximity_disabled = None;
         Ok(())
     }
 

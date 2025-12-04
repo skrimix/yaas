@@ -2918,6 +2918,60 @@ abstract class AppLocalizations {
   /// In en, this message translates to:
   /// **'Continue anyway'**
   String get lowSpaceWarningContinue;
+
+  /// No description provided for @proximityStatusEnabled.
+  ///
+  /// In en, this message translates to:
+  /// **'Enabled'**
+  String get proximityStatusEnabled;
+
+  /// No description provided for @proximityStatusDisabled.
+  ///
+  /// In en, this message translates to:
+  /// **'Disabled'**
+  String get proximityStatusDisabled;
+
+  /// No description provided for @proximityStatusUnknown.
+  ///
+  /// In en, this message translates to:
+  /// **'Unknown'**
+  String get proximityStatusUnknown;
+
+  /// No description provided for @proximityEnable.
+  ///
+  /// In en, this message translates to:
+  /// **'Enable'**
+  String get proximityEnable;
+
+  /// No description provided for @disable.
+  ///
+  /// In en, this message translates to:
+  /// **'Disable'**
+  String get disable;
+
+  /// No description provided for @proximityDisable2h.
+  ///
+  /// In en, this message translates to:
+  /// **'Disable for 2 hours'**
+  String get proximityDisable2h;
+
+  /// No description provided for @proximityDisable4h.
+  ///
+  /// In en, this message translates to:
+  /// **'Disable for 4 hours'**
+  String get proximityDisable4h;
+
+  /// No description provided for @proximityDisable8h.
+  ///
+  /// In en, this message translates to:
+  /// **'Disable for 8 hours'**
+  String get proximityDisable8h;
+
+  /// No description provided for @proximityDisableNoLimit.
+  ///
+  /// In en, this message translates to:
+  /// **'Disable (no limit)'**
+  String get proximityDisableNoLimit;
 }
 
 class _AppLocalizationsDelegate

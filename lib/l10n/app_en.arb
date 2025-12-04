@@ -749,5 +749,14 @@
             }
         }
     },
-    "lowSpaceWarningContinue": "Continue anyway"
+    "lowSpaceWarningContinue": "Continue anyway",
+    "proximityStatusEnabled": "Enabled",
+    "proximityStatusDisabled": "Disabled",
+    "proximityStatusUnknown": "Unknown",
+    "proximityEnable": "Enable",
+    "disable": "Disable",
+    "proximityDisable2h": "Disable for 2 hours",
+    "proximityDisable4h": "Disable for 4 hours",
+    "proximityDisable8h": "Disable for 8 hours",
+    "proximityDisableNoLimit": "Disable (no limit)"
 }

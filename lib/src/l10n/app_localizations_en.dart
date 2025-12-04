@@ -1542,4 +1542,31 @@ class AppLocalizationsEn extends AppLocalizations {
 
   @override
   String get lowSpaceWarningContinue => 'Continue anyway';
+
+  @override
+  String get proximityStatusEnabled => 'Enabled';
+
+  @override
+  String get proximityStatusDisabled => 'Disabled';
+
+  @override
+  String get proximityStatusUnknown => 'Unknown';
+
+  @override
+  String get proximityEnable => 'Enable';
+
+  @override
+  String get disable => 'Disable';
+
+  @override
+  String get proximityDisable2h => 'Disable for 2 hours';
+
+  @override
+  String get proximityDisable4h => 'Disable for 4 hours';
+
+  @override
+  String get proximityDisable8h => 'Disable for 8 hours';
+
+  @override
+  String get proximityDisableNoLimit => 'Disable (no limit)';
 }

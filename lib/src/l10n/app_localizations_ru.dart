@@ -1560,4 +1560,31 @@ class AppLocalizationsRu extends AppLocalizations {
 
   @override
   String get lowSpaceWarningContinue => 'Всё равно продолжить';
+
+  @override
+  String get proximityStatusEnabled => 'Включён';
+
+  @override
+  String get proximityStatusDisabled => 'Отключён';
+
+  @override
+  String get proximityStatusUnknown => 'Неизвестно';
+
+  @override
+  String get proximityEnable => 'Включить';
+
+  @override
+  String get disable => 'Отключить';
+
+  @override
+  String get proximityDisable2h => 'Отключить на 2 часа';
+
+  @override
+  String get proximityDisable4h => 'Отключить на 4 часа';
+
+  @override
+  String get proximityDisable8h => 'Отключить на 8 часов';
+
+  @override
+  String get proximityDisableNoLimit => 'Отключить (без лимита)';
 }

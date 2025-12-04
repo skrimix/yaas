@@ -20,6 +20,8 @@ pub(crate) struct AdbDevice {
     pub installed_packages: Vec<InstalledPackage>,
     /// Whether the Guardian system is currently paused on the device
     pub guardian_paused: Option<bool>,
+    /// Whether the proximity sensor is currently disabled (faked/overridden) on the device
+    pub proximity_disabled: Option<bool>,
 }
 
 #[derive(Serialize, RustSignal)]
@@ -41,6 +43,7 @@ impl From<adb::device::AdbDevice> for AdbDevice {
             space_info: device.space_info,
             installed_packages: device.installed_packages,
             guardian_paused: device.guardian_paused,
+            proximity_disabled: device.proximity_disabled,
         }
     }
 }

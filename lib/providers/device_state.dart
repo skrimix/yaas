@@ -37,6 +37,12 @@ class DeviceState extends ChangeNotifier {
   SpaceInfo? get spaceInfo => _device?.spaceInfo;
   bool? get guardianPaused => _device?.guardianPaused;
 
+  /// Whether the proximity sensor is currently disabled (faked/overridden).
+  /// - true: sensor is disabled (faked as close)
+  /// - false: sensor is enabled (real sensor active)
+  /// - null: state unknown
+  bool? get proximityDisabled => _device?.proximityDisabled;
+
   String controllerStatusString(
       BuildContext context, ControllerInfo? controller) {
     final l10n = AppLocalizations.of(context);

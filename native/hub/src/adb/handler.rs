@@ -571,15 +571,20 @@ impl AdbHandler {
                 result.map(|_| ()).context("Failed to reboot device")
             }
 
-            AdbCommand::SetProximitySensor(enabled) => {
+            AdbCommand::SetProximitySensor { enabled, duration_ms } => {
                 let device = self.current_device().await?;
-                let result = device.set_proximity_sensor(enabled).await;
+                let result = device.set_proximity_sensor(enabled, duration_ms).await;
+                let success = result.is_ok();
                 AdbCommandCompletedEvent {
                     command_type: AdbCommandKind::ProximitySensorSet,
                     command_key: key.clone(),
-                    success: result.is_ok(),
+                    success,
                 }
                 .send_signal_to_dart();
+                // Refresh device state to update proximity_disabled field
+                if success {
+                    let _ = self.refresh_device().await;
+                }
                 result.map(|_| ()).context("Failed to set proximity sensor")
             }
 

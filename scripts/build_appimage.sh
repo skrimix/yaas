@@ -55,19 +55,7 @@ app="$OUTPUT_APPIMAGE"
 chmod +x "$app"
 "$app" --appimage-extract
 
-tmpdir="$(mktemp -d -t yaas-7z-XXXXXX)"
-trap 'rm -rf "$tmpdir"' EXIT
-
-curl -fsSL -o "$tmpdir/7zip-linux.tar.xz" "https://github.com/ip7z/7zip/releases/download/25.01/7z2501-linux-x64.tar.xz"
-(cd "$tmpdir" && tar -xJf 7zip-linux.tar.xz || true)
-
-found=$(find "$tmpdir" -maxdepth 3 -type f -name '7zzs' | head -n1 || true)
-if [[ -z "$found" ]]; then
-  echo "7zzs not found in archive" >&2
-  exit 1
-fi
-
-install -Dm755 "$found" squashfs-root/usr/bin/7zzs
+"$SCRIPT_DIR/bundle_7zip.sh" squashfs-root/usr/bin
 
 sed -i '/^exec/i export PATH="$PWD/usr/bin:$PATH"' squashfs-root/AppRun
 sed -i '/^exec /{/\"\$@\"/!s/$/ "$@"/}' squashfs-root/AppRun

@@ -49,6 +49,7 @@ jobs:
           submodules: true
       
       - name: Normalize Git
+        shell: bash
         run: |
           git config --global core.autocrlf false
           git config --global core.filemode false
@@ -113,9 +114,11 @@ jobs:
           crate: rinf_cli
 
       - name: Generate Rinf bindings
+        shell: bash
         run: rinf gen
 
       - name: Build the app
+        shell: bash
         run: |
           if [[ "${{ matrix.target }}" == "linux" ]]; then
             ./scripts/build_appimage.sh
@@ -168,6 +171,7 @@ jobs:
       contents: write
     steps:
       - name: Set current date as env variable
+        shell: bash
         run: echo "PUBLISH_DATE=$(date +'%Y-%m-%dT%H:%M:%S')" >> $GITHUB_ENV
 
       - name: Checkout repository
@@ -213,6 +217,7 @@ jobs:
           fi
 
       - name: Move 'nightly' tag to this commit
+        shell: bash
         run: |
           git config user.name "github-actions"
           git config user.email "github-actions@github.com"

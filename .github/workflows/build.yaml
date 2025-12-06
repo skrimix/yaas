@@ -36,7 +36,7 @@ jobs:
           - runner: windows
             target: windows
             build-path: build/windows/x64/runner/Release/
-          - runner: macos-15-intel
+          - runner: macos
             target: macos
             build-path: build/macos/Build/Products/Release/*.app
 

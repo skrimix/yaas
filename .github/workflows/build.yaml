@@ -24,16 +24,16 @@ concurrency:
 jobs:
   build:
     name: ${{ matrix.target }}
-    runs-on: ${{ matrix.runner }}
+    runs-on: ${{ matrix.runner }}-latest
     strategy:
       fail-fast: false
       matrix:
-        runner: [ubuntu-latest, windows-latest, macos-15-intel]
+        runner: [ubuntu, windows, macos]
         include:
-          - runner: ubuntu-latest
+          - runner: ubuntu
             target: linux
             build-path: dist/yaas.AppImage
-          - runner: windows-latest
+          - runner: windows
             target: windows
             build-path: build/windows/x64/runner/Release/
           - runner: macos-15-intel

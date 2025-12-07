@@ -529,40 +529,45 @@ class _DownloadAppsScreenState extends State<DownloadAppsScreen> {
 
   Widget _buildSearchButton() {
     if (_isSearching) {
-      return SizedBox(
-        width: 350,
-        height: 40,
-        child: Padding(
-          padding: const EdgeInsets.only(right: 4.0),
-          child: TextField(
-            controller: _searchController,
-            // autofocus: true,
-            decoration: InputDecoration(
-              hintText: AppLocalizations.of(context).searchAppsHint,
-              contentPadding:
-                  const EdgeInsets.symmetric(horizontal: 8, vertical: 8),
-              border: const OutlineInputBorder(),
-              suffixIcon: _searchQuery.isNotEmpty
-                  ? IconButton(
-                      icon: const Icon(Icons.close),
-                      onPressed: () {
-                        _resetSearch();
-                      },
-                      tooltip: AppLocalizations.of(context).clearSearch,
-                    )
-                  : null,
+      return Align(
+        alignment: Alignment.centerRight,
+        child: ConstrainedBox(
+          constraints: const BoxConstraints(maxWidth: 350),
+          child: SizedBox(
+            height: 40,
+            child: Padding(
+              padding: const EdgeInsets.only(right: 4.0),
+              child: TextField(
+                controller: _searchController,
+                // autofocus: true,
+                decoration: InputDecoration(
+                  hintText: AppLocalizations.of(context).searchAppsHint,
+                  contentPadding:
+                      const EdgeInsets.symmetric(horizontal: 8, vertical: 8),
+                  border: const OutlineInputBorder(),
+                  suffixIcon: _searchQuery.isNotEmpty
+                      ? IconButton(
+                          icon: const Icon(Icons.close),
+                          onPressed: () {
+                            _resetSearch();
+                          },
+                          tooltip: AppLocalizations.of(context).clearSearch,
+                        )
+                      : null,
+                ),
+                onChanged: (value) {
+                  _searchDebounceTimer?.cancel();
+                  _searchDebounceTimer =
+                      Timer(const Duration(milliseconds: 300), () {
+                    setState(() {
+                      _searchQuery = value;
+                    });
+                    // Persist search query
+                    context.read<AppState>().setDownloadSearchQuery(value);
+                  });
+                },
+              ),
             ),
-            onChanged: (value) {
-              _searchDebounceTimer?.cancel();
-              _searchDebounceTimer =
-                  Timer(const Duration(milliseconds: 300), () {
-                setState(() {
-                  _searchQuery = value;
-                });
-                // Persist search query
-                context.read<AppState>().setDownloadSearchQuery(value);
-              });
-            },
           ),
         ),
       );
@@ -1002,8 +1007,10 @@ class _DownloadAppsScreenState extends State<DownloadAppsScreen> {
                           l10n.availableApps,
                           style: Theme.of(context).textTheme.titleLarge,
                         ),
-                        const Spacer(),
-                        if (!_showOnlySelected) _buildSearchButton(),
+                        if (!_showOnlySelected)
+                          Expanded(child: _buildSearchButton())
+                        else
+                          const Spacer(),
                         if (_showCheckboxes) _buildFilterButton(),
                         IconButton(
                           icon: Icon(

@@ -184,19 +184,16 @@ class _DonateAppsScreenState extends State<DonateAppsScreen> {
           margin: const EdgeInsets.symmetric(horizontal: 16, vertical: 2),
           child: SizedBox(
             child: ContextMenuRegion(
-              menuChildren: [
-                MenuItemButton(
+              menuItems: (ctx) => [
+                PopupMenuItem(
+                  value: () =>
+                      copyToClipboard(ctx, appName, description: appName),
                   child: Text(l10n.copyDisplayName),
-                  onPressed: () {
-                    copyToClipboard(context, appName, description: appName);
-                  },
                 ),
-                MenuItemButton(
+                PopupMenuItem(
+                  value: () => copyToClipboard(ctx, app.packageName,
+                      description: app.packageName),
                   child: Text(l10n.copyPackageName),
-                  onPressed: () {
-                    copyToClipboard(context, app.packageName,
-                        description: app.packageName);
-                  },
                 ),
               ],
               child: ListTile(

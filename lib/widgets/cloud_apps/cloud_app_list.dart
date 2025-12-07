@@ -123,26 +123,22 @@ class CloudAppListItem extends StatelessWidget {
       margin: const EdgeInsets.symmetric(horizontal: 16, vertical: 2),
       child: SizedBox(
         child: ContextMenuRegion(
-          menuChildren: [
-            MenuItemButton(
+          menuItems: (ctx) => [
+            PopupMenuItem(
+              value: () => copyToClipboard(
+                ctx,
+                cachedApp.app.fullName,
+                description: cachedApp.app.fullName,
+              ),
               child: Text(l10n.copyFullName),
-              onPressed: () {
-                copyToClipboard(
-                  context,
-                  cachedApp.app.fullName,
-                  description: cachedApp.app.fullName,
-                );
-              },
             ),
-            MenuItemButton(
+            PopupMenuItem(
+              value: () => copyToClipboard(
+                ctx,
+                cachedApp.app.packageName,
+                description: cachedApp.app.packageName,
+              ),
               child: Text(l10n.copyPackageName),
-              onPressed: () {
-                copyToClipboard(
-                  context,
-                  cachedApp.app.packageName,
-                  description: cachedApp.app.packageName,
-                );
-              },
             ),
           ],
           onPrimaryTap:

@@ -148,6 +148,15 @@ jobs:
         run: |
           cp ./scripts/launch_portable.bat "${{ matrix.build-path }}/launch_portable.bat"
 
+      - name: Resign macOS app
+        if: matrix.target == 'macos'
+        shell: bash
+        run: |
+          set -euo pipefail
+          app_path="$(ls -d build/macos/Build/Products/Release/*.app | head -n1)"
+          echo "Re-signing app: $app_path"
+          codesign --force --deep -s - "$app_path"
+
       - name: Package macOS app
         if: matrix.target == 'macos'
         shell: bash

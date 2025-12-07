@@ -33,13 +33,12 @@ echo "Downloading 7-Zip ${SEVENZIP_VERSION}..."
 curl -fsSL -o "$tmpdir/archive" "$URL"
 
 echo "Extracting..."
-cd "$tmpdir"
 case "$URL" in
-  *.tar.xz) tar -xJf archive ;;
-  *.7z)     7z x -y archive >/dev/null ;;
+  *.tar.xz) tar -xJf "$tmpdir/archive" -C "$tmpdir" ;;
+  *.7z)     7z x -y "$tmpdir/archive" -o"$tmpdir" >/dev/null ;;
 esac
 
-found=$(find . -type f -name "$BINARY" | head -n1)
+found=$(find "$tmpdir" -type f -name "$BINARY" | head -n1)
 if [[ -z "$found" ]]; then
   echo "Binary $BINARY not found in archive" >&2
   exit 1

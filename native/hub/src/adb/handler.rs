@@ -333,7 +333,6 @@ impl AdbHandler {
                             );
                             // Server might have died
                             self.refresh_adb_state().await;
-                            // FIXME: device updates stop after this
                             break;
                         } else {
                             // The stream closed immediately (persistent error likely)

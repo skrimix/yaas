@@ -29,7 +29,6 @@ class SettingsState extends ChangeNotifier {
   String? _error;
   bool _hasLoaded = false;
   final List<String> _availableStartupKeys = AppPageRegistry.pageKeys;
-  // TODO: move to a separate state object or to app state or put in a struct
   bool _downloaderAvailable = false;
   bool _downloaderInitializing = false;
   String? _downloaderError;

@@ -2,10 +2,10 @@
 //! entry point of the Rust logic.
 
 use std::{
-    panic::{AssertUnwindSafe, catch_unwind},
+    panic::catch_unwind,
     path::PathBuf,
     sync::{Arc, OnceLock},
-    time::Duration,
+    time::{Duration, Instant},
 };
 
 use adb::AdbHandler;
@@ -16,9 +16,9 @@ use models::signals::system::{AppVersionInfo, MediaConfigChanged, RustPanic};
 use rinf::RustSignal;
 use settings::SettingsHandler;
 use task::TaskManager;
-use tokio::sync::Notify;
+use tokio::{sync::Notify, time::timeout};
 use tokio_stream::wrappers::WatchStream;
-use tracing::{error, info};
+use tracing::{debug, error, info, instrument};
 use tracing_appender::{
     non_blocking::WorkerGuard,
     rolling::{RollingFileAppender, Rotation},
@@ -78,21 +78,26 @@ fn main() {
         original_hook(panic_info);
     }));
 
-    let _ = catch_unwind(AssertUnwindSafe(|| {
+    let _ = catch_unwind(|| {
         runtime.block_on(async move {
+            let init_start = Instant::now();
             // Initialize everything
-            init(portable_mode).await;
+            timeout(Duration::from_secs(10), init(portable_mode))
+                .await
+                .expect("Core initialization timed out");
+            info!("Core initialization completed in {:?}", init_start.elapsed());
 
             tokio::select! {
                 _ = rinf::dart_shutdown() => {},
                 _ = panic_notify.notified() => {},
             }
         })
-    }));
+    });
 
     runtime.shutdown_timeout(Duration::from_secs(3));
 }
 
+#[instrument]
 async fn init(portable_mode: bool) {
     // Set working directory to the app's data directory
     let app_dir = resolve_app_dir(portable_mode);
@@ -126,6 +131,7 @@ async fn init(portable_mode: bool) {
     }
     .send_signal_to_dart();
 
+    debug!("Creating settings handler");
     let settings_handler = SettingsHandler::new(app_dir.clone(), portable_mode)
         .expect("Failed to create settings handler");
 
@@ -138,24 +144,32 @@ async fn init(portable_mode: bool) {
     MediaConfigChanged { media_base_url, cache_dir: media_cache_dir.display().to_string() }
         .send_signal_to_dart();
 
+    debug!("Creating adb handler");
     let adb_handler = AdbHandler::new(WatchStream::new(settings_handler.subscribe())).await;
-    let downloads_catalog = DownloadsCatalog::start(WatchStream::new(settings_handler.subscribe()));
+    debug!("Creating downloads catalog");
+    let downloads_catalog = DownloadsCatalog::new(WatchStream::new(settings_handler.subscribe()));
+    debug!("Creating downloader manager");
     let downloader_manager = DownloaderManager::new(None);
+    debug!("Creating task manager");
     let _task_manager = TaskManager::new(
         adb_handler.clone(),
         downloader_manager.clone(),
         downloads_catalog.clone(),
         WatchStream::new(settings_handler.subscribe()),
     );
+    debug!("Starting downloader manager");
     downloader_manager.clone().start(app_dir.clone(), settings_handler.clone());
 
     // Backups-related requests
+    debug!("Creating backups catalog");
     let _backups_handler = BackupsCatalog::start(WatchStream::new(settings_handler.subscribe()));
 
     // Casting-related requests (Windows-only)
+    debug!("Creating casting manager");
     CastingManager::start();
 
     // Log-related requests from Flutter
+    debug!("Starting signal layer request handler");
     SignalLayer::start_request_handler(app_dir.join("logs"));
 }
 

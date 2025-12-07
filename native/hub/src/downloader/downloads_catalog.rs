@@ -25,7 +25,7 @@ pub(crate) struct DownloadsCatalog {
 }
 
 impl DownloadsCatalog {
-    pub(crate) fn start(mut settings_stream: WatchStream<Settings>) -> Arc<Self> {
+    pub(crate) fn new(mut settings_stream: WatchStream<Settings>) -> Arc<Self> {
         let initial_settings = futures::executor::block_on(settings_stream.next())
             .expect("Settings stream closed on downloads handler init");
 

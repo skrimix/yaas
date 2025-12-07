@@ -1,8 +1,9 @@
 use std::str::FromStr;
 
-use lazy_regex::lazy_regex;
 use rinf::SignalPiece;
 use serde::{Deserialize, Deserializer, Serialize};
+
+use super::RENAME_PATTERN;
 
 /// Popularity percentage for different time windows.
 #[derive(Serialize, Deserialize, Debug, Clone, SignalPiece)]
@@ -40,8 +41,7 @@ fn parse_size_mb_to_bytes(size_mb_str: &str) -> Result<u64, String> {
 
 /// Strips known rename markers from a package name to derive the original.
 fn normalize_package_name(name: &str) -> String {
-    let re = lazy_regex!(r"(^mr\.)|(^mrf\.)|(\.mrf\.)|(\.jjb)");
-    re.replace_all(name, "").into_owned()
+    RENAME_PATTERN.replace_all(name, "").into_owned()
 }
 
 /// A cloud app from the remote repository.

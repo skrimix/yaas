@@ -21,6 +21,14 @@ enum SortOption {
   popularity,
 }
 
+enum SearchSortOption {
+  relevance,
+  name,
+  date,
+  size,
+  popularity,
+}
+
 class DownloadAppsScreen extends StatefulWidget {
   const DownloadAppsScreen({super.key});
 
@@ -31,6 +39,8 @@ class DownloadAppsScreen extends StatefulWidget {
 class _DownloadAppsScreenState extends State<DownloadAppsScreen> {
   SortOption _sortOption = SortOption.name;
   bool _sortAscending = true;
+  SearchSortOption _searchSortOption = SearchSortOption.relevance;
+  bool _searchSortAscending = true;
   List<CachedAppData>? _sortedApps;
   String? _lastSortKey;
   final _isSearching = true; // Always true
@@ -238,8 +248,35 @@ class _DownloadAppsScreenState extends State<DownloadAppsScreen> {
         }
       }
 
-      // Sort by search relevance score (highest first)
-      matchingApps.sort((a, b) => b.score.compareTo(a.score));
+      // Sort by selected search sort option
+      switch (_searchSortOption) {
+        case SearchSortOption.relevance:
+          matchingApps.sort((a, b) => b.score.compareTo(a.score));
+        case SearchSortOption.name:
+          matchingApps.sort((a, b) {
+            final cmp = a.app.fullNameLower.compareTo(b.app.fullNameLower);
+            return _searchSortAscending ? cmp : -cmp;
+          });
+        case SearchSortOption.date:
+          matchingApps.sort((a, b) {
+            final cmp = a.app.app.lastUpdated.compareTo(b.app.app.lastUpdated);
+            return _searchSortAscending ? cmp : -cmp;
+          });
+        case SearchSortOption.size:
+          matchingApps.sort((a, b) {
+            final cmp =
+                a.app.app.size.toBigInt().compareTo(b.app.app.size.toBigInt());
+            return _searchSortAscending ? cmp : -cmp;
+          });
+        case SearchSortOption.popularity:
+          final popRange = context.read<SettingsState>().popularityRange;
+          matchingApps.sort((a, b) {
+            final popA = _getPopularityValue(a.app.app.popularity, popRange);
+            final popB = _getPopularityValue(b.app.app.popularity, popRange);
+            final cmp = popA.compareTo(popB);
+            return _searchSortAscending ? cmp : -cmp;
+          });
+      }
       filtered = matchingApps.map((item) => item.app).toList();
     }
 
@@ -400,129 +437,74 @@ class _DownloadAppsScreenState extends State<DownloadAppsScreen> {
     return res ?? false;
   }
 
-  Widget _buildSortButton(bool enabled) {
+  Widget _buildSortButton({required bool isSearchMode}) {
     final l10n = AppLocalizations.of(context);
-    return PopupMenuButton<(SortOption, bool)>(
-      enabled: enabled,
+
+    // Get current state based on mode
+    final currentKey = isSearchMode ? _searchSortOption.name : _sortOption.name;
+    final currentAscending =
+        isSearchMode ? _searchSortAscending : _sortAscending;
+
+    bool isSelected(String key, bool ascending) {
+      if (key == 'relevance') {
+        return currentKey == 'relevance';
+      }
+      return currentKey == key && currentAscending == ascending;
+    }
+
+    PopupMenuItem<(String, bool)> buildItem(
+        String key, bool ascending, String label) {
+      return PopupMenuItem(
+        value: (key, ascending),
+        child: Row(
+          children: [
+            Icon(isSelected(key, ascending)
+                ? Icons.radio_button_checked
+                : Icons.radio_button_unchecked),
+            const SizedBox(width: 8),
+            Text(label),
+          ],
+        ),
+      );
+    }
+
+    return PopupMenuButton<(String, bool)>(
       tooltip: l10n.sortBy,
       icon: const Icon(Icons.sort),
-      initialValue: (_sortOption, _sortAscending),
+      initialValue: (currentKey, currentAscending),
       itemBuilder: (context) => [
         PopupMenuItem(
           enabled: false,
           child: Text(l10n.sortBy),
         ),
-        PopupMenuItem(
-          value: (SortOption.name, true),
-          child: Row(
-            children: [
-              Icon(_sortOption == SortOption.name && _sortAscending
-                  ? Icons.radio_button_checked
-                  : Icons.radio_button_unchecked),
-              const SizedBox(width: 8),
-              Text(l10n.sortNameAsc),
-            ],
-          ),
-        ),
-        PopupMenuItem(
-          value: (SortOption.name, false),
-          child: Row(
-            children: [
-              Icon(_sortOption == SortOption.name && !_sortAscending
-                  ? Icons.radio_button_checked
-                  : Icons.radio_button_unchecked),
-              const SizedBox(width: 8),
-              Text(l10n.sortNameDesc),
-            ],
-          ),
-        ),
-        PopupMenuItem(
-          value: (SortOption.date, true),
-          child: Row(
-            children: [
-              Icon(_sortOption == SortOption.date && _sortAscending
-                  ? Icons.radio_button_checked
-                  : Icons.radio_button_unchecked),
-              const SizedBox(width: 8),
-              Text(l10n.sortDateOldest),
-            ],
-          ),
-        ),
-        PopupMenuItem(
-          value: (SortOption.date, false),
-          child: Row(
-            children: [
-              Icon(_sortOption == SortOption.date && !_sortAscending
-                  ? Icons.radio_button_checked
-                  : Icons.radio_button_unchecked),
-              const SizedBox(width: 8),
-              Text(l10n.sortDateNewest),
-            ],
-          ),
-        ),
-        PopupMenuItem(
-          value: (SortOption.size, true),
-          child: Row(
-            children: [
-              Icon(_sortOption == SortOption.size && _sortAscending
-                  ? Icons.radio_button_checked
-                  : Icons.radio_button_unchecked),
-              const SizedBox(width: 8),
-              Text(l10n.sortSizeSmallest),
-            ],
-          ),
-        ),
-        PopupMenuItem(
-          value: (SortOption.size, false),
-          child: Row(
-            children: [
-              Icon(_sortOption == SortOption.size && !_sortAscending
-                  ? Icons.radio_button_checked
-                  : Icons.radio_button_unchecked),
-              const SizedBox(width: 8),
-              Text(l10n.sortSizeLargest),
-            ],
-          ),
-        ),
-        PopupMenuItem(
-          value: (SortOption.popularity, false),
-          child: Row(
-            children: [
-              Icon(_sortOption == SortOption.popularity && !_sortAscending
-                  ? Icons.radio_button_checked
-                  : Icons.radio_button_unchecked),
-              const SizedBox(width: 8),
-              Text(l10n.sortPopularityMost),
-            ],
-          ),
-        ),
-        PopupMenuItem(
-          value: (SortOption.popularity, true),
-          child: Row(
-            children: [
-              Icon(_sortOption == SortOption.popularity && _sortAscending
-                  ? Icons.radio_button_checked
-                  : Icons.radio_button_unchecked),
-              const SizedBox(width: 8),
-              Text(l10n.sortPopularityLeast),
-            ],
-          ),
-        ),
+        if (isSearchMode) buildItem('relevance', true, l10n.sortRelevance),
+        buildItem('name', true, l10n.sortNameAsc),
+        buildItem('name', false, l10n.sortNameDesc),
+        buildItem('date', true, l10n.sortDateOldest),
+        buildItem('date', false, l10n.sortDateNewest),
+        buildItem('size', true, l10n.sortSizeSmallest),
+        buildItem('size', false, l10n.sortSizeLargest),
+        buildItem('popularity', false, l10n.sortPopularityMost),
+        buildItem('popularity', true, l10n.sortPopularityLeast),
       ],
       onSelected: (value) {
+        final (key, ascending) = value;
         setState(() {
-          _sortOption = value.$1;
-          _sortAscending = value.$2;
+          if (isSearchMode) {
+            _searchSortOption = SearchSortOption.values.byName(key);
+            _searchSortAscending = ascending;
+          } else {
+            _sortOption = SortOption.values.byName(key);
+            _sortAscending = ascending;
+          }
           _resetScroll();
         });
         // Persist sort state
-        final sortKey = switch (_sortOption) {
-          SortOption.name => 'name',
-          SortOption.date => 'date',
-          SortOption.size => 'size',
-          SortOption.popularity => 'popularity',
-        };
-        context.read<AppState>().setDownloadSort(sortKey, _sortAscending);
+        if (isSearchMode) {
+          context.read<AppState>().setDownloadSearchSort(key, ascending);
+        } else {
+          context.read<AppState>().setDownloadSort(key, ascending);
+        }
       },
     );
   }
@@ -616,6 +598,17 @@ class _DownloadAppsScreenState extends State<DownloadAppsScreen> {
       _ => SortOption.name,
     };
     _sortAscending = appState.downloadSortAscending;
+
+    // Restore search sort state
+    final searchKey = appState.downloadSearchSortKey;
+    _searchSortOption = switch (searchKey) {
+      'name' => SearchSortOption.name,
+      'date' => SearchSortOption.date,
+      'size' => SearchSortOption.size,
+      'popularity' => SearchSortOption.popularity,
+      _ => SearchSortOption.relevance,
+    };
+    _searchSortAscending = appState.downloadSearchSortAscending;
 
     // Restore selection / view prefs
     _showCheckboxes = appState.downloadShowCheckboxes;
@@ -1029,8 +1022,7 @@ class _DownloadAppsScreenState extends State<DownloadAppsScreen> {
                           onPressed: _toggleCheckboxVisibility,
                         ),
                         _buildPopularityRangeButton(),
-                        // TODO: add search result sorting?
-                        _buildSortButton(_searchQuery.isEmpty),
+                        _buildSortButton(isSearchMode: _searchQuery.isNotEmpty),
                         IconButton(
                           icon: const Icon(Icons.refresh),
                           tooltip: l10n.refresh,

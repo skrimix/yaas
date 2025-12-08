@@ -448,6 +448,7 @@
     "sortDateNewest": "Дата (сначала новые)",
     "sortSizeSmallest": "Размер (сначала меньшие)",
     "sortSizeLargest": "Размер (сначала большие)",
+    "sortRelevance": "Релевантность",
     "searchAppsHint": "Поиск приложений...",
     "clearSearch": "Очистить поиск",
     "search": "Поиск",

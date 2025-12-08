@@ -924,6 +924,9 @@ class AppLocalizationsRu extends AppLocalizations {
   String get sortSizeLargest => 'Размер (сначала большие)';
 
   @override
+  String get sortRelevance => 'Релевантность';
+
+  @override
   String get searchAppsHint => 'Поиск приложений...';
 
   @override

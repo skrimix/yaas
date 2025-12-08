@@ -1736,6 +1736,12 @@ abstract class AppLocalizations {
   /// **'Size (Largest first)'**
   String get sortSizeLargest;
 
+  /// No description provided for @sortRelevance.
+  ///
+  /// In en, this message translates to:
+  /// **'Relevance'**
+  String get sortRelevance;
+
   /// No description provided for @searchAppsHint.
   ///
   /// In en, this message translates to:

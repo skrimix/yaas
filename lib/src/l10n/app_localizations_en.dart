@@ -910,6 +910,9 @@ class AppLocalizationsEn extends AppLocalizations {
   String get sortSizeLargest => 'Size (Largest first)';
 
   @override
+  String get sortRelevance => 'Relevance';
+
+  @override
   String get searchAppsHint => 'Search apps...';
 
   @override

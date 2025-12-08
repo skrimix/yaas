@@ -13,8 +13,11 @@ class AppState extends ChangeNotifier {
 
   // Download Apps page state
   String _downloadSearchQuery = '';
-  String _downloadSortKey = 'name'; // 'name' | 'date' | 'size'
+  String _downloadSortKey = 'name'; // 'name' | 'date' | 'size' | 'popularity'
   bool _downloadSortAscending = true;
+  String _downloadSearchSortKey =
+      'relevance'; // 'relevance' | 'name' | 'date' | 'size' | 'popularity'
+  bool _downloadSearchSortAscending = true;
   double _downloadScrollOffset = 0.0;
   bool _downloadShowCheckboxes = false;
   bool _downloadShowOnlySelected = false;
@@ -23,6 +26,8 @@ class AppState extends ChangeNotifier {
   String get downloadSearchQuery => _downloadSearchQuery;
   String get downloadSortKey => _downloadSortKey;
   bool get downloadSortAscending => _downloadSortAscending;
+  String get downloadSearchSortKey => _downloadSearchSortKey;
+  bool get downloadSearchSortAscending => _downloadSearchSortAscending;
   double get downloadScrollOffset => _downloadScrollOffset;
   bool get downloadShowCheckboxes => _downloadShowCheckboxes;
   bool get downloadShowOnlySelected => _downloadShowOnlySelected;
@@ -39,6 +44,16 @@ class AppState extends ChangeNotifier {
     if (_downloadSortKey == key && _downloadSortAscending == ascending) return;
     _downloadSortKey = key;
     _downloadSortAscending = ascending;
+    notifyListeners();
+  }
+
+  void setDownloadSearchSort(String key, bool ascending) {
+    if (_downloadSearchSortKey == key &&
+        _downloadSearchSortAscending == ascending) {
+      return;
+    }
+    _downloadSearchSortKey = key;
+    _downloadSearchSortAscending = ascending;
     notifyListeners();
   }
 

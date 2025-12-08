@@ -454,6 +454,7 @@
     "sortDateNewest": "Date (Newest first)",
     "sortSizeSmallest": "Size (Smallest first)",
     "sortSizeLargest": "Size (Largest first)",
+    "sortRelevance": "Relevance",
     "searchAppsHint": "Search apps...",
     "clearSearch": "Clear search",
     "search": "Search",

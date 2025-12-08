@@ -119,6 +119,14 @@ class AppLocalizationsRu extends AppLocalizations {
       'Обнаруживать устройства через mDNS в локальной сети и автоматически выполнять \'adb connect\'. Изменение вступит в силу после перезапуска.';
 
   @override
+  String get settingsAutoReinstallOnConflict =>
+      'Автопереустановка при конфликте версий';
+
+  @override
+  String get settingsAutoReinstallOnConflictHelp =>
+      'Автоматически создавать резервную копию, переустанавливать и восстанавливать при конфликте версий (откат или несовместимое обновление). Требуется отладочная версия приложения.';
+
+  @override
   String get settingsSectionDownloader => 'Загрузчик';
 
   @override

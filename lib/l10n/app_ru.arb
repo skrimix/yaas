@@ -42,6 +42,8 @@
     "settingsConnectionWireless": "Беспроводной",
     "settingsMdnsAutoConnect": "Автоподключение ADB по Wi‑Fi",
     "settingsMdnsAutoConnectHelp": "Обнаруживать устройства через mDNS в локальной сети и автоматически выполнять 'adb connect'. Изменение вступит в силу после перезапуска.",
+    "settingsAutoReinstallOnConflict": "Автопереустановка при конфликте версий",
+    "settingsAutoReinstallOnConflictHelp": "Автоматически создавать резервную копию, переустанавливать и восстанавливать при конфликте версий (откат или несовместимое обновление). Требуется отладочная версия приложения.",
   "settingsSectionDownloader": "Загрузчик",
   "preparingDownloader": "Подготовка загрузчика...",
   "downloadingRcloneFiles": "Загрузка файлов rclone",

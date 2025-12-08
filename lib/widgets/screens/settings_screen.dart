@@ -585,6 +585,18 @@ class _SettingsScreenState extends State<SettingsScreen> {
               });
             },
           ),
+          SwitchListTile(
+            title: Text(l10n.settingsAutoReinstallOnConflict),
+            subtitle: Text(l10n.settingsAutoReinstallOnConflictHelp),
+            value: _currentFormSettings.autoReinstallOnConflict,
+            onChanged: (v) {
+              setState(() {
+                _currentFormSettings =
+                    _currentFormSettings.copyWith(autoReinstallOnConflict: v);
+                _checkForChanges();
+              });
+            },
+          ),
           _buildDropdownSetting<ConnectionKind>(
             label: l10n.settingsPreferredConnection,
             value: _currentFormSettings.preferredConnectionType,

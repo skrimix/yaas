@@ -80,6 +80,8 @@ pub(crate) struct Settings {
     pub mdns_auto_connect: bool,
     /// Popularity display range
     popularity_range: PopularityRange,
+    /// Auto reinstall app on incompatible update or downgrade (requires debuggable app for data backup)
+    pub auto_reinstall_on_conflict: bool,
 }
 
 impl Default for Settings {
@@ -112,6 +114,7 @@ impl Default for Settings {
             favorite_packages: Vec::new(),
             mdns_auto_connect: true,
             popularity_range: PopularityRange::default(),
+            auto_reinstall_on_conflict: true,
         }
     }
 }

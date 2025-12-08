@@ -1162,9 +1162,16 @@ impl AdbHandler {
         apk_path: &Path,
         backups_location: std::path::PathBuf,
         progress_sender: UnboundedSender<SideloadProgress>,
+        auto_reinstall_on_conflict: bool,
     ) -> Result<()> {
         let result = device
-            .install_apk_with_progress(apk_path, &backups_location, progress_sender, false)
+            .install_apk_with_progress(
+                apk_path,
+                &backups_location,
+                progress_sender,
+                false,
+                auto_reinstall_on_conflict,
+            )
             .await;
         self.refresh_device().await?;
         result
@@ -1191,8 +1198,17 @@ impl AdbHandler {
         backups_location: std::path::PathBuf,
         progress_sender: UnboundedSender<SideloadProgress>,
         token: CancellationToken,
+        auto_reinstall_on_conflict: bool,
     ) -> Result<()> {
-        let result = device.sideload_app(app_path, &backups_location, progress_sender, token).await;
+        let result = device
+            .sideload_app(
+                app_path,
+                &backups_location,
+                progress_sender,
+                token,
+                auto_reinstall_on_conflict,
+            )
+            .await;
         self.refresh_device().await?;
         result
     }

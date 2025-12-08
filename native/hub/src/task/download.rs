@@ -186,7 +186,11 @@ impl TaskManager {
         let adb_handler = self.adb_handler.clone();
         let device = adb_handler.current_device().await?;
 
-        let backups_location = self.settings.read().await.backups_location();
+        let settings = self.settings.read().await;
+        let backups_location = settings.backups_location();
+        let auto_reinstall_on_conflict = settings.auto_reinstall_on_conflict;
+        drop(settings);
+
         let app_path_cloned = app_path.clone();
         self.run_install_step(
             InstallStepConfig { step_number: 2, log_context: "sideload" },
@@ -204,6 +208,7 @@ impl TaskManager {
                                 backups_location,
                                 tx,
                                 token,
+                                auto_reinstall_on_conflict,
                             )
                             .await
                     }

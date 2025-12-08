@@ -42,6 +42,8 @@
     "settingsConnectionWireless": "Wireless",
     "settingsMdnsAutoConnect": "Auto-connect ADB over Wi‑Fi",
     "settingsMdnsAutoConnectHelp": "Discover devices via mDNS on the local network and attempt 'adb connect' automatically. Takes effect after restart.",
+    "settingsAutoReinstallOnConflict": "Auto reinstall on incompatible update",
+    "settingsAutoReinstallOnConflictHelp": "Automatically backup data, reinstall, and restore when encountering version conflicts (downgrade or incompatible update). Requires the app to be debuggable.",
   "settingsSectionDownloader": "Downloader",
   "preparingDownloader": "Preparing downloader...",
   "downloadingRcloneFiles": "Downloading rclone files",

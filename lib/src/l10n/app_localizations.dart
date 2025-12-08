@@ -308,6 +308,18 @@ abstract class AppLocalizations {
   /// **'Discover devices via mDNS on the local network and attempt \'adb connect\' automatically. Takes effect after restart.'**
   String get settingsMdnsAutoConnectHelp;
 
+  /// No description provided for @settingsAutoReinstallOnConflict.
+  ///
+  /// In en, this message translates to:
+  /// **'Auto reinstall on incompatible update'**
+  String get settingsAutoReinstallOnConflict;
+
+  /// No description provided for @settingsAutoReinstallOnConflictHelp.
+  ///
+  /// In en, this message translates to:
+  /// **'Automatically backup data, reinstall, and restore when encountering version conflicts (downgrade or incompatible update). Requires the app to be debuggable.'**
+  String get settingsAutoReinstallOnConflictHelp;
+
   /// No description provided for @settingsSectionDownloader.
   ///
   /// In en, this message translates to:

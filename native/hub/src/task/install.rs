@@ -158,7 +158,10 @@ impl TaskManager {
         let adb_handler = self.adb_handler.clone();
         let device = adb_handler.current_device().await?;
 
-        let backups_location = self.settings.read().await.backups_location();
+        let settings = self.settings.read().await;
+        let backups_location = settings.backups_location();
+        let auto_reinstall_on_conflict = settings.auto_reinstall_on_conflict;
+        drop(settings);
 
         self.run_install_step(
             InstallStepConfig { step_number: 1, log_context: "apk_install" },
@@ -169,7 +172,13 @@ impl TaskManager {
                 tokio::spawn(
                     async move {
                         adb_handler
-                            .install_apk(&device, Path::new(&apk_path), backups_location, tx)
+                            .install_apk(
+                                &device,
+                                Path::new(&apk_path),
+                                backups_location,
+                                tx,
+                                auto_reinstall_on_conflict,
+                            )
                             .await
                     }
                     .instrument(Span::current()),
@@ -197,7 +206,11 @@ impl TaskManager {
         let adb_handler = self.adb_handler.clone();
         let device = adb_handler.current_device().await?;
 
-        let backups_location = self.settings.read().await.backups_location();
+        let settings = self.settings.read().await;
+        let backups_location = settings.backups_location();
+        let auto_reinstall_on_conflict = settings.auto_reinstall_on_conflict;
+        drop(settings);
+
         let app_path_cloned = app_path.clone();
         self.run_install_step(
             InstallStepConfig { step_number: 1, log_context: "sideload_local" },
@@ -215,6 +228,7 @@ impl TaskManager {
                                 backups_location,
                                 tx,
                                 token,
+                                auto_reinstall_on_conflict,
                             )
                             .await
                     }

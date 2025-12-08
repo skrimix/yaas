@@ -23,6 +23,7 @@ class SettingsState extends ChangeNotifier {
     favoritePackages: const [],
     mdnsAutoConnect: true,
     popularityRange: PopularityRange.day7,
+    autoReinstallOnConflict: true,
   );
 
   bool _isLoading = false;

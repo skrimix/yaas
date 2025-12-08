@@ -118,6 +118,14 @@ class AppLocalizationsEn extends AppLocalizations {
       'Discover devices via mDNS on the local network and attempt \'adb connect\' automatically. Takes effect after restart.';
 
   @override
+  String get settingsAutoReinstallOnConflict =>
+      'Auto reinstall on incompatible update';
+
+  @override
+  String get settingsAutoReinstallOnConflictHelp =>
+      'Automatically backup data, reinstall, and restore when encountering version conflicts (downgrade or incompatible update). Requires the app to be debuggable.';
+
+  @override
   String get settingsSectionDownloader => 'Downloader';
 
   @override

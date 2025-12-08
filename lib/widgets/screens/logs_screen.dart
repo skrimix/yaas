@@ -293,7 +293,6 @@ class _LogsScreenState extends State<LogsScreen> {
                           : Theme.of(context).colorScheme.outline,
                     ),
                     const SizedBox(width: 4),
-                    // TODO: add a setting for not recording span events?
                     Text(
                       l10n.spansLabel,
                       style: TextStyle(

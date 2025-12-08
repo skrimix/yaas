@@ -76,8 +76,11 @@ impl TaskManager {
         let device = adb_handler.current_device().await?;
 
         // Use downloads location as the base for temporary donation directories and archives.
-        let settings = self.settings.read().await.clone();
+        let settings = self.settings.read().await;
         let downloads_root = settings.downloads_location();
+        let installation_id = settings.installation_id.clone();
+        drop(settings);
+
         let upload_root = downloads_root.join(DONATE_TMP_DIR);
         tokio::fs::create_dir_all(&upload_root).await.with_context(|| {
             format!("Failed to create upload directory {}", upload_root.display())
@@ -145,7 +148,7 @@ impl TaskManager {
         let archive_file_name = format!("{sanitized_name}.zip");
 
         let hwid_hex = {
-            let digest = md5::compute(settings.installation_id.as_bytes());
+            let digest = md5::compute(installation_id.as_bytes());
             format!("{:X}", digest)
         };
         tokio::fs::write(pulled_dir.join("HWID.txt"), hwid_hex.as_bytes())

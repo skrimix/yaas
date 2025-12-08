@@ -251,9 +251,7 @@ impl TaskManager {
         app_full_name: &str,
         app_path: &str,
     ) -> Result<()> {
-        let settings = self.settings.read().await.clone();
-        self.downloads_catalog
-            .apply_cleanup_policy(settings.cleanup_policy, app_full_name, app_path)
-            .await
+        let cleanup_policy = self.settings.read().await.cleanup_policy;
+        self.downloads_catalog.apply_cleanup_policy(cleanup_policy, app_full_name, app_path).await
     }
 }

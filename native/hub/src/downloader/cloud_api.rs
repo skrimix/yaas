@@ -98,7 +98,7 @@ pub(super) async fn load_popularity_for_apps(
 
     let resp = client
         .get(url)
-        .timeout(Duration::from_secs(5))
+        .timeout(Duration::from_secs(10))
         .send()
         .await
         .context("Failed to fetch popularity data")?;

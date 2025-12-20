@@ -30,7 +30,7 @@ struct CloudAppCsvHelper {
     #[serde(alias = "Last Updated")]
     last_updated: String,
     #[serde(alias = "Size (MB)")]
-    size: String,
+    size_mb: String,
 }
 
 fn parse_size_mb_to_bytes(size_mb_str: &str) -> Result<u64, String> {
@@ -54,6 +54,7 @@ pub(crate) struct CloudApp {
     pub true_package_name: String,
     pub version_code: u32,
     pub last_updated: String,
+    /// Size in bytes
     pub size: u64,
     pub popularity: Option<Popularity>,
 }
@@ -65,7 +66,7 @@ impl<'de> Deserialize<'de> for CloudApp {
     {
         // Delegate to helper with serde field attributes, then convert
         let helper = CloudAppCsvHelper::deserialize(deserializer)?;
-        let size = parse_size_mb_to_bytes(&helper.size).map_err(serde::de::Error::custom)?;
+        let size = parse_size_mb_to_bytes(&helper.size_mb).map_err(serde::de::Error::custom)?;
         let original = normalize_package_name(&helper.package_name);
         Ok(CloudApp {
             app_name: helper.app_name,

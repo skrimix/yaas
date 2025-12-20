@@ -9,7 +9,7 @@ use anyhow::{Context, Result, ensure};
 use async_trait::async_trait;
 use base64::Engine as _;
 use derive_more::Debug;
-use futures::TryStreamExt as _;
+use futures::StreamExt as _;
 use time::{OffsetDateTime, format_description::well_known::Rfc3339};
 use tokio::{
     fs::{self, File},
@@ -182,15 +182,30 @@ impl Repo for FFARepo {
         let path = storage
             .download_file(list_path, cache_dir.to_path_buf(), Some(cancellation_token))
             .await
-            .context("Failed to download game list file")?;
+            .context("Failed to download app list file")?;
 
         debug!(path = %path.display(), "App list file downloaded, parsing...");
-        let file = File::open(&path).await.context("Could not open game list file")?;
+        let file = File::open(&path).await.context("Could not open app list file")?;
         let mut reader =
             csv_async::AsyncReaderBuilder::new().delimiter(b';').create_deserializer(file);
-        let records = reader.deserialize();
-        let cloud_apps: Vec<CloudApp> =
-            records.try_collect().await.context("Failed to parse game list file")?;
+        let records = reader.deserialize::<CloudApp>();
+        let cloud_apps: Vec<CloudApp> = records
+            .enumerate()
+            .filter_map(|(idx, result)| async move {
+                match result {
+                    Ok(app) => Some(app),
+                    Err(e) => {
+                        warn!(
+                            line = idx + 1,
+                            error = &e as &dyn Error,
+                            "Skipping malformed line in app list"
+                        );
+                        None
+                    }
+                }
+            })
+            .collect()
+            .await;
         let mut donation_blacklist = Vec::new();
         if let Some(handle) = blacklist_handle {
             match handle.await {
@@ -418,9 +433,24 @@ impl Repo for VRPPublicRepo {
             .with_context(|| format!("Could not open {}", list_path.display()))?;
         let mut reader =
             csv_async::AsyncReaderBuilder::new().delimiter(b';').create_deserializer(file);
-        let records = reader.deserialize();
-        let apps: Vec<CloudApp> =
-            records.try_collect().await.context("Failed to parse VRP-public list")?;
+        let records = reader.deserialize::<CloudApp>();
+        let apps: Vec<CloudApp> = records
+            .enumerate()
+            .filter_map(|(idx, result)| async move {
+                match result {
+                    Ok(app) => Some(app),
+                    Err(e) => {
+                        warn!(
+                            line = idx + 1,
+                            error = &e as &dyn Error,
+                            "Skipping malformed line in app list"
+                        );
+                        None
+                    }
+                }
+            })
+            .collect()
+            .await;
 
         let mut donation_blacklist = Vec::new();
         if let Some(path) = self.donation_blacklist_path.as_deref().filter(|p| !p.is_empty()) {

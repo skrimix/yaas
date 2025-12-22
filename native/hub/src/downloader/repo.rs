@@ -326,12 +326,12 @@ impl VRPPublicRepo {
                 let base_uri = json
                     .get("baseUri")
                     .and_then(|v| v.as_str())
-                    .context("baseUri missing in vrp-public.json")?
+                    .context("baseUri missing in public VRP config")?
                     .to_string();
                 let pass_b64 = json
                     .get("password")
                     .and_then(|v| v.as_str())
-                    .context("password missing in vrp-public.json")?;
+                    .context("password missing in public VRP config")?;
                 let bytes = base64::engine::general_purpose::STANDARD
                     .decode(pass_b64)
                     .context("Invalid base64 password")?;
@@ -348,6 +348,8 @@ struct VRPPublicState {
     base_uri: String,
     password: String,
 }
+
+const VRP_STAMP_FILENAME: &str = "vrp_stamp.json";
 
 #[async_trait]
 impl Repo for VRPPublicRepo {
@@ -480,7 +482,7 @@ impl Repo for VRPPublicRepo {
         cache_dir: &Path,
         _cancellation_token: CancellationToken,
     ) -> Result<PreDownloadDecision> {
-        let stamp_path = dst_dir.join("vrp_stamp.json");
+        let stamp_path = dst_dir.join(VRP_STAMP_FILENAME);
         if !stamp_path.is_file() {
             return Ok(PreDownloadDecision::Proceed);
         }
@@ -517,11 +519,13 @@ impl Repo for VRPPublicRepo {
         }
 
         let stamp: Stamp = match serde_json::from_slice(
-            &fs::read(&stamp_path).await.context("Failed to read vrp_stamp.json")?,
+            &fs::read(&stamp_path)
+                .await
+                .context(format!("Failed to read {}", VRP_STAMP_FILENAME))?,
         ) {
             Ok(s) => s,
             Err(e) => {
-                warn!(error = &e as &dyn Error, path = %stamp_path.display(), "Invalid vrp_stamp.json, ignoring");
+                warn!(error = &e as &dyn Error, path = %stamp_path.display(), "Invalid {}, ignoring", VRP_STAMP_FILENAME);
                 return Ok(PreDownloadDecision::Proceed);
             }
         };
@@ -681,7 +685,11 @@ impl Repo for VRPPublicRepo {
                         .collect(),
                 };
                 if let Ok(json) = serde_json::to_string_pretty(&stamp) {
-                    let _ = fs::write(dst_dir.join("vrp_stamp.json"), json).await;
+                    let stamp_path = dst_dir.join(VRP_STAMP_FILENAME);
+                    if let Err(e) = fs::write(&stamp_path, json).await {
+                        warn!(error = &e as &dyn Error, path = %stamp_path.display(), "Failed to write {}", VRP_STAMP_FILENAME);
+                    }
+                    debug!(path = %stamp_path.display(), "Wrote VRP extraction stamp");
                 }
             }
             // Remove multipart .7z parts after successful extraction

@@ -136,7 +136,7 @@ class _DownloaderSetupDialogState extends State<DownloaderSetupDialog> {
         ..connectionTimeout = const Duration(seconds: 5);
       try {
         final request = await client.getUrl(
-          Uri.parse('https://ifconfig.co/country-iso'),
+          Uri.parse('https://ipinfo.io/country'),
         );
         final response = await request.close();
         if (response.statusCode == 200) {

@@ -580,8 +580,13 @@ impl Downloader {
 
         let timeout = Duration::from_secs(30);
         let repo = self.repo.clone();
-        let fut =
-            repo.load_app_list(storage, list_path, &cache_dir, &client, cancellation_token.clone());
+        let fut = repo.load_app_list(
+            storage.clone(),
+            list_path,
+            &cache_dir,
+            &client,
+            cancellation_token.clone(),
+        );
 
         match tokio::time::timeout(timeout, fut).await {
             Ok(Ok(result)) => {
@@ -658,11 +663,11 @@ impl Downloader {
                     warn!("App list load cancelled");
                     return;
                 }
-                error!(error = e.as_ref() as &dyn Error, "Failed to load app list");
+                error!(error = e.as_ref() as &dyn Error, storage = ?storage, "Failed to load app list");
                 send_event(false, None, None, Some(format!("Failed to load app list: {e:#}")));
             }
             Err(_) => {
-                warn!("App list load timed out");
+                error!(storage = ?storage, "App list load timed out");
                 send_event(false, None, None, Some("Timed out while loading app list".into()));
             }
         }

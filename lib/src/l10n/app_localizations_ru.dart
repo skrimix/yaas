@@ -197,8 +197,8 @@ class AppLocalizationsRu extends AppLocalizations {
   }
 
   @override
-  String downloaderConfigVrgRusTestLocation(String country) {
-    return 'Регион IP: $country';
+  String downloaderConfigVrgRusTestLocation(String country, String org) {
+    return 'Расположение IP: $country, $org';
   }
 
   @override

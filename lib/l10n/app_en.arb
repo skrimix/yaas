@@ -83,10 +83,13 @@
       }
     }
   },
-  "downloaderConfigVrgRusTestLocation": "IP region: {country}",
+  "downloaderConfigVrgRusTestLocation": "IP location: {country}, {org}",
   "@downloaderConfigVrgRusTestLocation": {
     "placeholders": {
       "country": {
+        "type": "String"
+      },
+      "org": {
         "type": "String"
       }
     }

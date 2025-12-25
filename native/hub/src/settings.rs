@@ -249,6 +249,7 @@ impl SettingsHandler {
                 format!("Backups directory parent ({}) does not exist", backups_parent.display())
             );
         }
+        // TODO: portable mode as fallback?
         fs::create_dir_all(&downloads_location).context("Failed to create downloads directory")?;
         fs::create_dir_all(&backups_location).context("Failed to create backups directory")?;
 

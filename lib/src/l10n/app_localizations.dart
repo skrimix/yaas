@@ -449,8 +449,8 @@ abstract class AppLocalizations {
   /// No description provided for @downloaderConfigVrgRusTestLocation.
   ///
   /// In en, this message translates to:
-  /// **'IP region: {country}'**
-  String downloaderConfigVrgRusTestLocation(String country);
+  /// **'IP location: {country}, {org}'**
+  String downloaderConfigVrgRusTestLocation(String country, String org);
 
   /// No description provided for @downloaderConfigVrgRusTestRequiredTooltip.
   ///

@@ -43,6 +43,7 @@ class _DownloaderSetupDialogState extends State<DownloaderSetupDialog> {
   String? _vrgRusErrorMessage;
   int? _vrgRusErrorMessageCode;
   String? _ipCountryCode;
+  String? _ipOrg;
 
   @override
   void initState() {
@@ -130,26 +131,31 @@ class _DownloaderSetupDialogState extends State<DownloaderSetupDialog> {
   bool get _vrgRusTestCompleted => _vrgRusTestState == _VrgRusTestState.success;
   // _vrgRusTestState == _VrgRusTestState.noAccess;
 
-  Future<String?> _fetchCountryCode() async {
+  Future<({String? country, String? org})> _fetchIpInfo() async {
     try {
       final client = HttpClient()
         ..connectionTimeout = const Duration(seconds: 5);
       try {
         final request = await client.getUrl(
-          Uri.parse('https://ipinfo.io/country'),
+          Uri.parse('https://ipinfo.io/'),
         );
+        request.headers.add('Accept', 'application/json');
         final response = await request.close();
         if (response.statusCode == 200) {
           final body = await response.transform(utf8.decoder).join();
-          return body.trim();
+          final json = jsonDecode(body) as Map<String, dynamic>;
+          return (
+            country: json['country'] as String?,
+            org: json['org'] as String?,
+          );
         }
       } finally {
         client.close();
       }
     } catch (e) {
-      debugPrint('Error fetching country code: $e');
+      debugPrint('Error fetching IP info: $e');
     }
-    return null;
+    return (country: null, org: null);
   }
 
   Future<void> _testVrgRusAccess() async {
@@ -158,6 +164,7 @@ class _DownloaderSetupDialogState extends State<DownloaderSetupDialog> {
       _vrgRusTestState = _VrgRusTestState.inProgress;
       _vrgRusErrorMessage = null;
       _ipCountryCode = null;
+      _ipOrg = null;
     });
     try {
       final client = HttpClient()
@@ -180,22 +187,24 @@ class _DownloaderSetupDialogState extends State<DownloaderSetupDialog> {
             _vrgRusErrorMessage = null;
           });
         } else if (response.statusCode == 403) {
-          final country = await _fetchCountryCode();
+          final ipInfo = await _fetchIpInfo();
           if (!mounted) return;
           setState(() {
             _vrgRusTestState = _VrgRusTestState.noAccess;
             _vrgRusErrorMessage = body.trim().isNotEmpty ? body.trim() : null;
             _vrgRusErrorMessageCode = response.statusCode;
-            _ipCountryCode = country;
+            _ipCountryCode = ipInfo.country;
+            _ipOrg = ipInfo.org;
           });
         } else {
-          final country = await _fetchCountryCode();
+          final ipInfo = await _fetchIpInfo();
           if (!mounted) return;
           setState(() {
             _vrgRusTestState = _VrgRusTestState.noAccess;
             _vrgRusErrorMessage = body.trim().isNotEmpty ? body.trim() : null;
             _vrgRusErrorMessageCode = response.statusCode;
-            _ipCountryCode = country;
+            _ipCountryCode = ipInfo.country;
+            _ipOrg = ipInfo.org;
           });
         }
       } finally {
@@ -204,13 +213,14 @@ class _DownloaderSetupDialogState extends State<DownloaderSetupDialog> {
     } catch (e) {
       debugPrint('Error testing VRG Rus access: $e');
       if (!mounted) return;
-      final country = await _fetchCountryCode();
+      final ipInfo = await _fetchIpInfo();
       if (!mounted) return;
       setState(() {
         _vrgRusTestState = _VrgRusTestState.noAccess;
         _vrgRusErrorMessage = e.toString();
         _vrgRusErrorMessageCode = 0;
-        _ipCountryCode = country;
+        _ipCountryCode = ipInfo.country;
+        _ipOrg = ipInfo.org;
       });
     }
   }
@@ -348,11 +358,12 @@ class _DownloaderSetupDialogState extends State<DownloaderSetupDialog> {
                                   color: Theme.of(context).colorScheme.error,
                                 ),
                           ),
-                          if (_ipCountryCode != null) ...[
+                          if (_ipCountryCode != null || _ipOrg != null) ...[
                             const SizedBox(height: 2),
                             Text(
                               l10n.downloaderConfigVrgRusTestLocation(
-                                _ipCountryCode!,
+                                _ipCountryCode ?? '',
+                                _ipOrg ?? '',
                               ),
                               style: Theme.of(context)
                                   .textTheme

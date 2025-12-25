@@ -83,10 +83,13 @@
       }
     }
   },
-  "downloaderConfigVrgRusTestLocation": "Регион IP: {country}",
+  "downloaderConfigVrgRusTestLocation": "Расположение IP: {country}, {org}",
   "@downloaderConfigVrgRusTestLocation": {
     "placeholders": {
       "country": {
+        "type": "String"
+      },
+      "org": {
         "type": "String"
       }
     }

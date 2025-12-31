@@ -1093,7 +1093,14 @@ impl AdbDevice {
                             );
                         }
                     } else {
-                        let shell_cmd = adb_args.join(" ");
+                        let shell_cmd = adb_args
+                            .iter()
+                            .map(|arg| match arg.contains(' ') && !arg.starts_with(['"', '\'']) {
+                                true => format!("\"{arg}\""),
+                                false => arg.to_string(),
+                            })
+                            .collect::<Vec<_>>()
+                            .join(" ");
                         debug!(shell_cmd, "Line {line_num}: executing shell command");
                         let output = self.shell(&shell_cmd).await.with_context(|| {
                             format!("Line {line_num}: failed to execute command '{shell_cmd}'")

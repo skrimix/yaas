@@ -1211,12 +1211,14 @@ impl AdbDevice {
             _ => bail!("Multiple APK files found in app directory"),
         };
 
-        // TODO: read package name from APK file and use it to find OBB directory
+        let apk_info = get_apk_info(apk_path).context("Failed to read APK info")?;
+        let package_name = &apk_info.package_name;
+
         let obb_dir = entries.iter().find_map(|e| {
             if e.path().is_dir() {
-                e.file_name().to_str().and_then(|n| {
-                    if PACKAGE_NAME_REGEX.is_match(n) { Some(e.path()) } else { None }
-                })
+                e.file_name()
+                    .to_str()
+                    .and_then(|n| if n == package_name { Some(e.path()) } else { None })
             } else {
                 None
             }

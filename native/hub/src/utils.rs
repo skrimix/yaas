@@ -126,6 +126,28 @@ pub(crate) async fn first_subdirectory(dir: &Path) -> Result<Option<PathBuf>> {
     Ok(None)
 }
 
+/// Returns the single subdirectory inside a directory, or None if empty.
+/// Returns an error if there are multiple subdirectories.
+pub(crate) async fn single_subdirectory(dir: &Path) -> Result<Option<PathBuf>> {
+    if !dir.is_dir() {
+        return Ok(None);
+    }
+    let mut rd = fs::read_dir(dir).await?;
+    let mut found: Option<PathBuf> = None;
+    while let Some(entry) = rd.next_entry().await? {
+        if entry.file_type().await?.is_dir() {
+            if found.is_some() {
+                anyhow::bail!(
+                    "Expected single subdirectory in '{}', found multiple",
+                    dir.display()
+                );
+            }
+            found = Some(entry.path());
+        }
+    }
+    Ok(found)
+}
+
 /// Checks recursively if a directory contains any files
 pub(crate) async fn dir_has_any_files(dir: &Path) -> Result<bool> {
     if !dir.exists() || !dir.is_dir() {

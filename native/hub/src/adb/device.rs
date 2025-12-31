@@ -35,7 +35,9 @@ use crate::{
             CONTROLLER_INFO_COMMAND_DUMPSYS, CONTROLLER_INFO_COMMAND_JSON, HeadsetControllersInfo,
         },
     },
-    utils::{dir_has_any_files, first_subdirectory, remove_child_dir_if_exists},
+    utils::{
+        dir_has_any_files, first_subdirectory, remove_child_dir_if_exists, single_subdirectory,
+    },
 };
 
 /// Java tool used for package listing
@@ -1666,8 +1668,7 @@ impl AdbDevice {
 
         // Restore OBB
         if obb_backup_path.is_dir()
-            // TODO: here and below, ensure there's a single valid directory
-            && let Some(pkg_dir) = first_subdirectory(&obb_backup_path).await?
+            && let Some(pkg_dir) = single_subdirectory(&obb_backup_path).await?
         {
             debug!("Restoring OBB");
             let remote_parent = UnixPath::new("/sdcard/Android/obb");
@@ -1676,7 +1677,7 @@ impl AdbDevice {
 
         // Restore shared data
         if shared_data_backup_path.is_dir()
-            && let Some(pkg_dir) = first_subdirectory(&shared_data_backup_path).await?
+            && let Some(pkg_dir) = single_subdirectory(&shared_data_backup_path).await?
         {
             debug!("Restoring shared data");
             let remote_parent = UnixPath::new("/sdcard/Android/data");
@@ -1685,7 +1686,7 @@ impl AdbDevice {
 
         // Restore private data
         if private_data_backup_path.is_dir()
-            && let Some(pkg_dir) = first_subdirectory(&private_data_backup_path).await?
+            && let Some(pkg_dir) = single_subdirectory(&private_data_backup_path).await?
         {
             let package_name = pkg_dir
                 .file_name()

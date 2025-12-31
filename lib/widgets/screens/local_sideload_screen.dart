@@ -66,7 +66,6 @@ class _LocalSideloadScreenState extends State<LocalSideloadScreen> {
         dialogTitle: l10n.selectApkFileTitle,
         type: FileType.custom,
         allowedExtensions: ['apk'],
-        // TODO: handle multiple files
         allowMultiple: false,
       );
       path = result?.files.single.path;

@@ -1174,8 +1174,6 @@ impl AdbDevice {
             let _ = progress_sender.send(SideloadProgress { status: status.to_string(), progress });
         }
 
-        // TODO: support direct streaming of app files
-        // TODO: add optional checksum verification
         // TODO: check free space before proceeding
         ensure!(app_dir.is_dir(), "App path must be a directory");
 

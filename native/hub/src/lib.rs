@@ -240,3 +240,17 @@ fn resolve_app_dir(portable_mode: bool) -> PathBuf {
         data_dir.join("YAAS")
     }
 }
+
+#[cfg(test)]
+mod tests {
+    use std::time::Duration;
+
+    use crate::init;
+
+    #[tokio::test(flavor = "multi_thread")]
+    #[ignore]
+    async fn core_init_stable() {
+        init(true).await;
+        tokio::time::sleep(Duration::from_secs(3)).await;
+    }
+}

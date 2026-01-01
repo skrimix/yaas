@@ -122,7 +122,7 @@ impl TaskManager {
         tokio::spawn({
             let handle = self.clone();
             async move {
-                Box::pin(handle.process_task(id, task, token)).await;
+                handle.process_task(id, task, token).await;
 
                 let mut tasks = handle.tasks.lock().await;
                 tasks.remove(&id);

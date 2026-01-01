@@ -422,9 +422,7 @@ impl AdbDevice {
             .instrument(Span::current()),
         );
 
-        match Box::pin(self.inner.install_package_with_progress(apk_path, true, true, true, tx))
-            .await
-        {
+        match self.inner.install_package_with_progress(apk_path, true, true, true, tx).await {
             Ok(_) => Ok(()),
             Err(DeviceError::PackageManagerError(msg)) => {
                 info!(

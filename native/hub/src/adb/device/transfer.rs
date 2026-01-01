@@ -138,7 +138,7 @@ impl AdbDevice {
         let dest_path = self.resolve_push_dest_path(source_file, dest_file).await?;
         debug!(source = %source_file.display(), dest = %dest_path.display(), "Pushing file");
         let mut file = BufReader::new(File::open(source_file).await?);
-        Box::pin(self.inner.push(&mut file, &dest_path, 0o777)).await.context("Failed to push file")
+        self.inner.push(&mut file, &dest_path, 0o777).await.context("Failed to push file")
     }
 
     /// Pushes a directory to the device
@@ -166,9 +166,7 @@ impl AdbDevice {
             self.shell(&format!("rm -rf '{}'", dest_path.display())).await?;
         }
         debug!(source = %source.display(), dest = %dest_path.display(), "Pushing directory");
-        Box::pin(self.inner.push_dir(source, &dest_path, 0o777))
-            .await
-            .context("Failed to push directory")
+        self.inner.push_dir(source, &dest_path, 0o777).await.context("Failed to push directory")
     }
 
     /// Pushes a directory to the device (with progress)
@@ -197,7 +195,8 @@ impl AdbDevice {
             debug!(path = %dest_path.display(), "Cleaning up destination directory");
             self.shell(&format!("rm -rf '{}'", dest_path.display())).await?;
         }
-        Box::pin(self.inner.push_dir_with_progress(source, &dest_path, 0o777, progress_sender))
+        self.inner
+            .push_dir_with_progress(source, &dest_path, 0o777, progress_sender)
             .await
             .context("Failed to push directory")
     }
@@ -205,9 +204,7 @@ impl AdbDevice {
     /// Pushes raw bytes to a file on the device
     #[instrument(level = "debug", skip(self, bytes), fields(len = bytes.len()), err)]
     pub(super) async fn push_bytes(&self, mut bytes: &[u8], remote_path: &UnixPath) -> Result<()> {
-        Box::pin(self.inner.push(&mut bytes, remote_path, 0o777))
-            .await
-            .context("Failed to push bytes")
+        self.inner.push(&mut bytes, remote_path, 0o777).await.context("Failed to push bytes")
     }
 
     /// Pulls a file from the device
@@ -227,7 +224,7 @@ impl AdbDevice {
 
         let dest_path = self.resolve_pull_dest_path(source_file, dest_file).await?;
         let mut file = File::create(&dest_path).await?;
-        Box::pin(self.inner.pull(source_file, &mut file)).await?;
+        self.inner.pull(source_file, &mut file).await?;
         Ok(dest_path)
     }
 
@@ -253,9 +250,7 @@ impl AdbDevice {
         fs::create_dir_all(&dest_path).await.with_context(|| {
             format!("Failed to create destination directory: {}", dest_path.display())
         })?;
-        Box::pin(self.inner.pull_dir(source, &dest_path))
-            .await
-            .context("Failed to pull directory")?;
+        self.inner.pull_dir(source, &dest_path).await.context("Failed to pull directory")?;
         Ok(dest_path)
     }
 

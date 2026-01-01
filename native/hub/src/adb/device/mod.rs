@@ -15,6 +15,7 @@ pub(crate) use backup::BackupOptions;
 use const_format::concatcp;
 use derive_more::Debug;
 use forensic_adb::{Device, UnixPath};
+use futures::FutureExt;
 use lazy_regex::{Lazy, Regex, lazy_regex};
 use sha2_const_stable::Sha256;
 pub(crate) use sideload::SideloadProgress;
@@ -122,7 +123,7 @@ impl AdbDevice {
                 "Failed to refresh device identity, using fallback name"
             ),
         }
-        device.refresh().await.context("Failed to refresh device info")?;
+        device.refresh().boxed().await.context("Failed to refresh device info")?;
         Ok(device)
     }
 

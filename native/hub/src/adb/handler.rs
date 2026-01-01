@@ -11,6 +11,7 @@ use std::{
 use anyhow::{Context, Result, anyhow, bail, ensure};
 use derive_more::Debug;
 use forensic_adb::{DeviceBrief, DeviceInfo, DeviceState};
+use futures::FutureExt;
 use lazy_regex::{Lazy, Regex, lazy_regex};
 use mdns_sd::{ServiceDaemon, ServiceEvent};
 use rinf::{DartSignal, RustSignal};
@@ -211,9 +212,8 @@ impl AdbHandler {
             let cancel_token = cancel_token.clone();
             let handler = self.clone();
             async move {
-                let result = cancel_token
-                    .run_until_cancelled(Box::pin(handler.handle_device_updates(receiver)))
-                    .await;
+                let result =
+                    cancel_token.run_until_cancelled(handler.handle_device_updates(receiver)).await;
                 debug!(result = ?result, "Device update handler task finished");
                 result
             }
@@ -235,8 +235,7 @@ impl AdbHandler {
         tokio::spawn({
             let handle = self.clone();
             async move {
-                let result =
-                    cancel_token.run_until_cancelled(Box::pin(handle.receive_commands())).await;
+                let result = cancel_token.run_until_cancelled(handle.receive_commands()).await;
                 debug!(result = ?result, "Command receiver task finished");
                 result
             }
@@ -247,8 +246,7 @@ impl AdbHandler {
             let handle = self.clone();
             let cancel_token = self.cancel_token.read().await.clone();
             async move {
-                let result =
-                    cancel_token.run_until_cancelled(Box::pin(handle.run_periodic_refresh())).await;
+                let result = cancel_token.run_until_cancelled(handle.run_periodic_refresh()).await;
                 debug!(result = ?result, "Periodic refresh task finished");
                 result
             }
@@ -1150,7 +1148,7 @@ impl AdbHandler {
         Span::current().record("serial", &device.serial);
         debug!("Refreshing device data");
         let mut device_clone = (*device).clone();
-        device_clone.refresh().await?;
+        device_clone.refresh().boxed().await?;
 
         let _ = self.set_device(Some(device_clone), Some(&device.serial)).await?;
         debug!("Device data refreshed successfully");

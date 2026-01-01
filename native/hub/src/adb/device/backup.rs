@@ -289,7 +289,8 @@ impl AdbDevice {
                 let apk = apk_candidate.unwrap(); // apk_candidate is Some in this branch
                 info!(apk = %apk.display(), "Restoring APK");
                 // Use direct install without any special handling
-                Box::pin(self.inner.install_package(&apk, true, true, true))
+                self.inner
+                    .install_package(&apk, true, true, true)
                     .await
                     .context("Failed to install APK during restore")?;
             }

@@ -15,7 +15,7 @@ pub(crate) use backup::BackupOptions;
 use const_format::concatcp;
 use derive_more::Debug;
 use forensic_adb::{Device, UnixPath};
-use lazy_regex::lazy_regex;
+use lazy_regex::{Lazy, Regex, lazy_regex};
 use sha2_const_stable::Sha256;
 pub(crate) use sideload::SideloadProgress;
 use tokio::{fs, time::sleep};
@@ -338,10 +338,12 @@ impl AdbDevice {
     /// - `Virtual proximity state: DISABLED` => proximity enabled (real sensor)
     #[instrument(level = "debug", skip(self), err)]
     async fn refresh_proximity_state(&mut self) -> Result<()> {
+        static VIRTUAL_PROXIMITY_STATE_REGEX: Lazy<Regex> =
+            lazy_regex!(r"^Virtual proximity state: (\w+)");
+
         let output = self.shell("dumpsys oculus.internal.power.IVrPowerManager/default").await?;
 
-        let regex = lazy_regex!(r"^Virtual proximity state: (\w+)");
-        if let Some(captures) = regex.captures(&output)
+        if let Some(captures) = VIRTUAL_PROXIMITY_STATE_REGEX.captures(&output)
             && let Some(state) = captures.get(1)
         {
             // CLOSE means proximity is faked (sensor disabled)
@@ -625,16 +627,15 @@ impl AdbDevice {
 
     #[instrument(level = "debug", skip(self), ret, err)]
     async fn ip_from_route(&self) -> Result<Option<Ipv4Addr>> {
-        use lazy_regex::{Lazy, Regex};
-        static IP_REGEX: Lazy<Regex> =
-            Lazy::new(|| Regex::new(r"src ((?:\d{1,3}\.){3}\d{1,3})").unwrap());
+        /// Regex to extract IP address from `ip route` output
+        static IP_ROUTE_REGEX: Lazy<Regex> = lazy_regex!(r"src ((?:\d{1,3}\.){3}\d{1,3})");
 
         let output = self
             .shell_checked("ip route | grep wlan0")
             .await
             .context("'ip route' command failed")?;
 
-        let caps = match IP_REGEX.captures(&output) {
+        let caps = match IP_ROUTE_REGEX.captures(&output) {
             Some(caps) => caps,
             None => return Ok(None),
         };

@@ -6,7 +6,7 @@ use std::{
 
 use anyhow::{Context, Result, bail, ensure};
 use forensic_adb::{DeviceError, DirectoryTransferProgress, UnixPath};
-use lazy_regex::{Lazy, Regex};
+use lazy_regex::{Lazy, Regex, lazy_regex};
 use tokio::sync::mpsc::{self, UnboundedSender};
 use tokio_util::sync::CancellationToken;
 use tracing::{Instrument, Span, debug, info, instrument, trace, warn};
@@ -16,8 +16,7 @@ use crate::{adb::PackageName, apk::get_apk_info, archive::decompress_all_7z_in_d
 
 /// Regex to split command arguments - handles quoted arguments with spaces
 /// Note: This is a simplified parser for install scripts and may not handle all edge cases
-static COMMAND_ARGS_REGEX: Lazy<Regex> =
-    Lazy::new(|| Regex::new(r#""[^"]*"|'[^']*'|[^\s]+"#).unwrap());
+static COMMAND_ARGS_REGEX: Lazy<Regex> = lazy_regex!(r#""[^"]*"|'[^']*'|[^\s]+"#);
 
 /// Progress information for sideload operations
 #[derive(Debug)]

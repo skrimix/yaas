@@ -1,5 +1,5 @@
 use anyhow::{Context, Result};
-use lazy_regex::lazy_regex;
+use lazy_regex::{Lazy, Regex, lazy_regex};
 use rinf::SignalPiece;
 use serde::{Deserialize, Serialize};
 use tracing::{debug, trace, warn};
@@ -106,13 +106,13 @@ impl HeadsetControllersInfo {
     // #[instrument(level = "debug")]
     /// Parses the output of `QUEST_CONTROLLER_INFO_COMMAND` command.
     pub(crate) fn from_dumpsys(lines: &str) -> Self {
-        let mut result = Self::default();
-
-        let re = lazy_regex!(
+        static CONTROLLER_DUMPSYS_REGEX: Lazy<Regex> = lazy_regex!(
             r#"^\s*Paired.+Type:\s*(?<type>\w{4,5}).+Battery:\s*(?<battery>\-*\d{1,3})%.+ Status: (?<status>\w+).+$"#m
         );
 
-        for caps in re.captures_iter(lines) {
+        let mut result = Self::default();
+
+        for caps in CONTROLLER_DUMPSYS_REGEX.captures_iter(lines) {
             if let (Some(controller_type), Some(battery_str), Some(controller_status)) = (
                 caps.name("type").map(|m| m.as_str()),
                 caps.name("battery").map(|m| m.as_str()),

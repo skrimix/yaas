@@ -4,7 +4,7 @@ use std::{
 };
 
 use anyhow::{Context, Result};
-use lazy_regex::lazy_regex;
+use lazy_regex::{Lazy, Regex, lazy_regex};
 use time::{OffsetDateTime, format_description::well_known::Rfc3339};
 use tracing::{info, instrument, warn};
 
@@ -171,17 +171,11 @@ pub(crate) async fn read_download_metadata(dir: &Path) -> Result<DownloadMetadat
 
 /// Converts our `2000-01-01 12:00 UTC` format to RFC3339 without the timezone suffix
 fn convert_legacy_last_updated(s: &str) -> Result<String> {
-    // let timestamp = PrimitiveDateTime::parse(
-    //     s,
-    //     format_description!("[year]-[month]-[day] [hour]:[minute] UTC"),
-    // )?
-    // .assume_utc();
-    // let mut converted = timestamp.format(&Rfc3339)?;
-    // converted.pop();
-    // Ok(converted)
+    /// Parse legacy last_updated format: `2000-01-01 12:00 UTC`
+    static LEGACY_LAST_UPDATED_REGEX: Lazy<Regex> =
+        lazy_regex!(r"(\d{4}-\d{2}-\d{2}) (\d{2}:\d{2}) UTC");
 
-    let re = lazy_regex!(r"(\d{4}-\d{2}-\d{2}) (\d{2}:\d{2}) UTC");
-    let caps = re.captures(s).context("Invalid last updated")?;
+    let caps = LEGACY_LAST_UPDATED_REGEX.captures(s).context("Invalid last updated")?;
     let date = caps.get(1).context("Invalid last updated")?.as_str();
     let time = caps.get(2).context("Invalid last updated")?.as_str();
     Ok(format!("{date}T{time}:00"))

@@ -11,7 +11,7 @@ use tokio::{
     sync::mpsc::{self, Receiver, Sender},
     time,
 };
-use tracing::{Event, Instrument, Subscriber, error, info_span};
+use tracing::{Event, Subscriber};
 use tracing_subscriber::layer::{Context, Layer};
 
 use crate::models::signals::logging::{
@@ -67,8 +67,7 @@ impl SignalLayer {
                                 }
                             }
                             None => {
-                                error!("Log entry channel closed unexpectedly");
-                                break;
+                                panic!("Log entry channel closed unexpectedly");
                             }
                         }
                     }
@@ -81,22 +80,19 @@ impl SignalLayer {
                     }
                 }
             }
-        }.instrument(info_span!("task_log_forwarder")));
+        });
     }
 
     pub(crate) fn start_request_handler(logs_dir: PathBuf) {
-        tokio::spawn(
-            async move {
-                let directory_receiver = GetLogsDirectoryRequest::get_dart_signal_receiver();
+        tokio::spawn(async move {
+            let directory_receiver = GetLogsDirectoryRequest::get_dart_signal_receiver();
 
-                while directory_receiver.recv().await.is_some() {
-                    let logs_path = logs_dir.to_string_lossy().to_string();
-                    GetLogsDirectoryResponse { path: logs_path }.send_signal_to_dart();
-                }
-                panic!("GetLogsDirectoryRequest receiver closed");
+            while directory_receiver.recv().await.is_some() {
+                let logs_path = logs_dir.to_string_lossy().to_string();
+                GetLogsDirectoryResponse { path: logs_path }.send_signal_to_dart();
             }
-            .instrument(info_span!("task_log_request_handler")),
-        );
+            panic!("GetLogsDirectoryRequest receiver closed");
+        });
     }
 
     async fn flush_buffer(buffer: &mut Vec<LogEntry>) {

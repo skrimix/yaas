@@ -45,7 +45,7 @@ pub(super) async fn write_download_metadata(
 ) -> Result<()> {
     let now = OffsetDateTime::now_utc()
         .replace_millisecond(0)
-        .unwrap()
+        .unwrap() // 0ms is always valid
         .format(&Rfc3339)
         .unwrap_or_else(|_| "".to_string());
 

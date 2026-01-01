@@ -286,7 +286,7 @@ impl AdbDevice {
                     );
                 }
             } else {
-                let apk = apk_candidate.unwrap();
+                let apk = apk_candidate.unwrap(); // apk_candidate is Some in this branch
                 info!(apk = %apk.display(), "Restoring APK");
                 // Use direct install without any special handling
                 Box::pin(self.inner.install_package(&apk, true, true, true))

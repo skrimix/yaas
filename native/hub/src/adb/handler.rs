@@ -1456,7 +1456,7 @@ impl AdbHandler {
             self.device_data_cache.write().await.insert(
                 dev.transport_id.clone(),
                 CachedDeviceData {
-                    name: dev.name.clone().unwrap(),
+                    name: dev.name.clone().unwrap(), // We checked that name is Some above
                     true_serial: dev.true_serial.clone(),
                 },
             );

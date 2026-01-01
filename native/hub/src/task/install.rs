@@ -87,7 +87,7 @@ impl TaskManager {
             }
         }
 
-        install_result.unwrap()?;
+        install_result.expect("install_result should be Some after loop exit")?;
 
         info!(
             adb_permits = self.adb_semaphore.available_permits() + 1,

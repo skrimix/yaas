@@ -148,7 +148,7 @@ impl TaskManager {
             }
         }
 
-        let app_path = download_result.unwrap();
+        let app_path = download_result.expect("download_result should be Some after loop exit");
         info!(
             app_path = %app_path,
             download_permits = self.download_semaphore.available_permits() + 1,
@@ -244,8 +244,7 @@ impl TaskManager {
             "Starting download task"
         );
 
-        let _ =
-            self.run_download_step(&app_full_name, true_package, 1, update_progress, token).await?;
+        self.run_download_step(&app_full_name, true_package, 1, update_progress, token).await?;
 
         Ok(())
     }

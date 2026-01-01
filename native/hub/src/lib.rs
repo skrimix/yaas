@@ -59,7 +59,6 @@ pub(crate) const USER_AGENT: &str = concat!("YAAS/", env!("CARGO_PKG_VERSION"));
 
 fn main() {
     let portable_mode = std::env::args().any(|arg| arg == "--portable");
-    let runtime = tokio::runtime::Builder::new_multi_thread().enable_all().build().unwrap();
 
     let panic_notify = Arc::new(Notify::new());
     let hook_notify = panic_notify.clone();
@@ -77,6 +76,8 @@ fn main() {
 
         original_hook(panic_info);
     }));
+
+    let runtime = tokio::runtime::Builder::new_multi_thread().enable_all().build().unwrap();
 
     let _ = catch_unwind(|| {
         runtime.block_on(async move {

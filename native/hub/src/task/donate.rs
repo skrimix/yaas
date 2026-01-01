@@ -273,7 +273,7 @@ impl TaskManager {
             }
         }
 
-        upload_result.unwrap();
+        upload_result.expect("upload_result should be Some after loop exit");
 
         // drop(cleanup_guard);
 

@@ -4,20 +4,20 @@ This file provides guidance to Claude Code (claude.ai/code) when working with co
 
 ## Project Overview
 
-YAAS is a Flutter application with Rust backend integration using the Rinf framework. It's a cross-platform desktop application for managing Android devices via ADB, with features for app management, sideloading, and cloud app downloads.
+YAAS is a Flutter application with Rust core integration using the Rinf framework. It's a cross-platform desktop application for managing Android devices via ADB, with features for app management, sideloading, and cloud app downloads.
 
 ## Architecture
 
 This is a hybrid Flutter-Rust application:
 
-- **Frontend**: Flutter (Dart) with Provider for state management
-- **Backend**: Rust (`native/hub` crate) integrated via Rinf framework
+- **UI**: Flutter (Dart) with Provider for state management
+- **Core**: Rust (`native/hub` crate) integrated via Rinf framework
 - **Communication**: Rinf handles Flutter-Rust message passing through generated bindings
 - **Build System**: Uses `just` for task automation, Flutter for frontend builds, Cargo for Rust compilation
 
 Key architectural components:
 - `lib/main.dart`: Entry point with Provider setup for state management
-- `native/hub/src/lib.rs`: Rust backend entry point with async runtime
+- `native/hub/src/lib.rs`: Rust core entry point with async runtime
 - `lib/src/bindings/`: Auto-generated Dart-Rust communication layer
 - `lib/providers/`: State management (DeviceState, AdbState, CloudAppsState, TaskState, SettingsState)
 - `lib/widgets/`: UI components
@@ -85,7 +85,7 @@ Uses Provider pattern with these main states:
 - `TaskState`: Background task management
 - `SettingsState`: Application settings
 
-State flows from Rust backend to Flutter frontend via Rinf signals.
+State flows from Rust core to Flutter UI via Rinf signals.
 
 ## Localization (l10n)
 

@@ -111,7 +111,7 @@ async fn init(portable_mode: bool) {
     }
     // Log and send version/build info
     info!(
-        "Starting YAAS backend {}| version={} | commit={}{} | profile={} | rustc={} | built={}",
+        "Starting YAAS core {}| version={} | commit={}{} | profile={} | rustc={} | built={}",
         if portable_mode { "(portable mode)" } else { "" },
         built_info::PKG_VERSION,
         built_info::GIT_COMMIT_HASH_SHORT.unwrap_or("unknown"),
@@ -121,7 +121,7 @@ async fn init(portable_mode: bool) {
         built_info::BUILT_TIME_UTC
     );
     AppVersionInfo {
-        backend_version: built_info::PKG_VERSION.to_string(),
+        core_version: built_info::PKG_VERSION.to_string(),
         profile: built_info::PROFILE.to_string(),
         rustc_version: built_info::RUSTC_VERSION.to_string(),
         built_time_utc: built_info::BUILT_TIME_UTC.to_string(),

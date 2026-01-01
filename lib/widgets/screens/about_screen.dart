@@ -26,7 +26,7 @@ class _AboutScreenState extends State<AboutScreen> {
   Widget build(BuildContext context) {
     final l10n = AppLocalizations.of(context);
     final appState = context.watch<AppState>();
-    final backend = appState.backendVersionInfo;
+    final core = appState.coreVersionInfo;
 
     return Padding(
       padding: const EdgeInsets.all(16.0),
@@ -56,19 +56,19 @@ class _AboutScreenState extends State<AboutScreen> {
             },
           ),
           const SizedBox(height: 4),
-          if (backend != null) ...[
+          if (core != null) ...[
             Row(
               children: [
-                Text('Backend v${backend.backendVersion}'),
+                Text('Core v${core.coreVersion}'),
                 const SizedBox(width: 6),
                 // IconButton(
-                //   tooltip: 'Copy backend version',
+                //   tooltip: 'Copy core version',
                 //   icon: const Icon(Icons.copy, size: 16),
                 //   onPressed: () => copyToClipboard(
                 //     context,
-                //     'v${backend.backendVersion}',
+                //     'v${core.coreVersion}',
                 //     title: 'Version copied',
-                //     description: 'v${backend.backendVersion}',
+                //     description: 'v${core.coreVersion}',
                 //   ),
                 // ),
                 // const SizedBox(width: 8),
@@ -77,10 +77,10 @@ class _AboutScreenState extends State<AboutScreen> {
                   message: 'Copy full SHA',
                   child: GestureDetector(
                     onTap: () {
-                      final full = (backend.gitCommitHash ??
-                              backend.gitCommitHashShort ??
+                      final full = (core.gitCommitHash ??
+                              core.gitCommitHashShort ??
                               '') +
-                          (backend.gitDirty ? ' (dirty)' : '');
+                          (core.gitDirty ? ' (dirty)' : '');
                       if (full.isEmpty) return;
                       copyToClipboard(
                         context,
@@ -99,7 +99,7 @@ class _AboutScreenState extends State<AboutScreen> {
                         padding: const EdgeInsets.symmetric(
                             horizontal: 6, vertical: 2),
                         child: Text(
-                          '${backend.gitCommitHashShort ?? 'unknown'}${backend.gitDirty ? ' (dirty)' : ''}',
+                          '${core.gitCommitHashShort ?? 'unknown'}${core.gitDirty ? ' (dirty)' : ''}',
                           style: const TextStyle(fontFamily: 'monospace'),
                         ),
                       ),
@@ -111,8 +111,8 @@ class _AboutScreenState extends State<AboutScreen> {
                 //   tooltip: 'Copy full SHA',
                 //   icon: const Icon(Icons.copy, size: 16),
                 //   onPressed: () {
-                //     final full = backend.gitCommitHash ??
-                //         backend.gitCommitHashShort ??
+                //     final full = core.gitCommitHash ??
+                //         core.gitCommitHashShort ??
                 //         '';
                 //     if (full.isEmpty) return;
                 //     copyToClipboard(
@@ -127,9 +127,9 @@ class _AboutScreenState extends State<AboutScreen> {
             ),
             const SizedBox(height: 4),
             Text(
-                'Built ${backend.builtTimeUtc} • ${backend.profile} • ${backend.rustcVersion}'),
+                'Built ${core.builtTimeUtc} • ${core.profile} • ${core.rustcVersion}'),
           ] else ...[
-            const Text('Backend: loading…'),
+            const Text('Core: loading…'),
           ],
           const SizedBox(height: 8),
           // Text(

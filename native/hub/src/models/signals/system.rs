@@ -32,7 +32,7 @@ pub(crate) struct MediaConfigChanged {
 #[derive(Serialize, Deserialize, RustSignal)]
 pub(crate) struct AppVersionInfo {
     /// Crate version (from Cargo.toml)
-    pub backend_version: String,
+    pub core_version: String,
     /// Rust profile (debug/release)
     pub profile: String,
     /// rustc version string

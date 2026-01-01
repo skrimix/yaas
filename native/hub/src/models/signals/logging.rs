@@ -46,7 +46,7 @@ impl From<LogLevel> for Level {
 
 #[derive(Clone, Debug, Serialize, Deserialize, SignalPiece)]
 pub(crate) struct SpanInfo {
-    /// Stable identifier assigned by the backend for this span instance
+    /// Stable identifier assigned by the core for this span instance
     pub id: String,
     pub name: String,
     pub target: String,

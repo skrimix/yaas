@@ -72,11 +72,11 @@ void main() async {
     }
   });
 
-  // Receive backend build/version info
+  // Receive core build/version info
   messages.AppVersionInfo.rustSignalStream.listen((pack) {
     final info = pack.message;
     final appState = YAASApp.navigatorKey.currentContext?.read<AppState>();
-    appState?.setBackendVersionInfo(info);
+    appState?.setCoreVersionInfo(info);
   });
 }
 

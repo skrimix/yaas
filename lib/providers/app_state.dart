@@ -158,12 +158,12 @@ class AppState extends ChangeNotifier {
     notifyListeners();
   }
 
-  // Backend (Rust) version/build info
-  BackendVersionInfo? _backendVersionInfo;
-  BackendVersionInfo? get backendVersionInfo => _backendVersionInfo;
-  void setBackendVersionInfo(messages.AppVersionInfo info) {
-    _backendVersionInfo = BackendVersionInfo(
-      backendVersion: info.backendVersion,
+  // Core (Rust) version/build info
+  CoreVersionInfo? _coreVersionInfo;
+  CoreVersionInfo? get coreVersionInfo => _coreVersionInfo;
+  void setCoreVersionInfo(messages.AppVersionInfo info) {
+    _coreVersionInfo = CoreVersionInfo(
+      coreVersion: info.coreVersion,
       profile: info.profile,
       rustcVersion: info.rustcVersion,
       builtTimeUtc: info.builtTimeUtc,
@@ -175,8 +175,8 @@ class AppState extends ChangeNotifier {
   }
 }
 
-class BackendVersionInfo {
-  final String backendVersion;
+class CoreVersionInfo {
+  final String coreVersion;
   final String profile;
   final String rustcVersion;
   final String builtTimeUtc;
@@ -184,8 +184,8 @@ class BackendVersionInfo {
   final String? gitCommitHashShort;
   final bool gitDirty;
 
-  const BackendVersionInfo({
-    required this.backendVersion,
+  const CoreVersionInfo({
+    required this.coreVersion,
     required this.profile,
     required this.rustcVersion,
     required this.builtTimeUtc,

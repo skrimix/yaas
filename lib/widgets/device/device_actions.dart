@@ -1,5 +1,4 @@
 import 'dart:io' show Platform;
-import 'dart:async';
 import 'dart:math' as math;
 import 'package:flutter/material.dart';
 import 'package:rinf/rinf.dart';
@@ -151,30 +150,12 @@ class _GuardianToggle extends StatefulWidget {
 }
 
 class _GuardianToggleState extends State<_GuardianToggle> {
-  bool _isUpdating = false;
-  StreamSubscription? _subscription;
-
-  @override
-  void initState() {
-    super.initState();
-    _subscription = AdbCommandCompletedEvent.rustSignalStream.listen((event) {
-      final message = event.message;
-      if (message.commandType == AdbCommandKind.guardianPausedSet &&
-          message.commandKey == 'guardian') {
-        if (mounted) setState(() => _isUpdating = false);
-      }
-    });
-  }
-
-  @override
-  void dispose() {
-    _subscription?.cancel();
-    super.dispose();
-  }
+  /// The expected active state we're waiting for (null if not updating)
+  bool? _pendingActiveState;
 
   void _toggle(bool newActiveState) {
-    if (_isUpdating) return;
-    setState(() => _isUpdating = true);
+    if (_pendingActiveState != null) return;
+    setState(() => _pendingActiveState = newActiveState);
     // newActiveState == true means Guardian should be active (not paused)
     AdbRequest(
       command: AdbCommandSetGuardianPaused(value: !newActiveState),
@@ -191,6 +172,15 @@ class _GuardianToggleState extends State<_GuardianToggle> {
     // guardianActive = !guardianPaused
     final bool? guardianActive =
         guardianPaused != null ? !guardianPaused : null;
+
+    // Clear pending state once actual state matches expected
+    if (_pendingActiveState != null && guardianActive == _pendingActiveState) {
+      WidgetsBinding.instance.addPostFrameCallback((_) {
+        if (mounted) setState(() => _pendingActiveState = null);
+      });
+    }
+
+    final isUpdating = _pendingActiveState != null;
     final isActive = guardianActive ?? true;
     final theme = Theme.of(context);
 
@@ -214,7 +204,7 @@ class _GuardianToggleState extends State<_GuardianToggle> {
             ],
           ),
         ),
-        if (_isUpdating)
+        if (isUpdating)
           const SizedBox(
             width: 60,
             height: 40,
@@ -250,30 +240,12 @@ class _ProximityToggle extends StatefulWidget {
 }
 
 class _ProximityToggleState extends State<_ProximityToggle> {
-  bool _isUpdating = false;
-  StreamSubscription? _subscription;
-
-  @override
-  void initState() {
-    super.initState();
-    _subscription = AdbCommandCompletedEvent.rustSignalStream.listen((event) {
-      final message = event.message;
-      if (message.commandType == AdbCommandKind.proximitySensorSet &&
-          message.commandKey == 'proximity') {
-        if (mounted) setState(() => _isUpdating = false);
-      }
-    });
-  }
-
-  @override
-  void dispose() {
-    _subscription?.cancel();
-    super.dispose();
-  }
+  /// The expected disabled state we're waiting for (null if not updating)
+  bool? _pendingDisabledState;
 
   void _enableSensor() {
-    if (_isUpdating) return;
-    setState(() => _isUpdating = true);
+    if (_pendingDisabledState != null) return;
+    setState(() => _pendingDisabledState = false);
     AdbRequest(
       command:
           const AdbCommandSetProximitySensor(enabled: true, durationMs: null),
@@ -282,8 +254,8 @@ class _ProximityToggleState extends State<_ProximityToggle> {
   }
 
   void _disableSensor(int durationMs) {
-    if (_isUpdating) return;
-    setState(() => _isUpdating = true);
+    if (_pendingDisabledState != null) return;
+    setState(() => _pendingDisabledState = true);
     AdbRequest(
       command: AdbCommandSetProximitySensor(
         enabled: false,
@@ -300,9 +272,18 @@ class _ProximityToggleState extends State<_ProximityToggle> {
     final l10n = AppLocalizations.of(context);
     final device = context.watch<DeviceState>();
     final proximityDisabled = device.proximityDisabled;
-    final theme = Theme.of(context);
 
+    // Clear pending state once actual state matches expected
+    if (_pendingDisabledState != null &&
+        proximityDisabled == _pendingDisabledState) {
+      WidgetsBinding.instance.addPostFrameCallback((_) {
+        if (mounted) setState(() => _pendingDisabledState = null);
+      });
+    }
+
+    final isUpdating = _pendingDisabledState != null;
     final sensorDisabled = proximityDisabled == true;
+    final theme = Theme.of(context);
 
     return Row(
       children: [
@@ -327,7 +308,7 @@ class _ProximityToggleState extends State<_ProximityToggle> {
             ],
           ),
         ),
-        if (_isUpdating)
+        if (isUpdating)
           const SizedBox(
             width: 60,
             height: 20,

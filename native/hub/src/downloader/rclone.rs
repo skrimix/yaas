@@ -186,16 +186,16 @@ impl RcloneClient {
 
     #[instrument(skip(self), level = "debug")]
     async fn run_to_string(&self, args: &[&str]) -> Result<String> {
-        let output = self.command(args, false).output().await.context("rclone command failed")?;
+        let output = self.command(args, false).output().await.context("Rclone command failed")?;
         if output.status.success() {
             let stdout = String::from_utf8_lossy(&output.stdout).to_string();
-            trace!(stdout, "rclone command successful");
+            trace!(stdout, "Rclone command successful");
             Ok(stdout)
         } else {
             let stderr = String::from_utf8_lossy(&output.stderr).to_string();
-            error!(code = output.status.code().unwrap_or(-1), stderr, "rclone command failed");
+            error!(code = output.status.code().unwrap_or(-1), stderr, "Rclone command failed");
             bail!(
-                "rclone returned exit code {}, stderr:\n{}",
+                "Rclone returned exit code {}, stderr:\n{}",
                 output.status.code().map_or("unknown".to_string(), |c| c.to_string()),
                 stderr
             )
@@ -215,7 +215,7 @@ impl RcloneClient {
         let output = self
             .run_to_string(&["lsjson", "--fast-list", path])
             .await
-            .context("rclone lsjson failed")?;
+            .context("Rclone lsjson failed")?;
         let entries: Vec<RcloneLsJsonEntry> =
             serde_json::from_str(&output).context("Failed to parse rclone lsjson output")?;
         Ok(entries)
@@ -310,9 +310,9 @@ impl RcloneClient {
                     match serde_json::from_str::<RcloneJsonLogLine>(&line) {
                         Ok(log_line) => {
                             if let Some(mut stats) = log_line.stats {
-                                trace!(?stats, "parsed rclone stats");
+                                trace!(?stats, "Parsed rclone stats");
                                 stats.total_bytes = total_bytes;
-                                trace!(?stats, "sending stats update");
+                                trace!(?stats, "Sending stats update");
                                 if stats_tx.send(stats).is_err() {
                                     warn!("Stats receiver dropped, stopping stats processing.");
                                     break;
@@ -343,9 +343,9 @@ impl RcloneClient {
                         }
                     }
                     let stderr_str = stderr_lines.join("\n");
-                    error!(code = status.code().unwrap_or(-1), stderr = %stderr_str, "rclone transfer failed");
+                    error!(code = status.code().unwrap_or(-1), stderr = %stderr_str, "Rclone transfer failed");
                     Err(anyhow!(
-                        "rclone failed with exit code: {}, stderr: {}",
+                        "Rclone failed with exit code: {}, stderr: {}",
                         status.code().map_or("unknown".to_string(), |c| c.to_string()),
                         stderr_str
                     ))

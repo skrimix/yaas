@@ -73,7 +73,7 @@ impl TaskManager {
                 result = &mut download_task => {
                     let app_path = result
                         .context("Download task failed")?
-                        .context("Failed to download app")?;
+                        .context(format!("Failed to download app \"{app_full_name}\""))?;
                     info!("Download task completed");
                     download_result = Some(app_path);
                 }

@@ -1141,11 +1141,11 @@ impl AdbHandler {
     }
 
     /// Refreshes the currently connected device
-    #[instrument(level = "debug", skip(self), err)]
+    #[instrument(level = "debug", skip(self), fields(serial), err)]
     pub(crate) async fn refresh_device(&self) -> Result<()> {
         let device = self.current_device().await?;
-        // TODO: just add serial to instrument span
-        debug!(serial = %device.serial, "Refreshing device data");
+        Span::current().record("serial", &device.serial);
+        debug!("Refreshing device data");
         let mut device_clone = (*device).clone();
         device_clone.refresh().await?;
 

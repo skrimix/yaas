@@ -211,8 +211,9 @@ impl AdbHandler {
             let cancel_token = cancel_token.clone();
             let handler = self.clone();
             async move {
-                let result =
-                    cancel_token.run_until_cancelled(handler.handle_device_updates(receiver)).await;
+                let result = cancel_token
+                    .run_until_cancelled(Box::pin(handler.handle_device_updates(receiver)))
+                    .await;
                 debug!(result = ?result, "Device update handler task finished");
                 result
             }
@@ -234,7 +235,8 @@ impl AdbHandler {
         tokio::spawn({
             let handle = self.clone();
             async move {
-                let result = cancel_token.run_until_cancelled(handle.receive_commands()).await;
+                let result =
+                    cancel_token.run_until_cancelled(Box::pin(handle.receive_commands())).await;
                 debug!(result = ?result, "Command receiver task finished");
                 result
             }
@@ -245,7 +247,8 @@ impl AdbHandler {
             let handle = self.clone();
             let cancel_token = self.cancel_token.read().await.clone();
             async move {
-                let result = cancel_token.run_until_cancelled(handle.run_periodic_refresh()).await;
+                let result =
+                    cancel_token.run_until_cancelled(Box::pin(handle.run_periodic_refresh())).await;
                 debug!(result = ?result, "Periodic refresh task finished");
                 result
             }

@@ -114,26 +114,20 @@ impl AdbDevice {
             proximity_disabled: None,
         };
 
-        // Refresh identity first to use manufacturer + model if available
-        if let Err(e) = device.refresh_identity().await {
-            warn!(
+        // Read identity first to use manufacturer + model if available
+        match Self::query_identity(&device.inner).await {
+            Ok(identity) => device.name = Some(identity),
+            Err(e) => warn!(
                 error = e.as_ref() as &dyn Error,
                 "Failed to refresh device identity, using fallback name"
-            );
+            ),
         }
         device.refresh().await.context("Failed to refresh device info")?;
         Ok(device)
     }
 
-    /// Refresh basic identity (name) using `ro.product.manufacturer` and `ro.product.model`
-    #[instrument(level = "debug", skip(self), err)]
-    async fn refresh_identity(&mut self) -> Result<()> {
-        let identity = Self::query_identity(&self.inner).await?;
-        self.name = Some(identity);
-        Ok(())
-    }
-
-    /// Queries manufacturer + model from a `forensic_adb::Device` and returns a combined string.
+    /// Queries manufacturer (`ro.product.manufacturer`) and model (`ro.product.model`) from a `forensic_adb::Device` and returns a combined string.
+    ///
     /// If manufacturer is empty, returns just model.
     #[instrument(level = "debug", skip(device), err)]
     pub(super) async fn query_identity(device: &Device) -> Result<String> {
@@ -175,31 +169,59 @@ impl AdbDevice {
             .to_string())
     }
 
-    /// Refreshes device information (packages, battery, space, guardian)
+    /// Refreshes device information (packages, battery, space, guardian) in parallel
     #[instrument(level = "debug", skip(self), err)]
     pub(super) async fn refresh(&mut self) -> Result<()> {
+        // Run all queries in parallel
+        let (packages_res, battery_res, space_res, guardian_res, proximity_res) = tokio::join!(
+            self.query_package_list(),
+            self.query_battery_info(),
+            self.query_space_info(),
+            self.query_guardian_state(),
+            self.query_proximity_state(),
+        );
+
         let mut errors = Vec::new();
 
-        if let Err(e) = self.refresh_package_list().await {
-            errors.push(("packages", e));
-            self.installed_packages = Vec::new();
+        // Apply results
+        match packages_res {
+            Ok(packages) => self.installed_packages = packages,
+            Err(e) => {
+                errors.push(("packages", e));
+                self.installed_packages = Vec::new();
+            }
         }
-        if let Err(e) = self.refresh_battery_info().await {
-            errors.push(("battery", e));
-            self.battery_level = 0;
-            self.controllers = HeadsetControllersInfo::default();
+        match battery_res {
+            Ok((level, controllers)) => {
+                self.battery_level = level;
+                self.controllers = controllers;
+            }
+            Err(e) => {
+                errors.push(("battery", e));
+                self.battery_level = 0;
+                self.controllers = HeadsetControllersInfo::default();
+            }
         }
-        if let Err(e) = self.refresh_space_info().await {
-            errors.push(("space", e));
-            self.space_info = SpaceInfo::default();
+        match space_res {
+            Ok(space_info) => self.space_info = space_info,
+            Err(e) => {
+                errors.push(("space", e));
+                self.space_info = SpaceInfo::default();
+            }
         }
-        if let Err(e) = self.refresh_guardian_state().await {
-            errors.push(("guardian", e));
-            self.guardian_paused = None;
+        match guardian_res {
+            Ok(guardian_paused) => self.guardian_paused = guardian_paused,
+            Err(e) => {
+                errors.push(("guardian", e));
+                self.guardian_paused = None;
+            }
         }
-        if let Err(e) = self.refresh_proximity_state().await {
-            errors.push(("proximity", e));
-            self.proximity_disabled = None;
+        match proximity_res {
+            Ok(proximity_disabled) => self.proximity_disabled = proximity_disabled,
+            Err(e) => {
+                errors.push(("proximity", e));
+                self.proximity_disabled = None;
+            }
         }
 
         if !errors.is_empty() {
@@ -322,22 +344,21 @@ impl AdbDevice {
         Ok(())
     }
 
-    /// Refreshes the guardian paused state from the device
+    /// Queries the guardian paused state from the device
     #[instrument(level = "debug", skip(self), err)]
-    async fn refresh_guardian_state(&mut self) -> Result<()> {
+    async fn query_guardian_state(&self) -> Result<Option<bool>> {
         let output = self.shell("getprop debug.oculus.guardian_pause").await?;
         let trimmed = output.trim();
         // Property value is "1" for paused, "0" or empty for not paused
-        self.guardian_paused = Some(trimmed == "1");
-        Ok(())
+        Ok(Some(trimmed == "1"))
     }
 
-    /// Refreshes the proximity sensor disabled state from the device.
+    /// Queries the proximity sensor disabled state from the device.
     /// Parses `dumpsys oculus.internal.power.IVrPowerManager/default` output.
     /// - `Virtual proximity state: CLOSE` => proximity disabled (faked)
     /// - `Virtual proximity state: DISABLED` => proximity enabled (real sensor)
     #[instrument(level = "debug", skip(self), err)]
-    async fn refresh_proximity_state(&mut self) -> Result<()> {
+    async fn query_proximity_state(&self) -> Result<Option<bool>> {
         static VIRTUAL_PROXIMITY_STATE_REGEX: Lazy<Regex> =
             lazy_regex!(r"^Virtual proximity state: (\w+)");
 
@@ -348,21 +369,20 @@ impl AdbDevice {
         {
             // CLOSE means proximity is faked (sensor disabled)
             // DISABLED means proximity override is off (sensor enabled/real)
-            match state.as_str() {
-                "CLOSE" => self.proximity_disabled = Some(true),
-                "DISABLED" => self.proximity_disabled = Some(false),
-                _ => self.proximity_disabled = None,
-            }
-            return Ok(());
+            return Ok(match state.as_str() {
+                "CLOSE" => Some(true),
+                "DISABLED" => Some(false),
+                _ => None,
+            });
         }
+        trace!(output, "No virtual proximity state found");
 
-        self.proximity_disabled = None;
-        Ok(())
+        Ok(None)
     }
 
-    /// Refreshes the list of installed packages on the device
+    /// Queries the list of installed packages on the device
     #[instrument(level = "debug", skip(self), fields(count), err)]
-    async fn refresh_package_list(&mut self) -> Result<()> {
+    async fn query_package_list(&self) -> Result<Vec<InstalledPackage>> {
         const LIST_APPS_DEX_PATH: &str = "/data/local/tmp/list_apps.dex";
         if !self
             .shell_checked(concatcp!("sha256sum ", LIST_APPS_DEX_PATH))
@@ -385,13 +405,12 @@ impl AdbDevice {
             parse_list_apps_dex(&list_output).context("Failed to parse list_apps.dex output")?;
 
         Span::current().record("count", packages.len());
-        self.installed_packages = packages;
-        Ok(())
+        Ok(packages)
     }
 
-    /// Refreshes battery information for the device and controllers
+    /// Queries battery information for the device and controllers
     #[instrument(level = "debug", skip(self), err)]
-    async fn refresh_battery_info(&mut self) -> Result<()> {
+    async fn query_battery_info(&self) -> Result<(u8, HeadsetControllersInfo)> {
         // Get device battery level
         let battery_dump = self.battery_dump().await.context("Failed to get battery dump")?;
 
@@ -438,17 +457,13 @@ impl AdbDevice {
         };
         trace!(?controllers, "Parsed controller info");
 
-        self.battery_level = device_level;
-        self.controllers = controllers;
-        Ok(())
+        Ok((device_level, controllers))
     }
 
-    /// Refreshes storage space information
+    /// Queries storage space information
     #[instrument(level = "debug", skip(self), err)]
-    async fn refresh_space_info(&mut self) -> Result<()> {
-        let space_info = self.get_space_info().await?;
-        self.space_info = space_info;
-        Ok(())
+    async fn query_space_info(&self) -> Result<SpaceInfo> {
+        self.get_space_info().await
     }
 
     /// Gets storage space information from the device

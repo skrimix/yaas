@@ -4,7 +4,6 @@ use anyhow::{Context, Result, anyhow};
 use apk_info::Apk;
 use tracing::instrument;
 
-/// Basic APK metadata parsed from `AndroidManifest.xml` (and optionally `resources.arsc`).
 #[derive(Debug, Clone)]
 #[allow(unused)]
 pub(crate) struct ApkInfo {
@@ -14,9 +13,7 @@ pub(crate) struct ApkInfo {
     pub version_name: Option<String>,
 }
 
-/// Parse minimal info from an APK using `resand` only (no axmldecoder/aapt).
-/// Best-effort: returns `Ok` with whatever could be extracted. Fails for
-/// unrecoverable issues like missing/invalid `AndroidManifest.xml`.
+/// Parse minimal info from an APK using `apk_info` crate.
 #[instrument(ret, level = "debug", fields(apk_path = %apk_path.as_ref().display()))]
 pub(crate) fn get_apk_info(apk_path: impl AsRef<Path>) -> Result<ApkInfo> {
     let apk_path = apk_path.as_ref();

@@ -1,3 +1,4 @@
+pub(crate) mod apk_info;
 mod cloud_app;
 pub(crate) use cloud_app::*;
 mod device_space;

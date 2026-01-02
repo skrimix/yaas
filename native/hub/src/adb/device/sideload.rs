@@ -12,7 +12,7 @@ use tokio_util::sync::CancellationToken;
 use tracing::{Instrument, Span, debug, info, instrument, trace, warn};
 
 use super::{AdbDevice, backup::BackupOptions};
-use crate::{adb::PackageName, apk::get_apk_info, archive::decompress_all_7z_in_dir};
+use crate::{adb::PackageName, archive::decompress_all_7z_in_dir, models::apk_info::get_apk_info};
 
 /// Regex to split command arguments - handles quoted arguments with spaces
 /// Note: This is a simplified parser for install scripts and may not handle all edge cases

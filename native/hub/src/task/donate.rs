@@ -7,8 +7,10 @@ use tracing::{Instrument, Span, debug, info, instrument, warn};
 
 use super::{AdbStepConfig, ProgressUpdate, TaskManager};
 use crate::{
-    adb::PackageName, apk::get_apk_info, archive::create_zip_from_dir,
-    downloader::RcloneTransferStats, models::signals::task::TaskStatus,
+    adb::PackageName,
+    archive::create_zip_from_dir,
+    downloader::RcloneTransferStats,
+    models::{apk_info::get_apk_info, signals::task::TaskStatus},
 };
 
 pub(crate) const DONATE_TMP_DIR: &str = "_upload";

@@ -40,7 +40,6 @@ static LOG_GUARD: OnceLock<WorkerGuard> = OnceLock::new();
 rinf::write_interface!();
 
 pub(crate) mod adb;
-pub(crate) mod apk;
 pub(crate) mod archive;
 pub(crate) mod backups_catalog;
 pub(crate) mod casting;

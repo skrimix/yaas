@@ -199,7 +199,6 @@ impl CastingManager {
                 "input_forwarding_text_input_forwarding",
                 "image_stabilization",
                 "update_device_fov_via_openxr_api",
-                "panel_streaming",
             ]);
         }
 

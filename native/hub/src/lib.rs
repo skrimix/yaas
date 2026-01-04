@@ -76,7 +76,10 @@ fn main() {
         original_hook(panic_info);
     }));
 
-    let runtime = tokio::runtime::Builder::new_multi_thread().enable_all().build().unwrap();
+    let runtime = tokio::runtime::Builder::new_multi_thread()
+        .enable_all()
+        .build()
+        .expect("Failed to build tokio runtime");
 
     let _ = catch_unwind(|| {
         runtime.block_on(async move {

@@ -624,7 +624,11 @@ impl Repo for VRPPublicRepo {
                                 )
                             })?
                             .into();
-                        parts.push((name.to_string(), meta.len(), odt.format(&Rfc3339).unwrap())); // Rfc3339 is always valid
+                        parts.push((
+                            name.to_string(),
+                            meta.len(),
+                            odt.format(&Rfc3339).expect("Formatting with Rfc3339 failed"),
+                        ));
                     }
                 }
             }

@@ -1452,14 +1452,11 @@ impl AdbHandler {
     async fn emit_devices_list(&self, devices: &[DeviceInfo]) {
         let current = self.try_current_device().await;
         if let Some(dev) = &current
-            && dev.name.is_some()
+            && let Some(dev_name) = dev.name.as_ref()
         {
             self.device_data_cache.write().await.insert(
                 dev.transport_id.clone(),
-                CachedDeviceData {
-                    name: dev.name.clone().unwrap(), // We checked that name is Some above
-                    true_serial: dev.true_serial.clone(),
-                },
+                CachedDeviceData { name: dev_name.clone(), true_serial: dev.true_serial.clone() },
             );
         }
 

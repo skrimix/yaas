@@ -257,7 +257,14 @@ impl AdbDevice {
                     }
                 }
             }
-            if apk_candidate.is_none() {
+            if let Some(apk) = apk_candidate {
+                info!(apk = %apk.display(), "Restoring APK");
+                // Use direct install without any special handling
+                self.inner
+                    .install_package(&apk, true, true, true)
+                    .await
+                    .context("Failed to install APK during restore")?;
+            } else {
                 // If there is no APK in the backup, ensure the app is already installed
                 // Try to infer the package name from any backup subfolder (private/shared/obb)
                 let mut candidate_pkg: Option<String> = None;
@@ -285,14 +292,6 @@ impl AdbDevice {
                          the package name"
                     );
                 }
-            } else {
-                let apk = apk_candidate.unwrap(); // apk_candidate is Some in this branch
-                info!(apk = %apk.display(), "Restoring APK");
-                // Use direct install without any special handling
-                self.inner
-                    .install_package(&apk, true, true, true)
-                    .await
-                    .context("Failed to install APK during restore")?;
             }
         }
 

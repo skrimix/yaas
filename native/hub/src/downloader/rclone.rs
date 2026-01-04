@@ -280,7 +280,7 @@ impl RcloneClient {
         let mut args = vec![
             operation.as_str(),
             "--stats",
-            "0.5s",
+            if stats_tx.is_some() { "0.5s" } else { "0" },
             "--stats-log-level",
             "NOTICE",
             "--fast-list",

@@ -673,7 +673,7 @@ impl Downloader {
         }
     }
 
-    #[instrument(skip(self), err, ret)]
+    #[instrument(skip(self, progress_tx, stage_tx), err, ret)]
     pub(crate) async fn download_app(
         &self,
         app_full_name: String,

@@ -4,6 +4,9 @@ use rinf::SignalPiece;
 use serde::{Deserialize, Serialize};
 
 /// Regex pattern to detect known rename markers in package names.
+// Note: the Rust `regex` crate does not support look-around.
+// When *normalizing* names (see `cloud_app.rs`), `.mrf.` needs special handling so we
+// preserve the dot separators (turn `.mrf.` into `.`) instead of deleting both dots.
 pub(super) static RENAME_PATTERN: Lazy<Regex> = lazy_regex!(r"(^mr\.)|(^mrf\.)|(\.mrf\.)|(\.jjb)");
 
 fn is_package_renamed(package_name: &str) -> bool {

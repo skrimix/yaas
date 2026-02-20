@@ -41,7 +41,26 @@ fn parse_size_mb_to_bytes(size_mb_str: &str) -> Result<u64, String> {
 
 /// Strips known rename markers from a package name to derive the original.
 fn normalize_package_name(name: &str) -> String {
-    RENAME_PATTERN.replace_all(name, "").into_owned()
+    // Do some manual handling where regex can't help us
+    let name = name.replace(".mrf.", ".");
+    RENAME_PATTERN.replace_all(&name, "").into_owned()
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn normalize_package_name_preserves_dots_for_mrf_segment() {
+        assert_eq!(normalize_package_name("com.foo.mrf.bar"), "com.foo.bar");
+        assert_eq!(normalize_package_name("com.foo.mrf.bar.jjb"), "com.foo.bar");
+    }
+
+    #[test]
+    fn normalize_package_name_strips_prefix_markers() {
+        assert_eq!(normalize_package_name("mr.com.example.app"), "com.example.app");
+        assert_eq!(normalize_package_name("mrf.com.example.app"), "com.example.app");
+    }
 }
 
 /// A cloud app from the remote repository.

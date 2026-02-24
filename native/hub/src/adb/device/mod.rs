@@ -21,9 +21,10 @@ use sha2_const_stable::Sha256;
 pub(crate) use sideload::SideloadProgress;
 use tokio::{fs, time::sleep};
 use tracing::{Span, debug, error, info, instrument, trace, warn};
+pub(crate) mod battery_dump;
 
 use crate::{
-    adb::{PackageName, battery_dump},
+    adb::PackageName,
     models::{
         InstalledPackage, SPACE_INFO_COMMAND, SpaceInfo, parse_list_apps_dex,
         signals::{adb::command::RebootMode, system::Toast},

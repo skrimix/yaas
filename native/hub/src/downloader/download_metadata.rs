@@ -37,7 +37,7 @@ pub(crate) struct DownloadMetadataInfo {
 }
 
 #[instrument(level = "debug", skip(cached), fields(app_full_name = %app_full_name, dir = %dst_dir.display()), err)]
-pub(super) async fn write_download_metadata(
+pub(super) async fn write_metadata(
     cached: Option<CloudApp>,
     app_full_name: &str,
     dst_dir: &PathBuf,
@@ -122,7 +122,7 @@ pub(super) async fn write_download_metadata(
 }
 
 #[instrument(level = "debug", err, ret)]
-pub(crate) async fn read_download_metadata(dir: &Path) -> Result<DownloadMetadataInfo> {
+pub(crate) async fn read_metadata(dir: &Path) -> Result<DownloadMetadataInfo> {
     #[derive(serde::Deserialize)]
     struct DownloadMetaPartial {
         downloaded_at: Option<String>,

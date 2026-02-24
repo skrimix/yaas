@@ -14,7 +14,7 @@ use tokio_stream::{StreamExt, wrappers::WatchStream};
 use tracing::{Span, debug, error, info, instrument, trace, warn};
 
 use crate::{
-    downloader::metadata::read_download_metadata,
+    downloader::download_metadata::read_metadata,
     models::{DownloadCleanupPolicy, Settings, signals::downloads_local::*},
     task::DONATE_TMP_DIR,
 };
@@ -168,7 +168,7 @@ impl DownloadsCatalog {
             return Ok(None);
         }
 
-        let meta = read_download_metadata(dir).await?;
+        let meta = read_metadata(dir).await?;
         let package_name = meta.package_name;
         let version_code = meta.version_code;
         let mut ts_millis = meta.downloaded_at.unwrap_or(0);

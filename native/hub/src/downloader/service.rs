@@ -18,7 +18,7 @@ use crate::{
     downloader::{
         RcloneTransferStats, cloud_api,
         config::{DownloaderConfig, RepoLayoutKind},
-        metadata,
+        download_metadata,
         rclone::{self, RcloneStorage},
         repo,
     },
@@ -727,7 +727,7 @@ impl Downloader {
         let cached = self.get_app_by_full_name(&app_full_name).await;
         let write_legacy = *self.write_legacy_release_json.read().await;
 
-        if let Err(e) = metadata::write_download_metadata(
+        if let Err(e) = download_metadata::write_metadata(
             cached.clone(),
             &app_full_name,
             &dst_dir,

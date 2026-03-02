@@ -69,6 +69,19 @@ jobs:
       - name: Setup sccache
         uses: Mozilla-Actions/sccache-action@v0.0.9
 
+      - name: Setup Perl (Windows)
+        uses: shogo82148/actions-setup-perl@v1
+        if: matrix.target == 'windows'
+        with:
+          perl-version: '5.38'
+          distribution: strawberry
+
+      - name: Set Perl environment variables (Windows)
+        if: matrix.target == 'windows'
+        run: |
+          echo "PERL=$((where.exe perl)[0])" | Out-File -FilePath $env:GITHUB_ENV -Append -Encoding utf8
+          echo "OPENSSL_SRC_PERL=$((where.exe perl)[0])" | Out-File -FilePath $env:GITHUB_ENV -Append -Encoding utf8
+
       - name: Set sccache environment variables
         shell: bash
         run: |

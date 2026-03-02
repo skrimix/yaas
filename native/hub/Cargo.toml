@@ -56,7 +56,6 @@ sha2-const-stable = "0.1.0"
 const-hex = "1.17"
 const_format = "0.2"
 apk-info = "1.0.9"
-openssl-sys = { version = "0.9", features = ["vendored"] } # apk-info wants openssl which fails to build on windows runner
 
 [build-dependencies]
 built = { version = "0.8", features = ["git2", "chrono"] }

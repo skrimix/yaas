@@ -109,7 +109,17 @@ impl DownloaderManager {
     ) -> Result<()> {
         let _g = self.init_guard.lock().await;
         let cfg_path = app_dir.join("downloader.json");
-        let mut cfg = DownloaderConfig::load_from_path(&cfg_path)?;
+        let mut cfg = match DownloaderConfig::load_from_path(&cfg_path) {
+            Ok(cfg) => cfg,
+            Err(e) => {
+                DownloaderAvailabilityChanged {
+                    error: Some(format!("Failed to initialize downloader: {:#}", e)),
+                    ..Default::default()
+                }
+                .send_signal_to_dart();
+                return Err(e);
+            }
+        };
 
         if let Some(update_url) = cfg.config_update_url.as_deref() {
             if let Err(e) = maybe_update_config_from_url(&app_dir, &cfg.id, update_url).await {

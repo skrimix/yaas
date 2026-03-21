@@ -8,13 +8,10 @@ import 'package:rinf/rinf.dart';
 import '../../src/bindings/bindings.dart';
 import '../../src/l10n/app_localizations.dart';
 
-const _kDownloaderTemplateVrpId = 'vrp-public';
 const _kDownloaderTemplateVrgRusId = 'vrg-rus';
 const _kDownloaderTemplateNifId = 'nif';
 const _kDownloaderTemplateCustomId = 'custom';
 
-const _kDownloaderTemplateVrpUrl =
-    'https://github.com/skrimix/yaas/releases/download/files/downloader_vrp.json';
 const _kDownloaderTemplateVrgRusUrl =
     'https://github.com/skrimix/yaas/releases/download/files/downloader_ru.json';
 const _kDownloaderTemplateNifUrl =
@@ -63,19 +60,16 @@ class _DownloaderSetupDialogState extends State<DownloaderSetupDialog> {
 
   String _inferInitialTemplateId(String? currentId) {
     switch (currentId) {
-      case _kDownloaderTemplateVrpId:
       case _kDownloaderTemplateVrgRusId:
       case _kDownloaderTemplateNifId:
         return currentId!;
       default:
-        return _kDownloaderTemplateVrpId;
+        return _kDownloaderTemplateVrgRusId;
     }
   }
 
   String _urlForTemplate(String templateId) {
     switch (templateId) {
-      case _kDownloaderTemplateVrpId:
-        return _kDownloaderTemplateVrpUrl;
       case _kDownloaderTemplateVrgRusId:
         return _kDownloaderTemplateVrgRusUrl;
       case _kDownloaderTemplateNifId:
@@ -83,7 +77,7 @@ class _DownloaderSetupDialogState extends State<DownloaderSetupDialog> {
       case _kDownloaderTemplateCustomId:
         return _urlController.text;
       default:
-        return _kDownloaderTemplateVrpUrl;
+        return _kDownloaderTemplateVrgRusUrl;
     }
   }
 
@@ -281,16 +275,6 @@ class _DownloaderSetupDialogState extends State<DownloaderSetupDialog> {
               child: Column(
                 mainAxisSize: MainAxisSize.min,
                 children: [
-                  RadioListTile<String>(
-                    value: _kDownloaderTemplateVrpId,
-                    title: Text(l10n.downloaderConfigTemplateVrp),
-                    subtitle: Text(
-                      l10n.downloaderConfigTemplateVrpHint,
-                      style: Theme.of(context).textTheme.bodySmall?.copyWith(
-                          color: Theme.of(context).colorScheme.secondary),
-                    ),
-                    dense: true,
-                  ),
                   RadioListTile<String>(
                     value: _kDownloaderTemplateVrgRusId,
                     title: Text(l10n.downloaderConfigTemplateVrgRus),

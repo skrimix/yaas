@@ -46,7 +46,6 @@ impl TaskManager {
         });
 
         let (tx, mut rx) = mpsc::unbounded_channel::<RcloneTransferStats>();
-        let (stage_tx, mut stage_rx) = mpsc::unbounded_channel::<String>();
 
         let mut download_task = {
             let downloader = self.downloader_manager.get().await.expect("downloader missing");
@@ -54,7 +53,7 @@ impl TaskManager {
             let token = token.clone();
             tokio::spawn(
                 async move {
-                    downloader.download_app(app_full_name, true_package, tx, stage_tx, token).await
+                    downloader.download_app(app_full_name, true_package, tx, token).await
                 }
                 .instrument(Span::current()),
             )
@@ -135,14 +134,6 @@ impl TaskManager {
                         step_number,
                         step_progress,
                         message,
-                    });
-                }
-                Some(stage_msg) = stage_rx.recv() => {
-                    update_progress(ProgressUpdate {
-                        status: TaskStatus::Running,
-                        step_number,
-                        step_progress: None,
-                        message: stage_msg,
                     });
                 }
             }

@@ -55,14 +55,12 @@
     "placeholders": {
       "id": {
         "type": "String",
-        "example": "vrp-public"
+        "example": "vrg-rus"
       }
     }
   },
   "downloaderConfigFromUrlTitle": "Настройка конфигурации загрузчика",
   "downloaderConfigFromUrlDescription": "Выберите предустановленный вариант или укажите свой URL. Вы всегда можете изменить конфигурацию позже в настройках.",
-  "downloaderConfigTemplateVrp": "VRP",
-  "downloaderConfigTemplateVrpHint": "Публичный сервер",
   "downloaderConfigTemplateVrgRus": "VR Games RUS",
   "downloaderConfigTemplateVrgRusHint": "Только для стран СНГ",
   "downloaderConfigTemplateNif": "NIF",

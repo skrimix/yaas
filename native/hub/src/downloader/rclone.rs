@@ -211,17 +211,6 @@ impl RcloneClient {
     }
 
     #[instrument(level = "debug", skip(self), ret, err)]
-    async fn lsjson(&self, path: &str) -> Result<Vec<RcloneLsJsonEntry>> {
-        let output = self
-            .run_to_string(&["lsjson", "--fast-list", path])
-            .await
-            .context("Rclone lsjson failed")?;
-        let entries: Vec<RcloneLsJsonEntry> =
-            serde_json::from_str(&output).context("Failed to parse rclone lsjson output")?;
-        Ok(entries)
-    }
-
-    #[instrument(level = "debug", skip(self), ret, err)]
     async fn size(&self, path: &str) -> Result<RcloneSizeOutput> {
         // TODO: can `--check-first` be used to make `total_bytes` reliable instead?
         let output = self.run_to_string(&["size", "--fast-list", "--json", path]).await?;
@@ -536,12 +525,6 @@ impl RcloneStorage {
             .await?;
         dest_path.push(local_leaf);
         Ok(dest_path)
-    }
-
-    #[instrument(level = "debug", skip(self), ret, err)]
-    pub(super) async fn list_dir_json(&self, source: String) -> Result<Vec<RcloneLsJsonEntry>> {
-        let remote_path = self.format_remote_path(&source);
-        self.client.lsjson(&remote_path).await
     }
 
     #[instrument(level = "debug", skip(self), ret, err)]

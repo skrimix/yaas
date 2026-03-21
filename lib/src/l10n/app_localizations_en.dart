@@ -156,12 +156,6 @@ class AppLocalizationsEn extends AppLocalizations {
       'Choose a preset configuration or use a custom URL. You can always change the configuration later in the settings.';
 
   @override
-  String get downloaderConfigTemplateVrp => 'VRP';
-
-  @override
-  String get downloaderConfigTemplateVrpHint => 'Public server';
-
-  @override
   String get downloaderConfigTemplateVrgRus => 'VR Games RUS';
 
   @override

@@ -374,18 +374,6 @@ abstract class AppLocalizations {
   /// **'Choose a preset configuration or use a custom URL. You can always change the configuration later in the settings.'**
   String get downloaderConfigFromUrlDescription;
 
-  /// No description provided for @downloaderConfigTemplateVrp.
-  ///
-  /// In en, this message translates to:
-  /// **'VRP'**
-  String get downloaderConfigTemplateVrp;
-
-  /// No description provided for @downloaderConfigTemplateVrpHint.
-  ///
-  /// In en, this message translates to:
-  /// **'Public server'**
-  String get downloaderConfigTemplateVrpHint;
-
   /// No description provided for @downloaderConfigTemplateVrgRus.
   ///
   /// In en, this message translates to:

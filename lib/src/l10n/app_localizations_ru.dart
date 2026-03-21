@@ -158,12 +158,6 @@ class AppLocalizationsRu extends AppLocalizations {
       'Выберите предустановленный вариант или укажите свой URL. Вы всегда можете изменить конфигурацию позже в настройках.';
 
   @override
-  String get downloaderConfigTemplateVrp => 'VRP';
-
-  @override
-  String get downloaderConfigTemplateVrpHint => 'Публичный сервер';
-
-  @override
   String get downloaderConfigTemplateVrgRus => 'VR Games RUS';
 
   @override

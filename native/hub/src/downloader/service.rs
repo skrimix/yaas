@@ -120,8 +120,6 @@ impl Downloader {
                 remote_name: &remote_for_init,
                 bandwidth_limit: &settings.bandwidth_limit,
                 remote_name_filter_regex: config.remote_name_filter_regex.clone(),
-                http_client: &http_client,
-                cache_dir: &cache_dir,
             })
             .await?;
         // If the repo asked us to persist a remote, update settings
@@ -225,8 +223,6 @@ impl Downloader {
                                     remote_name: &chosen_remote,
                                     bandwidth_limit: &settings.bandwidth_limit,
                                     remote_name_filter_regex: handle.config.remote_name_filter_regex.clone(),
-                                    http_client: &handle.http_client,
-                                    cache_dir: &handle.cache_dir,
                                 })
                                 .await;
 
@@ -673,14 +669,12 @@ impl Downloader {
         }
     }
 
-    #[instrument(skip(self, progress_tx, stage_tx), err, ret)]
+    #[instrument(skip(self, progress_tx), err, ret)]
     pub(crate) async fn download_app(
         &self,
         app_full_name: String,
         true_package: PackageName,
         progress_tx: UnboundedSender<RcloneTransferStats>,
-        // Status updates for non-transfer steps (e.g., extraction)
-        stage_tx: tokio::sync::mpsc::UnboundedSender<String>,
         cancellation_token: CancellationToken,
     ) -> Result<String> {
         let dst_dir = self.download_dir.read().await.join(&app_full_name);
@@ -689,32 +683,14 @@ impl Downloader {
         let source = self.repo.source_for_download(&app_full_name);
         let storage = self.storage.read().await.clone();
 
-        match self
-            .repo
-            .pre_download(
-                &storage,
-                &app_full_name,
-                &dst_dir,
-                &self.http_client,
-                &self.cache_dir,
+        storage
+            .download_dir_with_stats(
+                source,
+                dst_dir.clone(),
+                progress_tx,
                 cancellation_token.clone(),
             )
-            .await
-        {
-            Ok(repo::PreDownloadDecision::SkipAlreadyPresent) => {
-                debug!("Pre-download decided to skip transfer");
-            }
-            _ => {
-                storage
-                    .download_dir_with_stats(
-                        source,
-                        dst_dir.clone(),
-                        progress_tx,
-                        cancellation_token.clone(),
-                    )
-                    .await?;
-            }
-        }
+            .await?;
 
         let installation_id = self.installation_id.clone();
         if let Err(e) =
@@ -742,22 +718,6 @@ impl Downloader {
             );
         }
 
-        // Layout-specific post-processing (no-op for FFA)
-        let _ = stage_tx.send("Processing download...".into());
-        if let Err(e) = self
-            .repo
-            .post_download(
-                &app_full_name,
-                &dst_dir,
-                &self.http_client,
-                &self.cache_dir,
-                Some(stage_tx.clone()),
-                cancellation_token.clone(),
-            )
-            .await
-        {
-            warn!(error = e.as_ref() as &dyn Error, dir = %dst_dir.display(), "Post-download step failed");
-        }
         // Notify UI that downloads may have changed
         DownloadsChanged {}.send_signal_to_dart();
 

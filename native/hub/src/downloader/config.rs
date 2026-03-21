@@ -27,17 +27,14 @@ pub(crate) struct DownloaderConfig {
     /// Optional path to a newline-separated donation blacklist.
     ///
     /// For FFA layout this is a path on the configured rclone remote.
-    /// For VRP-public layout this is a path inside the `meta.7z` archive.
     #[serde(default)]
     pub donation_blacklist_path: Option<String>,
-    /// Repository layout selector. "ffa" or "vrp-public"
+    /// Repository layout selector.
     pub layout: RepoLayoutKind,
     #[serde(default = "default_root_dir")]
     pub root_dir: String,
     #[serde(default = "default_list_path")]
     pub list_path: String,
-    #[serde(default)]
-    pub vrp_public_url: String,
     /// Optional URL used to update this downloader configuration.
     #[serde(default)]
     pub config_update_url: Option<String>,
@@ -80,7 +77,6 @@ impl Default for DownloaderConfig {
             layout: RepoLayoutKind::Ffa,
             root_dir: default_root_dir(),
             list_path: default_list_path(),
-            vrp_public_url: String::new(),
             config_update_url: None,
         }
     }
@@ -91,8 +87,6 @@ impl Default for DownloaderConfig {
 pub(crate) enum RepoLayoutKind {
     #[serde(rename = "ffa")]
     Ffa,
-    #[serde(rename = "vrp-public")]
-    VrpPublic,
 }
 
 #[derive(Debug, Clone, Deserialize)]

@@ -55,14 +55,12 @@
     "placeholders": {
       "id": {
         "type": "String",
-        "example": "vrp-public"
+        "example": "vrg-rus"
       }
     }
   },
   "downloaderConfigFromUrlTitle": "Set up downloader config",
   "downloaderConfigFromUrlDescription": "Choose a preset configuration or use a custom URL. You can always change the configuration later in the settings.",
-  "downloaderConfigTemplateVrp": "VRP",
-  "downloaderConfigTemplateVrpHint": "Public server",
   "downloaderConfigTemplateVrgRus": "VR Games RUS",
   "downloaderConfigTemplateVrgRusHint": "CIS countries only",
   "downloaderConfigTemplateNif": "NIF",

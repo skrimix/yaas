@@ -47,7 +47,7 @@ jobs:
           fetch-depth: 0
           clean: true
           submodules: true
-      
+
       - name: Normalize Git
         shell: bash
         run: |
@@ -58,14 +58,13 @@ jobs:
         uses: subosito/flutter-action@v2
         with:
           channel: "stable"
-          flutter-version: 3.35.7 # Remove when https://github.com/media-kit/media-kit/issues/1321 is fixed (https://github.com/media-kit/media-kit/pull/1325)
           cache: true
 
       - name: Setup Rust toolchain
         uses: actions-rust-lang/setup-rust-toolchain@v1
         with:
           components: rustfmt, clippy
-      
+
       - name: Setup sccache
         uses: Mozilla-Actions/sccache-action@v0.0.9
 
@@ -81,7 +80,7 @@ jobs:
         with:
           packages: ninja-build libgtk-3-dev libasound2-dev libmpv-dev locate libmimalloc-dev libmimalloc2.0
           version: 1
-      
+
       - name: Install other dependencies (Linux)
         if: matrix.target == 'linux'
         run: |

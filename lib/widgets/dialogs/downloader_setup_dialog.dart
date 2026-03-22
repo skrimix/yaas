@@ -276,6 +276,7 @@ class _DownloaderSetupDialogState extends State<DownloaderSetupDialog> {
                 mainAxisSize: MainAxisSize.min,
                 children: [
                   RadioListTile<String>(
+                    enabled: false,
                     value: _kDownloaderTemplateVrgRusId,
                     title: Text(l10n.downloaderConfigTemplateVrgRus),
                     subtitle: Column(

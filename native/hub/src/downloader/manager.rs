@@ -159,7 +159,7 @@ impl DownloaderManager {
         let cache_dir = app_dir.join("downloader_cache").join(&cfg.id);
         let _ = tokio::fs::create_dir_all(&cache_dir).await;
 
-        match downloader::artifacts::prepare_artifacts(&cache_dir, &cfg).await {
+        match downloader::rclone::prepare_rclone_files(&cache_dir, &cfg).await {
             Ok((rclone_path, rclone_config_path)) => {
                 match Downloader::new(
                     Arc::new(cfg),

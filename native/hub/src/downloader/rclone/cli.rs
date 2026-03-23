@@ -8,13 +8,12 @@ use anyhow::{Context, Result, anyhow, bail, ensure};
 use lazy_regex::Regex;
 use serde::Deserialize;
 use tokio::{
-    fs,
     io::{AsyncBufReadExt, BufReader},
     process::Command,
     sync::mpsc::UnboundedSender,
 };
 use tokio_util::sync::CancellationToken;
-use tracing::{Span, debug, error, instrument, trace, warn};
+use tracing::{Span, error, instrument, trace, warn};
 
 use crate::utils::{get_sys_proxy, resolve_binary_path};
 
@@ -37,9 +36,7 @@ pub(super) struct RcloneLsJsonEntry {
 
 #[derive(Debug, Clone, Deserialize)]
 pub(super) struct RcloneSizeOutput {
-    // pub count: u64,
     pub bytes: u64,
-    // pub sizeless: u8,
 }
 
 #[derive(Debug, Clone, Deserialize)]
@@ -47,8 +44,6 @@ pub(super) struct RcloneSizeOutput {
 pub(crate) struct RcloneTransferStats {
     pub bytes: u64,
     pub total_bytes: u64,
-    // pub elapsed_time: f64,
-    // pub eta: Option<u64>,
     #[serde(deserialize_with = "deserialize_speed")]
     pub speed: u64,
 }
@@ -92,7 +87,6 @@ impl RcloneJsonLogLine {
         if let Some(t_pos) = self.time.find('T') {
             let date_part = &self.time[..t_pos];
             let time_start = t_pos + 1;
-            // HH:MM:SS is 8 characters
             let time_end = (time_start + 8).min(self.time.len());
             let time_part = &self.time[time_start..time_end];
             let formatted_date = date_part.replace('-', "/");
@@ -112,7 +106,7 @@ fn convert_json_log_line(line: &str) -> String {
 }
 
 #[derive(Debug)]
-enum RcloneTransferOperation {
+pub(super) enum RcloneTransferOperation {
     Copy,
     Sync,
 }
@@ -127,16 +121,16 @@ impl RcloneTransferOperation {
 }
 
 #[derive(Debug, Clone, PartialEq, Eq)]
-struct RcloneClient {
+pub(super) struct RcloneCli {
     rclone_path: PathBuf,
     config_path: PathBuf,
     sys_proxy: Option<String>,
     bandwidth_limit: String,
 }
 
-impl RcloneClient {
+impl RcloneCli {
     #[instrument(level = "debug", fields(sys_proxy), ret)]
-    fn new(rclone_path: PathBuf, config_path: PathBuf, bandwidth_limit: String) -> Self {
+    pub(super) fn new(rclone_path: PathBuf, config_path: PathBuf, bandwidth_limit: String) -> Self {
         let sys_proxy = get_sys_proxy();
         let resolved_path =
             match resolve_binary_path(Some(&rclone_path.to_string_lossy()), "rclone") {
@@ -158,8 +152,7 @@ impl RcloneClient {
     fn command(&self, args: &[&str], use_json_log: bool) -> Command {
         let mut command = Command::new(&self.rclone_path);
         command.kill_on_drop(true);
-
-        // Make any unexpected prompts fail to avoid hanging
+        // Avoid hangs on unexpected input prompts
         command.stdin(Stdio::null());
 
         // Hide the console window on Windows
@@ -178,7 +171,6 @@ impl RcloneClient {
         }
 
         command.args(["--contimeout", CONNECTION_TIMEOUT, "--timeout", IO_IDLE_TIMEOUT]);
-
         command.args(args);
         trace!(command = ?command, "Constructed rclone command");
         command
@@ -203,15 +195,13 @@ impl RcloneClient {
     }
 
     #[instrument(skip(self), level = "debug")]
-    async fn remotes(&self) -> Result<Vec<String>> {
+    pub(super) async fn remotes(&self) -> Result<Vec<String>> {
         let output = self.run_to_string(&["listremotes"]).await?;
-        let remotes: Vec<String> =
-            output.lines().map(|line| line.trim().trim_end_matches(':').to_string()).collect();
-        Ok(remotes)
+        Ok(output.lines().map(|line| line.trim().trim_end_matches(':').to_string()).collect())
     }
 
     #[instrument(level = "debug", skip(self), ret, err)]
-    async fn size(&self, path: &str) -> Result<RcloneSizeOutput> {
+    pub(super) async fn size(&self, path: &str) -> Result<RcloneSizeOutput> {
         // TODO: can `--check-first` be used to make `total_bytes` reliable instead?
         let output = self.run_to_string(&["size", "--fast-list", "--json", path]).await?;
         let size_output: RcloneSizeOutput =
@@ -220,7 +210,7 @@ impl RcloneClient {
     }
 
     #[instrument(level = "debug", skip(self, cancellation_token), err)]
-    async fn transfer(
+    pub(super) async fn transfer(
         &self,
         source: String,
         dest: String,
@@ -231,7 +221,7 @@ impl RcloneClient {
     }
 
     #[instrument(level = "debug", skip(self, stats_tx, cancellation_token), err)]
-    async fn transfer_with_stats(
+    pub(super) async fn transfer_with_stats(
         &self,
         source: String,
         dest: String,
@@ -323,7 +313,6 @@ impl RcloneClient {
             match status.success() {
                 true => Ok(()),
                 false => {
-                    // Read any remaining lines (for non-stats case where loop didn't run)
                     while let Some(line) = lines.next_line().await? {
                         if use_json_log {
                             stderr_lines.push(convert_json_log_line(&line));
@@ -357,18 +346,10 @@ impl RcloneClient {
     }
 }
 
-fn filter_remotes_with_regex(remotes: Vec<String>, regex: Option<&Regex>) -> Vec<String> {
-    if let Some(re) = regex {
-        remotes.into_iter().filter(|r| re.is_match(r)).collect()
-    } else {
-        remotes
-    }
-}
-
-fn filter_remotes_with_pattern(remotes: Vec<String>, pattern: Option<&str>) -> Vec<String> {
+fn filter_remotes_with_regex(remotes: Vec<String>, pattern: Option<&str>) -> Vec<String> {
     if let Some(pat) = pattern {
         match Regex::new(pat) {
-            Ok(re) => filter_remotes_with_regex(remotes, Some(&re)),
+            Ok(re) => remotes.into_iter().filter(|r| re.is_match(r)).collect(),
             Err(e) => {
                 warn!(
                     pattern = %pat,
@@ -383,214 +364,20 @@ fn filter_remotes_with_pattern(remotes: Vec<String>, pattern: Option<&str>) -> V
     }
 }
 
-#[derive(Debug, Clone)]
-pub(super) struct RcloneStorage {
-    client: RcloneClient,
-    remote: String,
-    root_dir: String,
-    // Keep original string for equality, compile once for runtime use
-    remote_filter_regex_str: Option<String>,
-    remote_filter_regex: Option<Regex>,
-}
-
-impl RcloneStorage {
-    #[instrument]
-    pub(super) fn new(
-        rclone_path: PathBuf,
-        config_path: PathBuf,
-        root_dir: String,
-        remote: String,
-        bandwidth_limit: String,
-        remote_filter_regex: Option<String>,
-    ) -> Self {
-        let compiled = match &remote_filter_regex {
-            Some(pat) => match Regex::new(pat) {
-                Ok(r) => Some(r),
-                Err(e) => {
-                    warn!(pattern = %pat, error = &e as &dyn Error, "Invalid remote filter regex, ignoring");
-                    None
-                }
-            },
-            None => None,
-        };
-        Self {
-            client: RcloneClient::new(rclone_path, config_path, bandwidth_limit),
-            remote,
-            root_dir,
-            remote_filter_regex_str: remote_filter_regex,
-            remote_filter_regex: compiled,
-        }
-    }
-
-    fn format_remote_path(&self, path: &str) -> String {
-        format!(
-            "{}:{}",
-            self.remote,
-            PathBuf::from(self.root_dir.trim_end_matches(['/', '\\'])).join(path).display()
-        )
-    }
-
-    /// Upload a single local file to an arbitrary remote and path.
-    ///
-    /// The file name from `local_path` is appended to `remote_dir`.
-    #[instrument(level = "debug", skip(self, stats_tx, cancellation_token), err)]
-    pub(super) async fn upload_file_to_remote(
-        &self,
-        local_path: &Path,
-        remote: &str,
-        remote_dir: &str,
-        stats_tx: Option<UnboundedSender<RcloneTransferStats>>,
-        cancellation_token: Option<CancellationToken>,
-    ) -> Result<()> {
-        ensure!(local_path.is_file(), "Local path is not a file: {}", local_path.display());
-        ensure!(!remote.is_empty(), "Remote name must not be empty");
-
-        let file_name = local_path.file_name().and_then(|n| n.to_str()).ok_or_else(|| {
-            anyhow!("Local path has no valid UTF-8 file name: {}", local_path.display())
-        })?;
-
-        let remote_dir_path = if remote_dir.is_empty() {
-            PathBuf::from(file_name)
-        } else {
-            PathBuf::from(remote_dir.trim_start_matches(['/', '\\'])).join(file_name)
-        };
-
-        let dest = format!("{remote}:{}", remote_dir_path.display());
-        debug!(src = %local_path.display(), dest = %dest, "Starting rclone upload");
-
-        let total_bytes = fs::metadata(local_path)
-            .await
-            .with_context(|| format!("Failed to get metadata for {}", local_path.display()))?
-            .len();
-
-        self.client
-            .transfer_with_stats(
-                local_path.display().to_string(),
-                dest,
-                RcloneTransferOperation::Copy,
-                total_bytes,
-                stats_tx,
-                cancellation_token,
-            )
-            .await
-    }
-
-    #[instrument(level = "debug", skip(self, stats_tx, cancellation_token), err, ret)]
-    pub(super) async fn download_dir_with_stats(
-        &self,
-        source: String,
-        dest: PathBuf,
-        stats_tx: UnboundedSender<RcloneTransferStats>,
-        cancellation_token: CancellationToken,
-    ) -> Result<PathBuf> {
-        ensure!(dest.parent().is_some(), "Destination must have a parent directory");
-        let source = self.format_remote_path(&source);
-        let total_bytes =
-            self.client.size(&source).await.context("Failed to get remote dir size")?.bytes;
-        self.client
-            .transfer_with_stats(
-                source,
-                dest.display().to_string(),
-                RcloneTransferOperation::Sync,
-                total_bytes,
-                Some(stats_tx),
-                Some(cancellation_token),
-            )
-            .await
-            .map(|_| dest)
-    }
-
-    #[instrument(level = "debug", skip(self), err, ret)]
-    pub(super) async fn download_file(
-        &self,
-        source: String,
-        dest: PathBuf,
-        cancellation_token: Option<CancellationToken>,
-    ) -> Result<PathBuf> {
-        ensure!(dest.is_dir(), "Destination must be a directory");
-        let local_leaf = PathBuf::from(&source)
-            .file_name()
-            .map(|s| s.to_string_lossy().into_owned())
-            .unwrap_or_else(|| source.clone());
-        let source = self.format_remote_path(&source);
-        let mut dest_path = dest.clone();
-        debug!(source = %source, dest = %dest.display(), "Starting file download");
-        self.client
-            .transfer(
-                source.clone(),
-                dest.display().to_string(),
-                RcloneTransferOperation::Copy,
-                cancellation_token,
-            )
-            .await?;
-        dest_path.push(local_leaf);
-        Ok(dest_path)
-    }
-
-    #[instrument(level = "debug", skip(self), ret, err)]
-    pub(super) async fn remotes(&self) -> Result<Vec<String>> {
-        let remotes = self.client.remotes().await?;
-        Ok(filter_remotes_with_regex(remotes, self.remote_filter_regex.as_ref()))
-    }
-}
-
-impl PartialEq for RcloneStorage {
-    fn eq(&self, other: &Self) -> bool {
-        self.client == other.client
-            && self.remote == other.remote
-            && self.root_dir == other.root_dir
-            && self.remote_filter_regex_str == other.remote_filter_regex_str
-    }
-}
-
-impl Eq for RcloneStorage {}
-
 #[instrument(level = "debug", ret, err)]
-pub(super) async fn list_remotes(
+pub(crate) async fn list_remotes(
     rclone_path: &Path,
     config_path: &Path,
     remote_filter_regex: Option<&str>,
 ) -> Result<Vec<String>> {
-    let client =
-        RcloneClient::new(rclone_path.to_path_buf(), config_path.to_path_buf(), String::new());
-    let remotes = client.remotes().await?;
-    Ok(filter_remotes_with_pattern(remotes, remote_filter_regex))
+    let cli = RcloneCli::new(rclone_path.to_path_buf(), config_path.to_path_buf(), String::new());
+    let remotes = cli.remotes().await?;
+    Ok(filter_remotes_with_regex(remotes, remote_filter_regex))
 }
 
 #[cfg(test)]
 mod tests {
     use super::*;
-
-    #[test]
-    fn storage_equality_reflects_bandwidth_limit() {
-        let base = RcloneStorage::new(
-            PathBuf::from("rclone"),
-            PathBuf::from("config"),
-            "root".to_string(),
-            "remote".to_string(),
-            "".to_string(),
-            None,
-        );
-        let same = RcloneStorage::new(
-            PathBuf::from("rclone"),
-            PathBuf::from("config"),
-            "root".to_string(),
-            "remote".to_string(),
-            "".to_string(),
-            None,
-        );
-        let with_limit = RcloneStorage::new(
-            PathBuf::from("rclone"),
-            PathBuf::from("config"),
-            "root".to_string(),
-            "remote".to_string(),
-            "2M".to_string(),
-            None,
-        );
-
-        assert_eq!(base, same, "identical bandwidth limits should be equal");
-        assert_ne!(base, with_limit, "changing bandwidth limit should change storage equality");
-    }
 
     #[test]
     fn parse_json_log_line_with_object() {
@@ -628,7 +415,7 @@ mod tests {
         let stats = parsed.stats.unwrap();
         assert_eq!(stats.bytes, 39841792);
         assert_eq!(stats.total_bytes, 107369499);
-        assert_eq!(stats.speed, 19920887); // truncated from float
+        assert_eq!(stats.speed, 19920887);
     }
 
     #[test]

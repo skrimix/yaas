@@ -9,7 +9,7 @@ use rinf::RustSignal;
 use tokio::fs;
 use tracing::{debug, info, instrument, warn};
 
-use super::http_cache::{self, DownloadResult};
+use super::super::http_cache::{self, DownloadResult};
 use crate::{
     archive::{extract_single_from_archive, list_archive_file_paths},
     downloader::{config::DownloaderConfig, http_cache::compute_md5_file, repo},
@@ -28,7 +28,7 @@ fn is_zip_url(value: &str) -> bool {
 }
 
 #[instrument(skip(cache_dir, cfg), fields(cache_dir = %cache_dir.display()))]
-pub(crate) async fn prepare_artifacts(
+pub(crate) async fn prepare_rclone_files(
     cache_dir: &Path,
     cfg: &DownloaderConfig,
 ) -> Result<(PathBuf, PathBuf)> {
@@ -191,7 +191,6 @@ async fn ensure_remote_rclone_from_zip(
 
             info!("Extracting rclone binary from cached zip");
             extract_rclone_from_zip(&zip_path, cache_dir, bin_dst).await?;
-            // Update checksum after (re)extraction
             if let Err(e) = write_md5_file(bin_dst, &md5_path).await {
                 warn!(error = e.as_ref() as &dyn Error, "Failed to write rclone MD5 stamp");
             }
@@ -199,7 +198,6 @@ async fn ensure_remote_rclone_from_zip(
         Ok(DownloadResult::Downloaded(_)) => {
             info!(path = %zip_path.display(), "Fetched rclone zip, extracting binary");
             extract_rclone_from_zip(&zip_path, cache_dir, bin_dst).await?;
-            // Persist checksum for future NotModified fast‑path
             if let Err(e) = write_md5_file(bin_dst, &md5_path).await {
                 warn!(error = e.as_ref() as &dyn Error, "Failed to write rclone MD5 stamp");
             }
@@ -223,7 +221,6 @@ async fn ensure_remote_rclone_from_zip(
         }
     }
 
-    // Ensure executable bit on Unix
     #[cfg(unix)]
     {
         use std::os::unix::fs::PermissionsExt;
@@ -235,7 +232,6 @@ async fn ensure_remote_rclone_from_zip(
     Ok(())
 }
 
-/// Extract rclone binary from the provided zip into `bin_dst` within `cache_dir`.
 async fn extract_rclone_from_zip(zip_path: &Path, cache_dir: &Path, bin_dst: &Path) -> Result<()> {
     let entries = list_archive_file_paths(zip_path)
         .await
@@ -258,17 +254,12 @@ async fn extract_rclone_from_zip(zip_path: &Path, cache_dir: &Path, bin_dst: &Pa
     candidates.sort_by_key(|s| s.len());
     let chosen = candidates[0];
 
-    // Extract only the chosen entry, flattening the path
     extract_single_from_archive(zip_path, cache_dir, chosen)
         .await
         .with_context(|| format!("Failed to extract '{}' from {}", chosen, zip_path.display()))?;
 
     let extracted_path = cache_dir.join(target_name);
     if extracted_path != bin_dst {
-        // Replace existing bin_dst if present
-        if bin_dst.exists() {
-            let _ = fs::remove_file(bin_dst).await;
-        }
         fs::rename(&extracted_path, bin_dst)
             .await
             .with_context(|| format!("Failed to place rclone to {}", bin_dst.display()))?;
@@ -304,17 +295,17 @@ mod tests {
     }
 
     #[tokio::test(flavor = "multi_thread")]
-    async fn prepare_artifacts_returns_local_paths_when_both_local() {
+    async fn prepare_files_returns_local_paths_when_both_local() {
         let dir = tempdir().unwrap();
         let cfg = cfg_local("/bin/echo", "/tmp/rclone.conf");
         let (bin, conf) =
-            prepare_artifacts(dir.path(), &cfg).await.expect("Prepare artifacts failed");
+            prepare_rclone_files(dir.path(), &cfg).await.expect("Prepare files failed");
         assert_eq!(bin, PathBuf::from("/bin/echo"));
         assert_eq!(conf, PathBuf::from("/tmp/rclone.conf"));
     }
 
     #[tokio::test(flavor = "multi_thread")]
-    async fn prepare_artifacts_errors_when_mixed_url_and_local() {
+    async fn prepare_files_errors_when_mixed_url_and_local() {
         let dir = tempdir().unwrap();
         let cfg = DownloaderConfig {
             rclone_path: RclonePath::Single("http://127.0.0.1/rclone".to_string()),
@@ -323,13 +314,13 @@ mod tests {
             ..Default::default()
         };
         let err =
-            prepare_artifacts(dir.path(), &cfg).await.expect_err("Prepare artifacts should fail");
+            prepare_rclone_files(dir.path(), &cfg).await.expect_err("Prepare files should fail");
         let msg = format!("{:#}", err);
         assert!(msg.contains("must both be local or both be URLs"));
     }
 
     #[tokio::test(flavor = "multi_thread")]
-    async fn prepare_artifacts_downloads_and_caches_http() {
+    async fn prepare_files_downloads_and_caches_http() {
         let dir = tempdir().unwrap();
         let server = MockServer::start().await;
         let conf_path = "/rclone.conf";
@@ -386,7 +377,7 @@ mod tests {
         };
 
         // First run downloads both files
-        let (bin, conf) = prepare_artifacts(dir.path(), &cfg).await.expect("First run failed");
+        let (bin, conf) = prepare_rclone_files(dir.path(), &cfg).await.expect("First run failed");
         assert!(bin.exists());
         assert!(conf.exists());
 
@@ -398,7 +389,8 @@ mod tests {
         }
 
         // Second run: server replies 304, function should still succeed and use cache
-        let (bin2, conf2) = prepare_artifacts(dir.path(), &cfg).await.expect("Second run failed");
+        let (bin2, conf2) =
+            prepare_rclone_files(dir.path(), &cfg).await.expect("Second run failed");
         assert_eq!(bin2, bin);
         assert_eq!(conf2, conf);
     }

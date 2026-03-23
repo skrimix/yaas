@@ -174,8 +174,8 @@ impl TaskManager {
             return Err(anyhow!("Task cancelled after download"));
         }
 
-        let adb_handler = self.adb_handler.clone();
-        let device = adb_handler.current_device().await?;
+        let adb_service = self.adb_service.clone();
+        let device = adb_service.current_device().await?;
 
         let settings = self.settings.read().await;
         let backups_location = settings.backups_location();
@@ -192,7 +192,7 @@ impl TaskManager {
                 let backups_location = backups_location.clone();
                 tokio::spawn(
                     async move {
-                        adb_handler
+                        adb_service
                             .sideload_app(
                                 &device,
                                 Path::new(&app_path),

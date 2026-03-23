@@ -1,3 +1,3 @@
 pub(crate) mod device;
-pub(crate) mod handler;
-pub(crate) use handler::*;
+pub(crate) mod service;
+pub(crate) use service::*;

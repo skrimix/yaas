@@ -75,16 +75,16 @@ struct CachedDeviceData {
     pub true_serial: String,
 }
 
-/// Handles ADB device connections and commands
+/// Handles ADB state, device connections and commands
 #[derive(Debug)]
-pub(crate) struct AdbHandler {
+pub(crate) struct AdbService {
     /// The ADB host instance for device communication
     adb_host: forensic_adb::Host,
     /// ADB server check/start mutex
     adb_server_mutex: Mutex<()>,
     /// ADB binary path
     adb_path: RwLock<Option<String>>,
-    /// ADB handler state
+    /// ADB service state
     adb_state: RwLock<AdbState>,
     /// Currently connected device (if any)
     device: RwLock<Option<Arc<AdbDevice>>>,
@@ -100,12 +100,12 @@ pub(crate) struct AdbHandler {
     preferred_connection_type: RwLock<ConnectionKind>,
 }
 
-impl AdbHandler {
-    /// Creates a new AdbHandler instance and starts device monitoring.
+impl AdbService {
+    /// Creates a new AdbService instance and starts device monitoring.
     /// This is the main entry point for ADB functionality.
     ///
     /// # Returns
-    /// Arc-wrapped AdbHandler that manages ADB device connections
+    /// Arc-wrapped AdbService that manages ADB device connections
     #[instrument(level = "debug", skip(settings_stream))]
     pub(crate) async fn new(mut settings_stream: WatchStream<Settings>) -> Arc<Self> {
         let first_settings =
@@ -157,15 +157,15 @@ impl AdbHandler {
     /// # Arguments
     /// * `settings_stream` - WatchStream for application settings updates
     #[instrument(level = "debug", skip(self, settings_stream))]
-    async fn start_tasks(self: Arc<AdbHandler>, mut settings_stream: WatchStream<Settings>) {
+    async fn start_tasks(self: Arc<AdbService>, mut settings_stream: WatchStream<Settings>) {
         // Handle settings updates
         tokio::spawn(
             {
                 let handle = self.clone();
                 async move {
-                    debug!("AdbHandler starting to listen for settings changes");
+                    debug!("AdbService starting to listen for settings changes");
                     while let Some(settings) = settings_stream.next().await {
-                        debug!("AdbHandler received settings update");
+                        debug!("AdbService received settings update");
                         debug!(?settings, "New settings");
                         let new_adb_path = settings.adb_path.clone();
                         let new_adb_path =
@@ -191,7 +191,7 @@ impl AdbHandler {
                         }
                     }
 
-                    panic!("Settings stream closed for AdbHandler");
+                    panic!("Settings stream closed for AdbService");
                 }
             }
             .instrument(info_span!("task_handle_settings_updates")),
@@ -202,7 +202,7 @@ impl AdbHandler {
 
     /// Starts the ADB tasks
     #[instrument(level = "debug", skip(self))]
-    async fn start_adb_tasks(self: Arc<AdbHandler>) {
+    async fn start_adb_tasks(self: Arc<AdbService>) {
         let cancel_token = self.cancel_token.read().await.clone();
         debug!("Starting ADB tasks");
 
@@ -210,10 +210,10 @@ impl AdbHandler {
         let (sender, receiver) = tokio::sync::mpsc::unbounded_channel();
         tokio::spawn({
             let cancel_token = cancel_token.clone();
-            let handler = self.clone();
+            let service = self.clone();
             async move {
                 let result =
-                    cancel_token.run_until_cancelled(handler.handle_device_updates(receiver)).await;
+                    cancel_token.run_until_cancelled(service.handle_device_updates(receiver)).await;
                 debug!(result = ?result, "Device update handler task finished");
                 result
             }
@@ -222,10 +222,10 @@ impl AdbHandler {
         // Track ADB device changes
         tokio::spawn({
             let cancel_token = cancel_token.clone();
-            let handler = self.clone();
+            let service = self.clone();
             async move {
                 let result =
-                    cancel_token.run_until_cancelled(handler.run_device_tracker(sender)).await;
+                    cancel_token.run_until_cancelled(service.run_device_tracker(sender)).await;
                 debug!(result = ?result, "Device tracker task finished");
                 result
             }
@@ -270,7 +270,7 @@ impl AdbHandler {
     /// Restarts the ADB handling
     // TODO: make sure this cannot race with `ensure_server_running`
     #[instrument(skip(self), err)]
-    async fn restart_adb(self: Arc<AdbHandler>) -> Result<()> {
+    async fn restart_adb(self: Arc<AdbService>) -> Result<()> {
         info!("Restarting ADB server and tasks");
         // Cancel all tasks
         self.cancel_token.read().await.cancel();
@@ -307,7 +307,7 @@ impl AdbHandler {
     /// * `sender` - Channel sender to communicate device updates
     #[instrument(level = "debug", skip(self, sender), err)]
     async fn run_device_tracker(
-        self: Arc<AdbHandler>,
+        self: Arc<AdbService>,
         sender: tokio::sync::mpsc::UnboundedSender<Vec<DeviceBrief>>,
     ) -> Result<()> {
         loop {
@@ -352,7 +352,7 @@ impl AdbHandler {
     /// # Arguments
     #[instrument(level = "debug", skip(self, receiver), err)]
     async fn handle_device_updates(
-        self: Arc<AdbHandler>,
+        self: Arc<AdbService>,
         mut receiver: tokio::sync::mpsc::UnboundedReceiver<Vec<DeviceBrief>>,
     ) -> Result<()> {
         while let Some(devices) = receiver.recv().await {
@@ -999,7 +999,7 @@ impl AdbHandler {
 
     /// Browses for ADB-over-Wi‑Fi services via mDNS and attempts ADB `connect`.
     #[instrument(level = "debug", skip(self), err)]
-    async fn run_mdns_auto_connect(self: Arc<AdbHandler>) -> Result<()> {
+    async fn run_mdns_auto_connect(self: Arc<AdbService>) -> Result<()> {
         if let Err(e) = self.ensure_server_running().await {
             warn!(error = e.as_ref() as &dyn Error, "ADB server not running prior to mDNS start");
         }

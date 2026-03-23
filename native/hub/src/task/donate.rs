@@ -74,8 +74,8 @@ impl TaskManager {
             "Starting app donation task"
         );
 
-        let adb_handler = self.adb_handler.clone();
-        let device = adb_handler.current_device().await?;
+        let adb_service = self.adb_service.clone();
+        let device = adb_service.current_device().await?;
 
         // Use downloads location as the base for temporary donation directories and archives.
         let settings = self.settings.read().await;
@@ -104,11 +104,11 @@ impl TaskManager {
                 update_progress,
                 token.clone(),
                 move || {
-                    let adb_handler = adb_handler.clone();
+                    let adb_service = adb_service.clone();
                     let device = device.clone();
                     let pkg = pkg_for_pull.clone();
                     let dest_root = dest_root_clone.clone();
-                    async move { adb_handler.pull_app_for_donation(&device, &pkg, &dest_root).await }
+                    async move { adb_service.pull_app_for_donation(&device, &pkg, &dest_root).await }
                 },
             )
             .await?;

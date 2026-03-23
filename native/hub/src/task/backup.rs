@@ -27,8 +27,8 @@ impl TaskManager {
             "Starting backup task"
         );
 
-        let adb_handler = self.adb_handler.clone();
-        let device = adb_handler.current_device().await?;
+        let adb_service = self.adb_service.clone();
+        let device = adb_service.current_device().await?;
 
         let parts = [
             if cfg.backup_data { Some("data") } else { None },
@@ -72,7 +72,7 @@ impl TaskManager {
                     let backups_path = backups_path_moved.clone();
                     let options = options_moved;
                     async move {
-                        adb_handler
+                        adb_service
                             .backup_app(
                                 &device,
                                 &package_name,
@@ -111,8 +111,8 @@ impl TaskManager {
             "Starting restore task"
         );
 
-        let adb_handler = self.adb_handler.clone();
-        let device = adb_handler.current_device().await?;
+        let adb_service = self.adb_service.clone();
+        let device = adb_service.current_device().await?;
 
         let backup_path_cloned = backup_path.clone();
         self.run_adb_one_step(
@@ -126,7 +126,7 @@ impl TaskManager {
             token,
             move || {
                 let path = backup_path_cloned.clone();
-                async move { adb_handler.restore_backup(&device, Path::new(&path)).await }
+                async move { adb_service.restore_backup(&device, Path::new(&path)).await }
             },
         )
         .await

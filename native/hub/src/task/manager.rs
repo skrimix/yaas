@@ -15,7 +15,7 @@ use tokio_util::sync::CancellationToken;
 use tracing::{debug, error, info, instrument, warn};
 
 use crate::{
-    adb::{AdbHandler, PackageName},
+    adb::{AdbService, PackageName},
     downloader::{downloads_catalog::DownloadsCatalog, manager::DownloaderManager},
     models::{
         Settings,
@@ -32,7 +32,7 @@ pub(crate) struct TaskManager {
     pub(super) download_semaphore: Semaphore,
     id_counter: AtomicU64,
     tasks: Mutex<HashMap<u64, (Task, CancellationToken)>>,
-    pub(super) adb_handler: Arc<AdbHandler>,
+    pub(super) adb_service: Arc<AdbService>,
     pub(super) downloader_manager: Arc<DownloaderManager>,
     pub(super) downloads_catalog: Arc<DownloadsCatalog>,
     pub(super) settings: RwLock<Settings>,
@@ -40,7 +40,7 @@ pub(crate) struct TaskManager {
 
 impl TaskManager {
     pub(crate) fn new(
-        adb_handler: Arc<AdbHandler>,
+        adb_service: Arc<AdbService>,
         downloader_manager: Arc<DownloaderManager>,
         downloads_catalog: Arc<DownloadsCatalog>,
         mut settings_stream: WatchStream<Settings>,
@@ -53,7 +53,7 @@ impl TaskManager {
             download_semaphore: Semaphore::new(1),
             id_counter: AtomicU64::new(0),
             tasks: Mutex::new(HashMap::new()),
-            adb_handler,
+            adb_service,
             downloader_manager,
             downloads_catalog,
             settings: RwLock::new(initial_settings),

@@ -8,7 +8,7 @@ use std::{
     time::{Duration, Instant},
 };
 
-use adb::AdbHandler;
+use adb::AdbService;
 use anyhow::{Context, Result};
 use logging::SignalLayer;
 use mimalloc::MiMalloc;
@@ -147,15 +147,15 @@ async fn init(portable_mode: bool) {
     MediaConfigChanged { media_base_url, cache_dir: media_cache_dir.display().to_string() }
         .send_signal_to_dart();
 
-    debug!("Creating adb handler");
-    let adb_handler = AdbHandler::new(WatchStream::new(settings_handler.subscribe())).await;
+    debug!("Creating adb service");
+    let adb_service = AdbService::new(WatchStream::new(settings_handler.subscribe())).await;
     debug!("Creating downloads catalog");
     let downloads_catalog = DownloadsCatalog::new(WatchStream::new(settings_handler.subscribe()));
     debug!("Creating downloader manager");
     let downloader_manager = DownloaderManager::new(None);
     debug!("Creating task manager");
     let _task_manager = TaskManager::new(
-        adb_handler.clone(),
+        adb_service.clone(),
         downloader_manager.clone(),
         downloads_catalog.clone(),
         WatchStream::new(settings_handler.subscribe()),

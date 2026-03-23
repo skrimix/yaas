@@ -155,8 +155,8 @@ impl TaskManager {
             "Starting APK install task"
         );
 
-        let adb_handler = self.adb_handler.clone();
-        let device = adb_handler.current_device().await?;
+        let adb_service = self.adb_service.clone();
+        let device = adb_service.current_device().await?;
 
         let settings = self.settings.read().await;
         let backups_location = settings.backups_location();
@@ -171,7 +171,7 @@ impl TaskManager {
                 let backups_location = backups_location.clone();
                 tokio::spawn(
                     async move {
-                        adb_handler
+                        adb_service
                             .install_apk(
                                 &device,
                                 Path::new(&apk_path),
@@ -203,8 +203,8 @@ impl TaskManager {
             "Starting local app install task"
         );
 
-        let adb_handler = self.adb_handler.clone();
-        let device = adb_handler.current_device().await?;
+        let adb_service = self.adb_service.clone();
+        let device = adb_service.current_device().await?;
 
         let settings = self.settings.read().await;
         let backups_location = settings.backups_location();
@@ -221,7 +221,7 @@ impl TaskManager {
                 let backups_location = backups_location.clone();
                 tokio::spawn(
                     async move {
-                        adb_handler
+                        adb_service
                             .sideload_app(
                                 &device,
                                 Path::new(&app_path),
@@ -254,8 +254,8 @@ impl TaskManager {
             "Starting uninstall task"
         );
 
-        let adb_handler = self.adb_handler.clone();
-        let device = adb_handler.current_device().await?;
+        let adb_service = self.adb_service.clone();
+        let device = adb_service.current_device().await?;
 
         self.run_adb_one_step(
             AdbStepConfig {
@@ -268,7 +268,7 @@ impl TaskManager {
             token,
             move || {
                 let package_name = package.clone();
-                async move { adb_handler.uninstall_package(&device, &package_name).await }
+                async move { adb_service.uninstall_package(&device, &package_name).await }
             },
         )
         .await

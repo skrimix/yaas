@@ -8,4 +8,4 @@ mod repo;
 mod service;
 pub(crate) use service::Downloader;
 pub(crate) mod downloads_catalog;
-pub(crate) mod manager;
+pub(crate) mod service_manager;

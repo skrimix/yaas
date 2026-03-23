@@ -28,7 +28,7 @@ use tracing_subscriber::{EnvFilter, fmt, layer::SubscriberExt};
 use crate::{
     backups_catalog::BackupsCatalog,
     casting::CastingManager,
-    downloader::{downloads_catalog::DownloadsCatalog, manager::DownloaderManager},
+    downloader::{downloads_catalog::DownloadsCatalog, service_manager::DownloaderManager},
 };
 
 #[global_allocator]

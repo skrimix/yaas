@@ -184,7 +184,6 @@ class StatusBar extends StatelessWidget {
     final recentTasks = taskState.recentTasks;
     final hasActiveTasks = activeTasks.isNotEmpty;
     final hasRecentTasks = recentTasks.isNotEmpty;
-    final progress = hasActiveTasks ? activeTasks.first.stepProgress : null;
     final failedCount = taskState.failedTaskCount;
 
     return Material(
@@ -205,7 +204,6 @@ class StatusBar extends StatelessWidget {
                 width: 16,
                 height: 16,
                 child: CircularProgressIndicator(
-                  value: progress,
                   strokeWidth: 2,
                 ),
               ),

@@ -790,10 +790,17 @@ class AppLocalizationsEn extends AppLocalizations {
   }
 
   @override
-  String get holdShiftToDowngrade => 'Hold Shift to downgrade to this version';
+  String holdShiftToDowngrade(String to) {
+    return 'Hold Shift to downgrade to $to';
+  }
 
   @override
   String get downgradeToThisVersion => 'Downgrade to this version';
+
+  @override
+  String downgradeTo(String to) {
+    return 'Downgrade to $to';
+  }
 
   @override
   String get holdShiftToViewVersions => 'Hold Shift to view versions';

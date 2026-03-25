@@ -377,8 +377,23 @@
             }
         }
     },
-    "holdShiftToDowngrade": "Удерживайте Shift для отката до этой версии",
+    "holdShiftToDowngrade": "Удерживайте Shift для отката до {to}",
+    "@holdShiftToDowngrade": {
+        "placeholders": {
+            "to": {
+                "type": "String"
+            }
+        }
+    },
     "downgradeToThisVersion": "Откатить до этой версии",
+    "downgradeTo": "Откатить до {to}",
+    "@downgradeTo": {
+        "placeholders": {
+            "to": {
+                "type": "String"
+            }
+        }
+    },
     "holdShiftToViewVersions": "Удерживайте Shift для просмотра версий",
     "noAppsInCategory": "Нет приложений в этой категории",
     "appDetails": "Сведения о приложении",

@@ -802,11 +802,17 @@ class AppLocalizationsRu extends AppLocalizations {
   }
 
   @override
-  String get holdShiftToDowngrade =>
-      'Удерживайте Shift для отката до этой версии';
+  String holdShiftToDowngrade(String to) {
+    return 'Удерживайте Shift для отката до $to';
+  }
 
   @override
   String get downgradeToThisVersion => 'Откатить до этой версии';
+
+  @override
+  String downgradeTo(String to) {
+    return 'Откатить до $to';
+  }
 
   @override
   String get holdShiftToViewVersions =>

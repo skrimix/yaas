@@ -340,8 +340,8 @@ class _ManageAppsScreenState extends State<ManageAppsScreen> {
                     } else {
                       // Older version
                       tooltipText = isShiftPressed
-                          ? l10n.downgradeToThisVersion
-                          : l10n.holdShiftToDowngrade;
+                          ? l10n.downgradeTo(cloudApp.fullName)
+                          : l10n.holdShiftToDowngrade(cloudApp.fullName);
                     }
 
                     return ListTile(
@@ -490,8 +490,8 @@ class _ManageAppsScreenState extends State<ManageAppsScreen> {
                 } else {
                   // Older
                   tooltip = isShiftPressed
-                      ? l10n.downgradeToThisVersion
-                      : l10n.holdShiftToDowngrade;
+                      ? l10n.downgradeTo(newestCloudApp.fullName)
+                      : l10n.holdShiftToDowngrade(newestCloudApp.fullName);
                 }
 
                 final Color? iconColor = hasNewerVersion

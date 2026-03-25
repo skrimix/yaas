@@ -1517,14 +1517,20 @@ abstract class AppLocalizations {
   /// No description provided for @holdShiftToDowngrade.
   ///
   /// In en, this message translates to:
-  /// **'Hold Shift to downgrade to this version'**
-  String get holdShiftToDowngrade;
+  /// **'Hold Shift to downgrade to {to}'**
+  String holdShiftToDowngrade(String to);
 
   /// No description provided for @downgradeToThisVersion.
   ///
   /// In en, this message translates to:
   /// **'Downgrade to this version'**
   String get downgradeToThisVersion;
+
+  /// No description provided for @downgradeTo.
+  ///
+  /// In en, this message translates to:
+  /// **'Downgrade to {to}'**
+  String downgradeTo(String to);
 
   /// No description provided for @holdShiftToViewVersions.
   ///

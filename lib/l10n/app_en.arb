@@ -383,8 +383,23 @@
             }
         }
     },
-    "holdShiftToDowngrade": "Hold Shift to downgrade to this version",
+    "holdShiftToDowngrade": "Hold Shift to downgrade to {to}",
+    "@holdShiftToDowngrade": {
+        "placeholders": {
+            "to": {
+                "type": "String"
+            }
+        }
+    },
     "downgradeToThisVersion": "Downgrade to this version",
+    "downgradeTo": "Downgrade to {to}",
+    "@downgradeTo": {
+        "placeholders": {
+            "to": {
+                "type": "String"
+            }
+        }
+    },
     "holdShiftToViewVersions": "Hold Shift to view versions",
     "noAppsInCategory": "No apps in this category",
     "appDetails": "App Details",

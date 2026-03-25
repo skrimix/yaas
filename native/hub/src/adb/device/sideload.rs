@@ -183,25 +183,12 @@ impl AdbDevice {
                     let source = script_dir.join(adb_args[0]);
                     let dest = UnixPath::new(&adb_args[1]);
                     debug!(source = %source.display(), dest = %dest.display(), "Line {line_num}: pushing directory");
-                    let push_result = if source.is_dir() {
-                        let source_name = source.file_name().and_then(|name| name.to_str());
-                        let dest_name = dest.file_name().and_then(|name| name.to_str());
-                        let dest_display = dest.display().to_string();
-
-                        if source_name.is_some()
-                            && source_name == dest_name
-                            && dest_display.starts_with("/sdcard/Android/obb/")
-                        {
-                            let dest_parent = dest.parent().with_context(|| {
-                                format!(
-                                    "Line {line_num}: adb push: missing parent for destination '{}'",
-                                    dest.display()
-                                )
-                            })?;
-                            self.push_dir(&source, dest_parent, true).await
-                        } else {
-                            self.push_any(&source, dest).await
-                        }
+                    let push_result = if source.is_dir()
+                        && dest.display().to_string().starts_with("/sdcard/Android/obb/")
+                        && source.file_name().and_then(|name| name.to_str())
+                            == dest.file_name().and_then(|name| name.to_str())
+                    {
+                        self.push_dir_to_path(&source, dest, true).await
                     } else {
                         self.push_any(&source, dest).await
                     };
@@ -382,7 +369,8 @@ impl AdbDevice {
                 .instrument(Span::current()),
             );
 
-            self.push_dir_with_progress(&obb_dir, remote_obb_parent, true, tx).await?;
+            let remote_obb_path = remote_obb_parent.join(package_name);
+            self.push_dir_to_path_with_progress(&obb_dir, &remote_obb_path, true, tx).await?;
         }
 
         Ok(())

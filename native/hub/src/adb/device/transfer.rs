@@ -20,12 +20,10 @@ impl AdbDevice {
     /// - If `dest` exists and is a regular file, then:
     ///   - pushing a local file overwrites that remote file path;
     ///   - pushing a local directory is rejected (cannot push a dir to an existing file).
-    /// - If `dest` does not exist but its parent exists, use `dest` as-is (the caller will create
-    ///   directories/files as needed during the transfer).
-    /// - If neither `dest` nor its parent exists, returns an error.
+    /// - If `dest` does not exist, use `dest` as-is. The device-side sync service will create
+    ///   missing parent directories for file and directory pushes, matching `adb push` behavior.
     ///
-    /// This mirrors common `adb push` conventions and ensures we never silently place content
-    /// at an unexpected path.
+    /// This mirrors common `adb push` conventions.
     #[instrument(level = "debug", ret, err)]
     pub(super) async fn resolve_push_dest_path(
         &self,
@@ -56,14 +54,8 @@ impl AdbDevice {
                 // Use destination path as is
                 Ok(UnixPathBuf::from(dest))
             }
-        } else if let Some(parent) = dest.parent() {
-            if self.inner.stat(parent).await.is_ok() {
-                Ok(UnixPathBuf::from(dest))
-            } else {
-                bail!("Parent directory '{}' does not exist", parent.display())
-            }
         } else {
-            bail!("Invalid destination path: no parent directory")
+            Ok(UnixPathBuf::from(dest))
         }
     }
 

@@ -100,10 +100,31 @@ class AppState extends ChangeNotifier {
 
   // Manage Apps page state
   int _manageAppsCategoryIndex = 0; // 0: vr, 1: other, 2: system
+  String _manageAppsSortKey = 'name'; // 'name' | 'size'
+  bool _manageAppsSortAscending = true;
+  bool _manageAppsUpdatesFirst = false;
   int get manageAppsCategoryIndex => _manageAppsCategoryIndex;
+  String get manageAppsSortKey => _manageAppsSortKey;
+  bool get manageAppsSortAscending => _manageAppsSortAscending;
+  bool get manageAppsUpdatesFirst => _manageAppsUpdatesFirst;
   void setManageAppsCategoryIndex(int index) {
     if (_manageAppsCategoryIndex == index) return;
     _manageAppsCategoryIndex = index;
+    notifyListeners();
+  }
+
+  void setManageAppsSort(String key, bool ascending) {
+    if (_manageAppsSortKey == key && _manageAppsSortAscending == ascending) {
+      return;
+    }
+    _manageAppsSortKey = key;
+    _manageAppsSortAscending = ascending;
+    notifyListeners();
+  }
+
+  void setManageAppsUpdatesFirst(bool value) {
+    if (_manageAppsUpdatesFirst == value) return;
+    _manageAppsUpdatesFirst = value;
     notifyListeners();
   }
 

@@ -13,6 +13,7 @@ class CloudAppsState extends ChangeNotifier {
   String _mediaBaseUrl = '';
   String? _mediaCacheDir;
   final Map<String, int> _maxVersionCodeByPackage = {};
+  final Map<String, List<CloudApp>> _appsByPackage = {};
   final Set<String> _donationBlacklist = {};
   Timer? _slowLoadingTimer;
 
@@ -27,6 +28,15 @@ class CloudAppsState extends ChangeNotifier {
   /// Returns the newest known cloud versionCode for a given package.
   int? newestVersionCodeForPackage(String packageName) =>
       _maxVersionCodeByPackage[packageName];
+
+  List<CloudApp> matchingAppsForPackage(String packageName) =>
+      List.unmodifiable(_appsByPackage[packageName] ?? const []);
+
+  CloudApp? newestAppForPackage(String packageName) {
+    final apps = _appsByPackage[packageName];
+    if (apps == null || apps.isEmpty) return null;
+    return apps.first;
+  }
 
   String thumbnailUrlFor(String packageName) {
     return '${_mediaBaseUrl}thumbnails/$packageName.jpg';
@@ -134,11 +144,15 @@ class CloudAppsState extends ChangeNotifier {
 
   void _rebuildIndex() {
     _maxVersionCodeByPackage.clear();
+    _appsByPackage.clear();
     for (final app in _apps) {
-      final existing = _maxVersionCodeByPackage[app.packageName];
-      if (existing == null || app.versionCode > existing) {
-        _maxVersionCodeByPackage[app.packageName] = app.versionCode;
-      }
+      (_appsByPackage[app.packageName] ??= []).add(app);
+    }
+
+    for (final entry in _appsByPackage.entries) {
+      final apps = entry.value;
+      apps.sort((a, b) => b.versionCode.compareTo(a.versionCode));
+      _maxVersionCodeByPackage[entry.key] = apps.first.versionCode;
     }
   }
 

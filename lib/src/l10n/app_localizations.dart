@@ -1742,11 +1742,29 @@ abstract class AppLocalizations {
   /// **'Size (Largest first)'**
   String get sortSizeLargest;
 
+  /// No description provided for @sortUpdateAvailableFirst.
+  ///
+  /// In en, this message translates to:
+  /// **'Update availability (Available first)'**
+  String get sortUpdateAvailableFirst;
+
+  /// No description provided for @sortUpdateUnavailableFirst.
+  ///
+  /// In en, this message translates to:
+  /// **'Update availability (Unavailable first)'**
+  String get sortUpdateUnavailableFirst;
+
   /// No description provided for @sortRelevance.
   ///
   /// In en, this message translates to:
   /// **'Relevance'**
   String get sortRelevance;
+
+  /// No description provided for @showUpdatesFirst.
+  ///
+  /// In en, this message translates to:
+  /// **'Show updates first'**
+  String get showUpdatesFirst;
 
   /// No description provided for @searchAppsHint.
   ///

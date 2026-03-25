@@ -932,7 +932,16 @@ class AppLocalizationsRu extends AppLocalizations {
   String get sortSizeLargest => 'Размер (сначала большие)';
 
   @override
+  String get sortUpdateAvailableFirst => 'Обновления (сначала доступные)';
+
+  @override
+  String get sortUpdateUnavailableFirst => 'Обновления (сначала недоступные)';
+
+  @override
   String get sortRelevance => 'Релевантность';
+
+  @override
+  String get showUpdatesFirst => 'Показывать обновления первыми';
 
   @override
   String get searchAppsHint => 'Поиск приложений...';

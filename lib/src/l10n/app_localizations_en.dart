@@ -919,7 +919,18 @@ class AppLocalizationsEn extends AppLocalizations {
   String get sortSizeLargest => 'Size (Largest first)';
 
   @override
+  String get sortUpdateAvailableFirst =>
+      'Update availability (Available first)';
+
+  @override
+  String get sortUpdateUnavailableFirst =>
+      'Update availability (Unavailable first)';
+
+  @override
   String get sortRelevance => 'Relevance';
+
+  @override
+  String get showUpdatesFirst => 'Show updates first';
 
   @override
   String get searchAppsHint => 'Search apps...';

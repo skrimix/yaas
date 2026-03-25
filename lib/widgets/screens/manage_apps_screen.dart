@@ -27,6 +27,11 @@ class ManageAppsScreen extends StatefulWidget {
   State<ManageAppsScreen> createState() => _ManageAppsScreenState();
 }
 
+enum ManageSortOption {
+  name,
+  size,
+}
+
 enum AppCategory {
   vr,
   other,
@@ -40,10 +45,28 @@ const hiddenPrefixes = [
   'com.facebook.',
 ];
 
+class _CloudUpdateInfo {
+  final List<CloudApp> matchingApps;
+  final CloudApp? newestApp;
+  final int installedVersionCode;
+
+  const _CloudUpdateInfo({
+    required this.matchingApps,
+    required this.newestApp,
+    required this.installedVersionCode,
+  });
+
+  bool get hasMatch => matchingApps.isNotEmpty;
+  bool get hasMultipleMatches => matchingApps.length > 1;
+  bool get hasNewerVersion =>
+      newestApp != null && newestApp!.versionCode > installedVersionCode;
+}
+
 class _ManageAppsScreenState extends State<ManageAppsScreen> {
   AppCategory _selectedCategory = AppCategory.vr;
-
-  final bool _sortAscending = true;
+  ManageSortOption _sortOption = ManageSortOption.name;
+  bool _sortAscending = true;
+  bool _updatesFirst = false;
   final ValueNotifier<bool> _isShiftPressedNotifier =
       ValueNotifier<bool>(false);
 
@@ -93,6 +116,12 @@ class _ManageAppsScreenState extends State<ManageAppsScreen> {
     if (idx >= 0 && idx < AppCategory.values.length) {
       _selectedCategory = AppCategory.values[idx];
     }
+    _sortOption = switch (appState.manageAppsSortKey) {
+      'size' => ManageSortOption.size,
+      _ => ManageSortOption.name,
+    };
+    _sortAscending = appState.manageAppsSortAscending;
+    _updatesFirst = appState.manageAppsUpdatesFirst;
     // Restore scroll offset for current category after layout
     WidgetsBinding.instance.addPostFrameCallback((_) {
       final controller = _scrollControllers[_selectedCategory]!;
@@ -137,13 +166,59 @@ class _ManageAppsScreenState extends State<ManageAppsScreen> {
     _cachedSystemApps = _getFilteredApps(packages, AppCategory.system);
   }
 
-  List<InstalledPackage> _sortApps(List<InstalledPackage> apps) {
+  bool _hasUpdateAvailable(
+      InstalledPackage app, CloudAppsState cloudAppsState) {
+    return _getCloudUpdateInfo(app, cloudAppsState).hasNewerVersion;
+  }
+
+  _CloudUpdateInfo _getCloudUpdateInfo(
+    InstalledPackage app,
+    CloudAppsState cloudAppsState,
+  ) {
+    final matchingApps = cloudAppsState.matchingAppsForPackage(app.packageName);
+    return _CloudUpdateInfo(
+      matchingApps: matchingApps,
+      newestApp: cloudAppsState.newestAppForPackage(app.packageName),
+      installedVersionCode: app.versionCode.toInt(),
+    );
+  }
+
+  List<InstalledPackage> _sortApps(
+    List<InstalledPackage> apps,
+    CloudAppsState cloudAppsState,
+  ) {
     apps.sort((a, b) {
       final appNameA =
           (a.label.isNotEmpty ? a.label : a.packageName).toLowerCase();
       final appNameB =
           (b.label.isNotEmpty ? b.label : b.packageName).toLowerCase();
-      int result = appNameA.compareTo(appNameB);
+      int result;
+
+      if (_updatesFirst) {
+        final updateA = _hasUpdateAvailable(a, cloudAppsState) ? 1 : 0;
+        final updateB = _hasUpdateAvailable(b, cloudAppsState) ? 1 : 0;
+        final updateResult = updateB.compareTo(updateA);
+        if (updateResult != 0) {
+          return updateResult;
+        }
+      }
+
+      switch (_sortOption) {
+        case ManageSortOption.name:
+          result = appNameA.compareTo(appNameB);
+          break;
+        case ManageSortOption.size:
+          final sizeA =
+              a.size.app.toInt() + a.size.data.toInt() + a.size.cache.toInt();
+          final sizeB =
+              b.size.app.toInt() + b.size.data.toInt() + b.size.cache.toInt();
+          result = sizeA.compareTo(sizeB);
+          if (result == 0) {
+            result = appNameA.compareTo(appNameB);
+          }
+          break;
+      }
+
       return _sortAscending ? result : -result;
     });
     return apps;
@@ -168,7 +243,76 @@ class _ManageAppsScreenState extends State<ManageAppsScreen> {
       }
     }).toList();
 
-    return _sortApps(filtered);
+    return filtered;
+  }
+
+  Widget _buildSortButton() {
+    final l10n = AppLocalizations.of(context);
+
+    bool isSelected(String key, bool ascending) {
+      return _sortOption.name == key && _sortAscending == ascending;
+    }
+
+    PopupMenuItem<(String, bool)> buildItem(
+      String key,
+      bool ascending,
+      String label,
+    ) {
+      return PopupMenuItem(
+        value: (key, ascending),
+        child: Row(
+          children: [
+            Icon(isSelected(key, ascending)
+                ? Icons.radio_button_checked
+                : Icons.radio_button_unchecked),
+            const SizedBox(width: 8),
+            Text(label),
+          ],
+        ),
+      );
+    }
+
+    return PopupMenuButton<(String, bool)>(
+      tooltip: l10n.sortBy,
+      icon: const Icon(Icons.sort),
+      initialValue: (_sortOption.name, _sortAscending),
+      itemBuilder: (context) => [
+        PopupMenuItem(
+          enabled: false,
+          child: Text(l10n.sortBy),
+        ),
+        buildItem('name', true, l10n.sortNameAsc),
+        buildItem('name', false, l10n.sortNameDesc),
+        buildItem('size', true, l10n.sortSizeSmallest),
+        buildItem('size', false, l10n.sortSizeLargest),
+      ],
+      onSelected: (value) {
+        final (key, ascending) = value;
+        setState(() {
+          _sortOption = ManageSortOption.values.byName(key);
+          _sortAscending = ascending;
+        });
+        context.read<AppState>().setManageAppsSort(key, ascending);
+      },
+    );
+  }
+
+  Widget _buildUpdatesFirstChip() {
+    final l10n = AppLocalizations.of(context);
+    return FilterChip(
+      label: Text(l10n.showUpdatesFirst),
+      selected: _updatesFirst,
+      avatar: Icon(
+        _updatesFirst ? Icons.check_box : Icons.check_box_outline_blank,
+        size: 18,
+      ),
+      onSelected: (selected) {
+        setState(() {
+          _updatesFirst = selected;
+        });
+        context.read<AppState>().setManageAppsUpdatesFirst(_updatesFirst);
+      },
+    );
   }
 
   String _formatAppSize(AppSize size) {
@@ -292,17 +436,6 @@ class _ManageAppsScreenState extends State<ManageAppsScreen> {
     );
   }
 
-  List<CloudApp> _findMatchingCloudApps(
-      InstalledPackage app, List<CloudApp> cloudApps) {
-    return cloudApps
-        .where((cloudApp) => cloudApp.packageName == app.packageName)
-        .toList();
-  }
-
-  bool _isNewerVersion(InstalledPackage installedApp, CloudApp cloudApp) {
-    return cloudApp.versionCode > installedApp.versionCode.toInt();
-  }
-
   void _showUpdateDialog(BuildContext context, InstalledPackage app,
       List<CloudApp> matchingCloudApps) {
     showDialog(
@@ -320,11 +453,11 @@ class _ManageAppsScreenState extends State<ManageAppsScreen> {
                   itemCount: matchingCloudApps.length,
                   itemBuilder: (context, index) {
                     final cloudApp = matchingCloudApps[index];
-                    final isNewer = _isNewerVersion(app, cloudApp);
+                    final installedVersionCode = app.versionCode.toInt();
+                    final isNewer = cloudApp.versionCode > installedVersionCode;
                     final isSameVersion =
-                        cloudApp.versionCode == app.versionCode.toInt();
-                    final isOlder =
-                        cloudApp.versionCode < app.versionCode.toInt();
+                        cloudApp.versionCode == installedVersionCode;
+                    final isOlder = cloudApp.versionCode < installedVersionCode;
 
                     final bool canInstall = isNewer ||
                         (isSameVersion && isShiftPressed) ||
@@ -445,10 +578,10 @@ class _ManageAppsScreenState extends State<ManageAppsScreen> {
           );
         }
 
-        final matchingCloudApps =
-            _findMatchingCloudApps(app, cloudAppsState.apps);
+        final updateInfo = _getCloudUpdateInfo(app, cloudAppsState);
+        final matchingCloudApps = updateInfo.matchingApps;
 
-        if (matchingCloudApps.isEmpty) {
+        if (!updateInfo.hasMatch) {
           return IconButton(
             icon: const Icon(Icons.update),
             tooltip: l10n.noMatchingCloudApp,
@@ -456,25 +589,20 @@ class _ManageAppsScreenState extends State<ManageAppsScreen> {
           );
         }
 
-        final hasNewerVersion =
-            matchingCloudApps.any((cloudApp) => _isNewerVersion(app, cloudApp));
-
-        // Prioritize newer versions
-        matchingCloudApps
-            .sort((a, b) => b.versionCode.compareTo(a.versionCode));
-
-        final newestCloudApp = matchingCloudApps.first;
+        final hasNewerVersion = updateInfo.hasNewerVersion;
+        final newestCloudApp = updateInfo.newestApp!;
+        final installedVersionCode = updateInfo.installedVersionCode;
 
         return ValueListenableBuilder<bool>(
             valueListenable: _isShiftPressedNotifier,
             builder: (context, isShiftPressed, _) {
               final l10n = AppLocalizations.of(context);
-              if (matchingCloudApps.length == 1) {
+              if (!updateInfo.hasMultipleMatches) {
                 // Single match
                 final isSameVersion =
-                    newestCloudApp.versionCode == app.versionCode.toInt();
+                    newestCloudApp.versionCode == installedVersionCode;
                 final isOlder =
-                    newestCloudApp.versionCode < app.versionCode.toInt();
+                    newestCloudApp.versionCode < installedVersionCode;
 
                 final bool enable = hasNewerVersion ||
                     (isSameVersion && isShiftPressed) ||
@@ -677,8 +805,8 @@ class _ManageAppsScreenState extends State<ManageAppsScreen> {
 
   @override
   Widget build(BuildContext context) {
-    return Consumer<DeviceState>(
-      builder: (context, deviceState, _) {
+    return Consumer2<DeviceState, CloudAppsState>(
+      builder: (context, deviceState, cloudAppsState, _) {
         final l10n = AppLocalizations.of(context);
         if (!deviceState.isConnected) {
           return const NoDeviceConnectedIndicator();
@@ -686,12 +814,15 @@ class _ManageAppsScreenState extends State<ManageAppsScreen> {
 
         _updateCachedLists(deviceState.device?.installedPackages);
 
-        final currentApps = switch (_selectedCategory) {
-              AppCategory.vr => _cachedVrApps,
-              AppCategory.other => _cachedOtherApps,
-              AppCategory.system => _cachedSystemApps,
-            } ??
-            [];
+        final currentApps = _sortApps(
+          List.of(switch (_selectedCategory) {
+                AppCategory.vr => _cachedVrApps,
+                AppCategory.other => _cachedOtherApps,
+                AppCategory.system => _cachedSystemApps,
+              } ??
+              []),
+          cloudAppsState,
+        );
 
         return Scaffold(
           body: SafeArea(
@@ -699,8 +830,11 @@ class _ManageAppsScreenState extends State<ManageAppsScreen> {
               children: [
                 Padding(
                   padding: _segmentPadding,
-                  child: Row(
-                    mainAxisAlignment: MainAxisAlignment.center,
+                  child: Wrap(
+                    alignment: WrapAlignment.center,
+                    crossAxisAlignment: WrapCrossAlignment.center,
+                    spacing: 8,
+                    runSpacing: 8,
                     children: [
                       SegmentedButton<AppCategory>(
                         segments: [
@@ -749,13 +883,14 @@ class _ManageAppsScreenState extends State<ManageAppsScreen> {
                           ),
                         ),
                       ),
-                      const SizedBox(width: 8),
                       AnimatedRefreshButton(
                         deviceState: deviceState,
                         tooltip: l10n.refreshAppsList,
                         size: 40,
                         iconSize: 24,
                       ),
+                      _buildUpdatesFirstChip(),
+                      _buildSortButton(),
                     ],
                   ),
                 ),

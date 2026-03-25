@@ -247,12 +247,14 @@ fn resolve_app_dir(portable_mode: bool) -> PathBuf {
 mod tests {
     use std::time::Duration;
 
+    use tokio::time::timeout;
+
     use crate::init;
 
     #[tokio::test(flavor = "multi_thread")]
     #[ignore]
     async fn core_init_stable() {
-        init(true).await;
+        timeout(Duration::from_secs(3), init(true)).await.unwrap();
         tokio::time::sleep(Duration::from_secs(3)).await;
     }
 }

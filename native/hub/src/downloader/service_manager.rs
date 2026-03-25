@@ -109,6 +109,10 @@ impl DownloaderManager {
     ) -> Result<()> {
         let _g = self.init_guard.lock().await;
         let cfg_path = app_dir.join("downloader.json");
+
+        DownloaderAvailabilityChanged { initializing: true, ..Default::default() }
+            .send_signal_to_dart();
+
         let mut cfg = match DownloaderConfig::load_from_path(&cfg_path) {
             Ok(cfg) => cfg,
             Err(e) => {

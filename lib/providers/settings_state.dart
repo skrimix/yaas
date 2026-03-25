@@ -31,7 +31,7 @@ class SettingsState extends ChangeNotifier {
   bool _hasLoaded = false;
   final List<String> _availableStartupKeys = AppPageRegistry.pageKeys;
   bool _downloaderAvailable = false;
-  bool _downloaderInitializing = false;
+  bool _downloaderInitializing = true;
   String? _downloaderError;
   String? _downloaderConfigId;
   int _downloaderInitBytes = 0;
@@ -105,6 +105,10 @@ class SettingsState extends ChangeNotifier {
       _downloaderConfigId = msg.configId;
       _downloaderIsDonationConfigured = msg.isDonationConfigured;
       _downloaderNeedsSetup = msg.needsSetup;
+      if (!msg.initializing) {
+        _downloaderInitBytes = 0;
+        _downloaderInitTotal = null;
+      }
       notifyListeners();
     });
 

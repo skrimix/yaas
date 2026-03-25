@@ -631,6 +631,24 @@ class _SettingsScreenState extends State<SettingsScreen> {
       _buildSection(
         title: l10n.settingsSectionDownloader,
         children: [
+          if (settingsState.isDownloaderInitializing)
+            Padding(
+              padding: const EdgeInsets.only(
+                bottom: SettingsConstants.verticalSpacing,
+              ),
+              child: _buildDownloaderInitBanner(l10n, settingsState),
+            ),
+          if (!settingsState.isDownloaderInitializing &&
+              settingsState.downloaderError != null)
+            Padding(
+              padding: const EdgeInsets.only(
+                bottom: SettingsConstants.verticalSpacing,
+              ),
+              child: _buildDownloaderErrorBanner(
+                l10n,
+                settingsState.downloaderError!,
+              ),
+            ),
           if (settingsState.isDownloaderAvailable) ...[
             _buildRcloneRemoteSelector(l10n),
             _buildTextSetting(
@@ -886,6 +904,71 @@ class _SettingsScreenState extends State<SettingsScreen> {
           },
         ),
       ],
+    );
+  }
+
+  Widget _buildDownloaderInitBanner(
+    AppLocalizations l10n,
+    SettingsState settingsState,
+  ) {
+    return Card(
+      child: Padding(
+        padding: const EdgeInsets.all(12),
+        child: Row(
+          children: [
+            const SizedBox(
+              width: 16,
+              height: 16,
+              child: CircularProgressIndicator(strokeWidth: 2),
+            ),
+            const SizedBox(width: 12),
+            Expanded(
+              child: Column(
+                crossAxisAlignment: CrossAxisAlignment.start,
+                children: [
+                  Text(l10n.preparingDownloader),
+                  const SizedBox(height: 4),
+                  LinearProgressIndicator(
+                    value: settingsState.downloaderInitProgress,
+                  ),
+                  const SizedBox(height: 4),
+                  Text(
+                    l10n.downloadingRcloneFiles,
+                    style: Theme.of(context).textTheme.bodySmall,
+                  ),
+                ],
+              ),
+            ),
+          ],
+        ),
+      ),
+    );
+  }
+
+  Widget _buildDownloaderErrorBanner(
+    AppLocalizations l10n,
+    String error,
+  ) {
+    return Card(
+      color: Colors.red.withValues(alpha: 0.08),
+      child: Padding(
+        padding: const EdgeInsets.all(12),
+        child: Row(
+          children: [
+            const Icon(Icons.error_outline, color: Colors.red),
+            const SizedBox(width: 8),
+            Expanded(child: Text(error)),
+            const SizedBox(width: 12),
+            FilledButton.tonalIcon(
+              onPressed: () {
+                const RetryDownloaderInitRequest().sendSignalToRust();
+              },
+              icon: const Icon(Icons.refresh),
+              label: Text(l10n.retry),
+            ),
+          ],
+        ),
+      ),
     );
   }
 

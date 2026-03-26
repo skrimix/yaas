@@ -57,7 +57,7 @@ pub(crate) struct Settings {
     pub installation_id: String,
     pub rclone_remote_name: String,
     pub adb_path: String,
-    pub preferred_connection_type: ConnectionKind, // TODO: implement
+    pub preferred_connection_type: ConnectionKind,
     downloads_location: String,
     backups_location: String,
     pub bandwidth_limit: String,

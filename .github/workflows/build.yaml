@@ -130,7 +130,7 @@ jobs:
         uses: milliewalky/setup-7-zip@v2
 
       - name: Bundle binary dependencies
-        if: matrix.target == 'windows' || matrix.target == 'macos'
+        if: matrix.target == 'windows' || matrix.target == 'macos' # Linux is handled in build_appimage.sh
         shell: bash
         run: |
           if [[ "${{ matrix.target }}" == "macos" ]]; then

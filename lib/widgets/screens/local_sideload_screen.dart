@@ -59,10 +59,11 @@ class _LocalSideloadScreenState extends State<LocalSideloadScreen> {
     String? path;
     final l10n = AppLocalizations.of(context);
     if (_isDirectory) {
-      path = await FilePicker.platform
-          .getDirectoryPath(dialogTitle: l10n.selectAppDirectoryTitle);
+      path = await FilePicker.getDirectoryPath(
+        dialogTitle: l10n.selectAppDirectoryTitle,
+      );
     } else {
-      final result = await FilePicker.platform.pickFiles(
+      final result = await FilePicker.pickFiles(
         dialogTitle: l10n.selectApkFileTitle,
         type: FileType.custom,
         allowedExtensions: ['apk'],

@@ -241,7 +241,7 @@ class _SettingsScreenState extends State<SettingsScreen> {
       initialDirectory = currentValue;
     }
 
-    final result = await FilePicker.platform.pickFiles(
+    final result = await FilePicker.pickFiles(
       dialogTitle: l10n.selectLabel(label),
       initialDirectory: initialDirectory,
     );
@@ -255,7 +255,7 @@ class _SettingsScreenState extends State<SettingsScreen> {
       initialDirectory = currentValue;
     }
 
-    return FilePicker.platform.getDirectoryPath(
+    return FilePicker.getDirectoryPath(
       dialogTitle: l10n.selectLabelDirectory(label),
       initialDirectory: initialDirectory,
     );
@@ -710,7 +710,7 @@ class _SettingsScreenState extends State<SettingsScreen> {
                 const SizedBox(width: 8),
                 TextButton.icon(
                   onPressed: () async {
-                    final result = await FilePicker.platform.pickFiles(
+                    final result = await FilePicker.pickFiles(
                       dialogTitle: l10n.settingsSelectDownloaderConfig,
                       allowMultiple: false,
                       type: FileType.custom,

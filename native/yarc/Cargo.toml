@@ -1,0 +1,21 @@
+[package]
+name = "yarc"
+version = "0.1.0"
+edition = "2024"
+
+[dependencies]
+async-compression = { version = "0.4", features = ["tokio", "zstd"] }
+async-tar = { version = "0.6", default-features = false, features = ["runtime-tokio"] }
+blake3 = "1.8"
+chacha20poly1305 = { version = "0.10", features = ["std", "stream"] }
+getrandom = "0.4"
+hex = "0.4"
+serde = { version = "1.0", features = ["derive"] }
+serde_json = "1.0"
+tokio = { version = "1.50", features = ["full", "tracing"] }
+tokio-stream = "0.1"
+zerocopy = { version = "0.8", features = ["std"] }
+zerocopy-derive = "0.8"
+
+[dev-dependencies]
+filetime = "0.2"

@@ -63,7 +63,6 @@ zip = "6"
 rand = "0.9"
 mdns-sd = "0.17"
 md5 = "0.8"
-base64 = "0.22"
 fs4 = { version = "0.13", features = ["fs-err3-tokio", "tokio"] }
 fs-err = { version = "3", features = ["tokio"] }
 uuid = { version = "1.18", features = ["v4"] }

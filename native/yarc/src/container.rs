@@ -17,7 +17,7 @@ use chacha20poly1305::{
 use tokio::fs;
 use tokio::io::{self as tokio_io, AsyncRead, AsyncReadExt, AsyncWrite, AsyncWriteExt};
 use tokio_stream::StreamExt;
-use zerocopy::{FromBytes, IntoBytes};
+use zerocopy::{FromBytes as _, IntoBytes as _};
 use zerocopy_derive::{FromBytes, Immutable, IntoBytes, KnownLayout, Unaligned};
 
 const YARC_MAGIC: [u8; 8] = *b"YAASYARC";

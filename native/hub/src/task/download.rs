@@ -21,23 +21,16 @@ impl TaskManager {
         update_progress: &impl Fn(ProgressUpdate),
         token: CancellationToken,
     ) -> Result<String> {
-        let emit_status = |status: TaskStatus, step_progress: Option<f32>, message: String| {
-            debug!(
-                app_full_name,
-                ?status,
-                step_number,
-                progress = step_progress,
-                message,
-                "Download step status"
-            );
-            update_progress(ProgressUpdate { status, step_number, step_progress, message });
-        };
-
         ensure!(
             self.downloader_manager.is_some().await,
             "Downloader is not configured. Install configuration file to initialize."
         );
-        emit_status(TaskStatus::Waiting, None, "Waiting to start download...".into());
+        update_progress(ProgressUpdate {
+            status: TaskStatus::Waiting,
+            step_number,
+            step_progress: None,
+            message: "Waiting to start download...".into(),
+        });
 
         let _permit = acquire_permit_or_cancel!(self.download_semaphore, token, "download");
         debug!(
@@ -45,7 +38,12 @@ impl TaskManager {
             "Acquired download semaphore"
         );
 
-        emit_status(TaskStatus::Running, None, "Starting download...".into());
+        update_progress(ProgressUpdate {
+            status: TaskStatus::Running,
+            step_number,
+            step_progress: None,
+            message: "Starting download...".into(),
+        });
 
         let (tx, mut rx) = mpsc::unbounded_channel::<AppDownloadProgress>();
 
@@ -80,7 +78,12 @@ impl TaskManager {
                 }
                 _ = token.cancelled() => {
                     warn!("Cancelling active download task");
-                    emit_status(TaskStatus::Running, None, "Cancelling download...".into());
+                    update_progress(ProgressUpdate {
+                        status: TaskStatus::Running,
+                        step_number,
+                        step_progress: None,
+                        message: "Cancelling download...".into(),
+                    });
                     download_task.abort();
                     let _ = download_task.await;
                     return Err(anyhow!("Task cancelled during download"));
@@ -88,7 +91,12 @@ impl TaskManager {
                 Some(progress) = rx.recv() => {
                     let progress = match progress {
                         AppDownloadProgress::Status(message) => {
-                            emit_status(TaskStatus::Running, None, message);
+                            update_progress(ProgressUpdate {
+                                status: TaskStatus::Running,
+                                step_number,
+                                step_progress: None,
+                                message,
+                            });
                             continue;
                         }
                         AppDownloadProgress::Transfer(progress) => progress,

@@ -68,6 +68,7 @@ pub(super) trait Repo: Send + Sync {
         cancellation_token: CancellationToken,
     ) -> Result<RepoAppList>;
 
+    #[allow(clippy::too_many_arguments)]
     async fn download_app(
         &self,
         storage: RepoStorage,

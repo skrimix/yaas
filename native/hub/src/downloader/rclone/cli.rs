@@ -41,7 +41,7 @@ pub(super) struct RcloneSizeOutput {
 
 #[derive(Debug, Clone, Deserialize)]
 #[serde(rename_all = "camelCase")]
-pub(crate) struct RcloneTransferStats {
+pub(crate) struct TransferStats {
     pub bytes: u64,
     pub total_bytes: u64,
     #[serde(deserialize_with = "deserialize_speed")]
@@ -64,7 +64,7 @@ struct RcloneJsonLogLine {
     #[serde(default)]
     object: Option<String>,
     #[serde(default)]
-    stats: Option<RcloneTransferStats>,
+    stats: Option<TransferStats>,
 }
 
 impl RcloneJsonLogLine {
@@ -227,7 +227,7 @@ impl RcloneCli {
         dest: String,
         operation: RcloneTransferOperation,
         total_bytes: u64,
-        stats_tx: Option<UnboundedSender<RcloneTransferStats>>,
+        stats_tx: Option<UnboundedSender<TransferStats>>,
         cancellation_token: Option<CancellationToken>,
     ) -> Result<()> {
         self.transfer_internal(
@@ -248,7 +248,7 @@ impl RcloneCli {
         dest: String,
         operation: RcloneTransferOperation,
         total_bytes: Option<u64>,
-        stats_tx: Option<UnboundedSender<RcloneTransferStats>>,
+        stats_tx: Option<UnboundedSender<TransferStats>>,
         cancellation_token: Option<CancellationToken>,
     ) -> Result<()> {
         ensure!(

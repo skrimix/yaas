@@ -885,7 +885,9 @@ class _DownloadAppsScreenState extends State<DownloadAppsScreen> {
           final remotes = settingsState.rcloneRemotes;
           final currentRemote = settingsState.settings.rcloneRemoteName;
           final showSlowHint =
-              cloudAppsState.isLoadingSlow && remotes.length > 1;
+              settingsState.downloaderSupportsRemoteSelection &&
+                  cloudAppsState.isLoadingSlow &&
+                  remotes.length > 1;
           return Center(
             child: Column(
               mainAxisSize: MainAxisSize.min,

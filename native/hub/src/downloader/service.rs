@@ -5,7 +5,7 @@ use std::{
     time::Duration,
 };
 
-use anyhow::{Context, Result, anyhow, ensure};
+use anyhow::Result;
 use rinf::{DartSignal, RustSignal};
 use tokio::sync::{Mutex, RwLock, mpsc::UnboundedSender};
 use tokio_stream::{StreamExt, wrappers::WatchStream};
@@ -14,10 +14,7 @@ use tracing::{Instrument, debug, error, info, info_span, instrument, warn};
 
 use crate::{
     adb::PackageName,
-    downloader::{
-        RcloneTransferStats, cloud_api, config::DownloaderConfig, download_metadata,
-        rclone::RcloneStorage, repo,
-    },
+    downloader::{TransferStats, cloud_api, config::DownloaderConfig, download_metadata, repo},
     models::{
         CloudApp, Settings,
         signals::{
@@ -37,13 +34,13 @@ use crate::{
 pub(crate) struct Downloader {
     config: Arc<DownloaderConfig>,
     cache_dir: PathBuf,
-    rclone_path: PathBuf,
-    rclone_config_path: PathBuf,
+    rclone_path: Option<PathBuf>,
+    rclone_config_path: Option<PathBuf>,
     root_dir: String,
     list_path: String,
     cloud_apps: Arc<Mutex<Vec<CloudApp>>>,
     donation_blacklist: Arc<Mutex<Vec<String>>>,
-    storage: RwLock<RcloneStorage>,
+    storage: RwLock<repo::RepoStorage>,
     download_dir: RwLock<PathBuf>,
     current_load_token: RwLock<CancellationToken>,
     write_legacy_release_json: RwLock<bool>,
@@ -58,8 +55,8 @@ impl Downloader {
     pub(crate) async fn new(
         config: Arc<DownloaderConfig>,
         cache_dir: PathBuf,
-        rclone_path: PathBuf,
-        rclone_config_path: PathBuf,
+        rclone_path: Option<PathBuf>,
+        rclone_config_path: Option<PathBuf>,
         settings_handler: Arc<SettingsHandler>,
         mut settings_stream: WatchStream<Settings>,
     ) -> Result<Arc<Self>> {
@@ -73,11 +70,12 @@ impl Downloader {
             .build()
             .unwrap_or_else(|_| reqwest::Client::new());
 
-        let donation_remote_configured =
-            config.donation_remote_name.as_deref().map(|s| !s.is_empty()).unwrap_or(false)
-                || config.donation_remote_path.as_deref().map(|s| !s.is_empty()).unwrap_or(false);
-        let blacklist_path_configured =
-            config.donation_blacklist_path.as_deref().map(|s| !s.is_empty()).unwrap_or(false);
+        let repo_capabilities = repo.capabilities();
+        let donation_remote_configured = repo_capabilities.supports_donation_upload
+            && (config.donation_remote_name.as_deref().map(|s| !s.is_empty()).unwrap_or(false)
+                || config.donation_remote_path.as_deref().map(|s| !s.is_empty()).unwrap_or(false));
+        let blacklist_path_configured = repo_capabilities.supports_donation_upload
+            && config.donation_blacklist_path.as_deref().map(|s| !s.is_empty()).unwrap_or(false);
         if donation_remote_configured && !blacklist_path_configured {
             warn!(
                 "App donation remote is configured but `donation_blacklist_path` is missing; \
@@ -87,8 +85,8 @@ impl Downloader {
 
         let built = repo
             .build_storage(repo::BuildStorageArgs {
-                rclone_path: &rclone_path,
-                rclone_config_path: &rclone_config_path,
+                rclone_path: rclone_path.as_deref(),
+                rclone_config_path: rclone_config_path.as_deref(),
                 root_dir: &config.root_dir,
                 remote_name: &settings.rclone_remote_name,
                 bandwidth_limit: &settings.bandwidth_limit,
@@ -163,8 +161,8 @@ impl Downloader {
                             let built = handle
                                 .repo
                                 .build_storage(repo::BuildStorageArgs {
-                                    rclone_path: &handle.rclone_path,
-                                    rclone_config_path: &handle.rclone_config_path,
+                                    rclone_path: handle.rclone_path.as_deref(),
+                                    rclone_config_path: handle.rclone_config_path.as_deref(),
                                     root_dir: &handle.root_dir,
                                     remote_name: &settings.rclone_remote_name,
                                     bandwidth_limit: &settings.bandwidth_limit,
@@ -190,22 +188,26 @@ impl Downloader {
                             };
 
                             if new_storage != *handle.storage.read().await {
-                                info!("Rclone storage config changed, recreating and refreshing app list");
+                                info!("Downloader storage config changed, recreating and refreshing app list");
                                 handle.current_load_token.read().await.cancel();
                                 let new_token = handle.cancel_token.child_token();
                                 *handle.current_load_token.write().await = new_token.clone();
 
                                 *handle.storage.write().await = new_storage;
 
-                                match handle.storage.read().await.remotes().await {
+                                match handle
+                                    .repo
+                                    .list_remotes(handle.storage.read().await.clone())
+                                    .await
+                                {
                                     Ok(remotes) => {
                                         RcloneRemotesChanged { remotes, error: None }.send_signal_to_dart();
                                     }
                                     Err(e) => {
-                                        error!(error = e.as_ref() as &dyn Error, "Failed to get rclone remotes after reload");
+                                        error!(error = e.as_ref() as &dyn Error, "Failed to get downloader remotes after reload");
                                         RcloneRemotesChanged {
                                             remotes: Vec::new(),
-                                            error: Some(format!("Failed to get rclone remotes: {:#}", e)),
+                                            error: Some(format!("Failed to get remotes: {:#}", e)),
                                         }
                                         .send_signal_to_dart();
                                     }
@@ -242,7 +244,7 @@ impl Downloader {
                     }
                     res = async {
                         let storage = handle.storage.read().await.clone();
-                        storage.remotes().await
+                        handle.repo.list_remotes(storage).await
                     } => {
                         match res {
                             Ok(remotes) => {
@@ -251,11 +253,11 @@ impl Downloader {
                             Err(e) => {
                                 error!(
                                     error = e.as_ref() as &dyn Error,
-                                    "Failed to get rclone remotes on init"
+                                    "Failed to get downloader remotes on init"
                                 );
                                 RcloneRemotesChanged {
                                     remotes: Vec::new(),
-                                    error: Some(format!("Failed to get rclone remotes: {:#}", e)),
+                                    error: Some(format!("Failed to get remotes: {:#}", e)),
                                 }
                                 .send_signal_to_dart();
                             }
@@ -283,38 +285,19 @@ impl Downloader {
     pub(crate) async fn upload_donation_archive(
         &self,
         archive_path: &Path,
-        stats_tx: Option<UnboundedSender<RcloneTransferStats>>,
+        stats_tx: Option<UnboundedSender<TransferStats>>,
         cancellation_token: CancellationToken,
     ) -> Result<()> {
-        let remote =
-            self.config.donation_remote_name.as_deref().filter(|s| !s.is_empty()).ok_or_else(
-                || anyhow!("App donation remote is not configured in downloader.json"),
-            )?;
-        let remote_path =
-            self.config.donation_remote_path.as_deref().filter(|s| !s.is_empty()).ok_or_else(
-                || anyhow!("App donation remote path is not configured in downloader.json"),
-            )?;
-
-        ensure!(
-            archive_path.is_file(),
-            "Donation archive does not exist or is not a file: {}",
-            archive_path.display()
-        );
-
         let storage = self.storage.read().await.clone();
-
-        storage
-            .upload_file_to_remote(
+        self.repo
+            .upload_donation_archive(
+                storage,
+                &self.config,
                 archive_path,
-                remote,
-                remote_path,
                 stats_tx,
-                Some(cancellation_token.clone()),
+                cancellation_token,
             )
             .await
-            .context("Failed to upload donation archive")?;
-
-        Ok(())
     }
 
     #[instrument(level = "debug", skip(self))]
@@ -347,14 +330,17 @@ impl Downloader {
                 request = get_rclone_remotes_receiver.recv() => {
                     if request.is_some() {
                         debug!("Received GetRcloneRemotesRequest");
-                        let remotes = self.storage.read().await.remotes().await;
+                        let remotes = self
+                            .repo
+                            .list_remotes(self.storage.read().await.clone())
+                            .await;
                         match remotes {
                             Ok(remotes) => {
                                 RcloneRemotesChanged { remotes, error: None }.send_signal_to_dart();
                             }
                             Err(e) => {
-                                error!(error = e.as_ref() as &dyn Error, "Failed to get rclone remotes");
-                                RcloneRemotesChanged { remotes: Vec::new(), error: Some(format!("Failed to get rclone remotes: {:#}", e)) }.send_signal_to_dart();
+                                error!(error = e.as_ref() as &dyn Error, "Failed to get downloader remotes");
+                                RcloneRemotesChanged { remotes: Vec::new(), error: Some(format!("Failed to get remotes: {:#}", e)) }.send_signal_to_dart();
                             }
                         }
                     } else {
@@ -593,19 +579,20 @@ impl Downloader {
         &self,
         app_full_name: String,
         true_package: PackageName,
-        progress_tx: UnboundedSender<RcloneTransferStats>,
+        progress_tx: UnboundedSender<TransferStats>,
         cancellation_token: CancellationToken,
     ) -> Result<String> {
         let dst_dir = self.download_dir.read().await.join(&app_full_name);
         info!(app = %app_full_name, dest = %dst_dir.display(), "Starting app download");
 
-        let source = self.repo.source_for_download(&app_full_name);
         let storage = self.storage.read().await.clone();
-
-        storage
-            .download_dir_with_stats(
-                source,
-                dst_dir.clone(),
+        self.repo
+            .download_app(
+                storage,
+                &app_full_name,
+                &dst_dir,
+                &self.cache_dir,
+                &self.http_client,
                 progress_tx,
                 cancellation_token.clone(),
             )

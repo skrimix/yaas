@@ -1,5 +1,5 @@
 mod rclone;
-pub(crate) use rclone::RcloneTransferStats;
+pub(crate) use rclone::TransferStats;
 mod cloud_api;
 pub(crate) mod config;
 pub(crate) mod download_metadata;

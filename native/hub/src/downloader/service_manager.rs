@@ -11,7 +11,11 @@ use tokio_stream::wrappers::WatchStream;
 use tracing::{debug, error, info, instrument, warn};
 
 use crate::{
-    downloader::{self, Downloader, config::DownloaderConfig, http_cache},
+    downloader::{
+        self, Downloader,
+        config::{DownloaderConfig, RepoLayoutKind},
+        http_cache, repo,
+    },
     models::signals::{
         downloader::{
             availability::DownloaderAvailabilityChanged,
@@ -146,13 +150,18 @@ impl DownloaderManager {
         settings_handler: Arc<SettingsHandler>,
     ) -> Result<()> {
         let config_id = cfg.id.clone();
-        let is_donation_configured =
-            cfg.donation_remote_name.is_some() && cfg.donation_remote_path.is_some();
+        let repo = repo::make_repo_from_config(&cfg);
+        let capabilities = repo.capabilities();
+        let is_donation_configured = capabilities.supports_donation_upload
+            && cfg.donation_remote_name.is_some()
+            && cfg.donation_remote_path.is_some();
 
         DownloaderAvailabilityChanged {
             initializing: true,
             config_id: Some(config_id.clone()),
             is_donation_configured,
+            supports_remote_selection: capabilities.supports_remote_selection,
+            supports_bandwidth_limit: capabilities.supports_bandwidth_limit,
             ..Default::default()
         }
         .send_signal_to_dart();
@@ -163,7 +172,16 @@ impl DownloaderManager {
         let cache_dir = app_dir.join("downloader_cache").join(&cfg.id);
         let _ = tokio::fs::create_dir_all(&cache_dir).await;
 
-        match downloader::rclone::prepare_rclone_files(&cache_dir, &cfg).await {
+        let prepared = match cfg.layout {
+            RepoLayoutKind::Ffa => downloader::rclone::prepare_rclone_files(&cache_dir, &cfg)
+                .await
+                .map(|(rclone_path, rclone_config_path)| {
+                    (Some(rclone_path), Some(rclone_config_path))
+                }),
+            RepoLayoutKind::NewRepo => Ok((None, None)),
+        };
+
+        match prepared {
             Ok((rclone_path, rclone_config_path)) => {
                 match Downloader::new(
                     Arc::new(cfg),
@@ -181,6 +199,8 @@ impl DownloaderManager {
                             available: true,
                             config_id: Some(config_id.clone()),
                             is_donation_configured,
+                            supports_remote_selection: capabilities.supports_remote_selection,
+                            supports_bandwidth_limit: capabilities.supports_bandwidth_limit,
                             ..Default::default()
                         }
                         .send_signal_to_dart();
@@ -190,6 +210,8 @@ impl DownloaderManager {
                         DownloaderAvailabilityChanged {
                             error: Some(format!("Failed to initialize downloader: {:#}", e)),
                             config_id: Some(config_id.clone()),
+                            supports_remote_selection: capabilities.supports_remote_selection,
+                            supports_bandwidth_limit: capabilities.supports_bandwidth_limit,
                             ..Default::default()
                         }
                         .send_signal_to_dart();
@@ -201,6 +223,8 @@ impl DownloaderManager {
                 DownloaderAvailabilityChanged {
                     error: Some(format!("Failed to prepare downloader: {:#}", e)),
                     config_id: Some(config_id),
+                    supports_remote_selection: capabilities.supports_remote_selection,
+                    supports_bandwidth_limit: capabilities.supports_bandwidth_limit,
                     ..Default::default()
                 }
                 .send_signal_to_dart();
@@ -360,8 +384,10 @@ async fn install_config(app_dir: &Path, src: &Path) -> Result<()> {
 
     // Validate by parsing
     let cfg = DownloaderConfig::load_from_path(src)?;
+    let rclone_path =
+        cfg.rclone_path.as_ref().map(ToString::to_string).unwrap_or_else(|| "<none>".to_string());
     debug!(
-        rclone_path = %cfg.rclone_path,
+        rclone_path = %rclone_path,
         rclone_config_path = cfg.rclone_config_path.as_deref().unwrap_or("<none>"),
         "Validated downloader.json"
     );

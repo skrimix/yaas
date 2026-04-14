@@ -8,6 +8,8 @@ pub(crate) struct DownloaderAvailabilityChanged {
     /// Optional ID of the currently configured downloader.json
     pub config_id: Option<String>,
     pub is_donation_configured: bool,
+    pub supports_remote_selection: bool,
+    pub supports_bandwidth_limit: bool,
     /// True when no downloader.json exists and user needs to configure one.
     /// False when config exists (even if initialization is in progress or failed).
     pub needs_setup: bool,

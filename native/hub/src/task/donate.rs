@@ -9,7 +9,7 @@ use super::{AdbStepConfig, ProgressUpdate, TaskManager};
 use crate::{
     adb::PackageName,
     archive::create_zip_from_dir,
-    downloader::RcloneTransferStats,
+    downloader::TransferStats,
     models::{apk_info::get_apk_info, signals::task::TaskStatus},
 };
 
@@ -177,7 +177,7 @@ impl TaskManager {
             message: "Uploading archive...".into(),
         });
 
-        let (tx, mut rx) = mpsc::unbounded_channel::<RcloneTransferStats>();
+        let (tx, mut rx) = mpsc::unbounded_channel::<TransferStats>();
 
         let mut upload_task = {
             let downloader = self

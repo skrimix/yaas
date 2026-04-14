@@ -32,7 +32,11 @@ pub(crate) async fn prepare_rclone_files(
     cache_dir: &Path,
     cfg: &DownloaderConfig,
 ) -> Result<(PathBuf, PathBuf)> {
-    let bin_source = cfg.rclone_path.resolve_for_current_platform()?;
+    let bin_source = cfg
+        .rclone_path
+        .as_ref()
+        .ok_or_else(|| anyhow::anyhow!("rclone_path is required for this repository layout"))?
+        .resolve_for_current_platform()?;
     let maybe_config_source = cfg.rclone_config_path.as_deref();
 
     let bin_is_url = is_http_url(&bin_source);
@@ -287,7 +291,7 @@ mod tests {
 
     fn cfg_local(bin: &str, conf: &str) -> DownloaderConfig {
         DownloaderConfig {
-            rclone_path: RclonePath::Single(bin.to_string()),
+            rclone_path: Some(RclonePath::Single(bin.to_string())),
             rclone_config_path: Some(conf.to_string()),
             disable_randomize_remote: true,
             ..Default::default()
@@ -308,7 +312,7 @@ mod tests {
     async fn prepare_files_errors_when_mixed_url_and_local() {
         let dir = tempdir().unwrap();
         let cfg = DownloaderConfig {
-            rclone_path: RclonePath::Single("http://127.0.0.1/rclone".to_string()),
+            rclone_path: Some(RclonePath::Single("http://127.0.0.1/rclone".to_string())),
             rclone_config_path: Some("/tmp/rclone.conf".to_string()),
             disable_randomize_remote: true,
             ..Default::default()
@@ -370,7 +374,7 @@ mod tests {
             .await;
 
         let cfg = DownloaderConfig {
-            rclone_path: RclonePath::Single(format!("{}{}", server.uri(), bin_path)),
+            rclone_path: Some(RclonePath::Single(format!("{}{}", server.uri(), bin_path))),
             rclone_config_path: Some(format!("{}{}", server.uri(), conf_path)),
             disable_randomize_remote: true,
             ..Default::default()

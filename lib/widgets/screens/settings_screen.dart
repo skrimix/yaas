@@ -650,21 +650,23 @@ class _SettingsScreenState extends State<SettingsScreen> {
               ),
             ),
           if (settingsState.isDownloaderAvailable) ...[
-            _buildRcloneRemoteSelector(l10n),
-            _buildTextSetting(
-              field: SettingTextField.bandwidthLimit,
-              label: l10n.settingsBandwidthLimit,
-              helper: InkWell(
-                onTap: () =>
-                    _launchURL('https://rclone.org/docs/#bwlimit-bwtimetable'),
-                child: Text(
-                  l10n.settingsBandwidthHelper,
-                  style: Theme.of(context).textTheme.bodySmall?.copyWith(
-                        color: Theme.of(context).hintColor,
-                      ),
+            if (settingsState.downloaderSupportsRemoteSelection)
+              _buildRcloneRemoteSelector(l10n),
+            if (settingsState.downloaderSupportsBandwidthLimit)
+              _buildTextSetting(
+                field: SettingTextField.bandwidthLimit,
+                label: l10n.settingsBandwidthLimit,
+                helper: InkWell(
+                  onTap: () => _launchURL(
+                      'https://rclone.org/docs/#bwlimit-bwtimetable'),
+                  child: Text(
+                    l10n.settingsBandwidthHelper,
+                    style: Theme.of(context).textTheme.bodySmall?.copyWith(
+                          color: Theme.of(context).hintColor,
+                        ),
+                  ),
                 ),
               ),
-            ),
             _buildDropdownSetting<DownloadCleanupPolicy>(
               label: l10n.settingsDownloadsCleanup,
               value: _currentFormSettings.cleanupPolicy,

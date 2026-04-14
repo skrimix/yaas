@@ -9,7 +9,7 @@ use tokio::{fs, sync::mpsc::UnboundedSender};
 use tokio_util::sync::CancellationToken;
 use tracing::{debug, instrument, warn};
 
-use super::cli::{RcloneCli, RcloneTransferOperation, RcloneTransferStats};
+use super::cli::{RcloneCli, RcloneTransferOperation, TransferStats};
 
 #[derive(Debug, Clone)]
 pub(crate) struct RcloneStorage {
@@ -67,7 +67,7 @@ impl RcloneStorage {
         local_path: &Path,
         remote: &str,
         remote_dir: &str,
-        stats_tx: Option<UnboundedSender<RcloneTransferStats>>,
+        stats_tx: Option<UnboundedSender<TransferStats>>,
         cancellation_token: Option<CancellationToken>,
     ) -> Result<()> {
         ensure!(local_path.is_file(), "Local path is not a file: {}", local_path.display());
@@ -108,7 +108,7 @@ impl RcloneStorage {
         &self,
         source: String,
         dest: PathBuf,
-        stats_tx: UnboundedSender<RcloneTransferStats>,
+        stats_tx: UnboundedSender<TransferStats>,
         cancellation_token: CancellationToken,
     ) -> Result<PathBuf> {
         ensure!(dest.parent().is_some(), "Destination must have a parent directory");

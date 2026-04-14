@@ -1,6 +1,6 @@
 use std::{collections::HashMap, fmt, fs, path::Path};
 
-use anyhow::{Context, Result};
+use anyhow::{Context, Result, ensure};
 use const_format::concatcp;
 use serde::Deserialize;
 use tracing::error;
@@ -10,7 +10,8 @@ pub(crate) struct DownloaderConfig {
     /// ID of the config. Used for cache separation.
     pub id: String,
     // TODO: should this be a URI?
-    pub rclone_path: RclonePath,
+    #[serde(default)]
+    pub rclone_path: Option<RclonePath>,
     #[serde(default)]
     pub rclone_config_path: Option<String>,
     #[serde(default)]
@@ -31,6 +32,8 @@ pub(crate) struct DownloaderConfig {
     pub donation_blacklist_path: Option<String>,
     /// Repository layout selector.
     pub layout: RepoLayoutKind,
+    #[serde(default)]
+    pub base_url: Option<String>,
     #[serde(default = "default_root_dir")]
     pub root_dir: String,
     #[serde(default = "default_list_path")]
@@ -58,7 +61,43 @@ impl DownloaderConfig {
             .inspect_err(|e| {
                 error!("Failed to parse downloader.json: {:#}", e);
             })?;
+        cfg.validate()?;
         Ok(cfg)
+    }
+
+    fn validate(&self) -> Result<()> {
+        ensure!(!self.id.trim().is_empty(), "downloader.id must not be empty");
+
+        match self.layout {
+            RepoLayoutKind::Ffa => {
+                ensure!(
+                    self.rclone_path.is_some(),
+                    "rclone_path is required for the ffa repository layout"
+                );
+                ensure!(
+                    self.rclone_config_path
+                        .as_deref()
+                        .map(|value| !value.trim().is_empty())
+                        .unwrap_or(false),
+                    "rclone_config_path is required for the ffa repository layout"
+                );
+            }
+            RepoLayoutKind::NewRepo => {
+                let base_url = self.base_url.as_deref().map(str::trim).unwrap_or_default();
+                ensure!(
+                    !base_url.is_empty(),
+                    "base_url is required for the new-repo repository layout"
+                );
+                let parsed = reqwest::Url::parse(base_url)
+                    .with_context(|| format!("Invalid new-repo base_url: {base_url}"))?;
+                ensure!(
+                    parsed.scheme() == "http" || parsed.scheme() == "https",
+                    "new-repo base_url must use http or https"
+                );
+            }
+        }
+
+        Ok(())
     }
 }
 
@@ -67,7 +106,7 @@ impl Default for DownloaderConfig {
     fn default() -> Self {
         Self {
             id: "test".to_string(),
-            rclone_path: RclonePath::Single("/bin/echo".to_string()),
+            rclone_path: Some(RclonePath::Single("/bin/echo".to_string())),
             rclone_config_path: None,
             remote_name_filter_regex: None,
             disable_randomize_remote: false,
@@ -75,6 +114,7 @@ impl Default for DownloaderConfig {
             donation_remote_path: None,
             donation_blacklist_path: None,
             layout: RepoLayoutKind::Ffa,
+            base_url: None,
             root_dir: default_root_dir(),
             list_path: default_list_path(),
             config_update_url: None,
@@ -87,6 +127,8 @@ impl Default for DownloaderConfig {
 pub(crate) enum RepoLayoutKind {
     #[serde(rename = "ffa")]
     Ffa,
+    #[serde(rename = "new-repo")]
+    NewRepo,
 }
 
 #[derive(Debug, Clone, Deserialize)]
@@ -174,7 +216,7 @@ mod tests {
 
         let cfg = DownloaderConfig::load_from_path(&cfg_path).expect("load config");
         match cfg.rclone_path {
-            RclonePath::Single(ref s) => assert_eq!(s, "/bin/echo"),
+            Some(RclonePath::Single(ref s)) => assert_eq!(s, "/bin/echo"),
             _ => panic!("expected Single path"),
         }
         assert_eq!(cfg.rclone_config_path.as_deref(), Some("/tmp/rclone.conf"));
@@ -213,5 +255,40 @@ mod tests {
         let err = path.resolve_for_current_platform().unwrap_err();
         let msg = format!("{:#}", err);
         assert!(msg.contains("rclone_path missing key"));
+    }
+
+    #[test]
+    fn new_repo_requires_base_url() {
+        let dir = tempdir().unwrap();
+        let cfg_path = dir.path().join("downloader.json");
+        write_file(
+            &cfg_path,
+            r#"{
+                "id": "new-repo",
+                "layout": "new-repo"
+            }"#,
+        );
+
+        let err = DownloaderConfig::load_from_path(&cfg_path).expect_err("missing base_url");
+        assert!(format!("{err:#}").contains("base_url is required"));
+    }
+
+    #[test]
+    fn new_repo_loads_without_rclone_fields() {
+        let dir = tempdir().unwrap();
+        let cfg_path = dir.path().join("downloader.json");
+        write_file(
+            &cfg_path,
+            r#"{
+                "id": "new-repo",
+                "layout": "new-repo",
+                "base_url": "https://example.com/repo"
+            }"#,
+        );
+
+        let cfg = DownloaderConfig::load_from_path(&cfg_path).expect("load config");
+        assert_eq!(cfg.layout, RepoLayoutKind::NewRepo);
+        assert!(cfg.rclone_path.is_none());
+        assert_eq!(cfg.base_url.as_deref(), Some("https://example.com/repo"));
     }
 }

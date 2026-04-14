@@ -78,6 +78,29 @@ pub(crate) struct CloudApp {
     pub popularity: Option<Popularity>,
 }
 
+impl CloudApp {
+    pub(crate) fn new(
+        app_name: String,
+        full_name: String,
+        package_name: String,
+        version_code: u32,
+        last_updated: String,
+        size: u64,
+    ) -> Self {
+        let true_package_name = normalize_package_name(&package_name);
+        Self {
+            app_name,
+            full_name,
+            package_name,
+            true_package_name,
+            version_code,
+            last_updated,
+            size,
+            popularity: None,
+        }
+    }
+}
+
 impl<'de> Deserialize<'de> for CloudApp {
     fn deserialize<D>(deserializer: D) -> Result<Self, D::Error>
     where
@@ -86,17 +109,14 @@ impl<'de> Deserialize<'de> for CloudApp {
         // Delegate to helper with serde field attributes, then convert
         let helper = CloudAppCsvHelper::deserialize(deserializer)?;
         let size = parse_size_mb_to_bytes(&helper.size_mb).map_err(serde::de::Error::custom)?;
-        let original = normalize_package_name(&helper.package_name);
-        Ok(CloudApp {
-            app_name: helper.app_name,
-            full_name: helper.full_name,
-            package_name: helper.package_name,
-            true_package_name: original,
-            version_code: helper.version_code,
-            last_updated: helper.last_updated,
+        Ok(CloudApp::new(
+            helper.app_name,
+            helper.full_name,
+            helper.package_name,
+            helper.version_code,
+            helper.last_updated,
             size,
-            popularity: None,
-        })
+        ))
     }
 }
 

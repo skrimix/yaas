@@ -1,17 +1,23 @@
 use std::{collections::HashSet, error::Error, path::Path};
 
-use anyhow::{Context, Result, bail};
+use anyhow::{Context, Result, anyhow, bail, ensure};
 use async_trait::async_trait;
 use derive_more::Debug;
 use futures::StreamExt as _;
 use rand::seq::IndexedRandom;
-use tokio::fs::{self, File};
+use tokio::{
+    fs::{self, File},
+    sync::mpsc::UnboundedSender,
+};
 use tokio_util::sync::CancellationToken;
 use tracing::{Instrument, Span, debug, instrument, warn};
 
-use super::{BuildStorageArgs, BuildStorageResult, Repo, RepoAppList};
+use super::{
+    BuildStorageArgs, BuildStorageResult, Repo, RepoAppList, RepoCapabilities, RepoStorage,
+};
 use crate::{
     downloader::{
+        TransferStats,
         config::DownloaderConfig,
         rclone::{self, RcloneStorage},
     },
@@ -36,13 +42,28 @@ impl Repo for FFARepo {
         "ffa"
     }
 
+    fn capabilities(&self) -> RepoCapabilities {
+        RepoCapabilities {
+            supports_remote_selection: true,
+            supports_bandwidth_limit: true,
+            supports_donation_upload: true,
+        }
+    }
+
     #[instrument(level = "debug", name = "repo.build_storage", fields(layout = %self.id()))]
     async fn build_storage(&self, args: BuildStorageArgs<'_>) -> Result<BuildStorageResult> {
         debug!("Using repository layout: FFA");
 
+        let rclone_path = args
+            .rclone_path
+            .ok_or_else(|| anyhow!("Missing rclone path for ffa repository layout"))?;
+        let rclone_config_path = args
+            .rclone_config_path
+            .ok_or_else(|| anyhow!("Missing rclone config path for ffa repository layout"))?;
+
         let remote_name = pick_remote_name(
-            args.rclone_path,
-            args.rclone_config_path,
+            rclone_path,
+            rclone_config_path,
             args.remote_name_filter_regex.as_deref(),
             args.remote_name,
             args.allow_randomize_remote,
@@ -51,25 +72,35 @@ impl Repo for FFARepo {
         let persist_remote = (remote_name != args.remote_name).then(|| remote_name.clone());
 
         let storage = RcloneStorage::new(
-            args.rclone_path.to_path_buf(),
-            args.rclone_config_path.to_path_buf(),
+            rclone_path.to_path_buf(),
+            rclone_config_path.to_path_buf(),
             args.root_dir.to_string(),
             remote_name,
             args.bandwidth_limit.to_string(),
             args.remote_name_filter_regex.clone(),
         );
-        Ok(BuildStorageResult { storage, persist_remote })
+        Ok(BuildStorageResult { storage: RepoStorage::Ffa(storage), persist_remote })
+    }
+
+    async fn list_remotes(&self, storage: RepoStorage) -> Result<Vec<String>> {
+        match storage {
+            RepoStorage::Ffa(storage) => storage.remotes().await,
+            RepoStorage::NewRepo(_) => unreachable!("new-repo storage passed to ffa repo"),
+        }
     }
 
     #[instrument(level = "debug", name = "repo.load_app_list", skip(storage, _http_client, cancellation_token), fields(layout = %self.id()))]
     async fn load_app_list(
         &self,
-        storage: RcloneStorage,
+        storage: RepoStorage,
         list_path: String,
         cache_dir: &Path,
         _http_client: &reqwest::Client,
         cancellation_token: CancellationToken,
     ) -> Result<RepoAppList> {
+        let RepoStorage::Ffa(storage) = storage else {
+            unreachable!("new-repo storage passed to ffa repo");
+        };
         let blacklist_handle = if let Some(blacklist_path) =
             self.donation_blacklist_path.as_deref().filter(|p| !p.is_empty())
         {
@@ -136,8 +167,66 @@ impl Repo for FFARepo {
         Ok(RepoAppList { apps: cloud_apps, donation_blacklist })
     }
 
-    fn source_for_download(&self, app_full_name: &str) -> String {
-        app_full_name.to_string()
+    async fn download_app(
+        &self,
+        storage: RepoStorage,
+        app_full_name: &str,
+        destination_dir: &Path,
+        _cache_dir: &Path,
+        _http_client: &reqwest::Client,
+        progress_tx: UnboundedSender<TransferStats>,
+        cancellation_token: CancellationToken,
+    ) -> Result<()> {
+        let RepoStorage::Ffa(storage) = storage else {
+            unreachable!("new-repo storage passed to ffa repo");
+        };
+        storage
+            .download_dir_with_stats(
+                app_full_name.to_string(),
+                destination_dir.to_path_buf(),
+                progress_tx,
+                cancellation_token,
+            )
+            .await?;
+        Ok(())
+    }
+
+    async fn upload_donation_archive(
+        &self,
+        storage: RepoStorage,
+        config: &DownloaderConfig,
+        archive_path: &Path,
+        stats_tx: Option<UnboundedSender<TransferStats>>,
+        cancellation_token: CancellationToken,
+    ) -> Result<()> {
+        let RepoStorage::Ffa(storage) = storage else {
+            unreachable!("new-repo storage passed to ffa repo");
+        };
+        let remote =
+            config.donation_remote_name.as_deref().filter(|s| !s.is_empty()).ok_or_else(|| {
+                anyhow!("App donation remote is not configured in downloader.json")
+            })?;
+        let remote_path =
+            config.donation_remote_path.as_deref().filter(|s| !s.is_empty()).ok_or_else(|| {
+                anyhow!("App donation remote path is not configured in downloader.json")
+            })?;
+
+        ensure!(
+            archive_path.is_file(),
+            "Donation archive does not exist or is not a file: {}",
+            archive_path.display()
+        );
+
+        storage
+            .upload_file_to_remote(
+                archive_path,
+                remote,
+                remote_path,
+                stats_tx,
+                Some(cancellation_token),
+            )
+            .await
+            .context("Failed to upload donation archive")
     }
 }
 

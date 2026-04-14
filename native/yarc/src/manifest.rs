@@ -99,6 +99,10 @@ impl ReleaseManifest {
         let expected = entries_by_path(&self.entries)?;
         let actual = entries_by_path(&actual_entries)?;
 
+        // TODO: remove this
+        println!("expected: {:#?}", expected);
+        println!("actual: {:#?}", actual);
+
         Ok(actual == expected)
     }
 

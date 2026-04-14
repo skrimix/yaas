@@ -7,7 +7,7 @@ use tracing::{Instrument, Span, debug, error, info, instrument, warn};
 
 use super::{InstallStepConfig, ProgressUpdate, TaskManager};
 use crate::{
-    adb::PackageName, downloader::RcloneTransferStats, models::signals::task::TaskStatus,
+    adb::PackageName, downloader::TransferStats, models::signals::task::TaskStatus,
     task::acquire_permit_or_cancel,
 };
 
@@ -45,7 +45,7 @@ impl TaskManager {
             message: "Starting download...".into(),
         });
 
-        let (tx, mut rx) = mpsc::unbounded_channel::<RcloneTransferStats>();
+        let (tx, mut rx) = mpsc::unbounded_channel::<TransferStats>();
 
         let mut download_task = {
             let downloader = self.downloader_manager.get().await.expect("downloader missing");

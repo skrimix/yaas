@@ -25,7 +25,8 @@ use yarc::{
 };
 
 use super::{
-    BuildStorageArgs, BuildStorageResult, Repo, RepoAppList, RepoCapabilities, RepoStorage,
+    BuildStorageArgs, BuildStorageResult, Repo, RepoAppList, RepoCapabilities, RepoDownloadResult,
+    RepoStorage,
 };
 use crate::{
     downloader::{AppDownloadProgress, TransferStats, config::DownloaderConfig, http_cache},
@@ -228,7 +229,7 @@ impl Repo for NewRepo {
         http_client: &reqwest::Client,
         progress_tx: UnboundedSender<AppDownloadProgress>,
         cancellation_token: CancellationToken,
-    ) -> Result<()> {
+    ) -> Result<RepoDownloadResult> {
         let RepoStorage::NewRepo(storage) = storage else {
             unreachable!("ffa storage passed to new-repo backend");
         };
@@ -315,7 +316,7 @@ impl Repo for NewRepo {
                         path = %destination_dir.display(),
                         "Skipping download because local files already match the latest manifest"
                     );
-                    return Ok(());
+                    return Ok(RepoDownloadResult { skipped: true });
                 }
                 Ok(false) => {
                     debug!(
@@ -437,7 +438,7 @@ impl Repo for NewRepo {
             }
         }
 
-        download_result
+        download_result.map(|()| RepoDownloadResult { skipped: false })
     }
 
     async fn upload_donation_archive(

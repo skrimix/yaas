@@ -590,7 +590,8 @@ impl Downloader {
         let _ = progress_tx.send(AppDownloadProgress::Status("Preparing download...".to_string()));
 
         let storage = self.storage.read().await.clone();
-        self.repo
+        let download_result = self
+            .repo
             .download_app(
                 storage,
                 &app_full_name,
@@ -602,18 +603,24 @@ impl Downloader {
             )
             .await?;
 
-        let installation_id = self.installation_id.clone();
-        tokio::spawn({
-            let http_client = self.http_client.clone();
-            async move {
-                if let Err(e) =
-                    cloud_api::track_download(&http_client, &installation_id, true_package).await
-                {
-                    warn!(error = e.as_ref() as &dyn Error, "Failed to send download track event");
+        if !download_result.skipped {
+            let installation_id = self.installation_id.clone();
+            tokio::spawn({
+                let http_client = self.http_client.clone();
+                async move {
+                    if let Err(e) =
+                        cloud_api::track_download(&http_client, &installation_id, true_package)
+                            .await
+                    {
+                        warn!(
+                            error = e.as_ref() as &dyn Error,
+                            "Failed to send download track event"
+                        );
+                    }
                 }
-            }
-            .instrument(info_span!("task_track_download"))
-        });
+                .instrument(info_span!("task_track_download"))
+            });
+        }
 
         // Prepare metadata inputs without holding long locks
         let cached = self.get_app_by_full_name(&app_full_name).await;

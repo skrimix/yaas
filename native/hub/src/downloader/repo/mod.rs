@@ -37,6 +37,11 @@ pub(super) struct RepoCapabilities {
     pub supports_donation_upload: bool,
 }
 
+#[derive(Debug, Clone, Copy, Default)]
+pub(super) struct RepoDownloadResult {
+    pub skipped: bool,
+}
+
 #[derive(Debug, Clone, Eq, PartialEq)]
 pub(super) enum RepoStorage {
     Ffa(RcloneStorage),
@@ -72,7 +77,7 @@ pub(super) trait Repo: Send + Sync {
         http_client: &reqwest::Client,
         progress_tx: UnboundedSender<AppDownloadProgress>,
         cancellation_token: CancellationToken,
-    ) -> Result<()>;
+    ) -> Result<RepoDownloadResult>;
 
     async fn upload_donation_archive(
         &self,

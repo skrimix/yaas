@@ -13,7 +13,8 @@ use tokio_util::sync::CancellationToken;
 use tracing::{Instrument, Span, debug, instrument, warn};
 
 use super::{
-    BuildStorageArgs, BuildStorageResult, Repo, RepoAppList, RepoCapabilities, RepoStorage,
+    BuildStorageArgs, BuildStorageResult, Repo, RepoAppList, RepoCapabilities, RepoDownloadResult,
+    RepoStorage,
 };
 use crate::{
     downloader::{
@@ -176,7 +177,7 @@ impl Repo for FFARepo {
         _http_client: &reqwest::Client,
         progress_tx: UnboundedSender<AppDownloadProgress>,
         cancellation_token: CancellationToken,
-    ) -> Result<()> {
+    ) -> Result<RepoDownloadResult> {
         let RepoStorage::Ffa(storage) = storage else {
             unreachable!("new-repo storage passed to ffa repo");
         };
@@ -196,7 +197,7 @@ impl Repo for FFARepo {
             )
             .await?;
         let _ = forward_progress.await;
-        Ok(())
+        Ok(RepoDownloadResult { skipped: false })
     }
 
     async fn upload_donation_archive(

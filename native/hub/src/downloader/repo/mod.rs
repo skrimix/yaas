@@ -7,7 +7,7 @@ use tokio::sync::mpsc::UnboundedSender;
 use tokio_util::sync::CancellationToken;
 
 use self::{ffa::FFARepo, new_repo::NewRepo};
-use super::{TransferStats, rclone::RcloneStorage};
+use super::{AppDownloadProgress, TransferStats, rclone::RcloneStorage};
 use crate::{
     downloader::config::{DownloaderConfig, RepoLayoutKind},
     models::CloudApp,
@@ -70,7 +70,7 @@ pub(super) trait Repo: Send + Sync {
         destination_dir: &Path,
         cache_dir: &Path,
         http_client: &reqwest::Client,
-        progress_tx: UnboundedSender<TransferStats>,
+        progress_tx: UnboundedSender<AppDownloadProgress>,
         cancellation_token: CancellationToken,
     ) -> Result<()>;
 

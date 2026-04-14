@@ -9,3 +9,9 @@ mod service;
 pub(crate) use service::Downloader;
 pub(crate) mod downloads_catalog;
 pub(crate) mod service_manager;
+
+#[derive(Debug, Clone)]
+pub(crate) enum AppDownloadProgress {
+    Status(String),
+    Transfer(TransferStats),
+}

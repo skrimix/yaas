@@ -17,7 +17,7 @@ use super::{
 };
 use crate::{
     downloader::{
-        TransferStats,
+        AppDownloadProgress, TransferStats,
         config::DownloaderConfig,
         rclone::{self, RcloneStorage},
     },
@@ -174,20 +174,28 @@ impl Repo for FFARepo {
         destination_dir: &Path,
         _cache_dir: &Path,
         _http_client: &reqwest::Client,
-        progress_tx: UnboundedSender<TransferStats>,
+        progress_tx: UnboundedSender<AppDownloadProgress>,
         cancellation_token: CancellationToken,
     ) -> Result<()> {
         let RepoStorage::Ffa(storage) = storage else {
             unreachable!("new-repo storage passed to ffa repo");
         };
+        let _ = progress_tx.send(AppDownloadProgress::Status("Downloading files...".to_string()));
+        let (stats_tx, mut stats_rx) = tokio::sync::mpsc::unbounded_channel::<TransferStats>();
+        let forward_progress = tokio::spawn(async move {
+            while let Some(stats) = stats_rx.recv().await {
+                let _ = progress_tx.send(AppDownloadProgress::Transfer(stats));
+            }
+        });
         storage
             .download_dir_with_stats(
                 app_full_name.to_string(),
                 destination_dir.to_path_buf(),
-                progress_tx,
+                stats_tx,
                 cancellation_token,
             )
             .await?;
+        let _ = forward_progress.await;
         Ok(())
     }
 

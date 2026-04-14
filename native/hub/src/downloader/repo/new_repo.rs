@@ -27,7 +27,7 @@ use super::{
     BuildStorageArgs, BuildStorageResult, Repo, RepoAppList, RepoCapabilities, RepoStorage,
 };
 use crate::{
-    downloader::{TransferStats, config::DownloaderConfig, http_cache},
+    downloader::{AppDownloadProgress, TransferStats, config::DownloaderConfig, http_cache},
     models::CloudApp,
 };
 
@@ -171,10 +171,15 @@ impl Repo for NewRepo {
             };
         storage.set_key(yarc_key).await;
 
-        let list_path =
-            cache_remote_file(http_client, &storage.list_url(), cache_dir, "new_repo/list.yarc")
-                .await
-                .context("Failed to cache NewRepo app list")?;
+        let list_path = cache_remote_file(
+            http_client,
+            &storage.list_url(),
+            cache_dir,
+            "new_repo/list.yarc",
+            &cancellation_token,
+        )
+        .await
+        .context("Failed to cache NewRepo app list")?;
         ensure_not_cancelled(&cancellation_token)?;
 
         let list_bytes = fs::read(&list_path)
@@ -215,7 +220,7 @@ impl Repo for NewRepo {
         destination_dir: &Path,
         cache_dir: &Path,
         http_client: &reqwest::Client,
-        progress_tx: UnboundedSender<TransferStats>,
+        progress_tx: UnboundedSender<AppDownloadProgress>,
         cancellation_token: CancellationToken,
     ) -> Result<()> {
         let RepoStorage::NewRepo(storage) = storage else {
@@ -223,6 +228,7 @@ impl Repo for NewRepo {
         };
 
         ensure_not_cancelled(&cancellation_token)?;
+        send_status(&progress_tx, "Resolving release...");
         let release = storage.release_for_download(app_full_name).await.ok_or_else(|| {
             anyhow!(
                 "No NewRepo release metadata found for `{app_full_name}`. Refresh the cloud app \
@@ -232,6 +238,7 @@ impl Repo for NewRepo {
         let yarc_key = match storage.current_key().await {
             Some(key) => key,
             None => {
+                send_status(&progress_tx, "Fetching decryption key...");
                 let key =
                     fetch_yarc_key(http_client, &storage.list_url(), &cancellation_token).await?;
                 storage.set_key(key).await;
@@ -240,14 +247,17 @@ impl Repo for NewRepo {
         };
 
         let manifest_rel_path = format!("new_repo/manifests/{}.yarc", release.manifest_hash);
+        send_status(&progress_tx, "Fetching manifest...");
         let manifest_path = cache_remote_file(
             http_client,
             &storage.manifest_url(&release.manifest_hash),
             cache_dir,
             &manifest_rel_path,
+            &cancellation_token,
         )
         .await
         .context("Failed to cache NewRepo manifest")?;
+        send_status(&progress_tx, "Decoding manifest...");
         let manifest_bytes = fs::read(&manifest_path)
             .await
             .with_context(|| format!("Failed to read {}", manifest_path.display()))?;
@@ -272,11 +282,13 @@ impl Repo for NewRepo {
 
         let temp_dir = unique_temp_dir(destination_parent, app_full_name);
         let download_result = async {
-            let response = http_client
-                .get(storage.blob_url(&manifest.yarc_id))
-                .send()
-                .await
-                .context("Failed to download NewRepo archive")?;
+            send_status(&progress_tx, "Requesting archive...");
+            let response = send_with_cancellation(
+                http_client.get(storage.blob_url(&manifest.yarc_id)),
+                &cancellation_token,
+            )
+            .await
+            .context("Failed to download NewRepo archive")?;
             let response = response.error_for_status().context("NewRepo archive request failed")?;
 
             let total_bytes = response.content_length().unwrap_or(manifest.yarc_size);
@@ -285,10 +297,12 @@ impl Repo for NewRepo {
                 .with_context(|| format!("Failed to create {}", temp_dir.display()))?;
 
             let (writer, reader) = tokio::io::duplex(256 * 1024);
+            send_status(&progress_tx, "Downloading archive...");
+            let transfer_progress_tx = progress_tx.clone();
             let stream_task = tokio::spawn(stream_archive_to_pipe(
                 response,
                 writer,
-                progress_tx,
+                transfer_progress_tx,
                 total_bytes,
                 cancellation_token.clone(),
             ));
@@ -306,10 +320,12 @@ impl Repo for NewRepo {
             }?;
 
             ensure_not_cancelled(&cancellation_token)?;
+            send_status(&progress_tx, "Restoring timestamps...");
             manifest
                 .apply_metadata_to_directory(&temp_dir)
                 .await
                 .context("Failed to restore extracted YARC metadata")?;
+            send_status(&progress_tx, "Verifying files...");
             ensure!(
                 manifest
                     .verify_directory(&temp_dir)
@@ -318,6 +334,7 @@ impl Repo for NewRepo {
                 "Downloaded archive contents did not match the manifest"
             );
 
+            send_status(&progress_tx, "Finalizing download...");
             replace_directory(&temp_dir, destination_dir).await
         }
         .await;
@@ -388,9 +405,7 @@ async fn fetch_yarc_key(
     cancellation_token: &CancellationToken,
 ) -> Result<[u8; 32]> {
     ensure_not_cancelled(cancellation_token)?;
-    let response = client
-        .head(url)
-        .send()
+    let response = send_with_cancellation(client.head(url), cancellation_token)
         .await
         .with_context(|| format!("Failed to fetch YARC key from {url}"))?;
     let response = response
@@ -416,6 +431,7 @@ async fn cache_remote_file(
     url: &str,
     cache_dir: &Path,
     relative_path: &str,
+    cancellation_token: &CancellationToken,
 ) -> Result<PathBuf> {
     let destination = cache_dir.join(relative_path);
     if let Some(parent) = destination.parent() {
@@ -423,16 +439,19 @@ async fn cache_remote_file(
             .await
             .with_context(|| format!("Failed to create {}", parent.display()))?;
     }
-    http_cache::update_file_cached(client, url, &destination, cache_dir, None)
-        .await
-        .with_context(|| format!("Failed to update cache for {url}"))?;
+    tokio::select! {
+        _ = cancellation_token.cancelled() => bail!("Operation cancelled"),
+        result = http_cache::update_file_cached(client, url, &destination, cache_dir, None) => {
+            result.with_context(|| format!("Failed to update cache for {url}"))?;
+        }
+    }
     Ok(destination)
 }
 
 async fn stream_archive_to_pipe(
     response: reqwest::Response,
     mut writer: DuplexStream,
-    progress_tx: UnboundedSender<TransferStats>,
+    progress_tx: UnboundedSender<AppDownloadProgress>,
     total_bytes: u64,
     cancellation_token: CancellationToken,
 ) -> Result<()> {
@@ -441,29 +460,58 @@ async fn stream_archive_to_pipe(
     let mut last_emit = 0_u128;
     let mut stream = response.bytes_stream();
 
-    while let Some(chunk) = stream.next().await {
-        ensure_not_cancelled(&cancellation_token)?;
+    loop {
+        let maybe_chunk = tokio::select! {
+            _ = cancellation_token.cancelled() => bail!("Operation cancelled"),
+            chunk = stream.next() => chunk,
+        };
+        let Some(chunk) = maybe_chunk else {
+            break;
+        };
         let chunk = chunk.context("Failed to stream NewRepo archive chunk")?;
-        writer.write_all(&chunk).await.context("Failed to pipe NewRepo archive chunk")?;
+        tokio::select! {
+            _ = cancellation_token.cancelled() => bail!("Operation cancelled"),
+            result = writer.write_all(&chunk) => {
+                result.context("Failed to pipe NewRepo archive chunk")?;
+            }
+        }
         downloaded_bytes += chunk.len() as u64;
 
         let elapsed = started_at.elapsed();
         let elapsed_millis = elapsed.as_millis();
         if elapsed_millis.saturating_sub(last_emit) >= STREAM_PROGRESS_INTERVAL_MILLIS {
             let speed = speed_bytes_per_sec(downloaded_bytes, elapsed_millis);
-            let _ = progress_tx.send(TransferStats { bytes: downloaded_bytes, total_bytes, speed });
+            let _ = progress_tx.send(AppDownloadProgress::Transfer(TransferStats {
+                bytes: downloaded_bytes,
+                total_bytes,
+                speed,
+            }));
             last_emit = elapsed_millis;
         }
     }
 
     let final_speed = speed_bytes_per_sec(downloaded_bytes, started_at.elapsed().as_millis());
-    let _ = progress_tx.send(TransferStats {
+    let _ = progress_tx.send(AppDownloadProgress::Transfer(TransferStats {
         bytes: downloaded_bytes,
         total_bytes,
         speed: final_speed,
-    });
+    }));
     writer.shutdown().await.context("Failed to finalize NewRepo archive stream")?;
     Ok(())
+}
+
+async fn send_with_cancellation(
+    request: reqwest::RequestBuilder,
+    cancellation_token: &CancellationToken,
+) -> Result<reqwest::Response> {
+    tokio::select! {
+        _ = cancellation_token.cancelled() => bail!("Operation cancelled"),
+        response = request.send() => Ok(response?),
+    }
+}
+
+fn send_status(progress_tx: &UnboundedSender<AppDownloadProgress>, status: impl Into<String>) {
+    let _ = progress_tx.send(AppDownloadProgress::Status(status.into()));
 }
 
 fn speed_bytes_per_sec(downloaded_bytes: u64, elapsed_millis: u128) -> u64 {

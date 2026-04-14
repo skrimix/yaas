@@ -7,7 +7,7 @@ use tracing::{Instrument, Span, debug, error, info, instrument, warn};
 
 use super::{InstallStepConfig, ProgressUpdate, TaskManager};
 use crate::{
-    adb::PackageName, downloader::TransferStats, models::signals::task::TaskStatus,
+    adb::PackageName, downloader::AppDownloadProgress, models::signals::task::TaskStatus,
     task::acquire_permit_or_cancel,
 };
 
@@ -45,7 +45,7 @@ impl TaskManager {
             message: "Starting download...".into(),
         });
 
-        let (tx, mut rx) = mpsc::unbounded_channel::<TransferStats>();
+        let (tx, mut rx) = mpsc::unbounded_channel::<AppDownloadProgress>();
 
         let mut download_task = {
             let downloader = self.downloader_manager.get().await.expect("downloader missing");
@@ -76,7 +76,31 @@ impl TaskManager {
                     info!("Download task completed");
                     download_result = Some(app_path);
                 }
+                _ = token.cancelled() => {
+                    warn!("Cancelling active download task");
+                    update_progress(ProgressUpdate {
+                        status: TaskStatus::Running,
+                        step_number,
+                        step_progress: None,
+                        message: "Cancelling download...".into(),
+                    });
+                    download_task.abort();
+                    let _ = download_task.await;
+                    return Err(anyhow!("Task cancelled during download"));
+                }
                 Some(progress) = rx.recv() => {
+                    let progress = match progress {
+                        AppDownloadProgress::Status(message) => {
+                            update_progress(ProgressUpdate {
+                                status: TaskStatus::Running,
+                                step_number,
+                                step_progress: None,
+                                message,
+                            });
+                            continue;
+                        }
+                        AppDownloadProgress::Transfer(progress) => progress,
+                    };
                     if unknown_progress {
                         // We can only report the speed, skip everything else
                         update_progress(ProgressUpdate {

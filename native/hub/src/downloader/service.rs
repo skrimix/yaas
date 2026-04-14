@@ -14,7 +14,10 @@ use tracing::{Instrument, debug, error, info, info_span, instrument, warn};
 
 use crate::{
     adb::PackageName,
-    downloader::{TransferStats, cloud_api, config::DownloaderConfig, download_metadata, repo},
+    downloader::{
+        AppDownloadProgress, TransferStats, cloud_api, config::DownloaderConfig, download_metadata,
+        repo,
+    },
     models::{
         CloudApp, Settings,
         signals::{
@@ -579,11 +582,12 @@ impl Downloader {
         &self,
         app_full_name: String,
         true_package: PackageName,
-        progress_tx: UnboundedSender<TransferStats>,
+        progress_tx: UnboundedSender<AppDownloadProgress>,
         cancellation_token: CancellationToken,
     ) -> Result<String> {
         let dst_dir = self.download_dir.read().await.join(&app_full_name);
         info!(app = %app_full_name, dest = %dst_dir.display(), "Starting app download");
+        let _ = progress_tx.send(AppDownloadProgress::Status("Preparing download...".to_string()));
 
         let storage = self.storage.read().await.clone();
         self.repo
@@ -593,21 +597,28 @@ impl Downloader {
                 &dst_dir,
                 &self.cache_dir,
                 &self.http_client,
-                progress_tx,
+                progress_tx.clone(),
                 cancellation_token.clone(),
             )
             .await?;
 
         let installation_id = self.installation_id.clone();
-        if let Err(e) =
-            cloud_api::track_download(&self.http_client, &installation_id, true_package).await
-        {
-            warn!(error = e.as_ref() as &dyn Error, "Failed to report download");
-        }
+        tokio::spawn({
+            let http_client = self.http_client.clone();
+            async move {
+                if let Err(e) =
+                    cloud_api::track_download(&http_client, &installation_id, true_package).await
+                {
+                    warn!(error = e.as_ref() as &dyn Error, "Failed to send download track event");
+                }
+            }
+            .instrument(info_span!("task_track_download"))
+        });
 
         // Prepare metadata inputs without holding long locks
         let cached = self.get_app_by_full_name(&app_full_name).await;
         let write_legacy = *self.write_legacy_release_json.read().await;
+        let _ = progress_tx.send(AppDownloadProgress::Status("Writing metadata...".to_string()));
 
         if let Err(e) = download_metadata::write_metadata(
             cached.clone(),

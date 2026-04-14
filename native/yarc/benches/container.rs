@@ -115,7 +115,7 @@ const SOURCE_SHAPED_RELEASES: &[ReleaseFixtureSpec] = &[
             },
             FixtureFileSpec {
                 path: "addons/pkg.tools.installer.apk",
-                size_bytes: 1 * MIB,
+                size_bytes: MIB,
             },
             FixtureFileSpec {
                 path: "pkg.tools.shell.apk",

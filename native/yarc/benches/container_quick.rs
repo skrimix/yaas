@@ -39,7 +39,7 @@ const SOURCE_SHAPED_RELEASES: &[ReleaseFixtureSpec] = &[
             },
             FixtureFileSpec {
                 path: "pkg.sample.atlas.apk",
-                size_bytes: 1 * MIB,
+                size_bytes: MIB,
             },
         ],
     },
@@ -52,7 +52,7 @@ const SOURCE_SHAPED_RELEASES: &[ReleaseFixtureSpec] = &[
             },
             FixtureFileSpec {
                 path: "pkg.sample.beacon.apk",
-                size_bytes: 1 * MIB,
+                size_bytes: MIB,
             },
         ],
     },
@@ -65,7 +65,7 @@ const SOURCE_SHAPED_RELEASES: &[ReleaseFixtureSpec] = &[
             },
             FixtureFileSpec {
                 path: "pkg.sample.cinder.apk",
-                size_bytes: 1 * MIB,
+                size_bytes: MIB,
             },
             FixtureFileSpec {
                 path: "EMPTY.txt",
@@ -82,7 +82,7 @@ const SOURCE_SHAPED_RELEASES: &[ReleaseFixtureSpec] = &[
             },
             FixtureFileSpec {
                 path: "pkg.sample.drift.apk",
-                size_bytes: 1 * MIB,
+                size_bytes: MIB,
             },
         ],
     },
@@ -120,7 +120,7 @@ const SOURCE_SHAPED_RELEASES: &[ReleaseFixtureSpec] = &[
             },
             FixtureFileSpec {
                 path: "pkg.tools.shell.apk",
-                size_bytes: 1 * MIB,
+                size_bytes: MIB,
             },
             FixtureFileSpec {
                 path: "README.txt",
@@ -133,7 +133,7 @@ const SOURCE_SHAPED_RELEASES: &[ReleaseFixtureSpec] = &[
         files: &[
             FixtureFileSpec {
                 path: "StarterLauncher-3.2.0.apk",
-                size_bytes: 1 * MIB,
+                size_bytes: MIB,
             },
             FixtureFileSpec {
                 path: "NOTES.txt",

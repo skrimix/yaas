@@ -77,7 +77,7 @@ impl TaskManager {
                     download_result = Some(app_path);
                 }
                 _ = token.cancelled() => {
-                    warn!("Cancelling active download task");
+                    info!(app_name = %app_full_name, "Cancelling active download task");
                     update_progress(ProgressUpdate {
                         status: TaskStatus::Running,
                         step_number,
@@ -86,11 +86,13 @@ impl TaskManager {
                     });
                     download_task.abort();
                     let _ = download_task.await;
+                    debug!(app_name = %app_full_name, "Download task abort finished");
                     return Err(anyhow!("Task cancelled during download"));
                 }
                 Some(progress) = rx.recv() => {
                     let progress = match progress {
                         AppDownloadProgress::Status(message) => {
+                            debug!(app_name = %app_full_name, status_message = %message, "Download phase updated");
                             update_progress(ProgressUpdate {
                                 status: TaskStatus::Running,
                                 step_number,

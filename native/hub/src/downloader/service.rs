@@ -5,8 +5,7 @@ use std::{
     time::Duration,
 };
 
-use anyhow::{Context, Result, anyhow, bail, ensure};
-use rand::seq::IndexedRandom;
+use anyhow::{Context, Result, anyhow, ensure};
 use rinf::{DartSignal, RustSignal};
 use tokio::sync::{Mutex, RwLock, mpsc::UnboundedSender};
 use tokio_stream::{StreamExt, wrappers::WatchStream};
@@ -16,11 +15,8 @@ use tracing::{Instrument, debug, error, info, info_span, instrument, warn};
 use crate::{
     adb::PackageName,
     downloader::{
-        RcloneTransferStats, cloud_api,
-        config::{DownloaderConfig, RepoLayoutKind},
-        download_metadata,
-        rclone::{self, RcloneStorage},
-        repo,
+        RcloneTransferStats, cloud_api, config::DownloaderConfig, download_metadata,
+        rclone::RcloneStorage, repo,
     },
     models::{
         CloudApp, Settings,
@@ -89,37 +85,15 @@ impl Downloader {
             );
         }
 
-        let mut remote_for_init = settings.rclone_remote_name.clone();
-        if matches!(config.layout, RepoLayoutKind::Ffa) {
-            remote_for_init = Self::pick_remote_name(
-                &rclone_path,
-                &rclone_config_path,
-                config.remote_name_filter_regex.as_deref(),
-                &remote_for_init,
-                !config.disable_randomize_remote,
-            )
-            .await?;
-
-            if remote_for_init != settings.rclone_remote_name {
-                debug!(
-                    old = settings.rclone_remote_name,
-                    new = remote_for_init,
-                    "Remote name changed on init, persisting to settings"
-                );
-                let mut updated = settings.clone();
-                updated.rclone_remote_name = remote_for_init.clone();
-                let _ = settings_handler.save_settings(&updated);
-            }
-        }
-
         let built = repo
             .build_storage(repo::BuildStorageArgs {
                 rclone_path: &rclone_path,
                 rclone_config_path: &rclone_config_path,
                 root_dir: &config.root_dir,
-                remote_name: &remote_for_init,
+                remote_name: &settings.rclone_remote_name,
                 bandwidth_limit: &settings.bandwidth_limit,
                 remote_name_filter_regex: config.remote_name_filter_regex.clone(),
+                allow_randomize_remote: !config.disable_randomize_remote,
             })
             .await?;
         // If the repo asked us to persist a remote, update settings
@@ -186,43 +160,16 @@ impl Downloader {
                             debug!(?settings, "New settings");
 
                             // Rebuild storage on settings changes, do not randomize the remote
-                            let mut chosen_remote = settings.rclone_remote_name.clone();
-                            if matches!(handle.config.layout, RepoLayoutKind::Ffa) {
-                                match Self::pick_remote_name(
-                                    &handle.rclone_path,
-                                    &handle.rclone_config_path,
-                                    handle.config.remote_name_filter_regex.as_deref(),
-                                    &chosen_remote,
-                                    false,
-                                )
-                                .await
-                                {
-                                    Ok(resolved) => {
-                                        if resolved != chosen_remote {
-                                            chosen_remote = resolved.clone();
-                                            let mut updated = settings.clone();
-                                            updated.rclone_remote_name = resolved;
-                                            let _ = settings_handler.save_settings(&updated);
-                                        }
-                                    }
-                                    Err(e) => {
-                                        error!(
-                                            error = e.as_ref() as &dyn Error,
-                                            "Remote list is empty after settings change"
-                                        );
-                                    }
-                                }
-                            }
-
                             let built = handle
                                 .repo
                                 .build_storage(repo::BuildStorageArgs {
                                     rclone_path: &handle.rclone_path,
                                     rclone_config_path: &handle.rclone_config_path,
                                     root_dir: &handle.root_dir,
-                                    remote_name: &chosen_remote,
+                                    remote_name: &settings.rclone_remote_name,
                                     bandwidth_limit: &settings.bandwidth_limit,
                                     remote_name_filter_regex: handle.config.remote_name_filter_regex.clone(),
+                                    allow_randomize_remote: false,
                                 })
                                 .await;
 
@@ -319,34 +266,6 @@ impl Downloader {
         });
 
         Ok(handle)
-    }
-
-    #[instrument(level = "debug", err)]
-    async fn pick_remote_name(
-        rclone_path: &Path,
-        rclone_config_path: &Path,
-        remote_filter_regex: Option<&str>,
-        current_remote: &str,
-        allow_randomize: bool,
-    ) -> Result<String> {
-        let remotes =
-            rclone::list_remotes(rclone_path, rclone_config_path, remote_filter_regex).await?;
-
-        if remotes.is_empty() {
-            bail!("Remote list is empty");
-        }
-
-        let mut chosen = current_remote.to_string();
-        if allow_randomize {
-            let mut rng = rand::rng();
-            if let Some(choice) = remotes.choose(&mut rng) {
-                chosen = choice.clone();
-            }
-        } else if remotes.iter().all(|r| r != current_remote) {
-            chosen = remotes.first().cloned().unwrap_or_else(|| current_remote.to_string());
-        }
-
-        Ok(chosen)
     }
 
     /// Returns the cached CloudApp (if any) that matches the given full name

@@ -1,77 +1,22 @@
-use std::{collections::HashSet, error::Error, path::Path, sync::Arc};
+use std::{collections::HashSet, error::Error, path::Path};
 
-use anyhow::{Context, Result};
+use anyhow::{Context, Result, bail};
 use async_trait::async_trait;
 use derive_more::Debug;
 use futures::StreamExt as _;
+use rand::seq::IndexedRandom;
 use tokio::fs::{self, File};
 use tokio_util::sync::CancellationToken;
 use tracing::{Instrument, Span, debug, instrument, warn};
 
-use super::rclone::RcloneStorage;
+use super::{BuildStorageArgs, BuildStorageResult, Repo, RepoAppList};
 use crate::{
-    downloader::config::{DownloaderConfig, RepoLayoutKind},
+    downloader::{
+        config::DownloaderConfig,
+        rclone::{self, RcloneStorage},
+    },
     models::CloudApp,
 };
-
-#[derive(Debug)]
-pub(super) struct BuildStorageResult {
-    pub storage: RcloneStorage,
-    /// If Some, Downloader should persist this remote name into settings.
-    pub persist_remote: Option<String>,
-}
-
-#[derive(Debug)]
-pub(super) struct RepoAppList {
-    pub apps: Vec<CloudApp>,
-    /// Package names that repo doesn't want donations for.
-    pub donation_blacklist: Vec<String>,
-}
-
-/// High-level operations a repository must implement.
-#[async_trait]
-pub(super) trait Repo: Send + Sync {
-    fn id(&self) -> &'static str;
-
-    async fn build_storage(&self, args: BuildStorageArgs<'_>) -> Result<BuildStorageResult>;
-
-    async fn load_app_list(
-        &self,
-        storage: RcloneStorage,
-        list_path: String,
-        cache_dir: &Path,
-        http_client: &reqwest::Client,
-        cancellation_token: CancellationToken,
-    ) -> Result<RepoAppList>;
-
-    /// Source path under the root directory for download.
-    fn source_for_download(&self, app_full_name: &str) -> String;
-
-    /// If the repo generates its own rclone config at runtime, return the
-    /// suggested filename to be used. Otherwise None.
-    fn generated_config_filename(&self) -> Option<&'static str> {
-        None
-    }
-}
-
-/// Factory: choose a concrete repo based on config.
-pub(super) fn make_repo_from_config(cfg: &DownloaderConfig) -> Arc<dyn Repo> {
-    match cfg.layout {
-        RepoLayoutKind::Ffa => Arc::new(FFARepo::from_config(cfg)),
-    }
-}
-
-/// Arguments for building storage, passed to repo implementations.
-#[derive(Debug)]
-pub(super) struct BuildStorageArgs<'a> {
-    pub rclone_path: &'a Path,
-    pub rclone_config_path: &'a Path,
-    pub root_dir: &'a str,
-    /// Remote selected by Downloader. Can be overridden by repo.
-    pub remote_name: &'a str,
-    pub bandwidth_limit: &'a str,
-    pub remote_name_filter_regex: Option<String>,
-}
 
 /// FFA layout – direct files and list under a configurable remote/root.
 #[derive(Debug, Clone, Default)]
@@ -80,7 +25,7 @@ pub(super) struct FFARepo {
 }
 
 impl FFARepo {
-    fn from_config(cfg: &DownloaderConfig) -> Self {
+    pub(super) fn from_config(cfg: &DownloaderConfig) -> Self {
         Self { donation_blacklist_path: cfg.donation_blacklist_path.clone() }
     }
 }
@@ -94,15 +39,26 @@ impl Repo for FFARepo {
     #[instrument(level = "debug", name = "repo.build_storage", fields(layout = %self.id()))]
     async fn build_storage(&self, args: BuildStorageArgs<'_>) -> Result<BuildStorageResult> {
         debug!("Using repository layout: FFA");
+
+        let remote_name = pick_remote_name(
+            args.rclone_path,
+            args.rclone_config_path,
+            args.remote_name_filter_regex.as_deref(),
+            args.remote_name,
+            args.allow_randomize_remote,
+        )
+        .await?;
+        let persist_remote = (remote_name != args.remote_name).then(|| remote_name.clone());
+
         let storage = RcloneStorage::new(
             args.rclone_path.to_path_buf(),
             args.rclone_config_path.to_path_buf(),
             args.root_dir.to_string(),
-            args.remote_name.to_string(),
+            remote_name,
             args.bandwidth_limit.to_string(),
             args.remote_name_filter_regex.clone(),
         );
-        Ok(BuildStorageResult { storage, persist_remote: None })
+        Ok(BuildStorageResult { storage, persist_remote })
     }
 
     #[instrument(level = "debug", name = "repo.load_app_list", skip(storage, _http_client, cancellation_token), fields(layout = %self.id()))]
@@ -183,6 +139,34 @@ impl Repo for FFARepo {
     fn source_for_download(&self, app_full_name: &str) -> String {
         app_full_name.to_string()
     }
+}
+
+#[instrument(level = "debug", err)]
+async fn pick_remote_name(
+    rclone_path: &Path,
+    rclone_config_path: &Path,
+    remote_filter_regex: Option<&str>,
+    current_remote: &str,
+    allow_randomize: bool,
+) -> Result<String> {
+    let remotes =
+        rclone::list_remotes(rclone_path, rclone_config_path, remote_filter_regex).await?;
+
+    if remotes.is_empty() {
+        bail!("Remote list is empty");
+    }
+
+    let mut chosen = current_remote.to_string();
+    if allow_randomize {
+        let mut rng = rand::rng();
+        if let Some(choice) = remotes.choose(&mut rng) {
+            chosen = choice.clone();
+        }
+    } else if remotes.iter().all(|r| r != current_remote) {
+        chosen = remotes.first().cloned().unwrap_or_else(|| current_remote.to_string());
+    }
+
+    Ok(chosen)
 }
 
 #[instrument(

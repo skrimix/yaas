@@ -16,7 +16,7 @@ use tokio::{
     sync::{Mutex, mpsc::UnboundedSender},
 };
 use tokio_util::sync::CancellationToken;
-use tracing::{debug, instrument, warn};
+use tracing::{instrument, warn};
 use yarc::{
     app_list::{AppList, AppRelease},
     container::YarcReader,
@@ -306,7 +306,10 @@ impl Repo for NewRepo {
             }?;
 
             ensure_not_cancelled(&cancellation_token)?;
-            debug!(manifest = ?manifest, temp_dir = %temp_dir.display(), "Verifying extracted YARC archive");
+            manifest
+                .apply_metadata_to_directory(&temp_dir)
+                .await
+                .context("Failed to restore extracted YARC metadata")?;
             ensure!(
                 manifest
                     .verify_directory(&temp_dir)

@@ -3,6 +3,7 @@ use std::io::{self, ErrorKind};
 use std::path::{Component, Path, PathBuf};
 use std::time::UNIX_EPOCH;
 
+use filetime::FileTime;
 use serde::{Deserialize, Serialize};
 use tokio::fs;
 
@@ -99,11 +100,39 @@ impl ReleaseManifest {
         let expected = entries_by_path(&self.entries)?;
         let actual = entries_by_path(&actual_entries)?;
 
-        // TODO: remove this
-        println!("expected: {:#?}", expected);
-        println!("actual: {:#?}", actual);
-
         Ok(actual == expected)
+    }
+
+    pub async fn apply_metadata_to_directory(&self, directory: impl AsRef<Path>) -> io::Result<()> {
+        self.validate()?;
+        let root = directory.as_ref().to_path_buf();
+
+        let mut directories = Vec::new();
+        for entry in &self.entries {
+            match entry {
+                ManifestEntry::File { path, mtime, .. } => {
+                    apply_entry_mtime(root.join(path), *mtime).await?;
+                }
+                ManifestEntry::Directory { path, mtime } => {
+                    directories.push((root.join(path), *mtime));
+                }
+            }
+        }
+
+        directories.sort_by(|left, right| {
+            right
+                .0
+                .components()
+                .count()
+                .cmp(&left.0.components().count())
+                .then_with(|| left.0.cmp(&right.0))
+        });
+
+        for (path, mtime) in directories {
+            apply_entry_mtime(path, mtime).await?;
+        }
+
+        Ok(())
     }
 
     fn validate(&self) -> io::Result<()> {
@@ -284,6 +313,19 @@ fn require_directory_yarc(yarc_summary: &YarcWriteSummary) -> io::Result<()> {
     Ok(())
 }
 
+async fn apply_entry_mtime(path: PathBuf, mtime: u64) -> io::Result<()> {
+    let file_time = FileTime::from_unix_time(
+        i64::try_from(mtime).map_err(|_| invalid_data("manifest mtime does not fit in i64"))?,
+        0,
+    );
+
+    tokio::task::spawn_blocking(move || filetime::set_file_mtime(&path, file_time))
+        .await
+        .map_err(|err| io::Error::other(format!("failed to join mtime task: {err}")))??;
+
+    Ok(())
+}
+
 fn invalid_input(message: &'static str) -> io::Error {
     io::Error::new(ErrorKind::InvalidInput, message)
 }
@@ -377,6 +419,34 @@ mod tests {
         assert_eq!(decoded, manifest);
 
         let _ = fs::remove_dir_all(&root).await;
+        Ok(())
+    }
+
+    #[tokio::test]
+    async fn apply_metadata_restores_extracted_directory_timestamps() -> io::Result<()> {
+        let source = unique_test_path("manifest-apply-metadata-source");
+        let target = unique_test_path("manifest-apply-metadata-target");
+        fs::create_dir_all(source.join("subdir")).await?;
+        fs::write(source.join("alpha.txt"), b"alpha").await?;
+        fs::write(source.join("subdir").join("beta.txt"), b"beta").await?;
+        normalize_test_tree_timestamps(&source)?;
+
+        let writer = YarcWriter::new([33; 32], 12);
+        let directory_yarc = writer.archive_directory(&source, Vec::new()).await?;
+        let manifest =
+            ReleaseManifest::build("release-key", "pkg", &source, &directory_yarc.summary).await?;
+
+        YarcReader::new([33; 32])
+            .extract_to_directory(std::io::Cursor::new(directory_yarc.out), &target)
+            .await?;
+
+        assert!(!manifest.verify_directory(&target).await?);
+
+        manifest.apply_metadata_to_directory(&target).await?;
+        assert!(manifest.verify_directory(&target).await?);
+
+        let _ = fs::remove_dir_all(&source).await;
+        let _ = fs::remove_dir_all(&target).await;
         Ok(())
     }
 

@@ -8,6 +8,7 @@ async-compression = { version = "0.4", features = ["tokio", "zstd"] }
 async-tar = { version = "0.6", default-features = false, features = ["runtime-tokio"] }
 blake3 = "1.8"
 chacha20poly1305 = { version = "0.10", features = ["std", "stream"] }
+filetime = "0.2"
 getrandom = "0.4"
 hex = "0.4"
 serde = { version = "1.0", features = ["derive"] }
@@ -19,7 +20,6 @@ zerocopy-derive = "0.8"
 
 [dev-dependencies]
 criterion = { version = "0.8", features = ["async_tokio", "html_reports"] }
-filetime = "0.2"
 tempfile = "3"
 
 [[bench]]

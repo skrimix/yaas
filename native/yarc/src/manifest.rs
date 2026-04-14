@@ -94,8 +94,19 @@ impl ReleaseManifest {
     }
 
     pub async fn verify_directory(&self, directory: impl AsRef<Path>) -> io::Result<bool> {
+        self.verify_directory_ignoring_paths(directory, &[]).await
+    }
+
+    pub async fn verify_directory_ignoring_paths(
+        &self,
+        directory: impl AsRef<Path>,
+        ignored_paths: &[&str],
+    ) -> io::Result<bool> {
         self.validate()?;
-        let actual_entries = collect_manifest_entries(directory.as_ref()).await?;
+        let mut actual_entries = collect_manifest_entries(directory.as_ref()).await?;
+        if !ignored_paths.is_empty() {
+            actual_entries.retain(|entry| !ignored_paths.contains(&entry_path(entry)));
+        }
 
         let expected = entries_by_path(&self.entries)?;
         let actual = entries_by_path(&actual_entries)?;
@@ -569,6 +580,32 @@ mod tests {
 
         assert_eq!(err.kind(), ErrorKind::InvalidData);
         assert_eq!(err.to_string(), "duplicate manifest entry path: alpha.txt");
+
+        let _ = fs::remove_dir_all(&root).await;
+        Ok(())
+    }
+
+    #[tokio::test]
+    async fn verify_directory_can_ignore_local_metadata_files() -> io::Result<()> {
+        let root = unique_test_path("manifest-ignore-local-metadata");
+        fs::create_dir_all(root.join("subdir")).await?;
+        fs::write(root.join("alpha.txt"), b"alpha").await?;
+        fs::write(root.join("subdir").join("beta.txt"), b"beta").await?;
+        normalize_test_tree_timestamps(&root)?;
+
+        let writer = YarcWriter::new([9; 32], 12);
+        let yarc = writer.archive_directory(&root, Vec::new()).await?;
+        let manifest = ReleaseManifest::build("release-key", "pkg", &root, &yarc.summary).await?;
+
+        fs::write(root.join("metadata.json"), b"{}").await?;
+        fs::write(root.join("release.json"), b"{}").await?;
+
+        assert!(!manifest.verify_directory(&root).await?);
+        assert!(
+            manifest
+                .verify_directory_ignoring_paths(&root, &["metadata.json", "release.json"])
+                .await?
+        );
 
         let _ = fs::remove_dir_all(&root).await;
         Ok(())

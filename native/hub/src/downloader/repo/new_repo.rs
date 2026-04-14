@@ -35,6 +35,7 @@ use crate::{
 const YAAS_KEY_HEADER: &str = "x-yaas-key";
 const STREAM_PROGRESS_INTERVAL_MILLIS: u128 = 500;
 const SLOW_NETWORK_WARNING_THRESHOLD: Duration = Duration::from_secs(8);
+const LOCAL_DOWNLOAD_METADATA_PATHS: [&str; 2] = ["metadata.json", "release.json"];
 
 #[derive(Debug, Default)]
 struct NewRepoRuntime {
@@ -298,6 +299,39 @@ impl Repo for NewRepo {
             plaintext_size = manifest.plaintext_size,
             "Decoded manifest"
         );
+
+        if destination_dir.exists() {
+            send_status(&progress_tx, "Checking existing files...");
+            debug!(
+                path = %destination_dir.display(),
+                "Checking existing download against manifest"
+            );
+            match manifest
+                .verify_directory_ignoring_paths(destination_dir, &LOCAL_DOWNLOAD_METADATA_PATHS)
+                .await
+            {
+                Ok(true) => {
+                    info!(
+                        path = %destination_dir.display(),
+                        "Skipping download because local files already match the latest manifest"
+                    );
+                    return Ok(());
+                }
+                Ok(false) => {
+                    debug!(
+                        path = %destination_dir.display(),
+                        "Existing download does not match the latest manifest, continuing with download"
+                    );
+                }
+                Err(error) => {
+                    warn!(
+                        path = %destination_dir.display(),
+                        error = &error as &dyn Error,
+                        "Failed to verify existing download, continuing with download"
+                    );
+                }
+            }
+        }
 
         let destination_parent = destination_dir
             .parent()

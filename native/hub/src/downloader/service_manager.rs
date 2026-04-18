@@ -49,6 +49,109 @@ struct LoadedManagedConfigs {
     error: Option<String>,
 }
 
+struct ResolvedManagedConfigs {
+    configs: Vec<DownloaderConfig>,
+    active_config_id: Option<String>,
+    error: Option<String>,
+}
+
+impl ResolvedManagedConfigs {
+    fn load(
+        app_dir: &Path,
+        settings_handler: &Arc<SettingsHandler>,
+        initial_error: Option<String>,
+    ) -> Result<Self> {
+        let loaded = load_managed_configs(app_dir)?;
+        let active_config_id =
+            resolve_active_config_id(&loaded.configs, current_active_config_id(settings_handler));
+
+        Ok(Self {
+            configs: loaded.configs,
+            active_config_id,
+            error: combine_errors(initial_error, loaded.error),
+        })
+    }
+
+    fn is_empty(&self) -> bool {
+        self.configs.is_empty()
+    }
+
+    fn active_config(&self) -> Option<DownloaderConfig> {
+        let active_config_id = self.active_config_id.as_deref()?;
+        self.configs.iter().find(|cfg| cfg.id == active_config_id).cloned()
+    }
+
+    fn persist_active_config(&self, settings_handler: &Arc<SettingsHandler>) -> Result<()> {
+        if self.active_config_id.is_none() {
+            return Ok(());
+        }
+
+        let current_active_id = current_active_config_id(settings_handler);
+        if self.active_config_id.as_deref() == Some(current_active_id.as_str()) {
+            return Ok(());
+        }
+
+        save_active_config_id(settings_handler, self.active_config_id.as_deref())
+    }
+
+    fn send_changed(&self, refreshing: bool) {
+        send_configs_changed(
+            &self.configs,
+            self.active_config_id.as_deref(),
+            refreshing,
+            self.error.clone(),
+        );
+    }
+}
+
+struct DownloaderAvailabilityReporter {
+    config_id: String,
+    is_donation_configured: bool,
+    supports_remote_selection: bool,
+    supports_bandwidth_limit: bool,
+}
+
+impl DownloaderAvailabilityReporter {
+    fn new(cfg: &DownloaderConfig, capabilities: repo::RepoCapabilities) -> Self {
+        Self {
+            config_id: cfg.id.clone(),
+            is_donation_configured: capabilities.supports_donation_upload
+                && cfg.donation_remote_name.is_some()
+                && cfg.donation_remote_path.is_some(),
+            supports_remote_selection: capabilities.supports_remote_selection,
+            supports_bandwidth_limit: capabilities.supports_bandwidth_limit,
+        }
+    }
+
+    fn signal(&self) -> DownloaderAvailabilityChanged {
+        DownloaderAvailabilityChanged {
+            config_id: Some(self.config_id.clone()),
+            is_donation_configured: self.is_donation_configured,
+            supports_remote_selection: self.supports_remote_selection,
+            supports_bandwidth_limit: self.supports_bandwidth_limit,
+            ..Default::default()
+        }
+    }
+
+    fn send_initializing(&self) {
+        let mut signal = self.signal();
+        signal.initializing = true;
+        signal.send_signal_to_dart();
+    }
+
+    fn send_available(&self) {
+        let mut signal = self.signal();
+        signal.available = true;
+        signal.send_signal_to_dart();
+    }
+
+    fn send_error(&self, context: &str, error: &anyhow::Error) {
+        let mut signal = self.signal();
+        signal.error = Some(format!("Failed to {context}: {error:#}"));
+        signal.send_signal_to_dart();
+    }
+}
+
 struct RefreshOutcome {
     refreshed: usize,
     failed: Vec<String>,
@@ -105,20 +208,16 @@ impl DownloaderManager {
             let app_dir = app_dir.clone();
             let settings_handler = settings_handler.clone();
             async move {
-                let migration_error =
-                    migrate_legacy_config_if_needed(&app_dir, &settings_handler)
-                        .await
-                        .map(|error| {
-                            warn!(
-                                error = error.as_ref() as &dyn Error,
-                                "Failed to migrate legacy downloader config"
-                            );
-                            send_error_toast(
-                                "Failed to migrate legacy downloader config",
-                                &error,
-                            );
-                            format!("{error:#}")
-                        });
+                let migration_error = migrate_legacy_config_if_needed(&app_dir, &settings_handler)
+                    .await
+                    .map(|error| {
+                        warn!(
+                            error = error.as_ref() as &dyn Error,
+                            "Failed to migrate legacy downloader config"
+                        );
+                        send_error_toast("Failed to migrate legacy downloader config", &error);
+                        format!("{error:#}")
+                    });
 
                 if let Err(e) = manager
                     .initialize_from_managed(
@@ -182,88 +281,40 @@ impl DownloaderManager {
                 .find(|cfg| cfg.id == active_id)
                 .cloned()
                 .context("No active downloader config available")?;
-            let refresh_outcome = refresh_all_configs(&app_dir, std::slice::from_ref(&active_cfg))
-                .await;
+            let refresh_outcome =
+                refresh_all_configs(&app_dir, std::slice::from_ref(&active_cfg)).await;
             state_error = combine_errors(state_error, refresh_outcome.error_message());
-            configs_to_refresh_in_background = loaded_before
-                .configs
-                .into_iter()
-                .filter(|cfg| cfg.id != active_id)
-                .collect();
+            configs_to_refresh_in_background =
+                loaded_before.configs.into_iter().filter(|cfg| cfg.id != active_id).collect();
         }
 
-        let loaded = load_managed_configs(&app_dir)?;
-        state_error = combine_errors(state_error, loaded.error.clone());
+        let managed = ResolvedManagedConfigs::load(&app_dir, &settings_handler, state_error)?;
 
-        if loaded.configs.is_empty() {
+        if managed.is_empty() {
             self.set_downloader(None).await;
-            send_configs_changed(&[], None, false, state_error);
+            managed.send_changed(false);
             DownloaderAvailabilityChanged { needs_setup: true, ..Default::default() }
                 .send_signal_to_dart();
             return Ok(());
         }
 
-        let current_active_id = current_active_config_id(&settings_handler);
-        let resolved_active_id =
-            resolve_active_config_id(&loaded.configs, current_active_id.clone())
-                .context("No active downloader config available")?;
+        managed.persist_active_config(&settings_handler)?;
+        managed.send_changed(false);
 
-        if current_active_id != resolved_active_id {
-            save_active_config_id(&settings_handler, Some(&resolved_active_id))?;
-        }
-
-        send_configs_changed(
-            &loaded.configs,
-            Some(&resolved_active_id),
-            false,
-            state_error.clone(),
-        );
-
-        let active_cfg = loaded
-            .configs
-            .into_iter()
-            .find(|cfg| cfg.id == resolved_active_id)
+        let active_cfg = managed
+            .active_config()
             .context("Active downloader config disappeared during initialization")?;
+        let startup_error = managed.error.clone();
 
         self.init_with_config(active_cfg, app_dir.clone(), settings_handler.clone()).await?;
 
         if !configs_to_refresh_in_background.is_empty() {
-            let app_dir_for_refresh = app_dir;
-            let settings_handler_for_refresh = settings_handler;
-            let startup_error = state_error.clone();
-
-            tokio::spawn(async move {
-                let refresh_outcome =
-                    refresh_all_configs(&app_dir_for_refresh, &configs_to_refresh_in_background)
-                        .await;
-
-                let loaded = match load_managed_configs(&app_dir_for_refresh) {
-                    Ok(loaded) => loaded,
-                    Err(e) => {
-                        warn!(
-                            error = e.as_ref() as &dyn Error,
-                            "Failed to reload downloader sources after background refresh"
-                        );
-                        return;
-                    }
-                };
-
-                let current_active_id = resolve_active_config_id(
-                    &loaded.configs,
-                    current_active_config_id(&settings_handler_for_refresh),
-                );
-                let state_error = combine_errors(
-                    combine_errors(startup_error, loaded.error.clone()),
-                    refresh_outcome.error_message(),
-                );
-
-                send_configs_changed(
-                    &loaded.configs,
-                    current_active_id.as_deref(),
-                    false,
-                    state_error,
-                );
-            });
+            spawn_background_refresh(
+                app_dir,
+                settings_handler,
+                configs_to_refresh_in_background,
+                startup_error,
+            );
         }
 
         Ok(())
@@ -275,87 +326,34 @@ impl DownloaderManager {
         app_dir: PathBuf,
         settings_handler: Arc<SettingsHandler>,
     ) -> Result<()> {
-        let config_id = cfg.id.clone();
         let repo = repo::make_repo_from_config(&cfg);
-        let capabilities = repo.capabilities();
-        let is_donation_configured = capabilities.supports_donation_upload
-            && cfg.donation_remote_name.is_some()
-            && cfg.donation_remote_path.is_some();
+        let availability = DownloaderAvailabilityReporter::new(&cfg, repo.capabilities());
 
-        DownloaderAvailabilityChanged {
-            initializing: true,
-            config_id: Some(config_id.clone()),
-            is_donation_configured,
-            supports_remote_selection: capabilities.supports_remote_selection,
-            supports_bandwidth_limit: capabilities.supports_bandwidth_limit,
-            ..Default::default()
-        }
-        .send_signal_to_dart();
+        availability.send_initializing();
 
         self.set_downloader(None).await;
 
         let cache_dir = app_dir.join("downloader_cache").join(&cfg.id);
         let _ = tokio::fs::create_dir_all(&cache_dir).await;
 
-        let prepared = match cfg.layout {
-            RepoLayoutKind::Ffa => downloader::rclone::prepare_rclone_files(&cache_dir, &cfg)
-                .await
-                .map(|(rclone_path, rclone_config_path)| {
-                    (Some(rclone_path), Some(rclone_config_path))
-                }),
-            RepoLayoutKind::NewRepo => Ok((None, None)),
-        };
+        let (rclone_path, rclone_config_path) = prepare_downloader_runtime(&cache_dir, &cfg)
+            .await
+            .inspect_err(|e| availability.send_error("prepare downloader", e))?;
 
-        match prepared {
-            Ok((rclone_path, rclone_config_path)) => {
-                match Downloader::new(
-                    Arc::new(cfg),
-                    cache_dir,
-                    rclone_path,
-                    rclone_config_path,
-                    settings_handler.clone(),
-                    WatchStream::new(settings_handler.subscribe()),
-                )
-                .await
-                {
-                    Ok(downloader) => {
-                        self.set_downloader(Some(downloader)).await;
-                        DownloaderAvailabilityChanged {
-                            available: true,
-                            config_id: Some(config_id.clone()),
-                            is_donation_configured,
-                            supports_remote_selection: capabilities.supports_remote_selection,
-                            supports_bandwidth_limit: capabilities.supports_bandwidth_limit,
-                            ..Default::default()
-                        }
-                        .send_signal_to_dart();
-                        Ok(())
-                    }
-                    Err(e) => {
-                        DownloaderAvailabilityChanged {
-                            error: Some(format!("Failed to initialize downloader: {:#}", e)),
-                            config_id: Some(config_id.clone()),
-                            supports_remote_selection: capabilities.supports_remote_selection,
-                            supports_bandwidth_limit: capabilities.supports_bandwidth_limit,
-                            ..Default::default()
-                        }
-                        .send_signal_to_dart();
-                        Err(e)
-                    }
-                }
-            }
-            Err(e) => {
-                DownloaderAvailabilityChanged {
-                    error: Some(format!("Failed to prepare downloader: {:#}", e)),
-                    config_id: Some(config_id),
-                    supports_remote_selection: capabilities.supports_remote_selection,
-                    supports_bandwidth_limit: capabilities.supports_bandwidth_limit,
-                    ..Default::default()
-                }
-                .send_signal_to_dart();
-                Err(e)
-            }
-        }
+        let downloader = Downloader::new(
+            Arc::new(cfg),
+            cache_dir,
+            rclone_path,
+            rclone_config_path,
+            settings_handler.clone(),
+            WatchStream::new(settings_handler.subscribe()),
+        )
+        .await
+        .inspect_err(|e| availability.send_error("initialize downloader", e))?;
+
+        self.set_downloader(Some(downloader)).await;
+        availability.send_available();
+        Ok(())
     }
 
     async fn finalize_config_install(
@@ -702,6 +700,30 @@ async fn cache_config_from_url(app_dir: &Path, cache_key: &str, url: &str) -> Re
     Ok(cached_cfg_path)
 }
 
+async fn fetch_managed_config(
+    app_dir: &Path,
+    cache_key: &str,
+    url: &str,
+    source_url: Option<&str>,
+    expected_id: Option<&str>,
+    refuse_existing: bool,
+) -> Result<DownloaderConfig> {
+    let remote_cfg_path = cache_config_from_url(app_dir, cache_key, url).await?;
+    write_managed_config(app_dir, &remote_cfg_path, source_url, expected_id, refuse_existing)
+}
+
+async fn prepare_downloader_runtime(
+    cache_dir: &Path,
+    cfg: &DownloaderConfig,
+) -> Result<(Option<PathBuf>, Option<PathBuf>)> {
+    match cfg.layout {
+        RepoLayoutKind::Ffa => downloader::rclone::prepare_rclone_files(cache_dir, cfg)
+            .await
+            .map(|(rclone_path, rclone_config_path)| (Some(rclone_path), Some(rclone_config_path))),
+        RepoLayoutKind::NewRepo => Ok((None, None)),
+    }
+}
+
 fn write_managed_config(
     app_dir: &Path,
     src: &Path,
@@ -743,8 +765,7 @@ async fn add_config_from_url(
     url: &str,
     select_as_active: bool,
 ) -> Result<DownloaderConfig> {
-    let remote_cfg_path = cache_config_from_url(app_dir, "_bootstrap", url).await?;
-    let cfg = write_managed_config(app_dir, &remote_cfg_path, Some(url), None, true)?;
+    let cfg = fetch_managed_config(app_dir, "_bootstrap", url, Some(url), None, true).await?;
     if select_as_active {
         save_active_config_id(settings_handler, Some(&cfg.id))?;
     }
@@ -761,8 +782,8 @@ async fn refresh_all_configs(app_dir: &Path, configs: &[DownloaderConfig]) -> Re
         };
 
         let refresh_result = async {
-            let remote_cfg_path = cache_config_from_url(app_dir, &cfg.id, update_url).await?;
-            let _ = write_managed_config(app_dir, &remote_cfg_path, None, Some(&cfg.id), false)?;
+            let _ = fetch_managed_config(app_dir, &cfg.id, update_url, None, Some(&cfg.id), false)
+                .await?;
             Ok::<(), anyhow::Error>(())
         }
         .await;
@@ -797,6 +818,31 @@ fn select_active_config(
     );
 
     save_active_config_id(settings_handler, Some(config_id))
+}
+
+fn spawn_background_refresh(
+    app_dir: PathBuf,
+    settings_handler: Arc<SettingsHandler>,
+    configs: Vec<DownloaderConfig>,
+    startup_error: Option<String>,
+) {
+    tokio::spawn(async move {
+        let refresh_outcome = refresh_all_configs(&app_dir, &configs).await;
+        let state_error = combine_errors(startup_error, refresh_outcome.error_message());
+
+        let managed = match ResolvedManagedConfigs::load(&app_dir, &settings_handler, state_error) {
+            Ok(managed) => managed,
+            Err(e) => {
+                warn!(
+                    error = e.as_ref() as &dyn Error,
+                    "Failed to reload downloader sources after background refresh"
+                );
+                return;
+            }
+        };
+
+        managed.send_changed(false);
+    });
 }
 
 async fn migrate_legacy_config_if_needed(

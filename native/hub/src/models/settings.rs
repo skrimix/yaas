@@ -55,6 +55,7 @@ pub(crate) enum DownloadCleanupPolicy {
 #[serde(default)]
 pub(crate) struct Settings {
     pub installation_id: String,
+    pub active_downloader_config_id: String,
     pub rclone_remote_name: String,
     pub adb_path: String,
     pub preferred_connection_type: ConnectionKind,
@@ -89,6 +90,7 @@ impl Default for Settings {
     fn default() -> Self {
         Self {
             installation_id: Uuid::new_v4().to_string(),
+            active_downloader_config_id: String::new(),
             rclone_remote_name: "FFA-90".to_string(),
             adb_path: "adb".to_string(),
             preferred_connection_type: ConnectionKind::default(),

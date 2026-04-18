@@ -1,9 +1,9 @@
 import 'dart:io';
+
 import 'package:flutter/material.dart';
 import 'package:provider/provider.dart';
 import 'package:desktop_drop/desktop_drop.dart';
 import '../../providers/device_state.dart';
-import '../../src/bindings/bindings.dart' as messages;
 import '../../utils/sideload_utils.dart';
 import '../../src/l10n/app_localizations.dart';
 
@@ -26,27 +26,8 @@ class _DragDropOverlayState extends State<DragDropOverlay> {
       List<DropItem> files, bool isDeviceConnected) async {
     if (files.isEmpty) return;
 
-    // First, handle any potential downloader config JSONs dropped anywhere in the app
-    final Set<String> recognizedConfigPaths = {};
-    for (final item in files) {
-      final path = item.path;
-      try {
-        if (await _isMaybeDownloaderConfig(path)) {
-          recognizedConfigPaths.add(path);
-          messages.InstallDownloaderConfigRequest(sourcePath: path)
-              .sendSignalToRust();
-        }
-      } catch (_) {
-        // ignore read errors for detection
-      }
-    }
-
     // Remaining items are for sideload/backup workflows
-    final others = files
-        .where((f) =>
-            !_equalsIgnoreCase(_basename(f.path), 'downloader.json') &&
-            !recognizedConfigPaths.contains(f.path))
-        .toList();
+    final others = files.toList();
     if (others.isEmpty) return;
 
     if (!mounted) return;
@@ -104,24 +85,6 @@ class _DragDropOverlayState extends State<DragDropOverlay> {
     for (final item in installItems) {
       SideloadUtils.installApp(item.path, item.isDirectory);
     }
-  }
-
-  String _basename(String path) {
-    final parts = path.split(RegExp(r'[\\/]'));
-    return parts.isNotEmpty ? parts.last : path;
-  }
-
-  bool _equalsIgnoreCase(String a, String b) =>
-      a.toLowerCase() == b.toLowerCase();
-
-  Future<bool> _isMaybeDownloaderConfig(String path) async {
-    final name = _basename(path);
-    if (!name.toLowerCase().endsWith('.json')) return false;
-    final content = await File(path).readAsString();
-    if (content.toLowerCase().contains('"rclone_path"')) {
-      return true;
-    }
-    return false;
   }
 
   Widget _buildDropSection({
@@ -190,14 +153,6 @@ class _DragDropOverlayState extends State<DragDropOverlay> {
                 title: l10n.dragDropNoDevice,
                 subtitle: l10n.dragDropHintDisconnected,
               );
-        final configDropSection = _buildDropSection(
-          context: context,
-          icon: Icons.cloud_download,
-          color: colorScheme.primary,
-          title: l10n.dragDropDownloaderConfigTitle,
-          subtitle: l10n.dragDropDownloaderConfigHint,
-          isSecondary: true,
-        );
         return Stack(
           children: [
             widget.child,
@@ -220,17 +175,7 @@ class _DragDropOverlayState extends State<DragDropOverlay> {
                     duration: const Duration(milliseconds: 200),
                     child: Container(
                       color: colorScheme.surface.withValues(alpha: 0.8),
-                      child: Stack(
-                        children: [
-                          Center(child: mainDropSection),
-                          Center(
-                            child: Transform.translate(
-                              offset: const Offset(308, 0),
-                              child: configDropSection,
-                            ),
-                          ),
-                        ],
-                      ),
+                      child: Center(child: mainDropSection),
                     ),
                   ),
                 ),

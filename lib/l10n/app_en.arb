@@ -48,9 +48,9 @@
   "preparingDownloader": "Preparing downloader...",
   "downloadingRcloneFiles": "Downloading rclone files",
   "installDownloaderConfig": "Install local config",
-  "installDownloaderConfigFromUrl": "Set up from preset/URL",
+  "installDownloaderConfigFromUrl": "Manage sources",
   "settingsSelectDownloaderConfig": "Select downloader.json",
-  "downloaderConfigId": "Current config ID: {id}",
+  "downloaderConfigId": "Source ID: {id}",
   "@downloaderConfigId": {
     "placeholders": {
       "id": {
@@ -59,8 +59,13 @@
       }
     }
   },
-  "downloaderConfigFromUrlTitle": "Set up downloader config",
-  "downloaderConfigFromUrlDescription": "Choose a preset configuration or use a custom URL. You can always change the configuration later in the settings.",
+  "downloaderConfigFromUrlTitle": "Manage downloader sources",
+  "downloaderConfigFromUrlDescription": "Choose the active source or add a new one by URL.",
+  "downloaderSourcesListTitle": "Installed sources",
+  "downloaderSourcesEmpty": "No downloader sources added yet.",
+  "downloaderSourcesAddTitle": "Add source",
+  "downloaderSourcesRefreshTooltip": "Refresh all sources",
+  "downloaderSourceNoSelection": "No active source selected",
   "downloaderConfigTemplateVrgRus": "VR Games RUS",
   "downloaderConfigTemplateVrgRusHint": "CIS countries only",
   "downloaderConfigTemplateNif": "NIF",
@@ -94,10 +99,10 @@
   },
   "downloaderConfigVrgRusTestRequiredTooltip": "Pass the access test first, or select another server.",
   "downloaderConfigNotConfiguredTitle": "Cloud downloader is not configured",
-  "downloaderConfigNotConfiguredDesc": "Install a downloader.json config to enable cloud app downloads.",
-  "downloaderConfigInstallButton": "Install",
+  "downloaderConfigNotConfiguredDesc": "Add a downloader source to enable cloud app downloads.",
+  "downloaderConfigInstallButton": "Add source",
   "downloaderConfigInstalling": "Installing...",
-  "downloaderConfigInstallFailed": "Failed to install downloader config",
+  "downloaderConfigInstallFailed": "Failed to add downloader source",
   "loadingApps": "Loading apps...",
     "loadingAppsSlowHint": "Loading is taking too long? You can try a different remote.",
     "loadingAppsSlowHintButton": "Switch remote",

@@ -1209,9 +1209,7 @@ class _DownloadAppsScreenState extends State<DownloadAppsScreen> {
                 await showDialog<void>(
                   context: context,
                   barrierDismissible: false,
-                  builder: (ctx) => DownloaderSetupDialog(
-                    initialConfigId: settingsState.downloaderConfigId,
-                  ),
+                  builder: (ctx) => const DownloaderSetupDialog(),
                 );
               },
               child: Text(l10n.installDownloaderConfigFromUrl),

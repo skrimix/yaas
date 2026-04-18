@@ -9,6 +9,10 @@ use tracing::error;
 pub(crate) struct DownloaderConfig {
     /// ID of the config. Used for cache separation.
     pub id: String,
+    #[serde(default)]
+    pub display_name: Option<String>,
+    #[serde(default)]
+    pub description: Option<String>,
     // TODO: should this be a URI?
     #[serde(default)]
     pub rclone_path: Option<RclonePath>,
@@ -66,7 +70,13 @@ impl DownloaderConfig {
     }
 
     fn validate(&self) -> Result<()> {
-        ensure!(!self.id.trim().is_empty(), "downloader.id must not be empty");
+        let trimmed_id = self.id.trim();
+        ensure!(!trimmed_id.is_empty(), "downloader.id must not be empty");
+        ensure!(trimmed_id == self.id, "downloader.id must not have surrounding whitespace");
+        ensure!(
+            !self.id.contains('/') && !self.id.contains('\\') && self.id != "." && self.id != "..",
+            "downloader.id must be a safe file name"
+        );
 
         match self.layout {
             RepoLayoutKind::Ffa => {
@@ -99,6 +109,50 @@ impl DownloaderConfig {
 
         Ok(())
     }
+
+    pub(crate) fn validate_managed_remote(&self, source_url: Option<&str>) -> Result<()> {
+        let update_url = self
+            .config_update_url
+            .as_deref()
+            .map(str::trim)
+            .filter(|value| !value.is_empty())
+            .context("config_update_url is required for managed downloader configs")?;
+
+        let parsed = reqwest::Url::parse(update_url)
+            .with_context(|| format!("Invalid config_update_url: {update_url}"))?;
+        ensure!(
+            parsed.scheme() == "http" || parsed.scheme() == "https",
+            "config_update_url must use http or https"
+        );
+
+        if let Some(source_url) = source_url {
+            let expected = source_url.trim();
+            ensure!(
+                expected == update_url,
+                "Config update URL mismatch: expected {expected}, got {update_url}"
+            );
+        }
+
+        Ok(())
+    }
+
+    pub(crate) fn effective_display_name(&self) -> String {
+        self.display_name
+            .as_deref()
+            .map(str::trim)
+            .filter(|value| !value.is_empty())
+            .unwrap_or(&self.id)
+            .to_string()
+    }
+
+    pub(crate) fn effective_description(&self) -> String {
+        self.description
+            .as_deref()
+            .map(str::trim)
+            .filter(|value| !value.is_empty())
+            .unwrap_or_default()
+            .to_string()
+    }
 }
 
 #[cfg(test)]
@@ -106,6 +160,8 @@ impl Default for DownloaderConfig {
     fn default() -> Self {
         Self {
             id: "test".to_string(),
+            display_name: None,
+            description: None,
             rclone_path: Some(RclonePath::Single("/bin/echo".to_string())),
             rclone_config_path: None,
             remote_name_filter_regex: None,

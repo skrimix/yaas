@@ -139,23 +139,38 @@ class AppLocalizationsRu extends AppLocalizations {
   String get installDownloaderConfig => 'Установить локальную конфигурацию';
 
   @override
-  String get installDownloaderConfigFromUrl => 'Настроить из пресета/URL';
+  String get installDownloaderConfigFromUrl => 'Управлять источниками';
 
   @override
   String get settingsSelectDownloaderConfig => 'Выберите downloader.json';
 
   @override
   String downloaderConfigId(String id) {
-    return 'ID текущей конфигурации: $id';
+    return 'ID источника: $id';
   }
 
   @override
   String get downloaderConfigFromUrlTitle =>
-      'Настройка конфигурации загрузчика';
+      'Управление источниками загрузчика';
 
   @override
   String get downloaderConfigFromUrlDescription =>
-      'Выберите предустановленный вариант или укажите свой URL. Вы всегда можете изменить конфигурацию позже в настройках.';
+      'Выберите активный источник или добавьте новый по URL.';
+
+  @override
+  String get downloaderSourcesListTitle => 'Установленные источники';
+
+  @override
+  String get downloaderSourcesEmpty => 'Источники загрузчика ещё не добавлены.';
+
+  @override
+  String get downloaderSourcesAddTitle => 'Добавить источник';
+
+  @override
+  String get downloaderSourcesRefreshTooltip => 'Обновить все источники';
+
+  @override
+  String get downloaderSourceNoSelection => 'Активный источник не выбран';
 
   @override
   String get downloaderConfigTemplateVrgRus => 'VR Games RUS';
@@ -205,17 +220,17 @@ class AppLocalizationsRu extends AppLocalizations {
 
   @override
   String get downloaderConfigNotConfiguredDesc =>
-      'Установите файл downloader.json, чтобы включить загрузку приложений из облака.';
+      'Добавьте источник загрузчика, чтобы включить загрузку приложений из облака.';
 
   @override
-  String get downloaderConfigInstallButton => 'Установить';
+  String get downloaderConfigInstallButton => 'Добавить источник';
 
   @override
   String get downloaderConfigInstalling => 'Установка...';
 
   @override
   String get downloaderConfigInstallFailed =>
-      'Не удалось установить конфигурацию загрузчика';
+      'Не удалось добавить источник загрузчика';
 
   @override
   String get loadingApps => 'Загрузка списка приложений...';

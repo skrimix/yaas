@@ -347,7 +347,7 @@ abstract class AppLocalizations {
   /// No description provided for @installDownloaderConfigFromUrl.
   ///
   /// In en, this message translates to:
-  /// **'Set up from preset/URL'**
+  /// **'Manage sources'**
   String get installDownloaderConfigFromUrl;
 
   /// No description provided for @settingsSelectDownloaderConfig.
@@ -359,20 +359,50 @@ abstract class AppLocalizations {
   /// No description provided for @downloaderConfigId.
   ///
   /// In en, this message translates to:
-  /// **'Current config ID: {id}'**
+  /// **'Source ID: {id}'**
   String downloaderConfigId(String id);
 
   /// No description provided for @downloaderConfigFromUrlTitle.
   ///
   /// In en, this message translates to:
-  /// **'Set up downloader config'**
+  /// **'Manage downloader sources'**
   String get downloaderConfigFromUrlTitle;
 
   /// No description provided for @downloaderConfigFromUrlDescription.
   ///
   /// In en, this message translates to:
-  /// **'Choose a preset configuration or use a custom URL. You can always change the configuration later in the settings.'**
+  /// **'Choose the active source or add a new one by URL.'**
   String get downloaderConfigFromUrlDescription;
+
+  /// No description provided for @downloaderSourcesListTitle.
+  ///
+  /// In en, this message translates to:
+  /// **'Installed sources'**
+  String get downloaderSourcesListTitle;
+
+  /// No description provided for @downloaderSourcesEmpty.
+  ///
+  /// In en, this message translates to:
+  /// **'No downloader sources added yet.'**
+  String get downloaderSourcesEmpty;
+
+  /// No description provided for @downloaderSourcesAddTitle.
+  ///
+  /// In en, this message translates to:
+  /// **'Add source'**
+  String get downloaderSourcesAddTitle;
+
+  /// No description provided for @downloaderSourcesRefreshTooltip.
+  ///
+  /// In en, this message translates to:
+  /// **'Refresh all sources'**
+  String get downloaderSourcesRefreshTooltip;
+
+  /// No description provided for @downloaderSourceNoSelection.
+  ///
+  /// In en, this message translates to:
+  /// **'No active source selected'**
+  String get downloaderSourceNoSelection;
 
   /// No description provided for @downloaderConfigTemplateVrgRus.
   ///
@@ -455,13 +485,13 @@ abstract class AppLocalizations {
   /// No description provided for @downloaderConfigNotConfiguredDesc.
   ///
   /// In en, this message translates to:
-  /// **'Install a downloader.json config to enable cloud app downloads.'**
+  /// **'Add a downloader source to enable cloud app downloads.'**
   String get downloaderConfigNotConfiguredDesc;
 
   /// No description provided for @downloaderConfigInstallButton.
   ///
   /// In en, this message translates to:
-  /// **'Install'**
+  /// **'Add source'**
   String get downloaderConfigInstallButton;
 
   /// No description provided for @downloaderConfigInstalling.
@@ -473,7 +503,7 @@ abstract class AppLocalizations {
   /// No description provided for @downloaderConfigInstallFailed.
   ///
   /// In en, this message translates to:
-  /// **'Failed to install downloader config'**
+  /// **'Failed to add downloader source'**
   String get downloaderConfigInstallFailed;
 
   /// No description provided for @loadingApps.

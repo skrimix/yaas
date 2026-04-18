@@ -48,9 +48,9 @@
   "preparingDownloader": "Подготовка загрузчика...",
   "downloadingRcloneFiles": "Загрузка файлов rclone",
   "installDownloaderConfig": "Установить локальную конфигурацию",
-  "installDownloaderConfigFromUrl": "Настроить из пресета/URL",
+  "installDownloaderConfigFromUrl": "Управлять источниками",
   "settingsSelectDownloaderConfig": "Выберите downloader.json",
-  "downloaderConfigId": "ID текущей конфигурации: {id}",
+  "downloaderConfigId": "ID источника: {id}",
   "@downloaderConfigId": {
     "placeholders": {
       "id": {
@@ -59,8 +59,13 @@
       }
     }
   },
-  "downloaderConfigFromUrlTitle": "Настройка конфигурации загрузчика",
-  "downloaderConfigFromUrlDescription": "Выберите предустановленный вариант или укажите свой URL. Вы всегда можете изменить конфигурацию позже в настройках.",
+  "downloaderConfigFromUrlTitle": "Управление источниками загрузчика",
+  "downloaderConfigFromUrlDescription": "Выберите активный источник или добавьте новый по URL.",
+  "downloaderSourcesListTitle": "Установленные источники",
+  "downloaderSourcesEmpty": "Источники загрузчика ещё не добавлены.",
+  "downloaderSourcesAddTitle": "Добавить источник",
+  "downloaderSourcesRefreshTooltip": "Обновить все источники",
+  "downloaderSourceNoSelection": "Активный источник не выбран",
   "downloaderConfigTemplateVrgRus": "VR Games RUS",
   "downloaderConfigTemplateVrgRusHint": "Только для стран СНГ",
   "downloaderConfigTemplateNif": "NIF",
@@ -94,10 +99,10 @@
   },
   "downloaderConfigVrgRusTestRequiredTooltip": "Сначала пройдите проверку доступа, либо выберите другой сервер.",
   "downloaderConfigNotConfiguredTitle": "Облачный загрузчик не настроен",
-  "downloaderConfigNotConfiguredDesc": "Установите файл downloader.json, чтобы включить загрузку приложений из облака.",
-  "downloaderConfigInstallButton": "Установить",
+  "downloaderConfigNotConfiguredDesc": "Добавьте источник загрузчика, чтобы включить загрузку приложений из облака.",
+  "downloaderConfigInstallButton": "Добавить источник",
   "downloaderConfigInstalling": "Установка...",
-  "downloaderConfigInstallFailed": "Не удалось установить конфигурацию загрузчика",
+  "downloaderConfigInstallFailed": "Не удалось добавить источник загрузчика",
   "loadingApps": "Загрузка списка приложений...",
     "loadingAppsSlowHint": "Загрузка занимает слишком долго? Можете попробовать другое хранилище.",
     "loadingAppsSlowHintButton": "Выбрать хранилище",

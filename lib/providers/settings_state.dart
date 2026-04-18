@@ -6,6 +6,7 @@ import '../utils/theme_utils.dart' as app_theme;
 class SettingsState extends ChangeNotifier {
   Settings _settings = Settings(
     installationId: '',
+    activeDownloaderConfigId: '',
     rcloneRemoteName: '',
     adbPath: '',
     preferredConnectionType: ConnectionKind.usb,
@@ -34,6 +35,9 @@ class SettingsState extends ChangeNotifier {
   bool _downloaderInitializing = true;
   String? _downloaderError;
   String? _downloaderConfigId;
+  List<InstalledDownloaderConfig> _downloaderSources = const [];
+  bool _downloaderSourcesRefreshing = false;
+  String? _downloaderSourcesError;
   int _downloaderInitBytes = 0;
   int? _downloaderInitTotal;
   bool _downloaderIsDonationConfigured = false;
@@ -116,6 +120,15 @@ class SettingsState extends ChangeNotifier {
       notifyListeners();
     });
 
+    DownloaderSourcesChanged.rustSignalStream.listen((event) {
+      final msg = event.message;
+      _downloaderSources = List.unmodifiable(msg.configs);
+      _downloaderSourcesRefreshing = msg.refreshing;
+      _downloaderSourcesError = msg.error;
+      _downloaderConfigId = msg.activeConfigId;
+      notifyListeners();
+    });
+
     DownloaderInitProgress.rustSignalStream.listen((event) {
       final p = event.message;
       _downloaderInitBytes = p.bytes.toInt();
@@ -155,6 +168,9 @@ class SettingsState extends ChangeNotifier {
   bool get isDownloaderInitializing => _downloaderInitializing;
   String? get downloaderError => _downloaderError;
   String? get downloaderConfigId => _downloaderConfigId;
+  List<InstalledDownloaderConfig> get downloaderSources => _downloaderSources;
+  bool get isDownloaderSourcesRefreshing => _downloaderSourcesRefreshing;
+  String? get downloaderSourcesError => _downloaderSourcesError;
   int get downloaderInitBytes => _downloaderInitBytes;
   int? get downloaderInitTotal => _downloaderInitTotal;
   double? get downloaderInitProgress =>
@@ -167,6 +183,15 @@ class SettingsState extends ChangeNotifier {
       _downloaderSupportsRemoteSelection;
   bool get downloaderSupportsBandwidthLimit =>
       _downloaderSupportsBandwidthLimit;
+  InstalledDownloaderConfig? get activeDownloaderConfig {
+    final currentId = _downloaderConfigId;
+    if (currentId == null) return null;
+    for (final config in _downloaderSources) {
+      if (config.id == currentId) return config;
+    }
+    return null;
+  }
+
   PopularityRange get popularityRange => _settings.popularityRange;
   Locale? get locale {
     final code = _settings.localeCode;
@@ -218,6 +243,15 @@ class SettingsState extends ChangeNotifier {
     _remotesError = null;
     notifyListeners();
     GetRcloneRemotesRequest().sendSignalToRust();
+  }
+
+  Future<void> refreshDownloaderSources() async {
+    RefreshDownloaderSourcesRequest().sendSignalToRust();
+  }
+
+  Future<void> selectDownloaderSource(String configId) async {
+    if (configId == _downloaderConfigId) return;
+    SelectDownloaderSourceRequest(configId: configId).sendSignalToRust();
   }
 
   bool _normalizeStartupPageKey() {

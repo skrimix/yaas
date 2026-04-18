@@ -1,52 +1,30 @@
 import 'dart:async';
-import 'dart:io';
-import 'dart:convert';
 
 import 'package:flutter/material.dart';
+import 'package:provider/provider.dart';
 import 'package:rinf/rinf.dart';
 
+import '../../providers/settings_state.dart';
 import '../../src/bindings/bindings.dart';
 import '../../src/l10n/app_localizations.dart';
 
-const _kDownloaderTemplateVrgRusId = 'vrg-rus';
-const _kDownloaderTemplateNifId = 'nif';
-const _kDownloaderTemplateCustomId = 'custom';
-
-const _kDownloaderTemplateVrgRusUrl =
-    'https://github.com/skrimix/yaas/releases/download/files/downloader_ru.json';
-const _kDownloaderTemplateNifUrl =
-    'https://qloader.5698452.xyz/files/rclone/config/downloader_nif.json';
-
 class DownloaderSetupDialog extends StatefulWidget {
-  const DownloaderSetupDialog({
-    super.key,
-    this.initialConfigId,
-  });
-
-  final String? initialConfigId;
+  const DownloaderSetupDialog({super.key});
 
   @override
   State<DownloaderSetupDialog> createState() => _DownloaderSetupDialogState();
 }
 
 class _DownloaderSetupDialogState extends State<DownloaderSetupDialog> {
-  late String _selectedTemplateId;
   final TextEditingController _urlController = TextEditingController();
   StreamSubscription<RustSignalPack<DownloaderConfigInstallResult>>?
       _installSub;
-  bool _isInstalling = false;
+  bool _isAdding = false;
   String? _errorText;
-  _VrgRusTestState _vrgRusTestState = _VrgRusTestState.idle;
-  String? _vrgRusErrorMessage;
-  int? _vrgRusErrorMessageCode;
-  String? _ipCountryCode;
-  String? _ipOrg;
 
   @override
   void initState() {
     super.initState();
-    _selectedTemplateId = _inferInitialTemplateId(widget.initialConfigId);
-    _urlController.text = _urlForTemplate(_selectedTemplateId);
     _installSub =
         DownloaderConfigInstallResult.rustSignalStream.listen(_onInstallResult);
   }
@@ -56,41 +34,6 @@ class _DownloaderSetupDialogState extends State<DownloaderSetupDialog> {
     _installSub?.cancel();
     _urlController.dispose();
     super.dispose();
-  }
-
-  String _inferInitialTemplateId(String? currentId) {
-    switch (currentId) {
-      case _kDownloaderTemplateVrgRusId:
-      case _kDownloaderTemplateNifId:
-        return currentId!;
-      default:
-        return _kDownloaderTemplateVrgRusId;
-    }
-  }
-
-  String _urlForTemplate(String templateId) {
-    switch (templateId) {
-      case _kDownloaderTemplateVrgRusId:
-        return _kDownloaderTemplateVrgRusUrl;
-      case _kDownloaderTemplateNifId:
-        return _kDownloaderTemplateNifUrl;
-      case _kDownloaderTemplateCustomId:
-        return _urlController.text;
-      default:
-        return _kDownloaderTemplateVrgRusUrl;
-    }
-  }
-
-  void _onTemplateChanged(String? templateId) {
-    if (templateId == null) return;
-    setState(() {
-      _selectedTemplateId = templateId;
-      _errorText = null;
-      // _vrgRusTestState = _VrgRusTestState.idle;
-      if (templateId != _kDownloaderTemplateCustomId) {
-        _urlController.text = _urlForTemplate(templateId);
-      }
-    });
   }
 
   bool _isValidUrl(String value) {
@@ -103,7 +46,7 @@ class _DownloaderSetupDialogState extends State<DownloaderSetupDialog> {
     return Uri.tryParse(url)?.hasAbsolutePath ?? false;
   }
 
-  void _onInstallPressed() {
+  void _onAddPressed() {
     final l10n = AppLocalizations.of(context);
     final url = _urlController.text.trim();
     if (!_isValidUrl(url)) {
@@ -113,130 +56,29 @@ class _DownloaderSetupDialogState extends State<DownloaderSetupDialog> {
       return;
     }
     setState(() {
-      _isInstalling = true;
+      _isAdding = true;
       _errorText = null;
     });
     InstallDownloaderConfigFromUrlRequest(url: url).sendSignalToRust();
   }
 
-  bool get _needsVrgRusTest =>
-      _selectedTemplateId == _kDownloaderTemplateVrgRusId;
-
-  bool get _vrgRusTestCompleted => _vrgRusTestState == _VrgRusTestState.success;
-  // _vrgRusTestState == _VrgRusTestState.noAccess;
-
-  Future<({String? country, String? org})> _fetchIpInfo() async {
-    try {
-      final client = HttpClient()
-        ..connectionTimeout = const Duration(seconds: 5);
-      try {
-        final request = await client.getUrl(
-          Uri.parse('https://ipinfo.io/'),
-        );
-        request.headers.add('Accept', 'application/json');
-        final response = await request.close();
-        if (response.statusCode == 200) {
-          final body = await response.transform(utf8.decoder).join();
-          final json = jsonDecode(body) as Map<String, dynamic>;
-          return (
-            country: json['country'] as String?,
-            org: json['org'] as String?,
-          );
-        }
-      } finally {
-        client.close();
-      }
-    } catch (e) {
-      debugPrint('Error fetching IP info: $e');
-    }
-    return (country: null, org: null);
-  }
-
-  Future<void> _testVrgRusAccess() async {
-    if (_vrgRusTestState == _VrgRusTestState.inProgress) return;
-    setState(() {
-      _vrgRusTestState = _VrgRusTestState.inProgress;
-      _vrgRusErrorMessage = null;
-      _ipCountryCode = null;
-      _ipOrg = null;
-    });
-    try {
-      final client = HttpClient()
-        ..connectionTimeout = const Duration(seconds: 15);
-      try {
-        final request = await client.getUrl(
-          Uri.parse('https://yaas.dipvr.ru:9227/api/v1/verification'),
-        );
-        final response = await request.close();
-        final body = await response.transform(utf8.decoder).join();
-
-        if (!mounted) {
-          client.close(force: true);
-          return;
-        }
-
-        if (response.statusCode == 200) {
-          setState(() {
-            _vrgRusTestState = _VrgRusTestState.success;
-            _vrgRusErrorMessage = null;
-          });
-        } else if (response.statusCode == 403) {
-          final ipInfo = await _fetchIpInfo();
-          if (!mounted) return;
-          setState(() {
-            _vrgRusTestState = _VrgRusTestState.noAccess;
-            _vrgRusErrorMessage = body.trim().isNotEmpty ? body.trim() : null;
-            _vrgRusErrorMessageCode = response.statusCode;
-            _ipCountryCode = ipInfo.country;
-            _ipOrg = ipInfo.org;
-          });
-        } else {
-          final ipInfo = await _fetchIpInfo();
-          if (!mounted) return;
-          setState(() {
-            _vrgRusTestState = _VrgRusTestState.noAccess;
-            _vrgRusErrorMessage = body.trim().isNotEmpty ? body.trim() : null;
-            _vrgRusErrorMessageCode = response.statusCode;
-            _ipCountryCode = ipInfo.country;
-            _ipOrg = ipInfo.org;
-          });
-        }
-      } finally {
-        client.close();
-      }
-    } catch (e) {
-      debugPrint('Error testing VRG Rus access: $e');
-      if (!mounted) return;
-      final ipInfo = await _fetchIpInfo();
-      if (!mounted) return;
-      setState(() {
-        _vrgRusTestState = _VrgRusTestState.noAccess;
-        _vrgRusErrorMessage = e.toString();
-        _vrgRusErrorMessageCode = 0;
-        _ipCountryCode = ipInfo.country;
-        _ipOrg = ipInfo.org;
-      });
-    }
-  }
-
   void _onInstallResult(
     RustSignalPack<DownloaderConfigInstallResult> pack,
   ) {
-    if (!_isInstalling) {
-      return;
-    }
+    if (!_isAdding) return;
     final result = pack.message;
     if (!mounted) return;
 
     if (result.success) {
       setState(() {
-        _isInstalling = false;
+        _isAdding = false;
+        _errorText = null;
+        _urlController.clear();
       });
-      Navigator.of(context).pop();
     } else {
       final l10n = AppLocalizations.of(context);
       setState(() {
-        _isInstalling = false;
+        _isAdding = false;
         _errorText = result.error?.isNotEmpty == true
             ? result.error
             : l10n.downloaderConfigInstallFailed;
@@ -244,198 +86,237 @@ class _DownloaderSetupDialogState extends State<DownloaderSetupDialog> {
     }
   }
 
+  Widget _buildSourceTile(
+    BuildContext context,
+    InstalledDownloaderConfig source,
+    String? selectedId,
+    bool enabled,
+  ) {
+    final selected = source.id == selectedId;
+    final theme = Theme.of(context);
+    final colorScheme = theme.colorScheme;
+
+    return Card(
+      margin: const EdgeInsets.only(bottom: 10),
+      color: selected
+          ? colorScheme.primaryContainer.withValues(alpha: 0.55)
+          : colorScheme.surfaceContainerHighest.withValues(alpha: 0.35),
+      shape: RoundedRectangleBorder(
+        borderRadius: BorderRadius.circular(14),
+        side: BorderSide(
+          color: selected ? colorScheme.primary : colorScheme.outlineVariant,
+        ),
+      ),
+      child: InkWell(
+        borderRadius: BorderRadius.circular(14),
+        onTap: enabled
+            ? () =>
+                context.read<SettingsState>().selectDownloaderSource(source.id)
+            : null,
+        child: Padding(
+          padding: const EdgeInsets.all(14),
+          child: Row(
+            crossAxisAlignment: CrossAxisAlignment.start,
+            children: [
+              Radio<String>(value: source.id),
+              const SizedBox(width: 8),
+              Expanded(
+                child: Column(
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  children: [
+                    Text(
+                      source.displayName,
+                      style: theme.textTheme.titleSmall,
+                    ),
+                    if (source.description.isNotEmpty) ...[
+                      const SizedBox(height: 4),
+                      Text(
+                        source.description,
+                        style: theme.textTheme.bodySmall,
+                      ),
+                    ],
+                    const SizedBox(height: 10),
+                    Container(
+                      padding: const EdgeInsets.symmetric(
+                        horizontal: 10,
+                        vertical: 6,
+                      ),
+                      decoration: BoxDecoration(
+                        color: colorScheme.surface.withValues(alpha: 0.9),
+                        borderRadius: BorderRadius.circular(999),
+                      ),
+                      child: Text(
+                        AppLocalizations.of(context)
+                            .downloaderConfigId(source.id),
+                        style: theme.textTheme.labelSmall,
+                      ),
+                    ),
+                  ],
+                ),
+              ),
+            ],
+          ),
+        ),
+      ),
+    );
+  }
+
   @override
   Widget build(BuildContext context) {
     final l10n = AppLocalizations.of(context);
-    final canEditUrl = _selectedTemplateId == _kDownloaderTemplateCustomId;
-    final isValid = _isValidUrl(_urlController.text);
-    final needsVrgTest = _needsVrgRusTest;
-    final canInstall =
-        !_isInstalling && isValid && (!needsVrgTest || _vrgRusTestCompleted);
+    final canAdd = !_isAdding && _isValidUrl(_urlController.text);
 
-    return AlertDialog(
-      title: Text(l10n.downloaderConfigFromUrlTitle),
-      content: SizedBox(
-        width: 480,
-        child: Column(
-          mainAxisSize: MainAxisSize.min,
-          crossAxisAlignment: CrossAxisAlignment.start,
-          children: [
-            Text(
-              l10n.downloaderConfigFromUrlDescription,
-              style: Theme.of(context).textTheme.bodyMedium,
-            ),
-            const SizedBox(height: 12),
-            RadioGroup<String>(
-              groupValue: _selectedTemplateId,
-              onChanged: (value) {
-                if (_isInstalling) return;
-                _onTemplateChanged(value);
-              },
-              child: Column(
-                mainAxisSize: MainAxisSize.min,
-                children: [
-                  RadioListTile<String>(
-                    enabled: false,
-                    value: _kDownloaderTemplateVrgRusId,
-                    title: Text(l10n.downloaderConfigTemplateVrgRus),
-                    subtitle: Column(
-                      crossAxisAlignment: CrossAxisAlignment.start,
-                      children: [
-                        Text(
-                          l10n.downloaderConfigTemplateVrgRusHint,
-                          style: Theme.of(context)
-                              .textTheme
-                              .bodySmall
-                              ?.copyWith(
-                                  color:
-                                      Theme.of(context).colorScheme.secondary),
+    return Consumer<SettingsState>(
+      builder: (context, settingsState, _) {
+        final sources = settingsState.downloaderSources;
+        final selectedId = settingsState.downloaderConfigId;
+        final busy = _isAdding || settingsState.isDownloaderSourcesRefreshing;
+
+        return AlertDialog(
+          title: Row(
+            children: [
+              Expanded(child: Text(l10n.downloaderConfigFromUrlTitle)),
+              SizedBox(
+                width: 36,
+                height: 36,
+                child: settingsState.isDownloaderSourcesRefreshing
+                    ? const Padding(
+                        padding: EdgeInsets.all(8),
+                        child: CircularProgressIndicator(strokeWidth: 2),
+                      )
+                    : IconButton(
+                        tooltip: l10n.downloaderSourcesRefreshTooltip,
+                        onPressed: busy
+                            ? null
+                            : settingsState.refreshDownloaderSources,
+                        icon: const Icon(Icons.refresh),
+                      ),
+              ),
+            ],
+          ),
+          content: SizedBox(
+            width: 560,
+            child: Column(
+              mainAxisSize: MainAxisSize.min,
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                Text(
+                  l10n.downloaderConfigFromUrlDescription,
+                  style: Theme.of(context).textTheme.bodyMedium,
+                ),
+                if (settingsState.downloaderSourcesError != null) ...[
+                  const SizedBox(height: 12),
+                  Text(
+                    settingsState.downloaderSourcesError!,
+                    style: Theme.of(context).textTheme.bodySmall?.copyWith(
+                          color: Theme.of(context).colorScheme.error,
                         ),
-                        const SizedBox(height: 4),
-                        Row(
-                          mainAxisSize: MainAxisSize.min,
-                          children: [
-                            TextButton.icon(
-                              onPressed: _isInstalling ||
-                                      _vrgRusTestState ==
-                                          _VrgRusTestState.inProgress
-                                  ? null
-                                  : _testVrgRusAccess,
-                              icon: const Icon(Icons.wifi_tethering),
-                              label: Text(
-                                l10n.downloaderConfigVrgRusTestButton,
-                              ),
-                            ),
-                            if (_vrgRusTestState ==
-                                _VrgRusTestState.inProgress) ...[
-                              const SizedBox(width: 8),
-                              const SizedBox(
-                                width: 16,
-                                height: 16,
-                                child: CircularProgressIndicator(
-                                  strokeWidth: 2,
-                                ),
-                              ),
-                            ],
-                          ],
-                        ),
-                        if (_vrgRusTestState == _VrgRusTestState.success) ...[
-                          const SizedBox(height: 2),
-                          Text(
-                            l10n.downloaderConfigVrgRusTestOk,
-                            style:
-                                Theme.of(context).textTheme.bodySmall?.copyWith(
-                                      color: Colors.green.shade300,
-                                    ),
-                          ),
-                        ] else if (_vrgRusTestState ==
-                            _VrgRusTestState.noAccess) ...[
-                          const SizedBox(height: 2),
-                          Text(
-                            l10n.downloaderConfigVrgRusTestError(
-                              _vrgRusErrorMessageCode ?? 0,
-                              _vrgRusErrorMessage ?? '',
-                            ),
-                            style: Theme.of(context)
-                                .textTheme
-                                .bodySmall
-                                ?.copyWith(
-                                  color: Theme.of(context).colorScheme.error,
-                                ),
-                          ),
-                          if (_ipCountryCode != null || _ipOrg != null) ...[
-                            const SizedBox(height: 2),
-                            Text(
-                              l10n.downloaderConfigVrgRusTestLocation(
-                                _ipCountryCode ?? '',
-                                _ipOrg ?? '',
-                              ),
-                              style: Theme.of(context)
-                                  .textTheme
-                                  .bodySmall
-                                  ?.copyWith(
-                                    color: Theme.of(context).colorScheme.error,
-                                  ),
-                            ),
-                          ],
-                        ],
-                      ],
-                    ),
-                    dense: true,
-                  ),
-                  RadioListTile<String>(
-                    value: _kDownloaderTemplateNifId,
-                    title: Text(l10n.downloaderConfigTemplateNif),
-                    subtitle: Text(
-                      l10n.downloaderConfigTemplateNifHint,
-                      style: Theme.of(context).textTheme.bodySmall?.copyWith(
-                          color: Theme.of(context).colorScheme.secondary),
-                    ),
-                    dense: true,
-                  ),
-                  RadioListTile<String>(
-                    value: _kDownloaderTemplateCustomId,
-                    title: Text(l10n.downloaderConfigTemplateCustom),
-                    dense: true,
                   ),
                 ],
-              ),
+                const SizedBox(height: 16),
+                Text(
+                  l10n.downloaderSourcesListTitle,
+                  style: Theme.of(context).textTheme.titleSmall,
+                ),
+                const SizedBox(height: 10),
+                ConstrainedBox(
+                  constraints: const BoxConstraints(maxHeight: 280),
+                  child: sources.isEmpty
+                      ? Container(
+                          width: double.infinity,
+                          padding: const EdgeInsets.all(16),
+                          decoration: BoxDecoration(
+                            color: Theme.of(context)
+                                .colorScheme
+                                .surfaceContainerHighest
+                                .withValues(alpha: 0.35),
+                            borderRadius: BorderRadius.circular(14),
+                          ),
+                          child: Text(
+                            l10n.downloaderSourcesEmpty,
+                            style: Theme.of(context).textTheme.bodyMedium,
+                          ),
+                        )
+                      : RadioGroup<String>(
+                          groupValue: selectedId,
+                          onChanged: (value) {
+                            if (busy || value == null) return;
+                            settingsState.selectDownloaderSource(value);
+                          },
+                          child: SingleChildScrollView(
+                            child: Column(
+                              children: [
+                                for (final source in sources)
+                                  _buildSourceTile(
+                                    context,
+                                    source,
+                                    selectedId,
+                                    !busy,
+                                  ),
+                              ],
+                            ),
+                          ),
+                        ),
+                ),
+                const SizedBox(height: 16),
+                Text(
+                  l10n.downloaderSourcesAddTitle,
+                  style: Theme.of(context).textTheme.titleSmall,
+                ),
+                const SizedBox(height: 10),
+                Row(
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  children: [
+                    Expanded(
+                      child: TextField(
+                        controller: _urlController,
+                        enabled: !busy,
+                        autofocus: sources.isEmpty,
+                        decoration: InputDecoration(
+                          labelText: l10n.downloaderConfigUrlLabel,
+                          border: const OutlineInputBorder(),
+                          errorText: _errorText,
+                        ),
+                        onChanged: (_) {
+                          if (_errorText != null) {
+                            setState(() {
+                              _errorText = null;
+                            });
+                          } else {
+                            setState(() {});
+                          }
+                        },
+                      ),
+                    ),
+                    const SizedBox(width: 12),
+                    FilledButton.icon(
+                      onPressed: canAdd ? _onAddPressed : null,
+                      icon: _isAdding
+                          ? const SizedBox(
+                              width: 16,
+                              height: 16,
+                              child: CircularProgressIndicator(strokeWidth: 2),
+                            )
+                          : const Icon(Icons.add),
+                      label: Text(
+                        _isAdding
+                            ? l10n.downloaderConfigInstalling
+                            : l10n.downloaderConfigInstallButton,
+                      ),
+                    ),
+                  ],
+                ),
+              ],
             ),
-            const SizedBox(height: 8),
-            TextField(
-              controller: _urlController,
-              enabled: !_isInstalling && canEditUrl,
-              decoration: InputDecoration(
-                labelText: l10n.downloaderConfigUrlLabel,
-                border: const OutlineInputBorder(),
-                errorText: _errorText,
-              ),
-              onChanged: (_) {
-                if (_errorText != null) {
-                  setState(() {
-                    _errorText = null;
-                  });
-                }
-              },
+          ),
+          actions: [
+            TextButton(
+              onPressed: () => Navigator.of(context).pop(),
+              child: Text(l10n.commonClose),
             ),
           ],
-        ),
-      ),
-      actions: [
-        TextButton(
-          onPressed: () => Navigator.of(context).pop(),
-          child: Text(_isInstalling ? l10n.commonClose : l10n.commonCancel),
-        ),
-        Tooltip(
-          message: (!canInstall && needsVrgTest && !_vrgRusTestCompleted)
-              ? l10n.downloaderConfigVrgRusTestRequiredTooltip
-              : '',
-          child: FilledButton(
-            onPressed: canInstall ? _onInstallPressed : null,
-            child: _isInstalling
-                ? Row(
-                    mainAxisSize: MainAxisSize.min,
-                    children: [
-                      const SizedBox(
-                        width: 16,
-                        height: 16,
-                        child: CircularProgressIndicator(strokeWidth: 2),
-                      ),
-                      const SizedBox(width: 8),
-                      Text(l10n.downloaderConfigInstalling),
-                    ],
-                  )
-                : Text(l10n.downloaderConfigInstallButton),
-          ),
-        ),
-      ],
+        );
+      },
     );
   }
-}
-
-enum _VrgRusTestState {
-  idle,
-  inProgress,
-  success,
-  noAccess,
 }

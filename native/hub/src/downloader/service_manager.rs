@@ -1,10 +1,11 @@
 use std::{
     error::Error,
+    fs,
     path::{Path, PathBuf},
     sync::Arc,
 };
 
-use anyhow::{Context, Result, ensure};
+use anyhow::{Context, Result, anyhow, ensure};
 use rinf::{DartSignal, RustSignal};
 use tokio::sync::{Mutex, RwLock};
 use tokio_stream::wrappers::WatchStream;
@@ -16,23 +17,51 @@ use crate::{
         config::{DownloaderConfig, RepoLayoutKind},
         http_cache, repo,
     },
-    models::signals::{
-        downloader::{
-            availability::DownloaderAvailabilityChanged,
-            setup::{
-                DownloaderConfigInstallResult, InstallDownloaderConfigFromUrlRequest,
-                InstallDownloaderConfigRequest, RetryDownloaderInitRequest,
+    models::{
+        InstalledDownloaderConfig, Settings,
+        signals::{
+            downloader::{
+                availability::DownloaderAvailabilityChanged,
+                setup::{
+                    DownloaderConfigInstallResult, DownloaderSourcesChanged,
+                    InstallDownloaderConfigFromUrlRequest, RefreshDownloaderSourcesRequest,
+                    RetryDownloaderInitRequest, SelectDownloaderSourceRequest,
+                },
             },
+            system::Toast,
         },
-        system::Toast,
     },
     settings::SettingsHandler,
 };
+
+const LEGACY_CONFIG_FILENAME: &str = "downloader.json";
+const MANAGED_CONFIGS_DIR: &str = "downloader_configs";
 
 #[derive(Clone)]
 pub(crate) struct DownloaderManager {
     inner: Arc<RwLock<Option<Arc<Downloader>>>>,
     init_guard: Arc<Mutex<()>>,
+}
+
+#[derive(Default)]
+struct LoadedManagedConfigs {
+    configs: Vec<DownloaderConfig>,
+    error: Option<String>,
+}
+
+struct RefreshOutcome {
+    refreshed: usize,
+    failed: Vec<String>,
+}
+
+impl RefreshOutcome {
+    fn error_message(&self) -> Option<String> {
+        if self.failed.is_empty() {
+            None
+        } else {
+            Some(format!("Failed to refresh some downloader sources: {}", self.failed.join("; ")))
+        }
+    }
 }
 
 impl DownloaderManager {
@@ -71,28 +100,42 @@ impl DownloaderManager {
     }
 
     pub(crate) fn start(self: Arc<Self>, app_dir: PathBuf, settings_handler: Arc<SettingsHandler>) {
-        let manager = self.clone();
-        let app_dir_init = app_dir.clone();
-        let settings_handler_init = settings_handler.clone();
-        tokio::spawn(async move {
-            if Path::new("downloader.json").exists() {
+        tokio::spawn({
+            let manager = self.clone();
+            let app_dir = app_dir.clone();
+            let settings_handler = settings_handler.clone();
+            async move {
+                let migration_error =
+                    migrate_legacy_config_if_needed(&app_dir, &settings_handler)
+                        .await
+                        .map(|error| {
+                            warn!(
+                                error = error.as_ref() as &dyn Error,
+                                "Failed to migrate legacy downloader config"
+                            );
+                            send_error_toast(
+                                "Failed to migrate legacy downloader config",
+                                &error,
+                            );
+                            format!("{error:#}")
+                        });
+
                 if let Err(e) = manager
-                    .init_from_disk(app_dir_init.clone(), settings_handler_init.clone())
+                    .initialize_from_managed(
+                        app_dir.clone(),
+                        settings_handler.clone(),
+                        true,
+                        migration_error,
+                    )
                     .await
                 {
-                    error!("Failed to initialize downloader: {:#}", e);
+                    error!(error = e.as_ref() as &dyn Error, "Failed to initialize downloader");
                 }
-            } else {
-                info!("No downloader.json found, cloud features disabled");
-                DownloaderAvailabilityChanged { needs_setup: true, ..Default::default() }
-                    .send_signal_to_dart();
             }
         });
 
-        // Drag&drop config installer handled by the manager
-        self.clone().start_setup_handler(app_dir.clone(), settings_handler.clone());
+        self.clone().start_request_handlers(app_dir.clone(), settings_handler.clone());
 
-        // Retry init loop (from UI)
         tokio::spawn({
             let app_dir = app_dir.clone();
             let settings_handler = settings_handler.clone();
@@ -100,47 +143,130 @@ impl DownloaderManager {
             async move {
                 let rx = RetryDownloaderInitRequest::get_dart_signal_receiver();
                 while rx.recv().await.is_some() {
-                    let _ = manager.init_from_disk(app_dir.clone(), settings_handler.clone()).await;
+                    let _ = manager
+                        .initialize_from_managed(
+                            app_dir.clone(),
+                            settings_handler.clone(),
+                            false,
+                            None,
+                        )
+                        .await;
                 }
             }
         });
     }
 
-    pub(crate) async fn init_from_disk(
+    async fn initialize_from_managed(
         &self,
         app_dir: PathBuf,
         settings_handler: Arc<SettingsHandler>,
+        refresh_configs: bool,
+        initial_error: Option<String>,
     ) -> Result<()> {
         let _g = self.init_guard.lock().await;
-        let cfg_path = app_dir.join("downloader.json");
 
-        DownloaderAvailabilityChanged { initializing: true, ..Default::default() }
-            .send_signal_to_dart();
+        let loaded_before = load_managed_configs(&app_dir)?;
+        let mut state_error = combine_errors(initial_error, loaded_before.error.clone());
+        let mut configs_to_refresh_in_background = Vec::new();
 
-        let mut cfg = match DownloaderConfig::load_from_path(&cfg_path) {
-            Ok(cfg) => cfg,
-            Err(e) => {
-                DownloaderAvailabilityChanged {
-                    error: Some(format!("Failed to initialize downloader: {:#}", e)),
-                    ..Default::default()
-                }
-                .send_signal_to_dart();
-                return Err(e);
-            }
-        };
+        if refresh_configs && !loaded_before.configs.is_empty() {
+            let active_id = resolve_active_config_id(
+                &loaded_before.configs,
+                current_active_config_id(&settings_handler),
+            )
+            .context("No active downloader config available")?;
 
-        if let Some(update_url) = cfg.config_update_url.as_deref() {
-            if let Err(e) = maybe_update_config_from_url(&app_dir, &cfg.id, update_url).await {
-                warn!(
-                    error = e.as_ref() as &dyn Error,
-                    "Failed to update downloader config from URL, using local copy"
-                );
-            } else {
-                cfg = DownloaderConfig::load_from_path(&cfg_path)?;
-            }
+            let active_cfg = loaded_before
+                .configs
+                .iter()
+                .find(|cfg| cfg.id == active_id)
+                .cloned()
+                .context("No active downloader config available")?;
+            let refresh_outcome = refresh_all_configs(&app_dir, std::slice::from_ref(&active_cfg))
+                .await;
+            state_error = combine_errors(state_error, refresh_outcome.error_message());
+            configs_to_refresh_in_background = loaded_before
+                .configs
+                .into_iter()
+                .filter(|cfg| cfg.id != active_id)
+                .collect();
         }
 
-        self.init_with_config(cfg, app_dir, settings_handler).await
+        let loaded = load_managed_configs(&app_dir)?;
+        state_error = combine_errors(state_error, loaded.error.clone());
+
+        if loaded.configs.is_empty() {
+            self.set_downloader(None).await;
+            send_configs_changed(&[], None, false, state_error);
+            DownloaderAvailabilityChanged { needs_setup: true, ..Default::default() }
+                .send_signal_to_dart();
+            return Ok(());
+        }
+
+        let current_active_id = current_active_config_id(&settings_handler);
+        let resolved_active_id =
+            resolve_active_config_id(&loaded.configs, current_active_id.clone())
+                .context("No active downloader config available")?;
+
+        if current_active_id != resolved_active_id {
+            save_active_config_id(&settings_handler, Some(&resolved_active_id))?;
+        }
+
+        send_configs_changed(
+            &loaded.configs,
+            Some(&resolved_active_id),
+            false,
+            state_error.clone(),
+        );
+
+        let active_cfg = loaded
+            .configs
+            .into_iter()
+            .find(|cfg| cfg.id == resolved_active_id)
+            .context("Active downloader config disappeared during initialization")?;
+
+        self.init_with_config(active_cfg, app_dir.clone(), settings_handler.clone()).await?;
+
+        if !configs_to_refresh_in_background.is_empty() {
+            let app_dir_for_refresh = app_dir;
+            let settings_handler_for_refresh = settings_handler;
+            let startup_error = state_error.clone();
+
+            tokio::spawn(async move {
+                let refresh_outcome =
+                    refresh_all_configs(&app_dir_for_refresh, &configs_to_refresh_in_background)
+                        .await;
+
+                let loaded = match load_managed_configs(&app_dir_for_refresh) {
+                    Ok(loaded) => loaded,
+                    Err(e) => {
+                        warn!(
+                            error = e.as_ref() as &dyn Error,
+                            "Failed to reload downloader sources after background refresh"
+                        );
+                        return;
+                    }
+                };
+
+                let current_active_id = resolve_active_config_id(
+                    &loaded.configs,
+                    current_active_config_id(&settings_handler_for_refresh),
+                );
+                let state_error = combine_errors(
+                    combine_errors(startup_error, loaded.error.clone()),
+                    refresh_outcome.error_message(),
+                );
+
+                send_configs_changed(
+                    &loaded.configs,
+                    current_active_id.as_deref(),
+                    false,
+                    state_error,
+                );
+            });
+        }
+
+        Ok(())
     }
 
     pub(crate) async fn init_with_config(
@@ -166,7 +292,6 @@ impl DownloaderManager {
         }
         .send_signal_to_dart();
 
-        // Drop old downloader before initializing a new one.
         self.set_downloader(None).await;
 
         let cache_dir = app_dir.join("downloader_cache").join(&cfg.id);
@@ -237,21 +362,18 @@ impl DownloaderManager {
         &self,
         app_dir: &Path,
         settings_handler: &Arc<SettingsHandler>,
-        result: Result<()>,
+        result: Result<String>,
     ) {
         match result {
-            Ok(()) => {
-                DownloaderConfigInstallResult { success: true, error: None }.send_signal_to_dart();
-
-                Toast::send(
-                    "Downloader config installed".into(),
-                    "Initializing cloud features...".into(),
-                    false,
-                    None,
-                );
-
-                if let Err(e) =
-                    self.init_from_disk(app_dir.to_path_buf(), settings_handler.clone()).await
+            Ok(config_id) => {
+                if let Err(e) = self
+                    .initialize_from_managed(
+                        app_dir.to_path_buf(),
+                        settings_handler.clone(),
+                        false,
+                        None,
+                    )
+                    .await
                 {
                     error!(
                         error = e.as_ref() as &dyn Error,
@@ -262,14 +384,29 @@ impl DownloaderManager {
                         error: Some(format!("Failed to initialize downloader: {:#}", e)),
                     }
                     .send_signal_to_dart();
+                    Toast::send(
+                        "Failed to add downloader source".into(),
+                        format!("Failed to initialize downloader: {:#}", e),
+                        true,
+                        None,
+                    );
+                    return;
                 }
+
+                DownloaderConfigInstallResult { success: true, error: None }.send_signal_to_dart();
+                Toast::send(
+                    "Downloader source added".into(),
+                    format!("Added source {config_id}"),
+                    false,
+                    None,
+                );
             }
             Err(e) => {
-                error!(error = e.as_ref() as &dyn Error, "Failed to install downloader config");
+                error!(error = e.as_ref() as &dyn Error, "Failed to install downloader source");
                 DownloaderConfigInstallResult { success: false, error: Some(format!("{:#}", e)) }
                     .send_signal_to_dart();
                 Toast::send(
-                    "Failed to install downloader config".into(),
+                    "Failed to add downloader source".into(),
                     format!("{:#}", e),
                     true,
                     None,
@@ -278,57 +415,34 @@ impl DownloaderManager {
         }
     }
 
-    /// Start handler that watches for InstallDownloaderConfigRequest and installs config.
-    fn start_setup_handler(
+    fn start_request_handlers(
         self: Arc<Self>,
         app_dir: PathBuf,
         settings_handler: Arc<SettingsHandler>,
     ) {
-        // Local file-based install
         tokio::spawn({
             let manager = self.clone();
             let app_dir = app_dir.clone();
             let settings_handler = settings_handler.clone();
             async move {
-                let receiver = InstallDownloaderConfigRequest::get_dart_signal_receiver();
-                loop {
-                    match receiver.recv().await {
-                        Some(req) => {
-                            let src = PathBuf::from(req.message.source_path);
-                            debug!(path = %src.display(), "Received InstallDownloaderConfigRequest");
-                            let res = install_config(&app_dir, &src).await;
-                            manager.finalize_config_install(&app_dir, &settings_handler, res).await;
-                        }
-                        None => panic!("InstallDownloaderConfigRequest receiver closed"),
-                    }
-                }
-            }
-        });
-
-        // URL-based install
-        tokio::spawn({
-            let manager = self.clone();
-            async move {
                 let receiver = InstallDownloaderConfigFromUrlRequest::get_dart_signal_receiver();
                 loop {
                     match receiver.recv().await {
                         Some(req) => {
-                            let url = req.message.url;
-                            debug!(
-                                url = %url,
-                                "Received InstallDownloaderConfigFromUrlRequest"
-                            );
+                            let url = req.message.url.trim().to_string();
+                            debug!(url = %url, "Received InstallDownloaderConfigFromUrlRequest");
 
-                            let res = async {
-                                const BOOTSTRAP_CACHE_KEY: &str = "_bootstrap";
-                                let remote_cfg_path =
-                                    cache_config_from_url(&app_dir, BOOTSTRAP_CACHE_KEY, &url)
+                            let result = async {
+                                let cfg =
+                                    add_config_from_url(&app_dir, &settings_handler, &url, true)
                                         .await?;
-                                install_config(&app_dir, &remote_cfg_path).await
+                                Ok(cfg.id)
                             }
                             .await;
 
-                            manager.finalize_config_install(&app_dir, &settings_handler, res).await;
+                            manager
+                                .finalize_config_install(&app_dir, &settings_handler, result)
+                                .await;
                         }
                         None => {
                             panic!("InstallDownloaderConfigFromUrlRequest receiver closed")
@@ -337,11 +451,237 @@ impl DownloaderManager {
                 }
             }
         });
+
+        tokio::spawn({
+            let manager = self.clone();
+            let app_dir = app_dir.clone();
+            let settings_handler = settings_handler.clone();
+            async move {
+                let receiver = SelectDownloaderSourceRequest::get_dart_signal_receiver();
+                loop {
+                    match receiver.recv().await {
+                        Some(req) => {
+                            let config_id = req.message.config_id.trim().to_string();
+                            let result =
+                                select_active_config(&settings_handler, &app_dir, &config_id);
+                            if let Err(e) = result {
+                                send_error_toast("Failed to switch downloader source", &e);
+                                continue;
+                            }
+                            if let Err(e) = manager
+                                .initialize_from_managed(
+                                    app_dir.clone(),
+                                    settings_handler.clone(),
+                                    false,
+                                    None,
+                                )
+                                .await
+                            {
+                                send_error_toast("Failed to switch downloader source", &e);
+                            }
+                        }
+                        None => panic!("SelectDownloaderSourceRequest receiver closed"),
+                    }
+                }
+            }
+        });
+
+        tokio::spawn({
+            let manager = self.clone();
+            let app_dir = app_dir.clone();
+            let settings_handler = settings_handler.clone();
+            async move {
+                let receiver = RefreshDownloaderSourcesRequest::get_dart_signal_receiver();
+                loop {
+                    match receiver.recv().await {
+                        Some(_) => {
+                            let loaded = match load_managed_configs(&app_dir) {
+                                Ok(loaded) => loaded,
+                                Err(e) => {
+                                    send_error_toast("Failed to refresh downloader sources", &e);
+                                    continue;
+                                }
+                            };
+
+                            let active_id = resolve_active_config_id(
+                                &loaded.configs,
+                                current_active_config_id(&settings_handler),
+                            );
+                            send_configs_changed(
+                                &loaded.configs,
+                                active_id.as_deref(),
+                                true,
+                                loaded.error.clone(),
+                            );
+
+                            let outcome = refresh_all_configs(&app_dir, &loaded.configs).await;
+                            if outcome.failed.is_empty() {
+                                Toast::send(
+                                    "Downloader sources refreshed".into(),
+                                    format!("Updated {} source(s)", outcome.refreshed),
+                                    false,
+                                    None,
+                                );
+                            } else {
+                                Toast::send(
+                                    "Downloader source refresh completed".into(),
+                                    format!(
+                                        "Updated {} source(s), {} failed",
+                                        outcome.refreshed,
+                                        outcome.failed.len()
+                                    ),
+                                    true,
+                                    None,
+                                );
+                            }
+
+                            if let Err(e) = manager
+                                .initialize_from_managed(
+                                    app_dir.clone(),
+                                    settings_handler.clone(),
+                                    false,
+                                    outcome.error_message(),
+                                )
+                                .await
+                            {
+                                send_error_toast("Failed to refresh downloader sources", &e);
+                            }
+                        }
+                        None => panic!("RefreshDownloaderSourcesRequest receiver closed"),
+                    }
+                }
+            }
+        });
     }
 }
+
 fn is_http_url(value: &str) -> bool {
     let v = value.to_ascii_lowercase();
     v.starts_with("http://") || v.starts_with("https://")
+}
+
+fn managed_configs_dir(app_dir: &Path) -> PathBuf {
+    app_dir.join(MANAGED_CONFIGS_DIR)
+}
+
+fn managed_config_path(app_dir: &Path, config_id: &str) -> PathBuf {
+    managed_configs_dir(app_dir).join(format!("{config_id}.json"))
+}
+
+fn config_download_cache_path(app_dir: &Path, cache_key: &str) -> (PathBuf, PathBuf) {
+    let cache_dir = app_dir.join("downloader_cache").join(cache_key);
+    let cached_cfg_path = cache_dir.join("downloader_config.json");
+    (cache_dir, cached_cfg_path)
+}
+
+fn current_settings(settings_handler: &Arc<SettingsHandler>) -> Settings {
+    let rx = settings_handler.subscribe();
+    rx.borrow().clone()
+}
+
+fn current_active_config_id(settings_handler: &Arc<SettingsHandler>) -> String {
+    current_settings(settings_handler).active_downloader_config_id.trim().to_string()
+}
+
+fn save_active_config_id(
+    settings_handler: &Arc<SettingsHandler>,
+    config_id: Option<&str>,
+) -> Result<()> {
+    let mut settings = current_settings(settings_handler);
+    let new_id = config_id.unwrap_or_default().to_string();
+    if settings.active_downloader_config_id == new_id {
+        return Ok(());
+    }
+
+    settings.active_downloader_config_id = new_id;
+    settings_handler.save_settings(&settings)
+}
+
+fn send_error_toast(title: &str, error: &impl std::fmt::Display) {
+    Toast::send(title.into(), format!("{error:#}"), true, None);
+}
+
+fn resolve_active_config_id(configs: &[DownloaderConfig], desired_id: String) -> Option<String> {
+    if !desired_id.is_empty() && configs.iter().any(|cfg| cfg.id == desired_id) {
+        return Some(desired_id);
+    }
+
+    configs.iter().min_by(|left, right| left.id.cmp(&right.id)).map(|cfg| cfg.id.clone())
+}
+
+fn combine_errors(first: Option<String>, second: Option<String>) -> Option<String> {
+    match (first, second) {
+        (None, None) => None,
+        (Some(error), None) | (None, Some(error)) => Some(error),
+        (Some(first), Some(second)) => Some(format!("{first}\n{second}")),
+    }
+}
+
+fn send_configs_changed(
+    configs: &[DownloaderConfig],
+    active_config_id: Option<&str>,
+    refreshing: bool,
+    error: Option<String>,
+) {
+    DownloaderSourcesChanged {
+        configs: configs
+            .iter()
+            .map(|cfg| InstalledDownloaderConfig {
+                id: cfg.id.clone(),
+                display_name: cfg.effective_display_name(),
+                description: cfg.effective_description(),
+            })
+            .collect(),
+        active_config_id: active_config_id.map(ToOwned::to_owned),
+        refreshing,
+        error,
+    }
+    .send_signal_to_dart();
+}
+
+fn load_managed_configs(app_dir: &Path) -> Result<LoadedManagedConfigs> {
+    let dir = managed_configs_dir(app_dir);
+    if !dir.exists() {
+        return Ok(LoadedManagedConfigs::default());
+    }
+
+    let mut configs = Vec::new();
+    let mut ignored = Vec::new();
+
+    for entry in fs::read_dir(&dir).with_context(|| format!("Failed to read {}", dir.display()))? {
+        let entry = entry.with_context(|| format!("Failed to read entry in {}", dir.display()))?;
+        let path = entry.path();
+        if path.extension().and_then(|value| value.to_str()) != Some("json") {
+            continue;
+        }
+
+        match DownloaderConfig::load_from_path(&path).and_then(|cfg| {
+            cfg.validate_managed_remote(None)?;
+            Ok(cfg)
+        }) {
+            Ok(cfg) => configs.push(cfg),
+            Err(e) => {
+                warn!(
+                    error = e.as_ref() as &dyn Error,
+                    path = %path.display(),
+                    "Ignoring invalid managed downloader config"
+                );
+                ignored.push(format!(
+                    "{}: {:#}",
+                    path.file_name().and_then(|value| value.to_str()).unwrap_or("unknown"),
+                    e
+                ));
+            }
+        }
+    }
+
+    configs.sort_by(|left, right| left.id.cmp(&right.id));
+
+    Ok(LoadedManagedConfigs {
+        configs,
+        error: (!ignored.is_empty())
+            .then(|| format!("Ignored invalid downloader sources: {}", ignored.join("; "))),
+    })
 }
 
 #[instrument(level = "debug", skip(app_dir), err)]
@@ -349,8 +689,7 @@ async fn cache_config_from_url(app_dir: &Path, cache_key: &str, url: &str) -> Re
     ensure!(is_http_url(url), "Config update URL must start with http:// or https://");
     debug!(update_url = %url, cache_key = %cache_key, "Downloading downloader config from URL");
 
-    let cache_dir = app_dir.join("downloader_cache").join(cache_key);
-    let cached_cfg_path = cache_dir.join("downloader_config.json");
+    let (cache_dir, cached_cfg_path) = config_download_cache_path(app_dir, cache_key);
 
     let client = reqwest::Client::builder()
         .user_agent(crate::USER_AGENT)
@@ -363,43 +702,152 @@ async fn cache_config_from_url(app_dir: &Path, cache_key: &str, url: &str) -> Re
     Ok(cached_cfg_path)
 }
 
-#[instrument(level = "debug", skip(app_dir), err)]
-async fn maybe_update_config_from_url(
+fn write_managed_config(
     app_dir: &Path,
-    config_id: &str,
-    update_url: &str,
-) -> Result<()> {
-    ensure!(!update_url.is_empty(), "Update URL should not be empty");
+    src: &Path,
+    source_url: Option<&str>,
+    expected_id: Option<&str>,
+    refuse_existing: bool,
+) -> Result<DownloaderConfig> {
+    let cfg = DownloaderConfig::load_from_path(src)?;
+    cfg.validate_managed_remote(source_url)?;
+    if let Some(expected_id) = expected_id {
+        ensure!(
+            cfg.id == expected_id,
+            "Downloaded downloader config changed ID: expected {expected_id}, got {}",
+            cfg.id
+        );
+    }
 
-    let cached_cfg_path = cache_config_from_url(app_dir, config_id, update_url).await?;
+    let dst_dir = managed_configs_dir(app_dir);
+    fs::create_dir_all(&dst_dir)
+        .with_context(|| format!("Failed to create {}", dst_dir.display()))?;
 
-    install_config(app_dir, &cached_cfg_path).await?;
-    Ok(())
+    let dst = managed_config_path(app_dir, &cfg.id);
+    if refuse_existing {
+        ensure!(!dst.exists(), "Downloader config ID already installed: {}", cfg.id);
+    }
+
+    let tmp = dst_dir.join(format!("{}.json.tmp", cfg.id));
+    let content =
+        fs::read_to_string(src).with_context(|| format!("Failed to read {}", src.display()))?;
+    fs::write(&tmp, content).with_context(|| format!("Failed to write {}", tmp.display()))?;
+    fs::rename(&tmp, &dst).with_context(|| format!("Failed to replace {}", dst.display()))?;
+
+    Ok(cfg)
 }
 
-#[instrument(skip(app_dir, src), fields(src = %src.display()), err)]
-async fn install_config(app_dir: &Path, src: &Path) -> Result<()> {
-    ensure!(src.exists(), "Source file not found");
-    ensure!(src.is_file(), "Source path is not a file");
+async fn add_config_from_url(
+    app_dir: &Path,
+    settings_handler: &Arc<SettingsHandler>,
+    url: &str,
+    select_as_active: bool,
+) -> Result<DownloaderConfig> {
+    let remote_cfg_path = cache_config_from_url(app_dir, "_bootstrap", url).await?;
+    let cfg = write_managed_config(app_dir, &remote_cfg_path, Some(url), None, true)?;
+    if select_as_active {
+        save_active_config_id(settings_handler, Some(&cfg.id))?;
+    }
+    Ok(cfg)
+}
 
-    // Validate by parsing
-    let cfg = DownloaderConfig::load_from_path(src)?;
-    let rclone_path =
-        cfg.rclone_path.as_ref().map(ToString::to_string).unwrap_or_else(|| "<none>".to_string());
-    debug!(
-        rclone_path = %rclone_path,
-        rclone_config_path = cfg.rclone_config_path.as_deref().unwrap_or("<none>"),
-        "Validated downloader.json"
+async fn refresh_all_configs(app_dir: &Path, configs: &[DownloaderConfig]) -> RefreshOutcome {
+    let mut outcome = RefreshOutcome { refreshed: 0, failed: Vec::new() };
+
+    for cfg in configs {
+        let Some(update_url) = cfg.config_update_url.as_deref().map(str::trim) else {
+            outcome.failed.push(format!("{}: missing config_update_url", cfg.id));
+            continue;
+        };
+
+        let refresh_result = async {
+            let remote_cfg_path = cache_config_from_url(app_dir, &cfg.id, update_url).await?;
+            let _ = write_managed_config(app_dir, &remote_cfg_path, None, Some(&cfg.id), false)?;
+            Ok::<(), anyhow::Error>(())
+        }
+        .await;
+
+        match refresh_result {
+            Ok(()) => outcome.refreshed += 1,
+            Err(e) => {
+                warn!(
+                    error = e.as_ref() as &dyn Error,
+                    config_id = %cfg.id,
+                    "Failed to refresh downloader config"
+                );
+                outcome.failed.push(format!("{}: {:#}", cfg.id, e));
+            }
+        }
+    }
+
+    outcome
+}
+
+fn select_active_config(
+    settings_handler: &Arc<SettingsHandler>,
+    app_dir: &Path,
+    config_id: &str,
+) -> Result<()> {
+    ensure!(!config_id.is_empty(), "Downloader config ID must not be empty");
+
+    let loaded = load_managed_configs(app_dir)?;
+    ensure!(
+        loaded.configs.iter().any(|cfg| cfg.id == config_id),
+        "Downloader config is not installed: {config_id}"
     );
 
-    let dst = app_dir.join("downloader.json");
-    let tmp = app_dir.join("downloader.json.tmp");
-    let content = std::fs::read_to_string(src)
-        .with_context(|| format!("Failed to read {}", src.display()))?;
-    std::fs::write(&tmp, content).context("Failed to write temporary config file")?;
-    std::fs::rename(&tmp, &dst).with_context(|| format!("Failed to replace {}", dst.display()))?;
-    debug!(path = %dst.display(), "Installed downloader.json");
-    Ok(())
+    save_active_config_id(settings_handler, Some(config_id))
+}
+
+async fn migrate_legacy_config_if_needed(
+    app_dir: &Path,
+    settings_handler: &Arc<SettingsHandler>,
+) -> Option<anyhow::Error> {
+    let legacy_path = app_dir.join(LEGACY_CONFIG_FILENAME);
+    if !legacy_path.exists() {
+        return None;
+    }
+
+    info!(path = %legacy_path.display(), "Migrating legacy downloader config");
+
+    let migration_result = async {
+        let legacy_cfg = DownloaderConfig::load_from_path(&legacy_path)?;
+        let update_url = legacy_cfg
+            .config_update_url
+            .as_deref()
+            .map(str::trim)
+            .filter(|value| !value.is_empty())
+            .context("Legacy downloader config has no usable config_update_url")?;
+
+        let select_as_active = current_active_config_id(settings_handler).is_empty();
+
+        if managed_config_path(app_dir, &legacy_cfg.id).exists() {
+            if select_as_active {
+                save_active_config_id(settings_handler, Some(&legacy_cfg.id))?;
+            }
+            return Ok::<(), anyhow::Error>(());
+        }
+
+        let _ =
+            add_config_from_url(app_dir, settings_handler, update_url, select_as_active).await?;
+        Ok(())
+    }
+    .await;
+
+    match migration_result {
+        Ok(()) => {
+            if let Err(e) = fs::remove_file(&legacy_path) {
+                warn!(
+                    error = &e as &dyn Error,
+                    path = %legacy_path.display(),
+                    "Failed to delete legacy downloader config"
+                );
+                return Some(anyhow!("Failed to delete legacy downloader config: {e}"));
+            }
+            None
+        }
+        Err(e) => Some(e),
+    }
 }
 
 #[cfg(test)]
@@ -410,125 +858,193 @@ mod tests {
         matchers::{method, path},
     };
 
-    use super::{cache_config_from_url, install_config, maybe_update_config_from_url};
+    use super::*;
 
-    fn valid_config_json() -> String {
-        r#"{
-            "id": "test",
-            "layout": "ffa",
-            "rclone_path": "/bin/echo",
-            "rclone_config_path": "/tmp/rclone.conf",
-            "disable_randomize_remote": false
-        }"#
-        .to_string()
+    fn managed_config_json(id: &str, update_url: &str) -> String {
+        format!(
+            r#"{{
+                "id": "{id}",
+                "display_name": "Display {id}",
+                "description": "Description {id}",
+                "layout": "ffa",
+                "rclone_path": "/bin/echo",
+                "rclone_config_path": "/tmp/rclone.conf",
+                "config_update_url": "{update_url}"
+            }}"#
+        )
     }
 
-    #[tokio::test(flavor = "multi_thread")]
-    async fn install_config_copies_and_validates() {
+    fn legacy_config_json_without_update_url(id: &str) -> String {
+        format!(
+            r#"{{
+                "id": "{id}",
+                "layout": "ffa",
+                "rclone_path": "/bin/echo",
+                "rclone_config_path": "/tmp/rclone.conf"
+            }}"#
+        )
+    }
+
+    #[test]
+    fn write_managed_config_requires_matching_update_url() {
         let dir = tempdir().unwrap();
         let src = dir.path().join("src.json");
-        std::fs::write(&src, valid_config_json()).unwrap();
+        std::fs::write(&src, managed_config_json("test", "https://example.com/downloader.json"))
+            .unwrap();
 
-        install_config(dir.path(), &src).await.expect("install ok");
+        let err = write_managed_config(
+            dir.path(),
+            &src,
+            Some("https://other.example/config.json"),
+            None,
+            true,
+        )
+        .unwrap_err();
+        assert!(format!("{:#}", err).contains("Config update URL mismatch"));
+    }
 
-        let dst = dir.path().join("downloader.json");
-        assert!(dst.is_file());
-        let content = std::fs::read_to_string(dst).unwrap();
-        assert!(content.contains("\"rclone_path\""));
+    #[test]
+    fn write_managed_config_rejects_duplicate_id() {
+        let dir = tempdir().unwrap();
+        let src = dir.path().join("src.json");
+        std::fs::write(&src, managed_config_json("test", "https://example.com/downloader.json"))
+            .unwrap();
+
+        let first = write_managed_config(
+            dir.path(),
+            &src,
+            Some("https://example.com/downloader.json"),
+            None,
+            true,
+        )
+        .unwrap();
+        assert_eq!(first.id, "test");
+
+        let err = write_managed_config(
+            dir.path(),
+            &src,
+            Some("https://example.com/downloader.json"),
+            None,
+            true,
+        )
+        .unwrap_err();
+        assert!(format!("{:#}", err).contains("Downloader config ID already installed"));
     }
 
     #[tokio::test(flavor = "multi_thread")]
-    async fn install_config_fails_for_missing_source() {
+    async fn refresh_all_configs_allows_update_url_change() {
         let dir = tempdir().unwrap();
-        let src = dir.path().join("missing.json");
-        let err = install_config(dir.path(), &src).await.unwrap_err();
-        assert!(format!("{:#}", err).contains("Source file not found"));
-    }
+        let app_dir = dir.path();
+        let managed_dir = managed_configs_dir(app_dir);
+        std::fs::create_dir_all(&managed_dir).unwrap();
 
-    #[tokio::test(flavor = "multi_thread")]
-    async fn install_config_fails_for_invalid_json() {
-        let dir = tempdir().unwrap();
-        let src = dir.path().join("bad.json");
-        std::fs::write(&src, "not-json").unwrap();
-        let err = install_config(dir.path(), &src).await.unwrap_err();
-        let msg = format!("{:#}", err);
-        assert!(msg.contains("Failed to parse downloader.json") || msg.contains("parse"));
-    }
-
-    #[tokio::test(flavor = "multi_thread")]
-    async fn cache_config_from_url_writes_into_cache_dir() {
-        let dir = tempdir().unwrap();
         let server = MockServer::start().await;
-        let url_path = "/downloader.json";
-        const CONTENTS: &str = "{\"example\":\"ok\"}";
+        let original_url = format!("{}/downloader.json", server.uri());
+        let installed_path = managed_config_path(app_dir, "test");
+        std::fs::write(&installed_path, managed_config_json("test", &original_url)).unwrap();
 
         Mock::given(method("GET"))
-            .and(path(url_path))
-            .respond_with(ResponseTemplate::new(200).set_body_string(CONTENTS))
+            .and(path("/downloader.json"))
+            .respond_with(ResponseTemplate::new(200).set_body_string(managed_config_json(
+                "test",
+                "https://other.example/downloader.json",
+            )))
             .mount(&server)
             .await;
 
-        let url = format!("{}{}", server.uri(), url_path);
-        let cache_key = "test-cache";
+        let cfg = DownloaderConfig::load_from_path(&installed_path).expect("load installed config");
+        let outcome = refresh_all_configs(app_dir, &[cfg]).await;
 
-        let cached_path = cache_config_from_url(dir.path(), cache_key, &url).await.unwrap();
-
-        assert!(cached_path.ends_with("downloader_cache/test-cache/downloader_config.json"));
-        assert!(cached_path.exists());
-        let content = std::fs::read_to_string(cached_path).unwrap();
-        assert_eq!(content, CONTENTS);
+        assert_eq!(outcome.refreshed, 1);
+        assert!(outcome.failed.is_empty());
+        let installed = std::fs::read_to_string(&installed_path).unwrap();
+        assert!(installed.contains("https://other.example/downloader.json"));
     }
 
     #[tokio::test(flavor = "multi_thread")]
-    async fn maybe_update_config_from_url_installs_to_app_dir() {
+    async fn migrate_legacy_config_imports_remote_and_deletes_file() {
         let dir = tempdir().unwrap();
-        let app_dir = dir.path();
-
-        let cfg_json = valid_config_json();
+        let app_dir = dir.path().to_path_buf();
+        let settings = SettingsHandler::new(app_dir.clone(), true).unwrap();
 
         let server = MockServer::start().await;
-        let url_path = "/downloader.json";
-
+        let url = format!("{}/downloader.json", server.uri());
         Mock::given(method("GET"))
-            .and(path(url_path))
-            .respond_with(ResponseTemplate::new(200).set_body_string(cfg_json.clone()))
+            .and(path("/downloader.json"))
+            .respond_with(
+                ResponseTemplate::new(200).set_body_string(managed_config_json("legacy", &url)),
+            )
             .mount(&server)
             .await;
 
-        let url = format!("{}{}", server.uri(), url_path);
+        let legacy_path = app_dir.join(LEGACY_CONFIG_FILENAME);
+        std::fs::write(&legacy_path, managed_config_json("legacy", &url)).unwrap();
 
-        let dst = app_dir.join("downloader.json");
-        assert!(!dst.exists());
-
-        maybe_update_config_from_url(app_dir, "config-1", &url).await.expect("update from URL");
-
-        assert!(dst.exists());
-        let installed = std::fs::read_to_string(dst).unwrap();
-        assert_eq!(installed, cfg_json);
+        let warning = migrate_legacy_config_if_needed(&app_dir, &settings).await;
+        assert!(warning.is_none());
+        assert!(!legacy_path.exists());
+        assert!(managed_config_path(&app_dir, "legacy").exists());
     }
 
     #[tokio::test(flavor = "multi_thread")]
-    async fn maybe_update_config_from_url_fails_for_empty_url() {
+    async fn migrate_legacy_without_update_url_keeps_file() {
         let dir = tempdir().unwrap();
-        let app_dir = dir.path();
+        let app_dir = dir.path().to_path_buf();
+        let settings = SettingsHandler::new(app_dir.clone(), true).unwrap();
+        let legacy_path = app_dir.join(LEGACY_CONFIG_FILENAME);
+        std::fs::write(&legacy_path, legacy_config_json_without_update_url("legacy")).unwrap();
 
-        let dst = app_dir.join("downloader.json");
-        assert!(!dst.exists());
-
-        let err = maybe_update_config_from_url(app_dir, "config-empty", "").await.unwrap_err();
-        let msg = format!("{:#}", err);
-        assert!(msg.contains("Update URL should not be empty"));
-
-        assert!(!dst.exists());
+        let warning = migrate_legacy_config_if_needed(&app_dir, &settings).await;
+        assert!(warning.is_some());
+        assert!(legacy_path.exists());
+        assert!(!managed_config_path(&app_dir, "legacy").exists());
     }
 
-    #[tokio::test(flavor = "multi_thread")]
-    async fn cache_config_from_url_rejects_non_http_url() {
-        let dir = tempdir().unwrap();
+    #[test]
+    fn resolve_active_config_id_falls_back_to_first_sorted_config() {
+        let configs = vec![
+            DownloaderConfig {
+                id: "b".into(),
+                display_name: None,
+                description: None,
+                rclone_path: Some(crate::downloader::config::RclonePath::Single(
+                    "/bin/echo".into(),
+                )),
+                rclone_config_path: Some("/tmp/rclone.conf".into()),
+                remote_name_filter_regex: None,
+                disable_randomize_remote: false,
+                donation_remote_name: None,
+                donation_remote_path: None,
+                donation_blacklist_path: None,
+                layout: RepoLayoutKind::Ffa,
+                base_url: None,
+                root_dir: "Quest Games".into(),
+                list_path: "FFA.txt".into(),
+                config_update_url: Some("https://example.com/b.json".into()),
+            },
+            DownloaderConfig {
+                id: "a".into(),
+                display_name: None,
+                description: None,
+                rclone_path: Some(crate::downloader::config::RclonePath::Single(
+                    "/bin/echo".into(),
+                )),
+                rclone_config_path: Some("/tmp/rclone.conf".into()),
+                remote_name_filter_regex: None,
+                disable_randomize_remote: false,
+                donation_remote_name: None,
+                donation_remote_path: None,
+                donation_blacklist_path: None,
+                layout: RepoLayoutKind::Ffa,
+                base_url: None,
+                root_dir: "Quest Games".into(),
+                list_path: "FFA.txt".into(),
+                config_update_url: Some("https://example.com/a.json".into()),
+            },
+        ];
 
-        let err =
-            cache_config_from_url(dir.path(), "cache", "ftp://example.com/file").await.unwrap_err();
-        let msg = format!("{:#}", err);
-        assert!(msg.contains("Config update URL must start with http:// or https://"));
+        assert_eq!(resolve_active_config_id(&configs, String::new()).as_deref(), Some("a"));
+        assert_eq!(resolve_active_config_id(&configs, "missing".into()).as_deref(), Some("a"));
+        assert_eq!(resolve_active_config_id(&configs, "a".into()).as_deref(), Some("a"));
     }
 }

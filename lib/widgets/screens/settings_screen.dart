@@ -4,8 +4,8 @@ import 'dart:math' as math;
 import 'package:flutter/material.dart';
 import '../../utils/theme_utils.dart' as app_theme;
 import 'package:flutter/services.dart';
-import 'package:provider/provider.dart';
 import 'package:file_picker/file_picker.dart';
+import 'package:provider/provider.dart';
 import '../../src/bindings/bindings.dart';
 import 'package:url_launcher/url_launcher.dart';
 import '../../providers/settings_state.dart';
@@ -275,15 +275,11 @@ class _SettingsScreenState extends State<SettingsScreen> {
     }
   }
 
-  Future<void> _showDownloaderConfigFromUrlDialog(
-    String? currentConfigId,
-  ) async {
+  Future<void> _showDownloaderSourcesDialog() async {
     await showDialog<void>(
       context: context,
       barrierDismissible: false,
-      builder: (ctx) => DownloaderSetupDialog(
-        initialConfigId: currentConfigId,
-      ),
+      builder: (ctx) => const DownloaderSetupDialog(),
     );
   }
 
@@ -649,6 +645,8 @@ class _SettingsScreenState extends State<SettingsScreen> {
                 settingsState.downloaderError!,
               ),
             ),
+          if (settingsState.downloaderSources.isNotEmpty)
+            _buildDownloaderSourceSummary(l10n, settingsState),
           if (settingsState.isDownloaderAvailable) ...[
             if (settingsState.downloaderSupportsRemoteSelection)
               _buildRcloneRemoteSelector(l10n),
@@ -703,40 +701,10 @@ class _SettingsScreenState extends State<SettingsScreen> {
             child: Row(
               children: [
                 TextButton.icon(
-                  onPressed: () => _showDownloaderConfigFromUrlDialog(
-                    settingsState.downloaderConfigId,
-                  ),
+                  onPressed: _showDownloaderSourcesDialog,
                   icon: const Icon(Icons.cloud_download),
                   label: Text(l10n.installDownloaderConfigFromUrl),
                 ),
-                const SizedBox(width: 8),
-                TextButton.icon(
-                  onPressed: () async {
-                    final result = await FilePicker.pickFiles(
-                      dialogTitle: l10n.settingsSelectDownloaderConfig,
-                      allowMultiple: false,
-                      type: FileType.custom,
-                      allowedExtensions: const ['json'],
-                    );
-                    final path = result?.files.single.path;
-                    if (path != null) {
-                      InstallDownloaderConfigRequest(sourcePath: path)
-                          .sendSignalToRust();
-                    }
-                  },
-                  icon: const Icon(Icons.file_open),
-                  label: Text(l10n.installDownloaderConfig),
-                ),
-                if (settingsState.downloaderConfigId != null) ...[
-                  const SizedBox(width: 4),
-                  Text(
-                    l10n.downloaderConfigId(settingsState.downloaderConfigId!),
-                    style: Theme.of(context).textTheme.bodySmall?.copyWith(
-                          color: Theme.of(context).hintColor,
-                        ),
-                    overflow: TextOverflow.ellipsis,
-                  ),
-                ],
               ],
             ),
           ),
@@ -1058,8 +1026,6 @@ class _SettingsScreenState extends State<SettingsScreen> {
     final currentRemote = _currentFormSettings.rcloneRemoteName;
     final isCurrentInList = remotes.contains(currentRemote);
     final dropdownValue = isCurrentInList ? currentRemote : null;
-
-    final l10n = AppLocalizations.of(context);
     final items = <DropdownMenuItem<String>>[
       ...remotes.map((r) => DropdownMenuItem(value: r, child: Text(r))),
     ];
@@ -1133,6 +1099,80 @@ class _SettingsScreenState extends State<SettingsScreen> {
               ),
             ],
           ),
+        ],
+      ),
+    );
+  }
+
+  Widget _buildDownloaderSourceSummary(
+    AppLocalizations l10n,
+    SettingsState settingsState,
+  ) {
+    final selectedId = settingsState.downloaderConfigId;
+    final selectedSource = settingsState.activeDownloaderConfig;
+
+    return Padding(
+      padding: const EdgeInsets.symmetric(
+        vertical: SettingsConstants.verticalSpacing,
+      ),
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          if (settingsState.downloaderSourcesError != null)
+            Padding(
+              padding: const EdgeInsets.only(bottom: 8),
+              child: _statusText(
+                icon: Icons.error_outline,
+                color: Theme.of(context).colorScheme.error,
+                text: settingsState.downloaderSourcesError!,
+              ),
+            ),
+          Container(
+            width: double.infinity,
+            padding: const EdgeInsets.all(12),
+            decoration: BoxDecoration(
+              color: Theme.of(context)
+                  .colorScheme
+                  .surfaceContainerHighest
+                  .withValues(alpha: 0.45),
+              borderRadius: BorderRadius.circular(12),
+            ),
+            child: Column(
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                Text(
+                  selectedSource?.displayName ??
+                      l10n.downloaderSourceNoSelection,
+                  style: Theme.of(context).textTheme.titleSmall,
+                ),
+                if (selectedSource != null &&
+                    selectedSource.description.isNotEmpty) ...[
+                  const SizedBox(height: 4),
+                  Text(
+                    selectedSource.description,
+                    style: Theme.of(context).textTheme.bodySmall,
+                  ),
+                ],
+              ],
+            ),
+          ),
+          if (selectedId != null) ...[
+            const SizedBox(height: 8),
+            Text(
+              l10n.downloaderConfigId(selectedId),
+              style: Theme.of(context).textTheme.bodySmall?.copyWith(
+                    color: Theme.of(context).hintColor,
+                  ),
+            ),
+          ],
+          if (selectedSource != null && selectedSource.description.isNotEmpty)
+            Padding(
+              padding: const EdgeInsets.only(top: 4),
+              child: Text(
+                selectedSource.description,
+                style: Theme.of(context).textTheme.bodySmall,
+              ),
+            ),
         ],
       ),
     );

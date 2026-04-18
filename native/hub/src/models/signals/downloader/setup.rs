@@ -1,9 +1,6 @@
 use rinf::{DartSignal, RustSignal};
 
-#[derive(serde::Serialize, serde::Deserialize, DartSignal)]
-pub(crate) struct InstallDownloaderConfigRequest {
-    pub source_path: String,
-}
+use crate::models::InstalledDownloaderConfig;
 
 #[derive(serde::Serialize, serde::Deserialize, DartSignal)]
 pub(crate) struct InstallDownloaderConfigFromUrlRequest {
@@ -12,6 +9,22 @@ pub(crate) struct InstallDownloaderConfigFromUrlRequest {
 
 #[derive(serde::Serialize, serde::Deserialize, DartSignal)]
 pub(crate) struct RetryDownloaderInitRequest {}
+
+#[derive(serde::Serialize, serde::Deserialize, DartSignal)]
+pub(crate) struct RefreshDownloaderSourcesRequest {}
+
+#[derive(serde::Serialize, serde::Deserialize, DartSignal)]
+pub(crate) struct SelectDownloaderSourceRequest {
+    pub config_id: String,
+}
+
+#[derive(Default, serde::Serialize, serde::Deserialize, RustSignal)]
+pub(crate) struct DownloaderSourcesChanged {
+    pub configs: Vec<InstalledDownloaderConfig>,
+    pub active_config_id: Option<String>,
+    pub refreshing: bool,
+    pub error: Option<String>,
+}
 
 #[derive(serde::Serialize, serde::Deserialize, RustSignal)]
 pub(crate) struct DownloaderConfigInstallResult {

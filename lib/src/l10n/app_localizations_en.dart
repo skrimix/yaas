@@ -138,22 +138,37 @@ class AppLocalizationsEn extends AppLocalizations {
   String get installDownloaderConfig => 'Install local config';
 
   @override
-  String get installDownloaderConfigFromUrl => 'Set up from preset/URL';
+  String get installDownloaderConfigFromUrl => 'Manage sources';
 
   @override
   String get settingsSelectDownloaderConfig => 'Select downloader.json';
 
   @override
   String downloaderConfigId(String id) {
-    return 'Current config ID: $id';
+    return 'Source ID: $id';
   }
 
   @override
-  String get downloaderConfigFromUrlTitle => 'Set up downloader config';
+  String get downloaderConfigFromUrlTitle => 'Manage downloader sources';
 
   @override
   String get downloaderConfigFromUrlDescription =>
-      'Choose a preset configuration or use a custom URL. You can always change the configuration later in the settings.';
+      'Choose the active source or add a new one by URL.';
+
+  @override
+  String get downloaderSourcesListTitle => 'Installed sources';
+
+  @override
+  String get downloaderSourcesEmpty => 'No downloader sources added yet.';
+
+  @override
+  String get downloaderSourcesAddTitle => 'Add source';
+
+  @override
+  String get downloaderSourcesRefreshTooltip => 'Refresh all sources';
+
+  @override
+  String get downloaderSourceNoSelection => 'No active source selected';
 
   @override
   String get downloaderConfigTemplateVrgRus => 'VR Games RUS';
@@ -202,17 +217,16 @@ class AppLocalizationsEn extends AppLocalizations {
 
   @override
   String get downloaderConfigNotConfiguredDesc =>
-      'Install a downloader.json config to enable cloud app downloads.';
+      'Add a downloader source to enable cloud app downloads.';
 
   @override
-  String get downloaderConfigInstallButton => 'Install';
+  String get downloaderConfigInstallButton => 'Add source';
 
   @override
   String get downloaderConfigInstalling => 'Installing...';
 
   @override
-  String get downloaderConfigInstallFailed =>
-      'Failed to install downloader config';
+  String get downloaderConfigInstallFailed => 'Failed to add downloader source';
 
   @override
   String get loadingApps => 'Loading apps...';

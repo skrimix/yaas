@@ -77,14 +77,13 @@ impl RcloneStorage {
             anyhow!("Local path has no valid UTF-8 file name: {}", local_path.display())
         })?;
 
-        let remote_dir_path = if remote_dir.is_empty() {
-            PathBuf::from(file_name)
-        } else {
-            PathBuf::from(remote_dir.trim_start_matches(['/', '\\'])).join(file_name)
-        };
-
-        let dest = format!("{remote}:{}", remote_dir_path.display());
-        debug!(src = %local_path.display(), dest = %dest, "Starting rclone upload");
+        let dest = format_upload_destination(remote, remote_dir);
+        debug!(
+            src = %local_path.display(),
+            dest = %dest,
+            file_name,
+            "Starting rclone upload"
+        );
 
         let total_bytes = fs::metadata(local_path)
             .await
@@ -162,6 +161,15 @@ impl RcloneStorage {
     }
 }
 
+fn format_upload_destination(remote: &str, remote_dir: &str) -> String {
+    let remote_dir = normalize_relative_remote_path(remote_dir);
+    if remote_dir.is_empty() { format!("{remote}:") } else { format!("{remote}:{remote_dir}") }
+}
+
+fn normalize_relative_remote_path(path: &str) -> String {
+    path.trim_matches(['/', '\\']).replace('\\', "/")
+}
+
 fn filter_remotes_with_regex(remotes: Vec<String>, regex: Option<&Regex>) -> Vec<String> {
     if let Some(re) = regex {
         remotes.into_iter().filter(|r| re.is_match(r)).collect()
@@ -214,5 +222,25 @@ mod tests {
 
         assert_eq!(base, same, "identical bandwidth limits should be equal");
         assert_ne!(base, with_limit, "changing bandwidth limit should change storage equality");
+    }
+
+    #[test]
+    fn upload_destination_is_remote_directory_for_rclone_copy() {
+        assert_eq!(format_upload_destination("FFA-DD", "_donations"), "FFA-DD:_donations");
+        assert_eq!(format_upload_destination("FFA-DD", "/_donations/"), "FFA-DD:_donations");
+    }
+
+    #[test]
+    fn upload_destination_supports_remote_root() {
+        assert_eq!(format_upload_destination("FFA-DD", ""), "FFA-DD:");
+        assert_eq!(format_upload_destination("FFA-DD", "/"), "FFA-DD:");
+    }
+
+    #[test]
+    fn upload_destination_uses_remote_path_separators() {
+        assert_eq!(
+            format_upload_destination("FFA-DD", r"uploads\donations"),
+            "FFA-DD:uploads/donations"
+        );
     }
 }

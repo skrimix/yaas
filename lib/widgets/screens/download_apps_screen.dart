@@ -1208,7 +1208,6 @@ class _DownloadAppsScreenState extends State<DownloadAppsScreen> {
               onPressed: () async {
                 await showDialog<void>(
                   context: context,
-                  barrierDismissible: false,
                   builder: (ctx) => const DownloaderSetupDialog(),
                 );
               },

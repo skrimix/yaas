@@ -278,7 +278,6 @@ class _SettingsScreenState extends State<SettingsScreen> {
   Future<void> _showDownloaderSourcesDialog() async {
     await showDialog<void>(
       context: context,
-      barrierDismissible: false,
       builder: (ctx) => const DownloaderSetupDialog(),
     );
   }

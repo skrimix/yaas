@@ -10,6 +10,7 @@ use anyhow::{Context, Result, anyhow, bail, ensure};
 use async_trait::async_trait;
 use derive_more::Debug;
 use futures::StreamExt as _;
+use tempfile::TempDir;
 use tokio::{
     fs,
     io::{AsyncWriteExt, DuplexStream},
@@ -341,8 +342,9 @@ impl Repo for NewRepo {
             .await
             .with_context(|| format!("Failed to create {}", destination_parent.display()))?;
 
-        let temp_dir = unique_temp_dir(destination_parent, app_full_name);
-        debug!(path = %temp_dir.display(), "Prepared temporary extraction directory");
+        let temp_dir = create_temp_dir(destination_parent, app_full_name)?;
+        let temp_dir_path = temp_dir.path();
+        debug!(path = %temp_dir_path.display(), "Created temporary extraction directory");
         let download_result = async {
             send_status(&progress_tx, "Starting package download...");
             let response = send_with_cancellation(
@@ -360,10 +362,6 @@ impl Repo for NewRepo {
             );
 
             let total_bytes = response.content_length().unwrap_or(manifest.yarc_size);
-            fs::create_dir_all(&temp_dir)
-                .await
-                .with_context(|| format!("Failed to create {}", temp_dir.display()))?;
-            debug!(path = %temp_dir.display(), "Created temporary extraction directory");
 
             let (writer, reader) = tokio::io::duplex(256 * 1024);
             send_status(&progress_tx, "Downloading package...");
@@ -378,7 +376,7 @@ impl Repo for NewRepo {
 
             debug!("Starting streamed package extraction");
             let extract_result = YarcReader::new(yarc_key)
-                .extract_to_directory(reader, &temp_dir)
+                .extract_to_directory(reader, &temp_dir_path)
                 .await
                 .context("Failed to extract YARC package");
             let stream_result = join_transfer_task(stream_task).await;
@@ -392,14 +390,14 @@ impl Repo for NewRepo {
             ensure_not_cancelled(&cancellation_token)?;
             debug!("Restoring extracted file metadata from manifest");
             manifest
-                .apply_metadata_to_directory(&temp_dir)
+                .apply_metadata_to_directory(&temp_dir_path)
                 .await
                 .context("Failed to restore extracted YARC metadata")?;
             send_status(&progress_tx, "Verifying files...");
             debug!("Verifying extracted directory against manifest");
             ensure!(
                 manifest
-                    .verify_directory(&temp_dir)
+                    .verify_directory(&temp_dir_path)
                     .await
                     .context("Failed to verify extracted YARC package")?,
                 "Downloaded package contents did not match the manifest"
@@ -407,24 +405,24 @@ impl Repo for NewRepo {
 
             send_status(&progress_tx, "Finalizing download...");
             debug!(
-                from = %temp_dir.display(),
+                from = %temp_dir_path.display(),
                 to = %destination_dir.display(),
                 "Replacing destination directory with verified extraction"
             );
-            replace_directory(&temp_dir, destination_dir).await
+            replace_directory(&temp_dir_path, destination_dir).await
         }
         .await;
 
-        if temp_dir.exists() {
-            debug!(path = %temp_dir.display(), "Cleaning up temporary directory");
-            if let Err(error) = cleanup_temp_dir(&temp_dir).await {
+        if temp_dir_path.exists() {
+            debug!(path = %temp_dir_path.display(), "Cleaning up temporary directory");
+            if let Err(error) = cleanup_temp_dir(&temp_dir_path).await {
                 warn!(
-                    path = %temp_dir.display(),
+                    path = %temp_dir_path.display(),
                     error = error.as_ref() as &dyn Error,
                     "Failed to clean up temporary directory"
                 );
             } else {
-                debug!(path = %temp_dir.display(), "Finished temporary cleanup");
+                debug!(path = %temp_dir_path.display(), "Finished temporary cleanup");
             }
         }
 
@@ -686,12 +684,13 @@ fn ensure_not_cancelled(cancellation_token: &CancellationToken) -> Result<()> {
     Ok(())
 }
 
-fn unique_temp_dir(destination_parent: &Path, app_full_name: &str) -> PathBuf {
-    destination_parent.join(format!(
-        ".{}.newrepo-{}",
-        sanitize_filename::sanitize(app_full_name),
-        uuid::Uuid::new_v4()
-    ))
+fn create_temp_dir(destination_parent: &Path, app_full_name: &str) -> Result<TempDir> {
+    tempfile::Builder::new()
+        .prefix(&format!(".{}.newrepo-", sanitize_filename::sanitize(app_full_name)))
+        .tempdir_in(destination_parent)
+        .with_context(|| {
+            format!("Failed to create temporary directory in {}", destination_parent.display())
+        })
 }
 
 async fn replace_directory(temp_dir: &Path, destination_dir: &Path) -> Result<()> {

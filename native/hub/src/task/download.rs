@@ -11,6 +11,8 @@ use crate::{
     task::acquire_permit_or_cancel,
 };
 
+const DOWNLOAD_CANCEL_ABORT_TIMEOUT: Duration = Duration::from_secs(5);
+
 impl TaskManager {
     #[instrument(level = "debug", skip(self, update_progress, token))]
     async fn run_download_step(
@@ -66,8 +68,20 @@ impl TaskManager {
         // Marker for the "bytes" > "total_bytes" case
         // We cant calculate progress if we get to that point
         let mut unknown_progress = false;
+        let mut cancel_requested = false;
+        let mut cancel_deadline = None;
 
         while download_result.is_none() {
+            let abort_deadline = cancel_deadline;
+            let abort_timeout = async move {
+                if let Some(deadline) = abort_deadline {
+                    tokio::time::sleep_until(deadline).await;
+                } else {
+                    std::future::pending::<()>().await;
+                }
+            };
+            tokio::pin!(abort_timeout);
+
             tokio::select! {
                 result = &mut download_task => {
                     let app_path = result
@@ -76,17 +90,26 @@ impl TaskManager {
                     info!("Download task completed");
                     download_result = Some(app_path);
                 }
-                _ = token.cancelled() => {
+                _ = token.cancelled(), if !cancel_requested => {
                     info!(app_name = %app_full_name, "Cancelling active download task");
+                    cancel_requested = true;
+                    cancel_deadline = Some(tokio::time::Instant::now() + DOWNLOAD_CANCEL_ABORT_TIMEOUT);
                     update_progress(ProgressUpdate {
                         status: TaskStatus::Running,
                         step_number,
                         step_progress: None,
                         message: "Cancelling download...".into(),
                     });
+                }
+                _ = &mut abort_timeout => {
+                    warn!(
+                        app_name = %app_full_name,
+                        timeout_secs = DOWNLOAD_CANCEL_ABORT_TIMEOUT.as_secs(),
+                        "Download task did not stop after cancellation, aborting"
+                    );
                     download_task.abort();
                     let _ = download_task.await;
-                    debug!(app_name = %app_full_name, "Download task abort finished");
+                    debug!(app_name = %app_full_name, "Download task abort finished after timeout");
                     return Err(anyhow!("Task cancelled during download"));
                 }
                 Some(progress) = rx.recv() => {
@@ -166,6 +189,9 @@ impl TaskManager {
         }
 
         let app_path = download_result.expect("download_result should be Some after loop exit");
+        if cancel_requested || token.is_cancelled() {
+            return Err(anyhow!("Task cancelled during download"));
+        }
         info!(
             app_path = %app_path,
             download_permits = self.download_semaphore.available_permits() + 1,

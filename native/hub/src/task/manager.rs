@@ -352,7 +352,7 @@ impl TaskManager {
                         status: TaskStatus::Cancelled,
                         step_number: total_steps,
                         step_progress: None,
-                        message: "Task cancelled by user".into(),
+                        message: "Cancelled".into(),
                     });
                     Toast::send(
                         task_name,

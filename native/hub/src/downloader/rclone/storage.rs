@@ -61,7 +61,7 @@ impl RcloneStorage {
     /// Upload a single local file to an arbitrary remote and path.
     ///
     /// The file name from `local_path` is appended to `remote_dir`.
-    #[instrument(level = "debug", skip(self, stats_tx, cancellation_token), err)]
+    #[instrument(level = "debug", skip(self, stats_tx, cancellation_token))]
     pub(crate) async fn upload_file_to_remote(
         &self,
         local_path: &Path,
@@ -102,7 +102,7 @@ impl RcloneStorage {
             .await
     }
 
-    #[instrument(level = "debug", skip(self, stats_tx, cancellation_token), err, ret)]
+    #[instrument(level = "debug", skip(self, stats_tx, cancellation_token), ret)]
     pub(crate) async fn download_dir_with_stats(
         &self,
         source: String,
@@ -127,7 +127,7 @@ impl RcloneStorage {
             .map(|_| dest)
     }
 
-    #[instrument(level = "debug", skip(self), err, ret)]
+    #[instrument(level = "debug", skip(self, cancellation_token), ret)]
     pub(crate) async fn download_file(
         &self,
         source: String,

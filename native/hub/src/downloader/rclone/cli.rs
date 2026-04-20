@@ -209,7 +209,7 @@ impl RcloneCli {
         Ok(size_output)
     }
 
-    #[instrument(level = "debug", skip(self, cancellation_token), err)]
+    #[instrument(level = "debug", skip(self, cancellation_token))]
     pub(super) async fn transfer(
         &self,
         source: String,
@@ -220,7 +220,7 @@ impl RcloneCli {
         self.transfer_internal(source, dest, operation, None, None, cancellation_token).await
     }
 
-    #[instrument(level = "debug", skip(self, stats_tx, cancellation_token), err)]
+    #[instrument(level = "debug", skip(self, stats_tx, cancellation_token))]
     pub(super) async fn transfer_with_stats(
         &self,
         source: String,

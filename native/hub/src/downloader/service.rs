@@ -577,7 +577,7 @@ impl Downloader {
         }
     }
 
-    #[instrument(skip(self, progress_tx), err, ret)]
+    #[instrument(skip(self, progress_tx, cancellation_token), ret)]
     pub(crate) async fn download_app(
         &self,
         app_full_name: String,
@@ -590,7 +590,7 @@ impl Downloader {
         let _ = progress_tx.send(AppDownloadProgress::Status("Preparing download...".to_string()));
 
         let storage = self.storage.read().await.clone();
-        let download_result = self
+        let download_result = match self
             .repo
             .download_app(
                 storage,
@@ -601,7 +601,26 @@ impl Downloader {
                 progress_tx.clone(),
                 cancellation_token.clone(),
             )
-            .await?;
+            .await
+        {
+            Ok(result) => result,
+            Err(error) if cancellation_token.is_cancelled() => {
+                info!(
+                    app = %app_full_name,
+                    error = error.as_ref() as &dyn Error,
+                    "App download cancelled"
+                );
+                return Err(error);
+            }
+            Err(error) => {
+                error!(
+                    app = %app_full_name,
+                    error = error.as_ref() as &dyn Error,
+                    "App download failed"
+                );
+                return Err(error);
+            }
+        };
 
         if !download_result.skipped {
             let installation_id = self.installation_id.clone();

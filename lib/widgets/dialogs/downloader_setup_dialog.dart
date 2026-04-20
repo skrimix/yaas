@@ -7,6 +7,7 @@ import 'package:rinf/rinf.dart';
 import '../../providers/settings_state.dart';
 import '../../src/bindings/bindings.dart';
 import '../../src/l10n/app_localizations.dart';
+import '../common/selectable_link_text.dart';
 
 class DownloaderSetupDialog extends StatefulWidget {
   const DownloaderSetupDialog({super.key});
@@ -193,8 +194,8 @@ class _DownloaderSetupDialogState extends State<DownloaderSetupDialog> {
                     ),
                     if (source.description.isNotEmpty) ...[
                       const SizedBox(height: 6),
-                      Text(
-                        source.description,
+                      SelectableLinkText(
+                        text: source.description,
                         style: theme.textTheme.bodySmall?.copyWith(
                           color: colorScheme.onSurfaceVariant,
                         ),

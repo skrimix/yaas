@@ -12,6 +12,7 @@ import '../../providers/settings_state.dart';
 import '../../navigation.dart';
 import '../../src/l10n/app_localizations.dart';
 import '../../utils/sideload_utils.dart';
+import '../common/selectable_link_text.dart';
 import '../dialogs/downloader_setup_dialog.dart';
 
 enum SettingTextField {
@@ -1144,34 +1145,26 @@ class _SettingsScreenState extends State<SettingsScreen> {
                       l10n.downloaderSourceNoSelection,
                   style: Theme.of(context).textTheme.titleSmall,
                 ),
+                if (selectedId != null) ...[
+                  Text(
+                    selectedId,
+                    style: Theme.of(context).textTheme.bodySmall?.copyWith(
+                          color: Theme.of(context).hintColor,
+                          fontStyle: FontStyle.italic,
+                        ),
+                  ),
+                ],
                 if (selectedSource != null &&
                     selectedSource.description.isNotEmpty) ...[
                   const SizedBox(height: 4),
-                  Text(
-                    selectedSource.description,
+                  SelectableLinkText(
+                    text: selectedSource.description,
                     style: Theme.of(context).textTheme.bodySmall,
                   ),
                 ],
               ],
             ),
           ),
-          if (selectedId != null) ...[
-            const SizedBox(height: 8),
-            Text(
-              l10n.downloaderConfigId(selectedId),
-              style: Theme.of(context).textTheme.bodySmall?.copyWith(
-                    color: Theme.of(context).hintColor,
-                  ),
-            ),
-          ],
-          if (selectedSource != null && selectedSource.description.isNotEmpty)
-            Padding(
-              padding: const EdgeInsets.only(top: 4),
-              child: Text(
-                selectedSource.description,
-                style: Theme.of(context).textTheme.bodySmall,
-              ),
-            ),
         ],
       ),
     );

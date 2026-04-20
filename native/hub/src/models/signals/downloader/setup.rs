@@ -18,6 +18,11 @@ pub(crate) struct SelectDownloaderSourceRequest {
     pub config_id: String,
 }
 
+#[derive(serde::Serialize, serde::Deserialize, DartSignal)]
+pub(crate) struct RemoveDownloaderSourceRequest {
+    pub config_id: String,
+}
+
 #[derive(Default, serde::Serialize, serde::Deserialize, RustSignal)]
 pub(crate) struct DownloaderSourcesChanged {
     pub configs: Vec<InstalledDownloaderConfig>,
@@ -28,6 +33,13 @@ pub(crate) struct DownloaderSourcesChanged {
 
 #[derive(serde::Serialize, serde::Deserialize, RustSignal)]
 pub(crate) struct DownloaderConfigInstallResult {
+    pub success: bool,
+    pub error: Option<String>,
+}
+
+#[derive(serde::Serialize, serde::Deserialize, RustSignal)]
+pub(crate) struct DownloaderSourceRemovedResult {
+    pub config_id: String,
     pub success: bool,
     pub error: Option<String>,
 }

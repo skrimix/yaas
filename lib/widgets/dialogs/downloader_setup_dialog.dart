@@ -19,7 +19,10 @@ class _DownloaderSetupDialogState extends State<DownloaderSetupDialog> {
   final TextEditingController _urlController = TextEditingController();
   StreamSubscription<RustSignalPack<DownloaderConfigInstallResult>>?
       _installSub;
+  StreamSubscription<RustSignalPack<DownloaderSourceRemovedResult>>? _removeSub;
   bool _isAdding = false;
+  String? _removingSourceId;
+  String? _hoveredSourceId;
   bool _showAddSection = false;
   String? _errorText;
 
@@ -28,11 +31,14 @@ class _DownloaderSetupDialogState extends State<DownloaderSetupDialog> {
     super.initState();
     _installSub =
         DownloaderConfigInstallResult.rustSignalStream.listen(_onInstallResult);
+    _removeSub =
+        DownloaderSourceRemovedResult.rustSignalStream.listen(_onRemoveResult);
   }
 
   @override
   void dispose() {
     _installSub?.cancel();
+    _removeSub?.cancel();
     _urlController.dispose();
     super.dispose();
   }
@@ -89,6 +95,42 @@ class _DownloaderSetupDialogState extends State<DownloaderSetupDialog> {
     }
   }
 
+  void _onRemoveResult(
+    RustSignalPack<DownloaderSourceRemovedResult> pack,
+  ) {
+    if (!mounted || _removingSourceId != pack.message.configId) return;
+    setState(() {
+      _removingSourceId = null;
+    });
+  }
+
+  Future<void> _confirmRemoveSource(InstalledDownloaderConfig source) async {
+    final l10n = AppLocalizations.of(context);
+    final confirmed = await showDialog<bool>(
+      context: context,
+      builder: (context) => AlertDialog(
+        title: Text(l10n.downloaderSourceRemoveTitle),
+        content: Text(l10n.downloaderSourceRemoveConfirm(source.displayName)),
+        actions: [
+          TextButton(
+            onPressed: () => Navigator.of(context).pop(false),
+            child: Text(l10n.commonCancel),
+          ),
+          FilledButton(
+            onPressed: () => Navigator.of(context).pop(true),
+            child: Text(l10n.remove),
+          ),
+        ],
+      ),
+    );
+    if (confirmed != true || !mounted) return;
+
+    setState(() {
+      _removingSourceId = source.id;
+    });
+    context.read<SettingsState>().removeDownloaderSource(source.id);
+  }
+
   Widget _buildSourceTile(
     BuildContext context,
     InstalledDownloaderConfig source,
@@ -98,6 +140,8 @@ class _DownloaderSetupDialogState extends State<DownloaderSetupDialog> {
     final selected = source.id == selectedId;
     final theme = Theme.of(context);
     final colorScheme = theme.colorScheme;
+    final isRemoving = _removingSourceId == source.id;
+    final showRemoveAction = isRemoving || _hoveredSourceId == source.id;
 
     return Material(
       color: selected
@@ -106,6 +150,17 @@ class _DownloaderSetupDialogState extends State<DownloaderSetupDialog> {
       borderRadius: BorderRadius.circular(12),
       child: InkWell(
         borderRadius: BorderRadius.circular(12),
+        onHover: (hovering) {
+          if (_hoveredSourceId == source.id && !hovering) {
+            setState(() {
+              _hoveredSourceId = null;
+            });
+          } else if (_hoveredSourceId != source.id && hovering) {
+            setState(() {
+              _hoveredSourceId = source.id;
+            });
+          }
+        },
         onTap: enabled
             ? () =>
                 context.read<SettingsState>().selectDownloaderSource(source.id)
@@ -148,6 +203,33 @@ class _DownloaderSetupDialogState extends State<DownloaderSetupDialog> {
                   ],
                 ),
               ),
+              const SizedBox(width: 8),
+              Visibility(
+                visible: showRemoveAction,
+                child: IgnorePointer(
+                  ignoring: !showRemoveAction,
+                  child: IconButton(
+                    tooltip: AppLocalizations.of(context)
+                        .downloaderSourceRemoveTooltip(source.displayName),
+                    onPressed: enabled && !isRemoving
+                        ? () => _confirmRemoveSource(source)
+                        : null,
+                    constraints: const BoxConstraints.tightFor(
+                      width: 36,
+                      height: 36,
+                    ),
+                    padding: const EdgeInsets.all(6),
+                    iconSize: 24,
+                    icon: isRemoving
+                        ? const SizedBox(
+                            width: 16,
+                            height: 16,
+                            child: CircularProgressIndicator(strokeWidth: 2),
+                          )
+                        : const Icon(Icons.delete_outline),
+                  ),
+                ),
+              ),
             ],
           ),
         ),
@@ -164,7 +246,9 @@ class _DownloaderSetupDialogState extends State<DownloaderSetupDialog> {
       builder: (context, settingsState, _) {
         final sources = settingsState.downloaderSources;
         final selectedId = settingsState.downloaderConfigId;
-        final busy = _isAdding || settingsState.isDownloaderSourcesRefreshing;
+        final busy = _isAdding ||
+            _removingSourceId != null ||
+            settingsState.isDownloaderSourcesRefreshing;
         final showAddSection =
             _showAddSection || sources.isEmpty || _errorText != null;
 

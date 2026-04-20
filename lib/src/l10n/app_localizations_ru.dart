@@ -170,6 +170,19 @@ class AppLocalizationsRu extends AppLocalizations {
   String get downloaderSourcesRefreshTooltip => 'Обновить все источники';
 
   @override
+  String get downloaderSourceRemoveTitle => 'Убрать источник загрузчика';
+
+  @override
+  String downloaderSourceRemoveConfirm(String name) {
+    return 'Убрать \"$name\"?';
+  }
+
+  @override
+  String downloaderSourceRemoveTooltip(String name) {
+    return 'Убрать \"$name\"';
+  }
+
+  @override
   String get downloaderSourceNoSelection => 'Активный источник не выбран';
 
   @override
@@ -1122,6 +1135,9 @@ class AppLocalizationsRu extends AppLocalizations {
 
   @override
   String get delete => 'Удалить';
+
+  @override
+  String get remove => 'Убрать';
 
   @override
   String get restore => 'Восстановить';

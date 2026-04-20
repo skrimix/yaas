@@ -65,6 +65,23 @@
   "downloaderSourcesEmpty": "Источники загрузчика ещё не добавлены.",
   "downloaderSourcesAddTitle": "Добавить источник",
   "downloaderSourcesRefreshTooltip": "Обновить все источники",
+  "downloaderSourceRemoveTitle": "Убрать источник загрузчика",
+  "downloaderSourceRemoveConfirm": "Убрать \"{name}\"?",
+  "@downloaderSourceRemoveConfirm": {
+    "placeholders": {
+      "name": {
+        "type": "String"
+      }
+    }
+  },
+  "downloaderSourceRemoveTooltip": "Убрать \"{name}\"",
+  "@downloaderSourceRemoveTooltip": {
+    "placeholders": {
+      "name": {
+        "type": "String"
+      }
+    }
+  },
   "downloaderSourceNoSelection": "Активный источник не выбран",
   "downloaderConfigTemplateVrgRus": "VR Games RUS",
   "downloaderConfigTemplateVrgRusHint": "Только для стран СНГ",
@@ -539,6 +556,7 @@
     "rebootToFastbootConfirm": "Перезагрузить устройство в fastboot?",
     "commonConfirm": "Подтвердить",
     "delete": "Удалить",
+    "remove": "Убрать",
     "restore": "Восстановить",
     "mute": "Выключить звук",
     "unmute": "Включить звук",

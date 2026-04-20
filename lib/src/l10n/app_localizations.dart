@@ -398,6 +398,24 @@ abstract class AppLocalizations {
   /// **'Refresh all sources'**
   String get downloaderSourcesRefreshTooltip;
 
+  /// No description provided for @downloaderSourceRemoveTitle.
+  ///
+  /// In en, this message translates to:
+  /// **'Remove downloader source'**
+  String get downloaderSourceRemoveTitle;
+
+  /// No description provided for @downloaderSourceRemoveConfirm.
+  ///
+  /// In en, this message translates to:
+  /// **'Are you sure you want to remove \"{name}\"?'**
+  String downloaderSourceRemoveConfirm(String name);
+
+  /// No description provided for @downloaderSourceRemoveTooltip.
+  ///
+  /// In en, this message translates to:
+  /// **'Remove \"{name}\"'**
+  String downloaderSourceRemoveTooltip(String name);
+
   /// No description provided for @downloaderSourceNoSelection.
   ///
   /// In en, this message translates to:
@@ -2119,6 +2137,12 @@ abstract class AppLocalizations {
   /// In en, this message translates to:
   /// **'Delete'**
   String get delete;
+
+  /// No description provided for @remove.
+  ///
+  /// In en, this message translates to:
+  /// **'Remove'**
+  String get remove;
 
   /// No description provided for @restore.
   ///

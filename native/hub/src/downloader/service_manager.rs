@@ -23,8 +23,9 @@ use crate::{
             downloader::{
                 availability::DownloaderAvailabilityChanged,
                 setup::{
-                    DownloaderConfigInstallResult, DownloaderSourcesChanged,
-                    InstallDownloaderConfigFromUrlRequest, RefreshDownloaderSourcesRequest,
+                    DownloaderConfigInstallResult, DownloaderSourceRemovedResult,
+                    DownloaderSourcesChanged, InstallDownloaderConfigFromUrlRequest,
+                    RefreshDownloaderSourcesRequest, RemoveDownloaderSourceRequest,
                     RetryDownloaderInitRequest, SelectDownloaderSourceRequest,
                 },
             },
@@ -413,6 +414,91 @@ impl DownloaderManager {
         }
     }
 
+    async fn finalize_source_removal(
+        &self,
+        app_dir: &Path,
+        settings_handler: &Arc<SettingsHandler>,
+        config_id: String,
+        result: Result<()>,
+    ) {
+        match result {
+            Ok(()) => {
+                let init_result = self
+                    .initialize_from_managed(
+                        app_dir.to_path_buf(),
+                        settings_handler.clone(),
+                        false,
+                        None,
+                    )
+                    .await;
+
+                let cleanup_result = delete_config_cache_dir(app_dir, &config_id);
+
+                let mut errors = Vec::new();
+                if let Err(e) = init_result {
+                    error!(
+                        error = e.as_ref() as &dyn Error,
+                        config_id = %config_id,
+                        "Downloader init after source removal failed"
+                    );
+                    errors.push(format!(
+                        "Source removed, but failed to initialize downloader: {:#}",
+                        e
+                    ));
+                }
+                if let Err(e) = cleanup_result {
+                    error!(
+                        error = e.as_ref() as &dyn Error,
+                        config_id = %config_id,
+                        "Downloader cache cleanup after source removal failed"
+                    );
+                    errors.push(format!("Source removed, but failed to clean cache: {:#}", e));
+                }
+
+                let error = (!errors.is_empty()).then(|| errors.join("\n"));
+                let success = error.is_none();
+
+                DownloaderSourceRemovedResult {
+                    config_id: config_id.clone(),
+                    success,
+                    error: error.clone(),
+                }
+                .send_signal_to_dart();
+
+                match error {
+                    Some(error) => {
+                        Toast::send("Downloader source removed".into(), error, true, None)
+                    }
+                    None => Toast::send(
+                        "Downloader source removed".into(),
+                        format!("Removed source {config_id}"),
+                        false,
+                        None,
+                    ),
+                }
+            }
+            Err(e) => {
+                error!(
+                    error = e.as_ref() as &dyn Error,
+                    config_id = %config_id,
+                    "Failed to remove downloader source"
+                );
+                DownloaderSourceRemovedResult {
+                    config_id: config_id.clone(),
+                    success: false,
+                    error: Some(format!("{:#}", e)),
+                }
+                .send_signal_to_dart();
+                Toast::send(
+                    "Failed to remove downloader source".into(),
+                    format!("{:#}", e),
+                    true,
+                    None,
+                );
+            }
+        }
+    }
+
     fn start_request_handlers(
         self: Arc<Self>,
         app_dir: PathBuf,
@@ -445,6 +531,36 @@ impl DownloaderManager {
                         None => {
                             panic!("InstallDownloaderConfigFromUrlRequest receiver closed")
                         }
+                    }
+                }
+            }
+        });
+
+        tokio::spawn({
+            let manager = self.clone();
+            let app_dir = app_dir.clone();
+            let settings_handler = settings_handler.clone();
+            async move {
+                let receiver = RemoveDownloaderSourceRequest::get_dart_signal_receiver();
+                loop {
+                    match receiver.recv().await {
+                        Some(req) => {
+                            let config_id = req.message.config_id.trim().to_string();
+                            debug!(config_id = %config_id, "Received RemoveDownloaderSourceRequest");
+
+                            let result =
+                                delete_managed_config(&settings_handler, &app_dir, &config_id);
+
+                            manager
+                                .finalize_source_removal(
+                                    &app_dir,
+                                    &settings_handler,
+                                    config_id,
+                                    result,
+                                )
+                                .await;
+                        }
+                        None => panic!("RemoveDownloaderSourceRequest receiver closed"),
                     }
                 }
             }
@@ -820,6 +936,34 @@ fn select_active_config(
     save_active_config_id(settings_handler, Some(config_id))
 }
 
+fn delete_managed_config(
+    settings_handler: &Arc<SettingsHandler>,
+    app_dir: &Path,
+    config_id: &str,
+) -> Result<()> {
+    ensure!(!config_id.is_empty(), "Downloader config ID must not be empty");
+
+    let path = managed_config_path(app_dir, config_id);
+    ensure!(path.exists(), "Downloader config is not installed: {config_id}");
+
+    fs::remove_file(&path).with_context(|| format!("Failed to delete {}", path.display()))?;
+
+    let loaded = load_managed_configs(app_dir)?;
+    let next_active_id =
+        resolve_active_config_id(&loaded.configs, current_active_config_id(settings_handler));
+    save_active_config_id(settings_handler, next_active_id.as_deref())
+}
+
+fn delete_config_cache_dir(app_dir: &Path, config_id: &str) -> Result<()> {
+    let cache_dir = app_dir.join("downloader_cache").join(config_id);
+    if cache_dir.exists() {
+        fs::remove_dir_all(&cache_dir)
+            .with_context(|| format!("Failed to delete {}", cache_dir.display()))?;
+    }
+
+    Ok(())
+}
+
 fn spawn_background_refresh(
     app_dir: PathBuf,
     settings_handler: Arc<SettingsHandler>,
@@ -1092,5 +1236,61 @@ mod tests {
         assert_eq!(resolve_active_config_id(&configs, String::new()).as_deref(), Some("a"));
         assert_eq!(resolve_active_config_id(&configs, "missing".into()).as_deref(), Some("a"));
         assert_eq!(resolve_active_config_id(&configs, "a".into()).as_deref(), Some("a"));
+    }
+
+    #[tokio::test(flavor = "multi_thread")]
+    async fn delete_managed_config_reassigns_active_source() {
+        let dir = tempdir().unwrap();
+        let app_dir = dir.path().to_path_buf();
+        let settings = SettingsHandler::new(app_dir.clone(), true).unwrap();
+
+        let alpha = managed_config_path(&app_dir, "alpha");
+        let beta = managed_config_path(&app_dir, "beta");
+        std::fs::create_dir_all(managed_configs_dir(&app_dir)).unwrap();
+        std::fs::write(&alpha, managed_config_json("alpha", "https://example.com/alpha.json"))
+            .unwrap();
+        std::fs::write(&beta, managed_config_json("beta", "https://example.com/beta.json"))
+            .unwrap();
+
+        save_active_config_id(&settings, Some("beta")).unwrap();
+
+        delete_managed_config(&settings, &app_dir, "beta").unwrap();
+
+        assert!(!beta.exists());
+        assert!(alpha.exists());
+        assert_eq!(current_active_config_id(&settings), "alpha");
+    }
+
+    #[tokio::test(flavor = "multi_thread")]
+    async fn delete_managed_config_clears_active_source_when_last_removed() {
+        let dir = tempdir().unwrap();
+        let app_dir = dir.path().to_path_buf();
+        let settings = SettingsHandler::new(app_dir.clone(), true).unwrap();
+
+        let only = managed_config_path(&app_dir, "only");
+        std::fs::create_dir_all(managed_configs_dir(&app_dir)).unwrap();
+        std::fs::write(&only, managed_config_json("only", "https://example.com/only.json"))
+            .unwrap();
+
+        save_active_config_id(&settings, Some("only")).unwrap();
+
+        delete_managed_config(&settings, &app_dir, "only").unwrap();
+
+        assert!(!only.exists());
+        assert_eq!(current_active_config_id(&settings), "");
+    }
+
+    #[test]
+    fn delete_config_cache_dir_removes_runtime_directory() {
+        let dir = tempdir().unwrap();
+        let app_dir = dir.path().to_path_buf();
+        let cache_dir = app_dir.join("downloader_cache").join("test");
+
+        std::fs::create_dir_all(&cache_dir).unwrap();
+        std::fs::write(cache_dir.join("downloader_config.json"), "cached").unwrap();
+
+        delete_config_cache_dir(&app_dir, "test").unwrap();
+
+        assert!(!cache_dir.exists());
     }
 }

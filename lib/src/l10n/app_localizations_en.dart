@@ -168,6 +168,19 @@ class AppLocalizationsEn extends AppLocalizations {
   String get downloaderSourcesRefreshTooltip => 'Refresh all sources';
 
   @override
+  String get downloaderSourceRemoveTitle => 'Remove downloader source';
+
+  @override
+  String downloaderSourceRemoveConfirm(String name) {
+    return 'Are you sure you want to remove \"$name\"?';
+  }
+
+  @override
+  String downloaderSourceRemoveTooltip(String name) {
+    return 'Remove \"$name\"';
+  }
+
+  @override
   String get downloaderSourceNoSelection => 'No active source selected';
 
   @override
@@ -1110,6 +1123,9 @@ class AppLocalizationsEn extends AppLocalizations {
 
   @override
   String get delete => 'Delete';
+
+  @override
+  String get remove => 'Remove';
 
   @override
   String get restore => 'Restore';

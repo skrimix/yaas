@@ -254,6 +254,10 @@ class SettingsState extends ChangeNotifier {
     SelectDownloaderSourceRequest(configId: configId).sendSignalToRust();
   }
 
+  Future<void> removeDownloaderSource(String configId) async {
+    RemoveDownloaderSourceRequest(configId: configId).sendSignalToRust();
+  }
+
   bool _normalizeStartupPageKey() {
     if (_availableStartupKeys.isEmpty) {
       return false;

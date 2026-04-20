@@ -27,7 +27,7 @@ pub(crate) struct SideloadProgress {
 
 impl AdbDevice {
     /// Executes an install script from the given path
-    #[instrument(level = "debug", skip(self), err)]
+    #[instrument(level = "debug", skip(self, token))]
     async fn execute_install_script(
         &self,
         script_path: &Path,
@@ -232,7 +232,7 @@ impl AdbDevice {
     /// # Arguments
     /// * `app_dir` - Path to directory containing the app files
     /// * `progress_sender` - Sender for progress updates
-    #[instrument(level = "debug", skip(self, progress_sender), err)]
+    #[instrument(level = "debug", skip(self, progress_sender, token))]
     pub(crate) async fn sideload_app(
         &self,
         app_dir: &Path,

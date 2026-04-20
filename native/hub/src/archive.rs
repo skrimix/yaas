@@ -95,7 +95,7 @@ where
 
 /// Create a ZIP archive from the contents of `src_dir` into `dest_dir` with the given file name.
 /// If `archive_name` has no extension, `.zip` is appended.
-#[instrument(skip(src_dir, dest_dir, cancel), err, level = "debug")]
+#[instrument(skip(src_dir, dest_dir, cancel), level = "debug")]
 pub(crate) async fn create_zip_from_dir(
     src_dir: &Path,
     dest_dir: &Path,
@@ -141,7 +141,7 @@ pub(crate) async fn create_zip_from_dir(
 /// - `wanted`: if provided and non-empty, only extracts the listed entries.
 /// - `archive` can be a regular archive file or the first segment of a
 ///   multi-volume archive (e.g. `file.7z.001`). 7-Zip will detect parts.
-#[instrument(skip(archive, dest_dir, password, wanted, cancel), err, level = "debug")]
+#[instrument(skip(archive, dest_dir, password, wanted, cancel), level = "debug")]
 pub(crate) async fn decompress_archive(
     archive: &Path,
     dest_dir: &Path,
@@ -170,7 +170,7 @@ pub(crate) async fn decompress_archive(
 }
 
 /// Decompresses all `.7z` archives found directly under `dir` into `dir`.
-#[instrument(level = "debug", skip(dir, cancel), err)]
+#[instrument(level = "debug", skip(dir, cancel))]
 pub(crate) async fn decompress_all_7z_in_dir(
     dir: &Path,
     cancel: Option<CancellationToken>,

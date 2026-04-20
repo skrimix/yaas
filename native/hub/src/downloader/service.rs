@@ -284,7 +284,7 @@ impl Downloader {
     ///
     /// This uses optional `donation_remote_name` and `donation_remote_path` from DownloaderConfig.
     /// If either is missing or empty, the call fails with a configuration error.
-    #[instrument(skip(self, stats_tx, cancellation_token), err)]
+    #[instrument(skip(self, stats_tx, cancellation_token))]
     pub(crate) async fn upload_donation_archive(
         &self,
         archive_path: &Path,

@@ -100,7 +100,7 @@
   "downloaderConfigVrgRusTestRequiredTooltip": "Сначала пройдите проверку доступа, либо выберите другой сервер.",
   "downloaderConfigNotConfiguredTitle": "Облачный загрузчик не настроен",
   "downloaderConfigNotConfiguredDesc": "Добавьте источник загрузчика, чтобы включить загрузку приложений из облака.",
-  "downloaderConfigInstallButton": "Добавить источник",
+  "downloaderConfigInstallButton": "Добавить",
   "downloaderConfigInstalling": "Установка...",
   "downloaderConfigInstallFailed": "Не удалось добавить источник загрузчика",
   "loadingApps": "Загрузка списка приложений...",

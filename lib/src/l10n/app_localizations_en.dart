@@ -220,7 +220,7 @@ class AppLocalizationsEn extends AppLocalizations {
       'Add a downloader source to enable cloud app downloads.';
 
   @override
-  String get downloaderConfigInstallButton => 'Add source';
+  String get downloaderConfigInstallButton => 'Add';
 
   @override
   String get downloaderConfigInstalling => 'Installing...';

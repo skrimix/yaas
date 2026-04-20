@@ -20,6 +20,7 @@ class _DownloaderSetupDialogState extends State<DownloaderSetupDialog> {
   StreamSubscription<RustSignalPack<DownloaderConfigInstallResult>>?
       _installSub;
   bool _isAdding = false;
+  bool _showAddSection = false;
   String? _errorText;
 
   @override
@@ -72,6 +73,7 @@ class _DownloaderSetupDialogState extends State<DownloaderSetupDialog> {
     if (result.success) {
       setState(() {
         _isAdding = false;
+        _showAddSection = false;
         _errorText = null;
         _urlController.clear();
       });
@@ -79,6 +81,7 @@ class _DownloaderSetupDialogState extends State<DownloaderSetupDialog> {
       final l10n = AppLocalizations.of(context);
       setState(() {
         _isAdding = false;
+        _showAddSection = true;
         _errorText = result.error?.isNotEmpty == true
             ? result.error
             : l10n.downloaderConfigInstallFailed;
@@ -96,29 +99,26 @@ class _DownloaderSetupDialogState extends State<DownloaderSetupDialog> {
     final theme = Theme.of(context);
     final colorScheme = theme.colorScheme;
 
-    return Card(
-      margin: const EdgeInsets.only(bottom: 10),
+    return Material(
       color: selected
-          ? colorScheme.primaryContainer.withValues(alpha: 0.55)
-          : colorScheme.surfaceContainerHighest.withValues(alpha: 0.35),
-      shape: RoundedRectangleBorder(
-        borderRadius: BorderRadius.circular(14),
-        side: BorderSide(
-          color: selected ? colorScheme.primary : colorScheme.outlineVariant,
-        ),
-      ),
+          ? colorScheme.secondaryContainer.withValues(alpha: 0.45)
+          : Colors.transparent,
+      borderRadius: BorderRadius.circular(12),
       child: InkWell(
-        borderRadius: BorderRadius.circular(14),
+        borderRadius: BorderRadius.circular(12),
         onTap: enabled
             ? () =>
                 context.read<SettingsState>().selectDownloaderSource(source.id)
             : null,
         child: Padding(
-          padding: const EdgeInsets.all(14),
+          padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 10),
           child: Row(
             crossAxisAlignment: CrossAxisAlignment.start,
             children: [
-              Radio<String>(value: source.id),
+              Padding(
+                padding: const EdgeInsets.only(top: 2),
+                child: Radio<String>(value: source.id),
+              ),
               const SizedBox(width: 8),
               Expanded(
                 child: Column(
@@ -128,29 +128,23 @@ class _DownloaderSetupDialogState extends State<DownloaderSetupDialog> {
                       source.displayName,
                       style: theme.textTheme.titleSmall,
                     ),
-                    if (source.description.isNotEmpty) ...[
-                      const SizedBox(height: 4),
-                      Text(
-                        source.description,
-                        style: theme.textTheme.bodySmall,
-                      ),
-                    ],
-                    const SizedBox(height: 10),
-                    Container(
-                      padding: const EdgeInsets.symmetric(
-                        horizontal: 10,
-                        vertical: 6,
-                      ),
-                      decoration: BoxDecoration(
-                        color: colorScheme.surface.withValues(alpha: 0.9),
-                        borderRadius: BorderRadius.circular(999),
-                      ),
-                      child: Text(
-                        AppLocalizations.of(context)
-                            .downloaderConfigId(source.id),
-                        style: theme.textTheme.labelSmall,
+                    const SizedBox(height: 2),
+                    Text(
+                      source.id,
+                      style: theme.textTheme.bodySmall?.copyWith(
+                        color: colorScheme.onSurfaceVariant,
+                        fontStyle: FontStyle.italic,
                       ),
                     ),
+                    if (source.description.isNotEmpty) ...[
+                      const SizedBox(height: 6),
+                      Text(
+                        source.description,
+                        style: theme.textTheme.bodySmall?.copyWith(
+                          color: colorScheme.onSurfaceVariant,
+                        ),
+                      ),
+                    ],
                   ],
                 ),
               ),
@@ -171,6 +165,8 @@ class _DownloaderSetupDialogState extends State<DownloaderSetupDialog> {
         final sources = settingsState.downloaderSources;
         final selectedId = settingsState.downloaderConfigId;
         final busy = _isAdding || settingsState.isDownloaderSourcesRefreshing;
+        final showAddSection =
+            _showAddSection || sources.isEmpty || _errorText != null;
 
         return AlertDialog(
           title: Row(
@@ -213,28 +209,22 @@ class _DownloaderSetupDialogState extends State<DownloaderSetupDialog> {
                         ),
                   ),
                 ],
-                const SizedBox(height: 16),
-                Text(
-                  l10n.downloaderSourcesListTitle,
-                  style: Theme.of(context).textTheme.titleSmall,
-                ),
-                const SizedBox(height: 10),
+                const SizedBox(height: 12),
                 ConstrainedBox(
                   constraints: const BoxConstraints(maxHeight: 280),
                   child: sources.isEmpty
-                      ? Container(
-                          width: double.infinity,
-                          padding: const EdgeInsets.all(16),
-                          decoration: BoxDecoration(
-                            color: Theme.of(context)
-                                .colorScheme
-                                .surfaceContainerHighest
-                                .withValues(alpha: 0.35),
-                            borderRadius: BorderRadius.circular(14),
-                          ),
+                      ? Padding(
+                          padding: const EdgeInsets.symmetric(vertical: 12),
                           child: Text(
                             l10n.downloaderSourcesEmpty,
-                            style: Theme.of(context).textTheme.bodyMedium,
+                            style: Theme.of(context)
+                                .textTheme
+                                .bodyMedium
+                                ?.copyWith(
+                                  color: Theme.of(context)
+                                      .colorScheme
+                                      .onSurfaceVariant,
+                                ),
                           ),
                         )
                       : RadioGroup<String>(
@@ -245,66 +235,129 @@ class _DownloaderSetupDialogState extends State<DownloaderSetupDialog> {
                           },
                           child: SingleChildScrollView(
                             child: Column(
+                              crossAxisAlignment: CrossAxisAlignment.stretch,
                               children: [
-                                for (final source in sources)
+                                for (var i = 0; i < sources.length; i++) ...[
                                   _buildSourceTile(
                                     context,
-                                    source,
+                                    sources[i],
                                     selectedId,
                                     !busy,
                                   ),
+                                  if (i != sources.length - 1)
+                                    const SizedBox(height: 4),
+                                ],
                               ],
                             ),
                           ),
                         ),
                 ),
-                const SizedBox(height: 16),
-                Text(
-                  l10n.downloaderSourcesAddTitle,
-                  style: Theme.of(context).textTheme.titleSmall,
-                ),
-                const SizedBox(height: 10),
-                Row(
-                  crossAxisAlignment: CrossAxisAlignment.start,
-                  children: [
-                    Expanded(
-                      child: TextField(
-                        controller: _urlController,
-                        enabled: !busy,
-                        autofocus: sources.isEmpty,
-                        decoration: InputDecoration(
-                          labelText: l10n.downloaderConfigUrlLabel,
-                          border: const OutlineInputBorder(),
-                          errorText: _errorText,
-                        ),
-                        onChanged: (_) {
-                          if (_errorText != null) {
-                            setState(() {
-                              _errorText = null;
-                            });
-                          } else {
-                            setState(() {});
-                          }
+                const SizedBox(height: 12),
+                const Divider(height: 1),
+                const SizedBox(height: 8),
+                InkWell(
+                  borderRadius: BorderRadius.circular(8),
+                  onTap: (busy && !showAddSection) || sources.isEmpty
+                      ? null
+                      : () {
+                          setState(() {
+                            _showAddSection = !showAddSection;
+                          });
                         },
-                      ),
+                  child: Padding(
+                    padding: const EdgeInsets.symmetric(
+                      horizontal: 8,
+                      vertical: 8,
                     ),
-                    const SizedBox(width: 12),
-                    FilledButton.icon(
-                      onPressed: canAdd ? _onAddPressed : null,
-                      icon: _isAdding
-                          ? const SizedBox(
-                              width: 16,
-                              height: 16,
-                              child: CircularProgressIndicator(strokeWidth: 2),
-                            )
-                          : const Icon(Icons.add),
-                      label: Text(
-                        _isAdding
-                            ? l10n.downloaderConfigInstalling
-                            : l10n.downloaderConfigInstallButton,
-                      ),
+                    child: Row(
+                      mainAxisSize: MainAxisSize.min,
+                      children: [
+                        Text(
+                          l10n.downloaderSourcesAddTitle,
+                          style: Theme.of(context)
+                              .textTheme
+                              .bodySmall
+                              ?.copyWith(
+                                color: Theme.of(context).colorScheme.primary,
+                                fontWeight: FontWeight.w600,
+                              ),
+                        ),
+                        const SizedBox(width: 4),
+                        AnimatedRotation(
+                          turns: showAddSection ? 0.5 : 0,
+                          duration: const Duration(milliseconds: 180),
+                          child: Icon(
+                            Icons.expand_more,
+                            size: 18,
+                            color: Theme.of(context).colorScheme.primary,
+                          ),
+                        ),
+                      ],
                     ),
-                  ],
+                  ),
+                ),
+                AnimatedSize(
+                  duration: const Duration(milliseconds: 180),
+                  curve: Curves.easeInOut,
+                  child: showAddSection
+                      ? Padding(
+                          padding: const EdgeInsets.only(top: 4, bottom: 4),
+                          child: Row(
+                            crossAxisAlignment: CrossAxisAlignment.start,
+                            children: [
+                              Expanded(
+                                child: TextField(
+                                  controller: _urlController,
+                                  enabled: !busy,
+                                  autofocus: sources.isEmpty,
+                                  decoration: InputDecoration(
+                                    labelText: l10n.downloaderConfigUrlLabel,
+                                    border: const OutlineInputBorder(),
+                                    errorText: _errorText,
+                                  ),
+                                  onChanged: (_) {
+                                    if (_errorText != null) {
+                                      setState(() {
+                                        _errorText = null;
+                                      });
+                                    } else {
+                                      setState(() {});
+                                    }
+                                  },
+                                ),
+                              ),
+                              const SizedBox(width: 12),
+                              Padding(
+                                padding: const EdgeInsets.only(top: 8),
+                                child: FilledButton(
+                                  onPressed: canAdd ? _onAddPressed : null,
+                                  child: Row(
+                                    mainAxisSize: MainAxisSize.min,
+                                    children: [
+                                      if (_isAdding) ...[
+                                        const SizedBox(
+                                          width: 16,
+                                          height: 16,
+                                          child: CircularProgressIndicator(
+                                            strokeWidth: 2,
+                                          ),
+                                        ),
+                                        const SizedBox(width: 8),
+                                      ],
+                                      Text(
+                                        _isAdding
+                                            ? l10n.downloaderConfigInstalling
+                                            : l10n
+                                                .downloaderConfigInstallButton,
+                                      ),
+                                    ],
+                                  ),
+                                ),
+                              ),
+                            ],
+                          ),
+                        )
+                      : const SizedBox.shrink(),
                 ),
               ],
             ),

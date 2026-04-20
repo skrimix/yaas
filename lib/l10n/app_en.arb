@@ -100,7 +100,7 @@
   "downloaderConfigVrgRusTestRequiredTooltip": "Pass the access test first, or select another server.",
   "downloaderConfigNotConfiguredTitle": "Cloud downloader is not configured",
   "downloaderConfigNotConfiguredDesc": "Add a downloader source to enable cloud app downloads.",
-  "downloaderConfigInstallButton": "Add source",
+  "downloaderConfigInstallButton": "Add",
   "downloaderConfigInstalling": "Installing...",
   "downloaderConfigInstallFailed": "Failed to add downloader source",
   "loadingApps": "Loading apps...",

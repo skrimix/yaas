@@ -491,7 +491,7 @@ abstract class AppLocalizations {
   /// No description provided for @downloaderConfigInstallButton.
   ///
   /// In en, this message translates to:
-  /// **'Add source'**
+  /// **'Add'**
   String get downloaderConfigInstallButton;
 
   /// No description provided for @downloaderConfigInstalling.

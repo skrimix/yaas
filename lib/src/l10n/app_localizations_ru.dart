@@ -223,7 +223,7 @@ class AppLocalizationsRu extends AppLocalizations {
       'Добавьте источник загрузчика, чтобы включить загрузку приложений из облака.';
 
   @override
-  String get downloaderConfigInstallButton => 'Добавить источник';
+  String get downloaderConfigInstallButton => 'Добавить';
 
   @override
   String get downloaderConfigInstalling => 'Установка...';

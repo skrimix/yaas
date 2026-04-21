@@ -155,7 +155,7 @@ impl CastingManager {
         use crate::models::signals::system::Toast;
 
         // Resolve Casting.exe path (installed under app data directory)
-        let exe_path = super::casting_exe_path(app_dir);
+        let exe_path = casting_exe_path(app_dir);
         if !exe_path.is_file() {
             Toast::send(
                 "Casting tool not installed".to_string(),

@@ -89,6 +89,15 @@ pub(crate) fn resolve_binary_path(custom_path: Option<&str>, base_name: &str) ->
 
     #[cfg(target_os = "linux")]
     {
+        if let Ok(app_dir) = env::var("APPDIR")
+            && !app_dir.is_empty()
+        {
+            let app_dir = Path::new(&app_dir);
+            if let Some(found) = try_in_dir(&app_dir.join("usr/bin"), base_name) {
+                return Ok(found);
+            }
+        }
+
         if let Ok(appimage) = env::var("APPIMAGE")
             && !appimage.is_empty()
         {

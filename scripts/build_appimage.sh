@@ -28,6 +28,7 @@ require_cmd appimagetool
 require_cmd curl
 require_cmd tar
 require_cmd rinf
+require_cmd unzip
 
 mkdir -p dist
 
@@ -56,6 +57,7 @@ chmod +x "$app"
 "$app" --appimage-extract
 
 "$SCRIPT_DIR/bundle_7zip.sh" squashfs-root/usr/bin
+"$SCRIPT_DIR/bundle_adb.sh" squashfs-root/usr/bin
 
 sed -i '/^exec/i export PATH="$PWD/usr/bin:$PATH"' squashfs-root/AppRun
 sed -i '/^exec /{/\"\$@\"/!s/$/ "$@"/}' squashfs-root/AppRun

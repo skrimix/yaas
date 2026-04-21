@@ -337,9 +337,15 @@ impl YarcWriter {
             let mut builder = TarBuilder::new(tar_writer);
             builder.mode(HeaderMode::Deterministic);
             builder.follow_symlinks(false);
-            append_directory_tree_canonical(&mut builder, &directory).await?;
-            let mut writer = builder.into_inner().await?;
-            writer.shutdown().await
+
+            let append_result = append_directory_tree_canonical(&mut builder, &directory).await;
+            let writer_result = builder.into_inner().await;
+
+            match (append_result, writer_result) {
+                (Err(err), _) => Err(err),
+                (Ok(()), Err(err)) => Err(err),
+                (Ok(()), Ok(mut writer)) => writer.shutdown().await,
+            }
         });
 
         match compression_scheme {
@@ -853,6 +859,49 @@ impl AsyncWrite for VecAsyncWriter {
     }
 }
 
+#[cfg(test)]
+struct FailAfterNWriter {
+    remaining: usize,
+}
+
+#[cfg(test)]
+impl FailAfterNWriter {
+    fn new(remaining: usize) -> Self {
+        Self { remaining }
+    }
+}
+
+#[cfg(test)]
+impl AsyncWrite for FailAfterNWriter {
+    fn poll_write(
+        mut self: std::pin::Pin<&mut Self>,
+        _cx: &mut std::task::Context<'_>,
+        buf: &[u8],
+    ) -> std::task::Poll<io::Result<usize>> {
+        if self.remaining == 0 {
+            return std::task::Poll::Ready(Err(io::Error::other("synthetic write failure")));
+        }
+
+        let written = buf.len().min(self.remaining);
+        self.remaining -= written;
+        std::task::Poll::Ready(Ok(written))
+    }
+
+    fn poll_flush(
+        self: std::pin::Pin<&mut Self>,
+        _cx: &mut std::task::Context<'_>,
+    ) -> std::task::Poll<io::Result<()>> {
+        std::task::Poll::Ready(Ok(()))
+    }
+
+    fn poll_shutdown(
+        self: std::pin::Pin<&mut Self>,
+        _cx: &mut std::task::Context<'_>,
+    ) -> std::task::Poll<io::Result<()>> {
+        std::task::Poll::Ready(Ok(()))
+    }
+}
+
 struct CanonicalDirEntry {
     src_path: PathBuf,
     archive_path: PathBuf,
@@ -1113,6 +1162,29 @@ mod tests {
 
         let _ = fs::remove_dir_all(&source).await;
         let _ = fs::remove_dir_all(&target).await;
+        Ok(())
+    }
+
+    #[tokio::test]
+    async fn archive_directory_returns_writer_error_without_builder_panic() -> io::Result<()> {
+        let root = unique_test_path("yarc-directory-write-failure");
+        let source = root.join("source");
+
+        fs::create_dir_all(&source).await?;
+        fs::write(source.join("file.txt"), b"payload").await?;
+
+        let writer = YarcWriter::new([26; 32], 12);
+        let err = match writer
+            .archive_directory(&source, FailAfterNWriter::new(0))
+            .await
+        {
+            Ok(_) => panic!("writer failure should be returned"),
+            Err(err) => err,
+        };
+
+        assert_eq!(err.to_string(), "synthetic write failure");
+
+        let _ = fs::remove_dir_all(&root).await;
         Ok(())
     }
 

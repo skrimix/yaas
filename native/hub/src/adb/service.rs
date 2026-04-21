@@ -98,6 +98,9 @@ pub(crate) struct AdbService {
     mdns_auto_connect: bool,
     /// Preferred connection type (USB or Wireless) for auto-connect
     preferred_connection_type: RwLock<ConnectionKind>,
+    /// App data directory used by auxiliary tools.
+    #[cfg_attr(not(target_os = "windows"), allow(dead_code))]
+    app_dir: PathBuf,
 }
 
 impl AdbService {
@@ -107,7 +110,10 @@ impl AdbService {
     /// # Returns
     /// Arc-wrapped AdbService that manages ADB device connections
     #[instrument(level = "debug", skip(settings_stream))]
-    pub(crate) async fn new(mut settings_stream: WatchStream<Settings>) -> Arc<Self> {
+    pub(crate) async fn new(
+        mut settings_stream: WatchStream<Settings>,
+        app_dir: PathBuf,
+    ) -> Arc<Self> {
         let first_settings =
             settings_stream.next().await.expect("Settings stream closed on adb init");
         let adb_path = first_settings.adb_path;
@@ -129,6 +135,7 @@ impl AdbService {
             device_data_cache: RwLock::new(HashMap::new()),
             mdns_auto_connect: first_settings.mdns_auto_connect,
             preferred_connection_type: RwLock::new(first_settings.preferred_connection_type),
+            app_dir,
         });
         tokio::spawn(
             {
@@ -482,8 +489,13 @@ impl AdbService {
                     let wireless = device.is_wireless;
                     let device_serial = &device.true_serial;
 
-                    match CastingManager::start_casting(&adb_path_buf, device_serial, wireless)
-                        .await
+                    match CastingManager::start_casting(
+                        &self.app_dir,
+                        &adb_path_buf,
+                        device_serial,
+                        wireless,
+                    )
+                    .await
                     {
                         Ok(_) => {
                             AdbCommandCompletedEvent {

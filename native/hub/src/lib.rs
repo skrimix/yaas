@@ -3,7 +3,7 @@
 
 use std::{
     panic::catch_unwind,
-    path::PathBuf,
+    path::{Path, PathBuf},
     sync::{Arc, OnceLock},
     time::{Duration, Instant},
 };
@@ -102,14 +102,16 @@ fn main() {
 
 #[instrument]
 async fn init(portable_mode: bool) {
-    // Set working directory to the app's data directory
     let app_dir = resolve_app_dir(portable_mode);
+    init_in_dir(app_dir, portable_mode).await;
+}
+
+async fn init_in_dir(app_dir: PathBuf, portable_mode: bool) {
     if !app_dir.exists() {
         std::fs::create_dir_all(&app_dir).expect("Failed to create app directory");
     }
-    std::env::set_current_dir(&app_dir).expect("Failed to set current working directory");
 
-    if let Err(e) = setup_logging() {
+    if let Err(e) = setup_logging(&app_dir) {
         rinf::debug_print!("Failed to setup logging: {:#}", e);
     }
     // Log and send version/build info
@@ -148,7 +150,8 @@ async fn init(portable_mode: bool) {
         .send_signal_to_dart();
 
     debug!("Creating adb service");
-    let adb_service = AdbService::new(WatchStream::new(settings_handler.subscribe())).await;
+    let adb_service =
+        AdbService::new(WatchStream::new(settings_handler.subscribe()), app_dir.clone()).await;
     debug!("Creating downloads catalog");
     let downloads_catalog = DownloadsCatalog::new(WatchStream::new(settings_handler.subscribe()));
     debug!("Creating downloader manager");
@@ -169,22 +172,25 @@ async fn init(portable_mode: bool) {
 
     // Casting-related requests (Windows-only)
     debug!("Creating casting manager");
-    CastingManager::start();
+    CastingManager::start(app_dir.clone());
 
     // Log-related requests from Flutter
     debug!("Starting signal layer request handler");
     SignalLayer::start_request_handler(app_dir.join("logs"));
 }
 
-fn setup_logging() -> Result<()> {
+fn setup_logging(app_dir: &Path) -> Result<()> {
+    let logs_dir = app_dir.join("logs");
+    let log_prefix = logs_dir.join("yaas_native");
+
     // Log to file
-    std::fs::create_dir_all("logs").context("Failed to create logs directory")?;
+    std::fs::create_dir_all(&logs_dir).context("Failed to create logs directory")?;
     let file_appender = RollingFileAppender::builder()
         .rotation(Rotation::DAILY)
         .max_log_files(10)
         .filename_prefix("yaas")
         .filename_suffix("log")
-        .build("logs/yaas_native")
+        .build(&log_prefix)
         .context("Failed to initialize file appender")?;
     let (non_blocking, guard) = tracing_appender::non_blocking(file_appender);
 
@@ -249,12 +255,15 @@ mod tests {
 
     use tokio::time::timeout;
 
-    use crate::init;
+    use crate::init_in_dir;
 
-    #[tokio::test(flavor = "multi_thread")]
+    #[tokio::test(flavor = "current_thread")]
     #[ignore]
     async fn core_init_stable() {
-        timeout(Duration::from_secs(3), init(true)).await.unwrap();
+        let app_dir = tempfile::tempdir().expect("Failed to create temp dir");
+        timeout(Duration::from_secs(3), init_in_dir(app_dir.path().to_path_buf(), true))
+            .await
+            .unwrap();
         tokio::time::sleep(Duration::from_secs(3)).await;
     }
 }

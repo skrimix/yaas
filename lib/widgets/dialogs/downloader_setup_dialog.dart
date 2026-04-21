@@ -271,6 +271,7 @@ class _DownloaderSetupDialogState extends State<DownloaderSetupDialog> {
                             ? null
                             : settingsState.refreshDownloaderSources,
                         icon: const Icon(Icons.refresh),
+                        padding: const EdgeInsets.all(6),
                       ),
               ),
             ],

@@ -409,13 +409,13 @@ impl Repo for NewRepo {
                 to = %destination_dir.display(),
                 "Replacing destination directory with verified extraction"
             );
-            replace_directory(&temp_dir_path, destination_dir).await
+            replace_directory(temp_dir_path, destination_dir).await
         }
         .await;
 
         if temp_dir_path.exists() {
             debug!(path = %temp_dir_path.display(), "Cleaning up temporary directory");
-            if let Err(error) = cleanup_temp_dir(&temp_dir_path).await {
+            if let Err(error) = cleanup_temp_dir(temp_dir_path).await {
                 warn!(
                     path = %temp_dir_path.display(),
                     error = error.as_ref() as &dyn Error,

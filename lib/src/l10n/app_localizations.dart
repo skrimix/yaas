@@ -2994,7 +2994,7 @@ abstract class AppLocalizations {
   /// No description provided for @lowSpaceWarningMessage.
   ///
   /// In en, this message translates to:
-  /// **'This installation will leave less than {threshold} of free space on the device (<={remaining} remaining). Do you want to continue?'**
+  /// **'This installation may leave less than {threshold} of free space on the device (<={remaining}). Do you want to continue?'**
   String lowSpaceWarningMessage(String threshold, String remaining);
 
   /// No description provided for @lowSpaceWarningContinue.

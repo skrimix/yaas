@@ -775,7 +775,7 @@
     "sortPopularityMost": "Популярность (от большей)",
     "sortPopularityLeast": "Популярность (от меньшей)",
     "lowSpaceWarningTitle": "Мало места на устройстве",
-    "lowSpaceWarningMessage": "После установки на устройстве останется менее {threshold} свободного места (останется <={remaining}). Продолжить?",
+    "lowSpaceWarningMessage": "После установки на устройстве может остаться менее {threshold} свободного места (<={remaining}). Продолжить?",
     "@lowSpaceWarningMessage": {
         "placeholders": {
             "threshold": {

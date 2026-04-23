@@ -1606,7 +1606,7 @@ class AppLocalizationsRu extends AppLocalizations {
 
   @override
   String lowSpaceWarningMessage(String threshold, String remaining) {
-    return 'После установки на устройстве останется менее $threshold свободного места (останется <=$remaining). Продолжить?';
+    return 'После установки на устройстве может остаться менее $threshold свободного места (<=$remaining). Продолжить?';
   }
 
   @override

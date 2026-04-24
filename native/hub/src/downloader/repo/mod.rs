@@ -6,7 +6,7 @@ use derive_more::Debug;
 use tokio::sync::mpsc::UnboundedSender;
 use tokio_util::sync::CancellationToken;
 
-use self::{ffa::FFARepo, new_repo::NewRepo};
+use self::{ffa::FFARepo, newrepo::NewRepo};
 use super::{AppDownloadProgress, TransferStats, rclone::RcloneStorage};
 use crate::{
     downloader::config::{DownloaderConfig, RepoLayoutKind},
@@ -14,7 +14,7 @@ use crate::{
 };
 
 mod ffa;
-mod new_repo;
+mod newrepo;
 
 #[derive(Debug)]
 pub(super) struct BuildStorageResult {
@@ -45,7 +45,7 @@ pub(super) struct RepoDownloadResult {
 #[derive(Debug, Clone, Eq, PartialEq)]
 pub(super) enum RepoStorage {
     Ffa(RcloneStorage),
-    NewRepo(new_repo::NewRepoStorage),
+    NewRepo(newrepo::NewRepoStorage),
 }
 
 /// High-level operations a repository must implement.

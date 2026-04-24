@@ -1,0 +1,66 @@
+{
+  "name": "YAAS Linux Dev",
+  "build": {
+    "dockerfile": "Dockerfile",
+    "context": ".."
+  },
+  "remoteUser": "root",
+  "features": {
+    "ghcr.io/devcontainers/features/rust:1": {
+      "version": "stable",
+      "profile": "default",
+      "components": "rustfmt,clippy"
+    },
+    "ghcr.io/devcontainers/features/github-cli:1": {},
+    "ghcr.io/devcontainers/features/desktop-lite:1": {
+      "password": "noPassword"
+    }
+  },
+  "forwardPorts": [
+    6080,
+    5901
+  ],
+  "portsAttributes": {
+    "6080": {
+      "label": "desktop"
+    }
+  },
+  "containerEnv": {
+    "SCCACHE_GHA_ENABLED": "false",
+    "RUSTC_WRAPPER": "sccache",
+    "PUB_CACHE": "/home/root/.pub-cache"
+  },
+  "remoteEnv": {
+    "PATH": "/home/root/flutter/bin:/home/root/.pub-cache/bin:/home/root/.cargo/bin:${containerEnv:PATH}"
+  },
+  "mounts": [
+    "source=yaas-cargo-registry,target=/home/root/.cargo/registry,type=volume",
+    "source=yaas-cargo-git,target=/home/root/.cargo/git,type=volume",
+    "source=yaas-rust-target,target=${containerWorkspaceFolder}/target,type=volume",
+    "source=yaas-pub-cache,target=/home/root/.pub-cache,type=volume",
+    "source=yaas-flutter-cache,target=/home/root/flutter/bin/cache,type=volume",
+    "source=yaas-sccache,target=/home/root/.cache/sccache,type=volume"
+  ],
+  "customizations": {
+    "vscode": {
+      "extensions": [
+        "Dart-Code.flutter",
+        "Dart-Code.dart-code",
+        "rust-lang.rust-analyzer",
+        "vadimcn.vscode-lldb",
+        "tamasfe.even-better-toml",
+        "ms-vscode.cpptools",
+        "ms-azuretools.vscode-docker"
+      ],
+      "settings": {
+        "dart.flutterSdkPath": "/home/root/flutter",
+        "rust-analyzer.cargo.targetDir": "target/rust-analyzer"
+      }
+    }
+  },
+  "postCreateCommand": "dart --disable-analytics && flutter config --enable-linux-desktop && flutter pub get && (cargo install rinf_cli --locked || cargo install rinf_cli) && dart pub global activate fastforge",
+  "postStartCommand": "git config --global core.autocrlf false && git config --global core.filemode false",
+  "runArgs": [
+    "--security-opt=seccomp=unconfined"
+  ]
+}

@@ -400,6 +400,7 @@ class _DownloaderSetupDialogState extends State<DownloaderSetupDialog> {
                                     labelText: l10n.downloaderConfigUrlLabel,
                                     border: const OutlineInputBorder(),
                                     errorText: _errorText,
+                                    errorMaxLines: 4,
                                   ),
                                   onChanged: (_) {
                                     if (_errorText != null) {

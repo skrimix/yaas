@@ -53,3 +53,5 @@ target/
 **/bindings/
 
 .aider*
+
+/squashfs-root/

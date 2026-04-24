@@ -55,3 +55,4 @@ target/
 .aider*
 
 /squashfs-root/
+/AppDir/

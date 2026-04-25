@@ -110,6 +110,7 @@ struct DownloaderAvailabilityReporter {
     is_donation_configured: bool,
     supports_remote_selection: bool,
     supports_bandwidth_limit: bool,
+    supports_download_mode_selection: bool,
 }
 
 impl DownloaderAvailabilityReporter {
@@ -121,6 +122,7 @@ impl DownloaderAvailabilityReporter {
                 && cfg.donation_remote_path.is_some(),
             supports_remote_selection: capabilities.supports_remote_selection,
             supports_bandwidth_limit: capabilities.supports_bandwidth_limit,
+            supports_download_mode_selection: capabilities.supports_download_mode_selection,
         }
     }
 
@@ -130,6 +132,7 @@ impl DownloaderAvailabilityReporter {
             is_donation_configured: self.is_donation_configured,
             supports_remote_selection: self.supports_remote_selection,
             supports_bandwidth_limit: self.supports_bandwidth_limit,
+            supports_download_mode_selection: self.supports_download_mode_selection,
             ..Default::default()
         }
     }

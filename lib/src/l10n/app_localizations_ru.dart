@@ -357,6 +357,21 @@ class AppLocalizationsRu extends AppLocalizations {
   String get settingsDownloadsCleanup => 'Очистка загрузок';
 
   @override
+  String get settingsDownloadMode => 'Режим загрузки';
+
+  @override
+  String get settingsDownloadModeStaged =>
+      'По частям (параллельно, затем распаковка)';
+
+  @override
+  String get settingsDownloadModeStreamed =>
+      'Потоковый (загрузка во время распаковки)';
+
+  @override
+  String get settingsDownloadModeHelp =>
+      'Режим по частям обычно быстрее, но на время загрузки требует примерно вдвое больше свободного места, чем размер приложения. Потоковый режим медленнее, но использует меньше временного места на диске.';
+
+  @override
   String get settingsWriteLegacyReleaseJson =>
       'Создавать устаревший release.json';
 

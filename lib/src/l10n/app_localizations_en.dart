@@ -353,6 +353,21 @@ class AppLocalizationsEn extends AppLocalizations {
   String get settingsDownloadsCleanup => 'Downloads Cleanup';
 
   @override
+  String get settingsDownloadMode => 'Download Mode';
+
+  @override
+  String get settingsDownloadModeStaged =>
+      'Staged (parallel download, then extract)';
+
+  @override
+  String get settingsDownloadModeStreamed =>
+      'Streamed (download while extracting)';
+
+  @override
+  String get settingsDownloadModeHelp =>
+      'Staged is usually faster, but needs about twice the app size in free disk space while downloading.';
+
+  @override
   String get settingsWriteLegacyReleaseJson => 'Write legacy release.json';
 
   @override

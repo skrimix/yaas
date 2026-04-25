@@ -296,6 +296,12 @@ class _SettingsScreenState extends State<SettingsScreen> {
           l10n.settingsCleanupKeepAllVersions,
       };
 
+  String _formatDownloadMode(AppLocalizations l10n, DownloadMode mode) =>
+      switch (mode) {
+        DownloadMode.staged => l10n.settingsDownloadModeStaged,
+        DownloadMode.streamed => l10n.settingsDownloadModeStreamed,
+      };
+
   String _formatNavigationRailLabelVisibility(
     AppLocalizations l10n,
     NavigationRailLabelVisibility visibility,
@@ -682,6 +688,8 @@ class _SettingsScreenState extends State<SettingsScreen> {
                 }
               },
             ),
+            if (settingsState.downloaderSupportsDownloadModeSelection)
+              _buildDownloadModeSetting(l10n),
             const SizedBox(height: SettingsConstants.verticalSpacing),
             SwitchListTile(
               title: Text(l10n.settingsWriteLegacyReleaseJson),
@@ -1015,6 +1023,36 @@ class _SettingsScreenState extends State<SettingsScreen> {
         decoration: InputDecoration(
           labelText: label,
           border: const OutlineInputBorder(),
+        ),
+      ),
+    );
+  }
+
+  Widget _buildDownloadModeSetting(AppLocalizations l10n) {
+    return Padding(
+      padding: const EdgeInsets.symmetric(
+          vertical: SettingsConstants.verticalSpacing),
+      child: DropdownButtonFormField<DownloadMode>(
+        initialValue: _currentFormSettings.downloadMode,
+        items: DownloadMode.values.map((mode) {
+          return DropdownMenuItem(
+            value: mode,
+            child: Text(_formatDownloadMode(l10n, mode)),
+          );
+        }).toList(),
+        onChanged: (value) {
+          if (value == null) return;
+          setState(() => _currentFormSettings =
+              _currentFormSettings.copyWith(downloadMode: value));
+          _checkForChanges();
+        },
+        decoration: InputDecoration(
+          labelText: l10n.settingsDownloadMode,
+          border: const OutlineInputBorder(),
+          suffixIcon: Tooltip(
+            message: l10n.settingsDownloadModeHelp,
+            child: const Icon(Icons.info_outline),
+          ),
         ),
       ),
     );

@@ -1,8 +1,12 @@
 use std::{
     collections::HashMap,
     error::Error,
+    io::SeekFrom,
     path::{Path, PathBuf},
-    sync::Arc,
+    sync::{
+        Arc,
+        atomic::{AtomicU64, Ordering},
+    },
     time::{Duration, Instant},
 };
 
@@ -13,7 +17,7 @@ use futures::StreamExt as _;
 use tempfile::TempDir;
 use tokio::{
     fs,
-    io::{AsyncWriteExt, DuplexStream},
+    io::{AsyncSeekExt, AsyncWriteExt, DuplexStream},
     sync::{Mutex, mpsc::UnboundedSender},
     time as tokio_time,
 };
@@ -31,13 +35,15 @@ use super::{
 };
 use crate::{
     downloader::{AppDownloadProgress, TransferStats, config::DownloaderConfig, http_cache},
-    models::CloudApp,
+    models::{CloudApp, DownloadMode},
 };
 
 const YAAS_KEY_HEADER: &str = "x-yaas-key";
 const STREAM_PROGRESS_INTERVAL_MILLIS: u128 = 500;
 const SLOW_NETWORK_WARNING_THRESHOLD: Duration = Duration::from_secs(8);
 const LOCAL_DOWNLOAD_METADATA_PATHS: [&str; 2] = ["metadata.json", "release.json"];
+const STAGED_DOWNLOAD_WORKERS: usize = 4;
+const STAGED_MIN_PART_SIZE: u64 = 32 * 1024 * 1024;
 
 #[derive(Debug, Default)]
 struct NewRepoRuntime {
@@ -125,6 +131,7 @@ impl Repo for NewRepo {
         RepoCapabilities {
             supports_remote_selection: false,
             supports_bandwidth_limit: false,
+            supports_download_mode_selection: true,
             supports_donation_upload: false,
         }
     }
@@ -228,6 +235,7 @@ impl Repo for NewRepo {
         destination_dir: &Path,
         cache_dir: &Path,
         http_client: &reqwest::Client,
+        download_mode: DownloadMode,
         progress_tx: UnboundedSender<AppDownloadProgress>,
         cancellation_token: CancellationToken,
     ) -> Result<RepoDownloadResult> {
@@ -347,45 +355,56 @@ impl Repo for NewRepo {
         debug!(path = %temp_dir_path.display(), "Created temporary extraction directory");
         let download_result = async {
             send_status(&progress_tx, "Starting package download...");
-            let response = send_with_cancellation(
-                http_client.get(storage.blob_url(&manifest.yarc_id)),
-                &storage.blob_url(&manifest.yarc_id),
-                &cancellation_token,
-            )
-            .await
-            .context("Failed to download package")?;
-            let response = response.error_for_status().context("Package request failed")?;
-            debug!(
-                blob_id = %manifest.yarc_id,
-                content_length = response.content_length(),
-                "Received package response headers"
-            );
+            let blob_url = storage.blob_url(&manifest.yarc_id);
+            match download_mode {
+                DownloadMode::Staged => {
+                    let package_path = temp_dir_path.join("package.yarc");
+                    debug!(
+                        blob_id = %manifest.yarc_id,
+                        total_bytes = manifest.yarc_size,
+                        path = %package_path.display(),
+                        "Starting staged package download"
+                    );
+                    send_status(&progress_tx, "Downloading package...");
+                    download_package_staged(
+                        http_client,
+                        &blob_url,
+                        &package_path,
+                        manifest.yarc_size,
+                        progress_tx.clone(),
+                        cancellation_token.clone(),
+                    )
+                    .await
+                    .context("Failed to download package")?;
 
-            let total_bytes = response.content_length().unwrap_or(manifest.yarc_size);
-
-            let (writer, reader) = tokio::io::duplex(256 * 1024);
-            send_status(&progress_tx, "Downloading package...");
-            let transfer_progress_tx = progress_tx.clone();
-            let stream_task = tokio::spawn(stream_package_to_pipe(
-                response,
-                writer,
-                transfer_progress_tx,
-                total_bytes,
-                cancellation_token.clone(),
-            ));
-
-            debug!("Starting streamed package extraction");
-            let extract_result = YarcReader::new(yarc_key)
-                .extract_to_directory(reader, &temp_dir_path)
-                .await
-                .context("Failed to extract YARC package");
-            let stream_result = join_transfer_task(stream_task).await;
-
-            match (extract_result, stream_result) {
-                (Err(error), _) => Err(error),
-                (Ok(_), Err(error)) => Err(error),
-                (Ok(_), Ok(())) => Ok(()),
-            }?;
+                    ensure_not_cancelled(&cancellation_token)?;
+                    send_status(&progress_tx, "Extracting package...");
+                    debug!(path = %package_path.display(), "Starting staged package extraction");
+                    let package_file = fs::File::open(&package_path)
+                        .await
+                        .with_context(|| format!("Failed to open {}", package_path.display()))?;
+                    YarcReader::new(yarc_key)
+                        .extract_to_directory(package_file, &temp_dir_path)
+                        .await
+                        .context("Failed to extract YARC package")?;
+                    fs::remove_file(&package_path)
+                        .await
+                        .with_context(|| format!("Failed to remove {}", package_path.display()))?;
+                }
+                DownloadMode::Streamed => {
+                    download_package_streamed(
+                        http_client,
+                        &blob_url,
+                        temp_dir_path,
+                        yarc_key,
+                        manifest.yarc_size,
+                        progress_tx.clone(),
+                        cancellation_token.clone(),
+                    )
+                    .await
+                    .context("Failed to download package")?;
+                }
+            }
 
             ensure_not_cancelled(&cancellation_token)?;
             debug!("Restoring extracted file metadata from manifest");
@@ -545,6 +564,305 @@ async fn cache_remote_file(
     Ok(destination)
 }
 
+async fn download_package_streamed(
+    client: &reqwest::Client,
+    url: &str,
+    destination: &Path,
+    yarc_key: [u8; 32],
+    expected_bytes: u64,
+    progress_tx: UnboundedSender<AppDownloadProgress>,
+    cancellation_token: CancellationToken,
+) -> Result<()> {
+    let response = send_with_cancellation(client.get(url), url, &cancellation_token)
+        .await
+        .context("Failed to download package")?;
+    let response = response.error_for_status().context("Package request failed")?;
+    debug!(
+        content_length = response.content_length(),
+        expected_bytes, "Received package response headers"
+    );
+
+    let total_bytes = response.content_length().unwrap_or(expected_bytes);
+    let (writer, reader) = tokio::io::duplex(256 * 1024);
+    send_status(&progress_tx, "Downloading package...");
+    let stream_task = tokio::spawn(stream_package_to_pipe(
+        response,
+        writer,
+        progress_tx,
+        total_bytes,
+        cancellation_token,
+    ));
+
+    debug!("Starting streamed package extraction");
+    let extract_result = YarcReader::new(yarc_key)
+        .extract_to_directory(reader, destination)
+        .await
+        .context("Failed to extract YARC package");
+    let stream_result = join_transfer_task(stream_task).await;
+
+    match (extract_result, stream_result) {
+        (Err(error), _) => Err(error),
+        (Ok(_), Err(error)) => Err(error),
+        (Ok(_), Ok(())) => Ok(()),
+    }
+}
+
+async fn download_package_staged(
+    client: &reqwest::Client,
+    url: &str,
+    destination: &Path,
+    total_bytes: u64,
+    progress_tx: UnboundedSender<AppDownloadProgress>,
+    cancellation_token: CancellationToken,
+) -> Result<()> {
+    ensure!(total_bytes > 0, "Package size must be greater than zero");
+    if let Some(parent) = destination.parent() {
+        fs::create_dir_all(parent)
+            .await
+            .with_context(|| format!("Failed to create {}", parent.display()))?;
+    }
+
+    let file = fs::OpenOptions::new()
+        .create(true)
+        .write(true)
+        .truncate(true)
+        .open(destination)
+        .await
+        .with_context(|| format!("Failed to create {}", destination.display()))?;
+    file.set_len(total_bytes)
+        .await
+        .with_context(|| format!("Failed to preallocate {}", destination.display()))?;
+    drop(file);
+
+    let ranges = staged_download_ranges(total_bytes);
+    debug!(
+        url,
+        destination = %destination.display(),
+        total_bytes,
+        range_count = ranges.len(),
+        "Downloading package with ranged staged transfer"
+    );
+
+    let downloaded_bytes = Arc::new(AtomicU64::new(0));
+    let transfer_token = cancellation_token.child_token();
+    let progress_token = CancellationToken::new();
+    let progress_task = tokio::spawn(staged_progress_loop(
+        downloaded_bytes.clone(),
+        total_bytes,
+        progress_tx,
+        progress_token.clone(),
+    ));
+
+    let mut tasks = Vec::with_capacity(ranges.len());
+    for range in ranges {
+        tasks.push(tokio::spawn(download_staged_range(
+            client.clone(),
+            url.to_string(),
+            destination.to_path_buf(),
+            range,
+            total_bytes,
+            downloaded_bytes.clone(),
+            transfer_token.clone(),
+        )));
+    }
+
+    let mut result = Ok(());
+    for task in tasks {
+        match join_transfer_task(task).await {
+            Ok(()) => {}
+            Err(error) if result.is_ok() => {
+                result = Err(error);
+                transfer_token.cancel();
+                progress_token.cancel();
+            }
+            Err(_) => {}
+        }
+    }
+
+    progress_token.cancel();
+    let _ = join_transfer_task(progress_task).await;
+    result?;
+
+    let actual_len = fs::metadata(destination)
+        .await
+        .with_context(|| format!("Failed to read {}", destination.display()))?
+        .len();
+    ensure!(
+        actual_len == total_bytes,
+        "Downloaded package size mismatch: expected {total_bytes}, got {actual_len}"
+    );
+    Ok(())
+}
+
+#[derive(Clone, Copy, Debug)]
+struct StagedRange {
+    index: usize,
+    start: u64,
+    end: u64,
+}
+
+impl StagedRange {
+    fn len(self) -> u64 {
+        self.end - self.start + 1
+    }
+
+    fn header_value(self) -> String {
+        format!("bytes={}-{}", self.start, self.end)
+    }
+}
+
+fn staged_download_ranges(total_bytes: u64) -> Vec<StagedRange> {
+    let max_parts = total_bytes.div_ceil(STAGED_MIN_PART_SIZE).max(1) as usize;
+    let part_count = STAGED_DOWNLOAD_WORKERS.min(max_parts).max(1);
+    let part_size = total_bytes.div_ceil(part_count as u64);
+
+    (0..part_count)
+        .map(|index| {
+            let start = index as u64 * part_size;
+            let end = (start + part_size).min(total_bytes) - 1;
+            StagedRange { index, start, end }
+        })
+        .collect()
+}
+
+async fn download_staged_range(
+    client: reqwest::Client,
+    url: String,
+    destination: PathBuf,
+    range: StagedRange,
+    total_bytes: u64,
+    downloaded_bytes: Arc<AtomicU64>,
+    cancellation_token: CancellationToken,
+) -> Result<()> {
+    ensure_not_cancelled(&cancellation_token)?;
+    let response = send_with_cancellation(
+        client.get(&url).header(reqwest::header::RANGE, range.header_value()),
+        &url,
+        &cancellation_token,
+    )
+    .await
+    .with_context(|| format!("Failed to download package range {}", range.index))?;
+
+    ensure!(
+        response.status() == reqwest::StatusCode::PARTIAL_CONTENT,
+        "Package range {} returned HTTP {}, expected 206 Partial Content",
+        range.index,
+        response.status()
+    );
+    validate_content_range(response.headers(), range, total_bytes)
+        .with_context(|| format!("Invalid Content-Range for package range {}", range.index))?;
+
+    let mut file = fs::OpenOptions::new()
+        .write(true)
+        .open(&destination)
+        .await
+        .with_context(|| format!("Failed to open {}", destination.display()))?;
+    file.seek(SeekFrom::Start(range.start))
+        .await
+        .with_context(|| format!("Failed to seek {}", destination.display()))?;
+
+    let mut written = 0_u64;
+    let mut stream = response.bytes_stream();
+    loop {
+        let maybe_chunk = tokio::select! {
+            _ = cancellation_token.cancelled() => {
+                info!(range_index = range.index, "Cancelled while downloading staged package range");
+                bail!("Operation cancelled")
+            },
+            chunk = stream.next() => {
+                chunk.transpose().context("Failed to stream staged package range")?
+            }
+        };
+        let Some(chunk) = maybe_chunk else {
+            break;
+        };
+        ensure!(
+            written + chunk.len() as u64 <= range.len(),
+            "Package range {} exceeded requested length",
+            range.index
+        );
+        tokio::select! {
+            _ = cancellation_token.cancelled() => {
+                info!(range_index = range.index, "Cancelled while writing staged package range");
+                bail!("Operation cancelled")
+            },
+            result = file.write_all(&chunk) => {
+                result.with_context(|| format!("Failed to write package range {}", range.index))?;
+            }
+        }
+        written += chunk.len() as u64;
+        downloaded_bytes.fetch_add(chunk.len() as u64, Ordering::Relaxed);
+    }
+
+    file.shutdown()
+        .await
+        .with_context(|| format!("Failed to flush package range {}", range.index))?;
+    ensure!(
+        written == range.len(),
+        "Package range {} length mismatch: expected {}, got {}",
+        range.index,
+        range.len(),
+        written
+    );
+    debug!(
+        range_index = range.index,
+        start = range.start,
+        end = range.end,
+        bytes = written,
+        "Finished staged package range"
+    );
+    Ok(())
+}
+
+async fn staged_progress_loop(
+    downloaded_bytes: Arc<AtomicU64>,
+    total_bytes: u64,
+    progress_tx: UnboundedSender<AppDownloadProgress>,
+    cancellation_token: CancellationToken,
+) -> Result<()> {
+    let started_at = Instant::now();
+    loop {
+        tokio::select! {
+            _ = cancellation_token.cancelled() => break,
+            _ = tokio_time::sleep(Duration::from_millis(STREAM_PROGRESS_INTERVAL_MILLIS as u64)) => {
+                let bytes = downloaded_bytes.load(Ordering::Relaxed);
+                let speed = speed_bytes_per_sec(bytes, started_at.elapsed().as_millis());
+                let _ = progress_tx.send(AppDownloadProgress::Transfer(TransferStats {
+                    bytes,
+                    total_bytes,
+                    speed,
+                }));
+                if bytes >= total_bytes {
+                    break;
+                }
+            }
+        }
+    }
+
+    let bytes = downloaded_bytes.load(Ordering::Relaxed);
+    let speed = speed_bytes_per_sec(bytes, started_at.elapsed().as_millis());
+    let _ = progress_tx.send(AppDownloadProgress::Transfer(TransferStats {
+        bytes,
+        total_bytes,
+        speed,
+    }));
+    Ok(())
+}
+
+fn validate_content_range(
+    headers: &reqwest::header::HeaderMap,
+    range: StagedRange,
+    total_bytes: u64,
+) -> Result<()> {
+    let Some(value) = headers.get(reqwest::header::CONTENT_RANGE) else {
+        return Ok(());
+    };
+    let value = value.to_str().context("Content-Range header is not valid UTF-8")?;
+    let expected = format!("bytes {}-{}/{}", range.start, range.end, total_bytes);
+    ensure!(value == expected, "Content-Range mismatch: expected `{expected}`, got `{value}`");
+    Ok(())
+}
+
 async fn stream_package_to_pipe(
     response: reqwest::Response,
     mut writer: DuplexStream,
@@ -567,11 +885,7 @@ async fn stream_package_to_pipe(
         let maybe_chunk = loop {
             tokio::select! {
                 _ = cancellation_token.cancelled() => {
-                    info!(
-                        downloaded_bytes,
-                        total_bytes,
-                        "Cancelled while streaming YARC package"
-                    );
+                    info!(downloaded_bytes, total_bytes, "Cancelled while streaming YARC package");
                     bail!("Operation cancelled")
                 },
                 _ = &mut slow_warning, if !warned_slow => {
@@ -597,11 +911,7 @@ async fn stream_package_to_pipe(
         }
         tokio::select! {
             _ = cancellation_token.cancelled() => {
-                info!(
-                    downloaded_bytes,
-                    total_bytes,
-                    "Cancelled while piping YARC chunk"
-                );
+                info!(downloaded_bytes, total_bytes, "Cancelled while piping YARC chunk");
                 bail!("Operation cancelled")
             },
             result = writer.write_all(&chunk) => {
@@ -610,8 +920,7 @@ async fn stream_package_to_pipe(
         }
         downloaded_bytes += chunk.len() as u64;
 
-        let elapsed = started_at.elapsed();
-        let elapsed_millis = elapsed.as_millis();
+        let elapsed_millis = started_at.elapsed().as_millis();
         if elapsed_millis.saturating_sub(last_emit) >= STREAM_PROGRESS_INTERVAL_MILLIS {
             let speed = speed_bytes_per_sec(downloaded_bytes, elapsed_millis);
             let _ = progress_tx.send(AppDownloadProgress::Transfer(TransferStats {
@@ -756,5 +1065,27 @@ mod tests {
         assert_eq!(app.version_code, 123);
         assert_eq!(app.last_updated, "2023-11-14 22:13 UTC");
         assert_eq!(app.size, 321_500_000);
+    }
+
+    #[test]
+    fn staged_ranges_use_single_part_below_min_size() {
+        let ranges = staged_download_ranges(STAGED_MIN_PART_SIZE - 1);
+
+        assert_eq!(ranges.len(), 1);
+        assert_eq!(ranges[0].start, 0);
+        assert_eq!(ranges[0].end, STAGED_MIN_PART_SIZE - 2);
+    }
+
+    #[test]
+    fn staged_ranges_cap_part_count_to_workers() {
+        let total_bytes = STAGED_MIN_PART_SIZE * 10;
+        let ranges = staged_download_ranges(total_bytes);
+
+        assert_eq!(ranges.len(), STAGED_DOWNLOAD_WORKERS);
+        assert_eq!(ranges[0].start, 0);
+        assert_eq!(ranges.last().expect("last range").end, total_bytes - 1);
+        for pair in ranges.windows(2) {
+            assert_eq!(pair[0].end + 1, pair[1].start);
+        }
     }
 }

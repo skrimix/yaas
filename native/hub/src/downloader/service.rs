@@ -19,7 +19,7 @@ use crate::{
         repo,
     },
     models::{
-        CloudApp, Settings,
+        CloudApp, DownloadMode, Settings,
         signals::{
             cloud_apps::{
                 details::{AppDetailsResponse, GetAppDetailsRequest},
@@ -47,6 +47,7 @@ pub(crate) struct Downloader {
     download_dir: RwLock<PathBuf>,
     current_load_token: RwLock<CancellationToken>,
     write_legacy_release_json: RwLock<bool>,
+    download_mode: RwLock<DownloadMode>,
     cancel_token: CancellationToken,
     http_client: reqwest::Client,
     repo: Arc<dyn repo::Repo>,
@@ -130,6 +131,7 @@ impl Downloader {
             download_dir: RwLock::new(settings.downloads_location()),
             current_load_token: RwLock::new(cancel_token.child_token()),
             write_legacy_release_json: RwLock::new(settings.write_legacy_release_json),
+            download_mode: RwLock::new(settings.download_mode),
             cancel_token,
             http_client,
             repo,
@@ -230,6 +232,9 @@ impl Downloader {
                             // Update legacy release.json toggle
                             let mut legacy_flag = handle.write_legacy_release_json.write().await;
                             *legacy_flag = settings.write_legacy_release_json;
+
+                            let mut download_mode = handle.download_mode.write().await;
+                            *download_mode = settings.download_mode;
                         }
                     }
                 }
@@ -590,6 +595,7 @@ impl Downloader {
         let _ = progress_tx.send(AppDownloadProgress::Status("Preparing download...".to_string()));
 
         let storage = self.storage.read().await.clone();
+        let download_mode = *self.download_mode.read().await;
         let download_result = match self
             .repo
             .download_app(
@@ -598,6 +604,7 @@ impl Downloader {
                 &dst_dir,
                 &self.cache_dir,
                 &self.http_client,
+                download_mode,
                 progress_tx.clone(),
                 cancellation_token.clone(),
             )

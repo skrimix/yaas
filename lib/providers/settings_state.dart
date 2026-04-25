@@ -14,6 +14,7 @@ class SettingsState extends ChangeNotifier {
     backupsLocation: '',
     bandwidthLimit: '',
     cleanupPolicy: DownloadCleanupPolicy.deleteAfterInstall,
+    downloadMode: DownloadMode.staged,
     writeLegacyReleaseJson: false,
     localeCode: 'system',
     navigationRailLabelVisibility: NavigationRailLabelVisibility.selected,
@@ -44,6 +45,7 @@ class SettingsState extends ChangeNotifier {
   bool _downloaderNeedsSetup = false;
   bool _downloaderSupportsRemoteSelection = false;
   bool _downloaderSupportsBandwidthLimit = false;
+  bool _downloaderSupportsDownloadModeSelection = false;
 
   List<String> _rcloneRemotes = const [];
   bool _isRemotesLoading = true;
@@ -113,6 +115,8 @@ class SettingsState extends ChangeNotifier {
       _downloaderNeedsSetup = msg.needsSetup;
       _downloaderSupportsRemoteSelection = msg.supportsRemoteSelection;
       _downloaderSupportsBandwidthLimit = msg.supportsBandwidthLimit;
+      _downloaderSupportsDownloadModeSelection =
+          msg.supportsDownloadModeSelection;
       if (!msg.initializing) {
         _downloaderInitBytes = 0;
         _downloaderInitTotal = null;
@@ -183,6 +187,8 @@ class SettingsState extends ChangeNotifier {
       _downloaderSupportsRemoteSelection;
   bool get downloaderSupportsBandwidthLimit =>
       _downloaderSupportsBandwidthLimit;
+  bool get downloaderSupportsDownloadModeSelection =>
+      _downloaderSupportsDownloadModeSelection;
   InstalledDownloaderConfig? get activeDownloaderConfig {
     final currentId = _downloaderConfigId;
     if (currentId == null) return null;

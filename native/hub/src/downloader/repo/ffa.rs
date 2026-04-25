@@ -22,7 +22,7 @@ use crate::{
         config::DownloaderConfig,
         rclone::{self, RcloneStorage},
     },
-    models::CloudApp,
+    models::{CloudApp, DownloadMode},
 };
 
 /// FFA layout – direct files and list under a configurable remote/root.
@@ -47,6 +47,7 @@ impl Repo for FFARepo {
         RepoCapabilities {
             supports_remote_selection: true,
             supports_bandwidth_limit: true,
+            supports_download_mode_selection: false,
             supports_donation_upload: true,
         }
     }
@@ -175,6 +176,7 @@ impl Repo for FFARepo {
         destination_dir: &Path,
         _cache_dir: &Path,
         _http_client: &reqwest::Client,
+        _download_mode: DownloadMode,
         progress_tx: UnboundedSender<AppDownloadProgress>,
         cancellation_token: CancellationToken,
     ) -> Result<RepoDownloadResult> {

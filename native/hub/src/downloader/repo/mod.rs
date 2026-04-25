@@ -10,7 +10,7 @@ use self::{ffa::FFARepo, newrepo::NewRepo};
 use super::{AppDownloadProgress, TransferStats, rclone::RcloneStorage};
 use crate::{
     downloader::config::{DownloaderConfig, RepoLayoutKind},
-    models::CloudApp,
+    models::{CloudApp, DownloadMode},
 };
 
 mod ffa;
@@ -34,6 +34,7 @@ pub(super) struct RepoAppList {
 pub(super) struct RepoCapabilities {
     pub supports_remote_selection: bool,
     pub supports_bandwidth_limit: bool,
+    pub supports_download_mode_selection: bool,
     pub supports_donation_upload: bool,
 }
 
@@ -76,6 +77,7 @@ pub(super) trait Repo: Send + Sync {
         destination_dir: &Path,
         cache_dir: &Path,
         http_client: &reqwest::Client,
+        download_mode: DownloadMode,
         progress_tx: UnboundedSender<AppDownloadProgress>,
         cancellation_token: CancellationToken,
     ) -> Result<RepoDownloadResult>;

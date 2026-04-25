@@ -740,6 +740,30 @@ abstract class AppLocalizations {
   /// **'Downloads Cleanup'**
   String get settingsDownloadsCleanup;
 
+  /// No description provided for @settingsDownloadMode.
+  ///
+  /// In en, this message translates to:
+  /// **'Download Mode'**
+  String get settingsDownloadMode;
+
+  /// No description provided for @settingsDownloadModeStaged.
+  ///
+  /// In en, this message translates to:
+  /// **'Staged (parallel download, then extract)'**
+  String get settingsDownloadModeStaged;
+
+  /// No description provided for @settingsDownloadModeStreamed.
+  ///
+  /// In en, this message translates to:
+  /// **'Streamed (download while extracting)'**
+  String get settingsDownloadModeStreamed;
+
+  /// No description provided for @settingsDownloadModeHelp.
+  ///
+  /// In en, this message translates to:
+  /// **'Staged is usually faster, but needs about twice the app size in free disk space while downloading.'**
+  String get settingsDownloadModeHelp;
+
   /// No description provided for @settingsWriteLegacyReleaseJson.
   ///
   /// In en, this message translates to:

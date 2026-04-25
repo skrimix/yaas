@@ -51,6 +51,13 @@ pub(crate) enum DownloadCleanupPolicy {
     KeepAllVersions,
 }
 
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize, SignalPiece, Default)]
+pub(crate) enum DownloadMode {
+    Streamed,
+    #[default]
+    Staged,
+}
+
 #[derive(Debug, Clone, Serialize, Deserialize, PartialEq, Eq, SignalPiece)]
 #[serde(default)]
 pub(crate) struct Settings {
@@ -63,6 +70,7 @@ pub(crate) struct Settings {
     backups_location: String,
     pub bandwidth_limit: String,
     pub cleanup_policy: DownloadCleanupPolicy,
+    pub download_mode: DownloadMode,
     /// Also write legacy release.json metadata alongside download.json
     pub write_legacy_release_json: bool,
     /// Locale code (language) for the UI
@@ -106,6 +114,7 @@ impl Default for Settings {
                 .to_string(),
             bandwidth_limit: String::new(),
             cleanup_policy: DownloadCleanupPolicy::default(),
+            download_mode: DownloadMode::default(),
             write_legacy_release_json: false,
             locale_code: "system".to_string(),
             navigation_rail_label_visibility: NavigationRailLabelVisibility::default(),

@@ -113,10 +113,12 @@ class SettingsState extends ChangeNotifier {
       _downloaderConfigId = msg.configId;
       _downloaderIsDonationConfigured = msg.isDonationConfigured;
       _downloaderNeedsSetup = msg.needsSetup;
-      _downloaderSupportsRemoteSelection = msg.supportsRemoteSelection;
-      _downloaderSupportsBandwidthLimit = msg.supportsBandwidthLimit;
+      _downloaderSupportsRemoteSelection =
+          msg.capabilities.supportsRemoteSelection;
+      _downloaderSupportsBandwidthLimit =
+          msg.capabilities.supportsBandwidthLimit;
       _downloaderSupportsDownloadModeSelection =
-          msg.supportsDownloadModeSelection;
+          msg.capabilities.supportsDownloadModeSelection;
       if (!msg.initializing) {
         _downloaderInitBytes = 0;
         _downloaderInitTotal = null;

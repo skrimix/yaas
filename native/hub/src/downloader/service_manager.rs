@@ -21,7 +21,7 @@ use crate::{
         InstalledDownloaderConfig, Settings,
         signals::{
             downloader::{
-                availability::DownloaderAvailabilityChanged,
+                availability::{DownloaderAvailabilityChanged, RepoCapabilities},
                 setup::{
                     DownloaderConfigInstallResult, DownloaderSourceRemovedResult,
                     DownloaderSourcesChanged, InstallDownloaderConfigFromUrlRequest,
@@ -108,21 +108,17 @@ impl ResolvedManagedConfigs {
 struct DownloaderAvailabilityReporter {
     config_id: String,
     is_donation_configured: bool,
-    supports_remote_selection: bool,
-    supports_bandwidth_limit: bool,
-    supports_download_mode_selection: bool,
+    capabilities: RepoCapabilities,
 }
 
 impl DownloaderAvailabilityReporter {
-    fn new(cfg: &DownloaderConfig, capabilities: repo::RepoCapabilities) -> Self {
+    fn new(cfg: &DownloaderConfig, capabilities: RepoCapabilities) -> Self {
         Self {
             config_id: cfg.id.clone(),
             is_donation_configured: capabilities.supports_donation_upload
                 && cfg.donation_remote_name.is_some()
                 && cfg.donation_remote_path.is_some(),
-            supports_remote_selection: capabilities.supports_remote_selection,
-            supports_bandwidth_limit: capabilities.supports_bandwidth_limit,
-            supports_download_mode_selection: capabilities.supports_download_mode_selection,
+            capabilities,
         }
     }
 
@@ -130,9 +126,7 @@ impl DownloaderAvailabilityReporter {
         DownloaderAvailabilityChanged {
             config_id: Some(self.config_id.clone()),
             is_donation_configured: self.is_donation_configured,
-            supports_remote_selection: self.supports_remote_selection,
-            supports_bandwidth_limit: self.supports_bandwidth_limit,
-            supports_download_mode_selection: self.supports_download_mode_selection,
+            capabilities: self.capabilities,
             ..Default::default()
         }
     }

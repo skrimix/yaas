@@ -10,7 +10,7 @@ use self::{ffa::FFARepo, newrepo::NewRepo};
 use super::{AppDownloadProgress, TransferStats, rclone::RcloneStorage};
 use crate::{
     downloader::config::{DownloaderConfig, RepoLayoutKind},
-    models::{CloudApp, DownloadMode},
+    models::{CloudApp, DownloadMode, signals::downloader::availability::RepoCapabilities},
 };
 
 mod ffa;
@@ -28,14 +28,6 @@ pub(super) struct RepoAppList {
     pub apps: Vec<CloudApp>,
     /// Package names that repo doesn't want donations for.
     pub donation_blacklist: Vec<String>,
-}
-
-#[derive(Debug, Clone, Copy, Default)]
-pub(super) struct RepoCapabilities {
-    pub supports_remote_selection: bool,
-    pub supports_bandwidth_limit: bool,
-    pub supports_download_mode_selection: bool,
-    pub supports_donation_upload: bool,
 }
 
 #[derive(Debug, Clone, Copy, Default)]

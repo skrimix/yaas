@@ -305,7 +305,7 @@ impl DownloadsCatalog {
                     return Ok(());
                 }
 
-                matching.sort_by(|a, b| b.timestamp.cmp(&a.timestamp));
+                matching.sort_by_key(|b| std::cmp::Reverse(b.timestamp));
 
                 let mut keep: Vec<String> = Vec::with_capacity(keep_total as usize);
                 keep.push(installed_full_name.to_string());

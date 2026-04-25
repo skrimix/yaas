@@ -63,7 +63,7 @@ impl BackupsCatalog {
                         match self.list_backups().await {
                             Ok(mut entries) => {
                                 // Newest first
-                                entries.sort_by(|a, b| b.timestamp.cmp(&a.timestamp));
+                                entries.sort_by_key(|b| std::cmp::Reverse(b.timestamp));
                                 GetBackupsResponse { entries, error: None }.send_signal_to_dart();
                             }
                             Err(e) => {

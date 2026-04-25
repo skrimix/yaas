@@ -582,35 +582,39 @@ class _DownloadedNewerBadge extends StatelessWidget {
       return Tooltip(
         message: l10n.downloadedStatusToolTip,
         waitDuration: const Duration(milliseconds: 300),
-        child: InkWell(
-          borderRadius: BorderRadius.circular(999),
-          onTap: () {
-            final appState = context.read<AppState>();
-            appState.setDownloadSearchQuery(pkg);
-            appState.requestNavigationTo('download');
-          },
-          child: Padding(
-            padding: const EdgeInsets.only(top: 6),
-            child: Container(
-              padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 4),
-              decoration: BoxDecoration(
-                color: Colors.transparent,
-                borderRadius: BorderRadius.circular(999),
-                border:
-                    Border.all(color: scheme.secondary.withValues(alpha: 0.7)),
-              ),
-              child: Row(
-                mainAxisSize: MainAxisSize.min,
-                children: [
-                  Icon(Icons.arrow_upward_rounded,
-                      size: 14, color: scheme.secondary),
-                  const SizedBox(width: 6),
-                  Text(
-                    l10n.downloadedStatusNewerVersion,
-                    style: theme.textTheme.labelSmall
-                        ?.copyWith(color: scheme.secondary),
-                  ),
-                ],
+        child: Padding(
+          padding: const EdgeInsets.only(top: 6),
+          child: Material(
+            color: Colors.transparent,
+            borderRadius: BorderRadius.circular(999),
+            clipBehavior: Clip.antiAlias,
+            child: InkWell(
+              borderRadius: BorderRadius.circular(999),
+              onTap: () {
+                final appState = context.read<AppState>();
+                appState.setDownloadSearchQuery(pkg);
+                appState.requestNavigationTo('download');
+              },
+              child: Container(
+                padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 4),
+                decoration: BoxDecoration(
+                  borderRadius: BorderRadius.circular(999),
+                  border: Border.all(
+                      color: scheme.secondary.withValues(alpha: 0.7)),
+                ),
+                child: Row(
+                  mainAxisSize: MainAxisSize.min,
+                  children: [
+                    Icon(Icons.arrow_upward_rounded,
+                        size: 14, color: scheme.secondary),
+                    const SizedBox(width: 6),
+                    Text(
+                      l10n.downloadedStatusNewerVersion,
+                      style: theme.textTheme.labelSmall
+                          ?.copyWith(color: scheme.secondary),
+                    ),
+                  ],
+                ),
               ),
             ),
           ),

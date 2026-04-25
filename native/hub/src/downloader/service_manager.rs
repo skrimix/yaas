@@ -155,6 +155,11 @@ struct RefreshOutcome {
     failed: Vec<String>,
 }
 
+struct StartupRefresh {
+    state_error: Option<String>,
+    background_configs: Vec<DownloaderConfig>,
+}
+
 impl RefreshOutcome {
     fn error_message(&self) -> Option<String> {
         if self.failed.is_empty() {
@@ -262,31 +267,12 @@ impl DownloaderManager {
     ) -> Result<()> {
         let _g = self.init_guard.lock().await;
 
-        let loaded_before = load_managed_configs(&app_dir)?;
-        let mut state_error = combine_errors(initial_error, loaded_before.error.clone());
-        let mut configs_to_refresh_in_background = Vec::new();
+        let startup_refresh =
+            prepare_startup_refresh(&app_dir, &settings_handler, refresh_configs, initial_error)
+                .await?;
 
-        if refresh_configs && !loaded_before.configs.is_empty() {
-            let active_id = resolve_active_config_id(
-                &loaded_before.configs,
-                current_active_config_id(&settings_handler),
-            )
-            .context("No active downloader config available")?;
-
-            let active_cfg = loaded_before
-                .configs
-                .iter()
-                .find(|cfg| cfg.id == active_id)
-                .cloned()
-                .context("No active downloader config available")?;
-            let refresh_outcome =
-                refresh_all_configs(&app_dir, std::slice::from_ref(&active_cfg)).await;
-            state_error = combine_errors(state_error, refresh_outcome.error_message());
-            configs_to_refresh_in_background =
-                loaded_before.configs.into_iter().filter(|cfg| cfg.id != active_id).collect();
-        }
-
-        let managed = ResolvedManagedConfigs::load(&app_dir, &settings_handler, state_error)?;
+        let managed =
+            ResolvedManagedConfigs::load(&app_dir, &settings_handler, startup_refresh.state_error)?;
 
         if managed.is_empty() {
             self.set_downloader(None).await;
@@ -306,11 +292,11 @@ impl DownloaderManager {
 
         self.init_with_config(active_cfg, app_dir.clone(), settings_handler.clone()).await?;
 
-        if !configs_to_refresh_in_background.is_empty() {
+        if !startup_refresh.background_configs.is_empty() {
             spawn_background_refresh(
                 app_dir,
                 settings_handler,
-                configs_to_refresh_in_background,
+                startup_refresh.background_configs,
                 startup_error,
             );
         }
@@ -507,29 +493,21 @@ impl DownloaderManager {
             let settings_handler = settings_handler.clone();
             async move {
                 let receiver = InstallDownloaderConfigFromUrlRequest::get_dart_signal_receiver();
-                loop {
-                    match receiver.recv().await {
-                        Some(req) => {
-                            let url = req.message.url.trim().to_string();
-                            debug!(url = %url, "Received InstallDownloaderConfigFromUrlRequest");
+                while let Some(req) = receiver.recv().await {
+                    let url = req.message.url.trim().to_string();
+                    debug!(url = %url, "Received InstallDownloaderConfigFromUrlRequest");
 
-                            let result = async {
-                                let cfg =
-                                    add_config_from_url(&app_dir, &settings_handler, &url, true)
-                                        .await?;
-                                Ok(cfg.id)
-                            }
-                            .await;
-
-                            manager
-                                .finalize_config_install(&app_dir, &settings_handler, result)
-                                .await;
-                        }
-                        None => {
-                            panic!("InstallDownloaderConfigFromUrlRequest receiver closed")
-                        }
+                    let result = async {
+                        let cfg =
+                            add_config_from_url(&app_dir, &settings_handler, &url, true).await?;
+                        Ok(cfg.id)
                     }
+                    .await;
+
+                    manager.finalize_config_install(&app_dir, &settings_handler, result).await;
                 }
+
+                panic!("InstallDownloaderConfigFromUrlRequest receiver closed")
             }
         });
 
@@ -539,27 +517,17 @@ impl DownloaderManager {
             let settings_handler = settings_handler.clone();
             async move {
                 let receiver = RemoveDownloaderSourceRequest::get_dart_signal_receiver();
-                loop {
-                    match receiver.recv().await {
-                        Some(req) => {
-                            let config_id = req.message.config_id.trim().to_string();
-                            debug!(config_id = %config_id, "Received RemoveDownloaderSourceRequest");
+                while let Some(req) = receiver.recv().await {
+                    let config_id = req.message.config_id.trim().to_string();
+                    debug!(config_id = %config_id, "Received RemoveDownloaderSourceRequest");
 
-                            let result =
-                                delete_managed_config(&settings_handler, &app_dir, &config_id);
-
-                            manager
-                                .finalize_source_removal(
-                                    &app_dir,
-                                    &settings_handler,
-                                    config_id,
-                                    result,
-                                )
-                                .await;
-                        }
-                        None => panic!("RemoveDownloaderSourceRequest receiver closed"),
-                    }
+                    let result = delete_managed_config(&settings_handler, &app_dir, &config_id);
+                    manager
+                        .finalize_source_removal(&app_dir, &settings_handler, config_id, result)
+                        .await;
                 }
+
+                panic!("RemoveDownloaderSourceRequest receiver closed")
             }
         });
 
@@ -569,31 +537,27 @@ impl DownloaderManager {
             let settings_handler = settings_handler.clone();
             async move {
                 let receiver = SelectDownloaderSourceRequest::get_dart_signal_receiver();
-                loop {
-                    match receiver.recv().await {
-                        Some(req) => {
-                            let config_id = req.message.config_id.trim().to_string();
-                            let result =
-                                select_active_config(&settings_handler, &app_dir, &config_id);
-                            if let Err(e) = result {
-                                send_error_toast("Failed to switch downloader source", &e);
-                                continue;
-                            }
-                            if let Err(e) = manager
-                                .initialize_from_managed(
-                                    app_dir.clone(),
-                                    settings_handler.clone(),
-                                    false,
-                                    None,
-                                )
-                                .await
-                            {
-                                send_error_toast("Failed to switch downloader source", &e);
-                            }
-                        }
-                        None => panic!("SelectDownloaderSourceRequest receiver closed"),
+                while let Some(req) = receiver.recv().await {
+                    let config_id = req.message.config_id.trim().to_string();
+                    let result = select_active_config(&settings_handler, &app_dir, &config_id);
+                    if let Err(e) = result {
+                        send_error_toast("Failed to switch downloader source", &e);
+                        continue;
+                    }
+                    if let Err(e) = manager
+                        .initialize_from_managed(
+                            app_dir.clone(),
+                            settings_handler.clone(),
+                            false,
+                            None,
+                        )
+                        .await
+                    {
+                        send_error_toast("Failed to switch downloader source", &e);
                     }
                 }
+
+                panic!("SelectDownloaderSourceRequest receiver closed")
             }
         });
 
@@ -603,64 +567,43 @@ impl DownloaderManager {
             let settings_handler = settings_handler.clone();
             async move {
                 let receiver = RefreshDownloaderSourcesRequest::get_dart_signal_receiver();
-                loop {
-                    match receiver.recv().await {
-                        Some(_) => {
-                            let loaded = match load_managed_configs(&app_dir) {
-                                Ok(loaded) => loaded,
-                                Err(e) => {
-                                    send_error_toast("Failed to refresh downloader sources", &e);
-                                    continue;
-                                }
-                            };
-
-                            let active_id = resolve_active_config_id(
-                                &loaded.configs,
-                                current_active_config_id(&settings_handler),
-                            );
-                            send_configs_changed(
-                                &loaded.configs,
-                                active_id.as_deref(),
-                                true,
-                                loaded.error.clone(),
-                            );
-
-                            let outcome = refresh_all_configs(&app_dir, &loaded.configs).await;
-                            if outcome.failed.is_empty() {
-                                Toast::send(
-                                    "Downloader sources refreshed".into(),
-                                    format!("Updated {} source(s)", outcome.refreshed),
-                                    false,
-                                    None,
-                                );
-                            } else {
-                                Toast::send(
-                                    "Downloader source refresh completed".into(),
-                                    format!(
-                                        "Updated {} source(s), {} failed",
-                                        outcome.refreshed,
-                                        outcome.failed.len()
-                                    ),
-                                    true,
-                                    None,
-                                );
-                            }
-
-                            if let Err(e) = manager
-                                .initialize_from_managed(
-                                    app_dir.clone(),
-                                    settings_handler.clone(),
-                                    false,
-                                    outcome.error_message(),
-                                )
-                                .await
-                            {
-                                send_error_toast("Failed to refresh downloader sources", &e);
-                            }
+                while receiver.recv().await.is_some() {
+                    let loaded = match load_managed_configs(&app_dir) {
+                        Ok(loaded) => loaded,
+                        Err(e) => {
+                            send_error_toast("Failed to refresh downloader sources", &e);
+                            continue;
                         }
-                        None => panic!("RefreshDownloaderSourcesRequest receiver closed"),
+                    };
+
+                    let active_id = resolve_active_config_id(
+                        &loaded.configs,
+                        current_active_config_id(&settings_handler),
+                    );
+                    send_configs_changed(
+                        &loaded.configs,
+                        active_id.as_deref(),
+                        true,
+                        loaded.error.clone(),
+                    );
+
+                    let outcome = refresh_all_configs(&app_dir, &loaded.configs).await;
+                    send_refresh_complete_toast(&outcome);
+
+                    if let Err(e) = manager
+                        .initialize_from_managed(
+                            app_dir.clone(),
+                            settings_handler.clone(),
+                            false,
+                            outcome.error_message(),
+                        )
+                        .await
+                    {
+                        send_error_toast("Failed to refresh downloader sources", &e);
                     }
                 }
+
+                panic!("RefreshDownloaderSourcesRequest receiver closed")
             }
         });
     }
@@ -710,6 +653,24 @@ fn save_active_config_id(
 
 fn send_error_toast(title: &str, error: &impl std::fmt::Display) {
     Toast::send(title.into(), format!("{error:#}"), true, None);
+}
+
+fn send_refresh_complete_toast(outcome: &RefreshOutcome) {
+    if outcome.failed.is_empty() {
+        Toast::send(
+            "Downloader sources refreshed".into(),
+            format!("Updated {} source(s)", outcome.refreshed),
+            false,
+            None,
+        );
+    } else {
+        Toast::send(
+            "Downloader source refresh completed".into(),
+            format!("Updated {} source(s), {} failed", outcome.refreshed, outcome.failed.len()),
+            true,
+            None,
+        );
+    }
 }
 
 fn resolve_active_config_id(configs: &[DownloaderConfig], desired_id: String) -> Option<String> {
@@ -915,6 +876,38 @@ async fn refresh_all_configs(app_dir: &Path, configs: &[DownloaderConfig]) -> Re
     }
 
     outcome
+}
+
+async fn prepare_startup_refresh(
+    app_dir: &Path,
+    settings_handler: &Arc<SettingsHandler>,
+    refresh_configs: bool,
+    initial_error: Option<String>,
+) -> Result<StartupRefresh> {
+    let loaded = load_managed_configs(app_dir)?;
+    let mut state_error = combine_errors(initial_error, loaded.error.clone());
+
+    if !refresh_configs || loaded.configs.is_empty() {
+        return Ok(StartupRefresh { state_error, background_configs: Vec::new() });
+    }
+
+    let active_id =
+        resolve_active_config_id(&loaded.configs, current_active_config_id(settings_handler))
+            .context("No active downloader config available")?;
+    let active_cfg = loaded
+        .configs
+        .iter()
+        .find(|cfg| cfg.id == active_id)
+        .cloned()
+        .context("No active downloader config available")?;
+
+    let refresh_outcome = refresh_all_configs(app_dir, std::slice::from_ref(&active_cfg)).await;
+    state_error = combine_errors(state_error, refresh_outcome.error_message());
+
+    Ok(StartupRefresh {
+        state_error,
+        background_configs: loaded.configs.into_iter().filter(|cfg| cfg.id != active_id).collect(),
+    })
 }
 
 fn select_active_config(

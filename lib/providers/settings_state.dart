@@ -143,13 +143,13 @@ class SettingsState extends ChangeNotifier {
     });
   }
 
-  Future<void> load() async {
+  void load() {
     _setIsLoading(true);
 
     LoadSettingsRequest().sendSignalToRust();
   }
 
-  Future<void> save(Settings settings) async {
+  void save(Settings settings) {
     // _setIsLoading(true);
 
     SaveSettingsRequest(settings: settings).sendSignalToRust();
@@ -158,7 +158,7 @@ class SettingsState extends ChangeNotifier {
     // _setIsLoading(false);
   }
 
-  Future<void> resetToDefaults() async {
+  void resetToDefaults() {
     _setIsLoading(true);
     ResetSettingsToDefaultsRequest().sendSignalToRust();
   }
@@ -207,62 +207,62 @@ class SettingsState extends ChangeNotifier {
     return Locale(code);
   }
 
-  Future<void> setLocaleCode(String code) async {
+  void setLocaleCode(String code) {
     _settings = _settings.copyWith(localeCode: code);
     notifyListeners();
     // Persist immediately via Rust settings handler
     SaveSettingsRequest(settings: _settings).sendSignalToRust();
   }
 
-  Future<void> setUseSystemColor(bool value) async {
+  void setUseSystemColor(bool value) {
     _settings = _settings.copyWith(useSystemColor: value);
     notifyListeners();
     SaveSettingsRequest(settings: _settings).sendSignalToRust();
   }
 
-  Future<void> setSeedColorKey(String key) async {
+  void setSeedColorKey(String key) {
     _settings = _settings.copyWith(seedColorKey: key);
     notifyListeners();
     SaveSettingsRequest(settings: _settings).sendSignalToRust();
   }
 
-  Future<void> setThemePreference(ThemePreference pref) async {
+  void setThemePreference(ThemePreference pref) {
     _settings = _settings.copyWith(themePreference: pref);
     notifyListeners();
     SaveSettingsRequest(settings: _settings).sendSignalToRust();
   }
 
-  Future<void> setPopularityRange(PopularityRange range) async {
+  void setPopularityRange(PopularityRange range) {
     if (_settings.popularityRange == range) return;
     _settings = _settings.copyWith(popularityRange: range);
     notifyListeners();
     SaveSettingsRequest(settings: _settings).sendSignalToRust();
   }
 
-  Future<void> setRcloneRemoteName(String name) async {
+  void setRcloneRemoteName(String name) {
     if (_settings.rcloneRemoteName == name) return;
     _settings = _settings.copyWith(rcloneRemoteName: name);
     notifyListeners();
     SaveSettingsRequest(settings: _settings).sendSignalToRust();
   }
 
-  Future<void> refreshRcloneRemotes() async {
+  void refreshRcloneRemotes() {
     _isRemotesLoading = true;
     _remotesError = null;
     notifyListeners();
     GetRcloneRemotesRequest().sendSignalToRust();
   }
 
-  Future<void> refreshDownloaderSources() async {
+  void refreshDownloaderSources() {
     RefreshDownloaderSourcesRequest().sendSignalToRust();
   }
 
-  Future<void> selectDownloaderSource(String configId) async {
+  void selectDownloaderSource(String configId) {
     if (configId == _downloaderConfigId) return;
     SelectDownloaderSourceRequest(configId: configId).sendSignalToRust();
   }
 
-  Future<void> removeDownloaderSource(String configId) async {
+  void removeDownloaderSource(String configId) {
     RemoveDownloaderSourceRequest(configId: configId).sendSignalToRust();
   }
 

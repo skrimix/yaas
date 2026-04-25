@@ -82,6 +82,22 @@ class AppState extends ChangeNotifier {
     notifyListeners();
   }
 
+  // Downloads page state
+  String _downloadsSortKey = 'date'; // 'name' | 'date' | 'size'
+  bool _downloadsSortAscending = false;
+
+  String get downloadsSortKey => _downloadsSortKey;
+  bool get downloadsSortAscending => _downloadsSortAscending;
+
+  void setDownloadsSort(String key, bool ascending) {
+    if (_downloadsSortKey == key && _downloadsSortAscending == ascending) {
+      return;
+    }
+    _downloadsSortKey = key;
+    _downloadsSortAscending = ascending;
+    notifyListeners();
+  }
+
   // Navigation requests (e.g., jump to a specific page)
   String? _navRequestPageKey;
 

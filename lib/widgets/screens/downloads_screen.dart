@@ -15,6 +15,12 @@ const _listPadding = EdgeInsets.only(bottom: 24);
 const _cardMargin = EdgeInsets.symmetric(horizontal: 16, vertical: 2);
 const _cardPadding = EdgeInsets.symmetric(horizontal: 16, vertical: 4);
 
+enum DownloadsSortOption {
+  name,
+  date,
+  size,
+}
+
 class DownloadsScreen extends StatefulWidget {
   const DownloadsScreen({super.key});
 
@@ -27,6 +33,9 @@ class _DownloadsScreenState extends State<DownloadsScreen> {
   bool _loading = false;
   String? _error;
   Map<String, int> _latestDownloadedByPackage = const {};
+  DownloadsSortOption _sortOption = DownloadsSortOption.date;
+  bool _sortAscending = false;
+  bool _initialized = false;
 
   @override
   void initState() {
@@ -35,6 +44,20 @@ class _DownloadsScreenState extends State<DownloadsScreen> {
     DownloadsChanged.rustSignalStream.listen((_) {
       if (mounted) _loadDownloads();
     });
+  }
+
+  @override
+  void didChangeDependencies() {
+    super.didChangeDependencies();
+    if (_initialized) return;
+    final appState = context.read<AppState>();
+    _sortOption = switch (appState.downloadsSortKey) {
+      'name' => DownloadsSortOption.name,
+      'size' => DownloadsSortOption.size,
+      _ => DownloadsSortOption.date,
+    };
+    _sortAscending = appState.downloadsSortAscending;
+    _initialized = true;
   }
 
   Future<void> _loadDownloads() async {
@@ -77,9 +100,93 @@ class _DownloadsScreenState extends State<DownloadsScreen> {
     SideloadUtils.installApp(entry.path, true);
   }
 
+  List<DownloadEntry> _sortedEntries() {
+    final entries = [..._entries];
+    entries.sort((a, b) {
+      final nameA = a.name.toLowerCase();
+      final nameB = b.name.toLowerCase();
+      int result;
+
+      switch (_sortOption) {
+        case DownloadsSortOption.name:
+          result = nameA.compareTo(nameB);
+          break;
+        case DownloadsSortOption.date:
+          result = a.timestamp.toInt().compareTo(b.timestamp.toInt());
+          if (result == 0) {
+            result = nameA.compareTo(nameB);
+          }
+          break;
+        case DownloadsSortOption.size:
+          result = a.totalSize.toInt().compareTo(b.totalSize.toInt());
+          if (result == 0) {
+            result = nameA.compareTo(nameB);
+          }
+          break;
+      }
+
+      return _sortAscending ? result : -result;
+    });
+    return entries;
+  }
+
+  Widget _buildSortButton() {
+    final l10n = AppLocalizations.of(context);
+
+    bool isSelected(String key, bool ascending) {
+      return _sortOption.name == key && _sortAscending == ascending;
+    }
+
+    PopupMenuItem<(String, bool)> buildItem(
+      String key,
+      bool ascending,
+      String label,
+    ) {
+      return PopupMenuItem(
+        value: (key, ascending),
+        child: Row(
+          children: [
+            Icon(isSelected(key, ascending)
+                ? Icons.radio_button_checked
+                : Icons.radio_button_unchecked),
+            const SizedBox(width: 8),
+            Text(label),
+          ],
+        ),
+      );
+    }
+
+    return PopupMenuButton<(String, bool)>(
+      tooltip: l10n.sortBy,
+      icon: const Icon(Icons.sort),
+      initialValue: (_sortOption.name, _sortAscending),
+      itemBuilder: (context) => [
+        PopupMenuItem(
+          enabled: false,
+          child: Text(l10n.sortBy),
+        ),
+        buildItem('name', true, l10n.sortNameAsc),
+        buildItem('name', false, l10n.sortNameDesc),
+        buildItem('date', true, l10n.sortDateOldest),
+        buildItem('date', false, l10n.sortDateNewest),
+        buildItem('size', true, l10n.sortSizeSmallest),
+        buildItem('size', false, l10n.sortSizeLargest),
+      ],
+      onSelected: (value) {
+        final (key, ascending) = value;
+        setState(() {
+          _sortOption = DownloadsSortOption.values.byName(key);
+          _sortAscending = ascending;
+        });
+        context.read<AppState>().setDownloadsSort(key, ascending);
+      },
+    );
+  }
+
   @override
   Widget build(BuildContext context) {
     final l10n = AppLocalizations.of(context);
+    final entries = _sortedEntries();
     return Scaffold(
       body: SafeArea(
         child: Column(
@@ -103,6 +210,7 @@ class _DownloadsScreenState extends State<DownloadsScreen> {
                     onPressed: _openDownloadsRoot,
                     icon: const Icon(Icons.folder_open),
                   ),
+                  _buildSortButton(),
                   IconButton(
                     tooltip: l10n.refresh,
                     onPressed: _refresh,
@@ -120,17 +228,17 @@ class _DownloadsScreenState extends State<DownloadsScreen> {
                           ? Center(child: Text(l10n.noDownloadsFound))
                           : ListView.builder(
                               padding: _listPadding,
-                              itemCount: _entries.length,
+                              itemCount: entries.length,
                               itemBuilder: (context, index) => _DownloadTile(
-                                entry: _entries[index],
+                                entry: entries[index],
                                 newestDownloadedForPackage:
                                     _latestDownloadedByPackage[
-                                        _entries[index].packageName ?? ''],
-                                onInstall: () => _installEntry(_entries[index]),
+                                        entries[index].packageName ?? ''],
+                                onInstall: () => _installEntry(entries[index]),
                                 onOpenFolder: () =>
-                                    _openFolder(_entries[index].path),
+                                    _openFolder(entries[index].path),
                                 onDelete: () =>
-                                    _confirmAndDelete(_entries[index]),
+                                    _confirmAndDelete(entries[index]),
                               ),
                             ),
             ),

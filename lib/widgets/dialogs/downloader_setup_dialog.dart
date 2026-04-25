@@ -163,8 +163,10 @@ class _DownloaderSetupDialogState extends State<DownloaderSetupDialog> {
           }
         },
         onTap: enabled
-            ? () =>
-                context.read<SettingsState>().selectDownloaderSource(source.id)
+            ? () {
+                context.read<SettingsState>().selectDownloaderSource(source.id);
+                Navigator.of(context).pop();
+              }
             : null,
         child: Padding(
           padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 10),
@@ -318,6 +320,7 @@ class _DownloaderSetupDialogState extends State<DownloaderSetupDialog> {
                           onChanged: (value) {
                             if (busy || value == null) return;
                             settingsState.selectDownloaderSource(value);
+                            Navigator.of(context).pop();
                           },
                           child: SingleChildScrollView(
                             child: Column(

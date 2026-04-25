@@ -36,14 +36,27 @@ class _DownloadsScreenState extends State<DownloadsScreen> {
   DownloadsSortOption _sortOption = DownloadsSortOption.date;
   bool _sortAscending = false;
   bool _initialized = false;
+  final _scrollController = ScrollController();
+  double _lastScrollOffset = 0.0;
 
   @override
   void initState() {
     super.initState();
+    _scrollController.addListener(() {
+      if (_scrollController.hasClients) {
+        _lastScrollOffset = _scrollController.position.pixels;
+      }
+    });
     _loadDownloads();
     DownloadsChanged.rustSignalStream.listen((_) {
       if (mounted) _loadDownloads();
     });
+  }
+
+  @override
+  void dispose() {
+    _scrollController.dispose();
+    super.dispose();
   }
 
   @override
@@ -84,6 +97,11 @@ class _DownloadsScreenState extends State<DownloadsScreen> {
           }
         }
         _latestDownloadedByPackage = latest;
+      });
+      WidgetsBinding.instance.addPostFrameCallback((_) {
+        if (!_scrollController.hasClients) return;
+        final max = _scrollController.position.maxScrollExtent;
+        _scrollController.jumpTo(_lastScrollOffset.clamp(0.0, max));
       });
     });
     GetDownloadsRequest().sendSignalToRust();
@@ -227,6 +245,7 @@ class _DownloadsScreenState extends State<DownloadsScreen> {
                       : _entries.isEmpty
                           ? Center(child: Text(l10n.noDownloadsFound))
                           : ListView.builder(
+                              controller: _scrollController,
                               padding: _listPadding,
                               itemCount: entries.length,
                               itemBuilder: (context, index) => _DownloadTile(

@@ -162,7 +162,7 @@ class _DownloaderSetupDialogState extends State<DownloaderSetupDialog> {
             });
           }
         },
-        onTap: enabled
+        onTap: enabled && !selected
             ? () {
                 context.read<SettingsState>().selectDownloaderSource(source.id);
                 Navigator.of(context).pop();

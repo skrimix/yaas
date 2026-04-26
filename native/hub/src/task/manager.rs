@@ -16,7 +16,7 @@ use tracing::{debug, error, info, instrument, warn};
 
 use crate::{
     adb::{AdbService, PackageName},
-    downloader::{downloads_catalog::DownloadsCatalog, service_manager::DownloaderManager},
+    downloader::{downloads_catalog::DownloadsCatalog, manager::DownloaderManager},
     models::{
         Settings,
         signals::{

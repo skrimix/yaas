@@ -63,10 +63,7 @@ impl TaskManager {
         update_progress: &impl Fn(ProgressUpdate),
         token: CancellationToken,
     ) -> Result<()> {
-        ensure!(
-            self.downloader_manager.is_some().await,
-            "Downloader is not configured. Install configuration file to initialize."
-        );
+        let downloader = self.downloader_manager.require().await?;
 
         debug!(
             package_name = %package,
@@ -180,11 +177,6 @@ impl TaskManager {
         let (tx, mut rx) = mpsc::unbounded_channel::<TransferStats>();
 
         let mut upload_task = {
-            let downloader = self
-                .downloader_manager
-                .get()
-                .await
-                .ok_or_else(|| anyhow!("Downloader is not configured"))?;
             let archive_path = archive_path.clone();
             let token = token.clone();
             tokio::spawn(

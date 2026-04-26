@@ -28,7 +28,10 @@ use tracing_subscriber::{EnvFilter, fmt, layer::SubscriberExt};
 use crate::{
     backups_catalog::BackupsCatalog,
     casting::CastingManager,
-    downloader::{downloads_catalog::DownloadsCatalog, service_manager::DownloaderManager},
+    downloader::{
+        controller::DownloaderController, downloads_catalog::DownloadsCatalog,
+        manager::DownloaderManager,
+    },
 };
 
 #[global_allocator]
@@ -155,7 +158,7 @@ async fn init_in_dir(app_dir: PathBuf, portable_mode: bool) {
     debug!("Creating downloads catalog");
     let downloads_catalog = DownloadsCatalog::new(WatchStream::new(settings_handler.subscribe()));
     debug!("Creating downloader manager");
-    let downloader_manager = DownloaderManager::new(None);
+    let downloader_manager = DownloaderManager::new();
     debug!("Creating task manager");
     let _task_manager = TaskManager::new(
         adb_service.clone(),
@@ -164,7 +167,12 @@ async fn init_in_dir(app_dir: PathBuf, portable_mode: bool) {
         WatchStream::new(settings_handler.subscribe()),
     );
     debug!("Starting downloader manager");
-    downloader_manager.clone().start(app_dir.clone(), settings_handler.clone());
+    DownloaderController::new(
+        downloader_manager.clone(),
+        app_dir.clone(),
+        settings_handler.clone(),
+    )
+    .start();
 
     // Backups-related requests
     debug!("Creating backups catalog");

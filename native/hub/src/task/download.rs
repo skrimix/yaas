@@ -1,6 +1,6 @@
 use std::{error::Error, path::Path, time::Duration};
 
-use anyhow::{Context, Result, anyhow, ensure};
+use anyhow::{Context, Result, anyhow};
 use tokio::sync::mpsc;
 use tokio_util::sync::CancellationToken;
 use tracing::{Instrument, Span, debug, error, info, instrument, warn};
@@ -23,10 +23,7 @@ impl TaskManager {
         update_progress: &impl Fn(ProgressUpdate),
         token: CancellationToken,
     ) -> Result<String> {
-        ensure!(
-            self.downloader_manager.is_some().await,
-            "Downloader is not configured. Install configuration file to initialize."
-        );
+        let downloader = self.downloader_manager.require().await?;
         update_progress(ProgressUpdate {
             status: TaskStatus::Waiting,
             step_number,
@@ -50,7 +47,6 @@ impl TaskManager {
         let (tx, mut rx) = mpsc::unbounded_channel::<AppDownloadProgress>();
 
         let mut download_task = {
-            let downloader = self.downloader_manager.get().await.expect("downloader missing");
             let app_full_name = app_full_name.to_string();
             let token = token.clone();
             tokio::spawn(

@@ -314,7 +314,7 @@ mod tests {
     }
 
     #[test]
-    fn new_repo_requires_base_url() {
+    fn newrepo_requires_base_url() {
         let dir = tempdir().unwrap();
         let cfg_path = dir.path().join("downloader.json");
         write_file(
@@ -330,7 +330,7 @@ mod tests {
     }
 
     #[test]
-    fn new_repo_loads_without_rclone_fields() {
+    fn newrepo_loads_without_rclone_fields() {
         let dir = tempdir().unwrap();
         let cfg_path = dir.path().join("downloader.json");
         write_file(

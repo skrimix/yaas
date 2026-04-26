@@ -188,7 +188,7 @@ impl Repo for NewRepo {
             http_client,
             &storage.list_url(),
             cache_dir,
-            "new_repo/list.yarc",
+            "newrepo/list.yarc",
             &cancellation_token,
         )
         .await
@@ -233,7 +233,7 @@ impl Repo for NewRepo {
         storage: RepoStorage,
         app_full_name: &str,
         destination_dir: &Path,
-        cache_dir: &Path,
+        _cache_dir: &Path,
         http_client: &reqwest::Client,
         download_mode: DownloadMode,
         progress_tx: UnboundedSender<AppDownloadProgress>,
@@ -272,26 +272,25 @@ impl Repo for NewRepo {
             }
         };
 
-        let manifest_rel_path = format!("new_repo/manifests/{}.yarc", release.manifest_hash);
         send_status(&progress_tx, "Fetching manifest...");
         debug!(
             manifest_hash = %release.manifest_hash,
-            relative_path = %manifest_rel_path,
-            "Caching manifest"
+            "Fetching manifest"
         );
-        let manifest_path = cache_remote_file(
-            http_client,
-            &storage.manifest_url(&release.manifest_hash),
-            cache_dir,
-            &manifest_rel_path,
+        let manifest_url = storage.manifest_url(&release.manifest_hash);
+        let manifest_bytes = send_with_cancellation(
+            http_client.get(&manifest_url),
+            &manifest_url,
             &cancellation_token,
         )
         .await
-        .context("Failed to cache manifest")?;
-        let manifest_bytes = fs::read(&manifest_path)
-            .await
-            .with_context(|| format!("Failed to read {}", manifest_path.display()))?;
-        let (manifest, _) = ReleaseManifest::from_yarc(manifest_bytes.as_slice(), yarc_key)
+        .context("Failed to fetch manifest")?
+        .error_for_status()
+        .context("Manifest request failed")?
+        .bytes()
+        .await
+        .context("Failed to read manifest response")?;
+        let (manifest, _) = ReleaseManifest::from_yarc(manifest_bytes.as_ref(), yarc_key)
             .await
             .context("Failed to decode manifest")?;
 

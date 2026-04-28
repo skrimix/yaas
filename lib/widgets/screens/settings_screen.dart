@@ -909,11 +909,13 @@ class _SettingsScreenState extends State<SettingsScreen> {
                   LinearProgressIndicator(
                     value: settingsState.downloaderInitProgress,
                   ),
-                  const SizedBox(height: 4),
-                  Text(
-                    l10n.downloadingRcloneFiles,
-                    style: Theme.of(context).textTheme.bodySmall,
-                  ),
+                  if (settingsState.isDownloaderInitDownloadActive) ...[
+                    const SizedBox(height: 4),
+                    Text(
+                      l10n.downloadingRcloneFiles,
+                      style: Theme.of(context).textTheme.bodySmall,
+                    ),
+                  ],
                 ],
               ),
             ),

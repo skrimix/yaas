@@ -183,6 +183,8 @@ class SettingsState extends ChangeNotifier {
       _downloaderInitTotal == null || _downloaderInitTotal == 0
           ? null
           : _downloaderInitBytes / _downloaderInitTotal!;
+  bool get isDownloaderInitDownloadActive =>
+      _downloaderInitBytes > 0 || _downloaderInitTotal != null;
   bool get isDownloaderDonationConfigured => _downloaderIsDonationConfigured;
   bool get downloaderNeedsSetup => _downloaderNeedsSetup;
   bool get downloaderSupportsRemoteSelection =>

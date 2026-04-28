@@ -7,7 +7,7 @@ use std::{
 };
 
 use anyhow::{Context, Result, ensure};
-use lazy_regex::{Lazy, Regex, lazy_regex};
+use lazy_regex::regex;
 use rinf::{DartSignal, RustSignal};
 use tokio::fs;
 use tokio_stream::{StreamExt, wrappers::WatchStream};
@@ -239,8 +239,8 @@ impl DownloadsCatalog {
         installed_path: &str,
     ) -> Result<()> {
         use DownloadCleanupPolicy as Policy;
-        /// Match versioned download directory names: `{name} v{version}+{build}`
-        static VERSIONED_DOWNLOAD_REGEX: Lazy<Regex> = lazy_regex!(r"^(.+) v\d+\+.+$");
+        // Match versioned download directory names: `{name} v{version}+{build}`
+        let re = regex!(r"^(.+) v\d+\+.+$");
 
         match policy {
             Policy::KeepAllVersions => {
@@ -269,7 +269,7 @@ impl DownloadsCatalog {
                     _ => unreachable!(),
                 };
 
-                let Some(captures) = VERSIONED_DOWNLOAD_REGEX.captures(installed_full_name) else {
+                let Some(captures) = re.captures(installed_full_name) else {
                     warn!(
                         installed = installed_full_name,
                         "Installed release name does not follow `{{name}} vX+Y` convention, \
@@ -290,7 +290,7 @@ impl DownloadsCatalog {
                 let entries = self.list_downloads().await?;
                 let mut matching = Vec::new();
                 for entry in entries {
-                    if let Some(caps) = VERSIONED_DOWNLOAD_REGEX.captures(&entry.name) {
+                    if let Some(caps) = re.captures(&entry.name) {
                         let entry_base = caps.get(1).map(|m| m.as_str().trim()).unwrap_or("");
                         if entry_base == base_name {
                             matching.push(entry);

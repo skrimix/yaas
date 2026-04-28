@@ -1,5 +1,5 @@
 use std::{
-    collections::HashMap,
+    collections::{HashMap, VecDeque},
     error::Error,
     io::SeekFrom,
     path::{Path, PathBuf},
@@ -40,6 +40,7 @@ use crate::{
 
 const YAAS_KEY_HEADER: &str = "x-yaas-key";
 const STREAM_PROGRESS_INTERVAL_MILLIS: u128 = 500;
+const SPEED_SAMPLE_WINDOW: Duration = Duration::from_secs(4);
 const SLOW_NETWORK_WARNING_THRESHOLD: Duration = Duration::from_secs(8);
 const LOCAL_DOWNLOAD_METADATA_PATHS: [&str; 2] = ["metadata.json", "release.json"];
 const STAGED_DOWNLOAD_WORKERS: usize = 4;
@@ -820,12 +821,13 @@ async fn staged_progress_loop(
     cancellation_token: CancellationToken,
 ) -> Result<()> {
     let started_at = Instant::now();
+    let mut speed_tracker = TransferSpeedTracker::new(SPEED_SAMPLE_WINDOW);
     loop {
         tokio::select! {
             _ = cancellation_token.cancelled() => break,
             _ = tokio_time::sleep(Duration::from_millis(STREAM_PROGRESS_INTERVAL_MILLIS as u64)) => {
                 let bytes = downloaded_bytes.load(Ordering::Relaxed);
-                let speed = speed_bytes_per_sec(bytes, started_at.elapsed().as_millis());
+                let speed = speed_tracker.record(bytes, started_at.elapsed().as_millis());
                 let _ = progress_tx.send(AppDownloadProgress::Transfer(TransferStats {
                     bytes,
                     total_bytes,
@@ -839,7 +841,7 @@ async fn staged_progress_loop(
     }
 
     let bytes = downloaded_bytes.load(Ordering::Relaxed);
-    let speed = speed_bytes_per_sec(bytes, started_at.elapsed().as_millis());
+    let speed = speed_tracker.record(bytes, started_at.elapsed().as_millis());
     let _ = progress_tx.send(AppDownloadProgress::Transfer(TransferStats {
         bytes,
         total_bytes,
@@ -872,6 +874,7 @@ async fn stream_package_to_pipe(
     let mut downloaded_bytes = 0_u64;
     let started_at = Instant::now();
     let mut last_emit = 0_u128;
+    let mut speed_tracker = TransferSpeedTracker::new(SPEED_SAMPLE_WINDOW);
     let mut stream = response.bytes_stream();
     let mut seen_first_chunk = false;
 
@@ -921,7 +924,7 @@ async fn stream_package_to_pipe(
 
         let elapsed_millis = started_at.elapsed().as_millis();
         if elapsed_millis.saturating_sub(last_emit) >= STREAM_PROGRESS_INTERVAL_MILLIS {
-            let speed = speed_bytes_per_sec(downloaded_bytes, elapsed_millis);
+            let speed = speed_tracker.record(downloaded_bytes, elapsed_millis);
             let _ = progress_tx.send(AppDownloadProgress::Transfer(TransferStats {
                 bytes: downloaded_bytes,
                 total_bytes,
@@ -931,7 +934,7 @@ async fn stream_package_to_pipe(
         }
     }
 
-    let final_speed = speed_bytes_per_sec(downloaded_bytes, started_at.elapsed().as_millis());
+    let final_speed = speed_tracker.record(downloaded_bytes, started_at.elapsed().as_millis());
     let _ = progress_tx.send(AppDownloadProgress::Transfer(TransferStats {
         bytes: downloaded_bytes,
         total_bytes,
@@ -974,6 +977,43 @@ async fn send_with_cancellation(
 
 fn send_status(progress_tx: &UnboundedSender<AppDownloadProgress>, status: impl Into<String>) {
     let _ = progress_tx.send(AppDownloadProgress::Status(status.into()));
+}
+
+#[derive(Debug)]
+struct TransferSpeedTracker {
+    samples: VecDeque<TransferSpeedSample>,
+    window_millis: u128,
+}
+
+impl TransferSpeedTracker {
+    fn new(window: Duration) -> Self {
+        let mut samples = VecDeque::new();
+        samples.push_back(TransferSpeedSample { bytes: 0, elapsed_millis: 0 });
+        Self { samples, window_millis: window.as_millis() }
+    }
+
+    fn record(&mut self, bytes: u64, elapsed_millis: u128) -> u64 {
+        self.samples.push_back(TransferSpeedSample { bytes, elapsed_millis });
+        let cutoff = elapsed_millis.saturating_sub(self.window_millis);
+
+        while self.samples.len() > 1
+            && self.samples.get(1).is_some_and(|sample| sample.elapsed_millis <= cutoff)
+        {
+            self.samples.pop_front();
+        }
+
+        let baseline = self.samples.front().expect("speed tracker must retain a baseline sample");
+        speed_bytes_per_sec(
+            bytes.saturating_sub(baseline.bytes),
+            elapsed_millis.saturating_sub(baseline.elapsed_millis),
+        )
+    }
+}
+
+#[derive(Clone, Copy, Debug)]
+struct TransferSpeedSample {
+    bytes: u64,
+    elapsed_millis: u128,
 }
 
 fn speed_bytes_per_sec(downloaded_bytes: u64, elapsed_millis: u128) -> u64 {
@@ -1064,6 +1104,16 @@ mod tests {
         assert_eq!(app.version_code, 123);
         assert_eq!(app.last_updated, "2023-11-14 22:13 UTC");
         assert_eq!(app.size, 321_500_000);
+    }
+
+    #[test]
+    fn transfer_speed_tracker_uses_rolling_window() {
+        let mut tracker = TransferSpeedTracker::new(Duration::from_secs(2));
+
+        assert_eq!(tracker.record(1_000, 1_000), 1_000);
+        assert_eq!(tracker.record(2_000, 2_000), 1_000);
+        assert_eq!(tracker.record(3_000, 3_000), 1_000);
+        assert_eq!(tracker.record(13_000, 4_000), 5_500);
     }
 
     #[test]

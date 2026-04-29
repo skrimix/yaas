@@ -2,6 +2,10 @@
 
 YAAS is a cross-platform desktop application for sideloading applications and managing Meta Quest headsets. It combines a Material Design 3 UI based on Flutter and a Rust core.
 
+## Downloads
+
+[Windows](https://github.com/skrimix/yaas/releases/download/nightly/YAAS-windows-x64.zip) | [Linux](https://github.com/skrimix/yaas/releases/download/nightly/YAAS-linux-x86_64.AppImage) | [MacOS](https://github.com/skrimix/yaas/releases/download/nightly/YAAS-macos.zip)
+
 ## Screenshots
 
 ![](./screenshots/1_home.png)

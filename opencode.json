@@ -7,7 +7,7 @@
         "dart",
         "mcp-server"
       ],
-      "enabled": true,
+      "enabled": false,
       "environment": {}
     }
   }

@@ -27,6 +27,35 @@ class _DownloaderSetupDialogState extends State<DownloaderSetupDialog> {
   bool _showAddSection = false;
   String? _errorText;
 
+  InputDecoration _buildUrlInputDecoration(AppLocalizations l10n) {
+    final errorText = _errorText;
+
+    if (errorText == null || errorText.isEmpty) {
+      return InputDecoration(
+        labelText: l10n.downloaderConfigUrlLabel,
+        border: const OutlineInputBorder(),
+      );
+    }
+
+    final decoration = InputDecoration(
+      labelText: l10n.downloaderConfigUrlLabel,
+      border: const OutlineInputBorder(),
+      errorMaxLines: 4,
+    );
+
+    return decoration.copyWith(
+      error: Tooltip(
+        message: errorText,
+        waitDuration: const Duration(milliseconds: 400),
+        child: Text(
+          errorText,
+          maxLines: 4,
+          overflow: TextOverflow.ellipsis,
+        ),
+      ),
+    );
+  }
+
   @override
   void initState() {
     super.initState();
@@ -399,12 +428,7 @@ class _DownloaderSetupDialogState extends State<DownloaderSetupDialog> {
                                   controller: _urlController,
                                   enabled: !busy,
                                   autofocus: sources.isEmpty,
-                                  decoration: InputDecoration(
-                                    labelText: l10n.downloaderConfigUrlLabel,
-                                    border: const OutlineInputBorder(),
-                                    errorText: _errorText,
-                                    errorMaxLines: 4,
-                                  ),
+                                  decoration: _buildUrlInputDecoration(l10n),
                                   onChanged: (_) {
                                     if (_errorText != null) {
                                       setState(() {

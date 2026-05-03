@@ -2,6 +2,7 @@ use std::{
     error::Error,
     path::{Path, PathBuf},
     process::Stdio,
+    time::Duration,
 };
 
 use anyhow::{Context, Result, anyhow, bail, ensure};
@@ -11,14 +12,19 @@ use tokio::{
     io::{AsyncBufReadExt, BufReader},
     process::Command,
     sync::mpsc::UnboundedSender,
+    time::{self, Instant, MissedTickBehavior},
 };
 use tokio_util::sync::CancellationToken;
 use tracing::{Span, error, instrument, trace, warn};
 
+use crate::downloader::{TransferSpeedTracker, TransferStats};
 use crate::utils::{get_sys_proxy, resolve_binary_path};
 
 static CONNECTION_TIMEOUT: &str = "5s";
 static IO_IDLE_TIMEOUT: &str = "30s";
+const RCLONE_STATS_INTERVAL: Duration = Duration::from_millis(500);
+const RCLONE_STALE_SPEED_TIMEOUT: Duration = Duration::from_millis(1500);
+const RCLONE_SPEED_SAMPLE_WINDOW: Duration = Duration::from_secs(8);
 
 #[derive(Debug, Clone, Deserialize)]
 #[serde(rename_all = "PascalCase")]
@@ -41,20 +47,20 @@ pub(super) struct RcloneSizeOutput {
 
 #[derive(Debug, Clone, Deserialize)]
 #[serde(rename_all = "camelCase")]
-pub(crate) struct TransferStats {
-    pub bytes: u64,
-    pub total_bytes: u64,
-    #[serde(deserialize_with = "deserialize_speed")]
-    pub speed: u64,
+struct RcloneTransferStats {
+    bytes: u64,
+    // total_bytes: u64,
+    // #[serde(deserialize_with = "deserialize_speed")]
+    // speed: u64,
 }
 
-fn deserialize_speed<'de, D>(deserializer: D) -> Result<u64, D::Error>
-where
-    D: serde::Deserializer<'de>,
-{
-    let speed = f64::deserialize(deserializer)?;
-    Ok(speed as u64)
-}
+// fn deserialize_speed<'de, D>(deserializer: D) -> Result<u64, D::Error>
+// where
+//     D: serde::Deserializer<'de>,
+// {
+//     let speed = f64::deserialize(deserializer)?;
+//     Ok(speed as u64)
+// }
 
 #[derive(Debug, Clone, Deserialize)]
 struct RcloneJsonLogLine {
@@ -64,7 +70,57 @@ struct RcloneJsonLogLine {
     #[serde(default)]
     object: Option<String>,
     #[serde(default)]
-    stats: Option<TransferStats>,
+    stats: Option<RcloneTransferStats>,
+}
+
+#[derive(Debug)]
+struct RcloneProgressTracker {
+    speed_tracker: TransferSpeedTracker,
+    started_at: Instant,
+    expected_total_bytes: u64,
+    last_stats: Option<TransferStats>,
+    last_update_at: Option<Instant>,
+}
+
+impl RcloneProgressTracker {
+    fn new(expected_total_bytes: u64) -> Self {
+        Self {
+            speed_tracker: TransferSpeedTracker::new(RCLONE_SPEED_SAMPLE_WINDOW),
+            started_at: Instant::now(),
+            expected_total_bytes,
+            last_stats: None,
+            last_update_at: None,
+        }
+    }
+
+    fn record_stats(&mut self, stats: RcloneTransferStats) -> TransferStats {
+        let speed = self.speed_tracker.record(stats.bytes, self.started_at.elapsed().as_millis());
+        let normalized = TransferStats {
+            bytes: stats.bytes,
+            total_bytes: (stats.bytes <= self.expected_total_bytes)
+                .then_some(self.expected_total_bytes),
+            speed,
+        };
+        self.last_update_at = Some(Instant::now());
+        self.last_stats = Some(normalized.clone());
+        normalized
+    }
+
+    fn maybe_stale_stats(&mut self, now: Instant) -> Option<TransferStats> {
+        let last_update_at = self.last_update_at?;
+        if now.duration_since(last_update_at) < RCLONE_STALE_SPEED_TIMEOUT {
+            return None;
+        }
+
+        let last_stats = self.last_stats.as_mut()?;
+        if last_stats.speed == 0 {
+            return None;
+        }
+
+        last_stats.speed = 0;
+        self.last_update_at = Some(now);
+        Some(last_stats.clone())
+    }
 }
 
 impl RcloneJsonLogLine {
@@ -285,25 +341,45 @@ impl RcloneCli {
             let mut stderr_lines: Vec<String> = Vec::new();
 
             if let (Some(stats_tx), Some(total_bytes)) = (stats_tx, total_bytes) {
-                while let Some(line) = lines.next_line().await? {
-                    match serde_json::from_str::<RcloneJsonLogLine>(&line) {
-                        Ok(log_line) => {
-                            if let Some(mut stats) = log_line.stats {
-                                trace!(?stats, "Parsed rclone stats");
-                                stats.total_bytes = total_bytes;
-                                trace!(?stats, "Sending stats update");
-                                if stats_tx.send(stats).is_err() {
-                                    warn!("Stats receiver dropped, stopping stats processing.");
-                                    break;
+                let mut progress_tracker = RcloneProgressTracker::new(total_bytes);
+                let mut stale_tick = time::interval(RCLONE_STATS_INTERVAL);
+                stale_tick.set_missed_tick_behavior(MissedTickBehavior::Delay);
+                stale_tick.tick().await;
+
+                loop {
+                    tokio::select! {
+                        line = lines.next_line() => {
+                            let Some(line) = line? else {
+                                break;
+                            };
+
+                            match serde_json::from_str::<RcloneJsonLogLine>(&line) {
+                                Ok(log_line) => {
+                                    if let Some(stats) = log_line.stats {
+                                        trace!(?stats, "Parsed rclone stats");
+                                        let normalized = progress_tracker.record_stats(stats);
+                                        trace!(?normalized, "Sending stats update");
+                                        if stats_tx.send(normalized).is_err() {
+                                            warn!("Stats receiver dropped, stopping stats processing.");
+                                            break;
+                                        }
+                                    } else {
+                                        stderr_lines.push(log_line.to_human_readable());
+                                    }
                                 }
-                            } else {
-                                // No stats field, convert to human-readable format
-                                stderr_lines.push(log_line.to_human_readable());
+                                Err(_) => {
+                                    stderr_lines.push(line);
+                                }
                             }
                         }
-                        Err(_) => {
-                            // Not valid JSON, keep raw line
-                            stderr_lines.push(line);
+                        _ = stale_tick.tick() => {
+                            if let Some(stale_stats) = progress_tracker.maybe_stale_stats(Instant::now()) {
+                                trace!(?stale_stats, "Sending stale speed reset");
+                                if stats_tx.send(stale_stats).is_err() {
+                                    warn!("Stats receiver dropped, stopping stale stats processing.");
+                                    break;
+                                }
+                            }
                         }
                     }
                 }
@@ -380,6 +456,41 @@ mod tests {
     use super::*;
 
     #[test]
+    fn progress_tracker_derives_speed_from_bytes() {
+        let mut tracker = RcloneProgressTracker::new(100);
+
+        let first = tracker.record_stats(RcloneTransferStats { bytes: 25 });
+        std::thread::sleep(Duration::from_millis(20));
+        let second = tracker.record_stats(RcloneTransferStats { bytes: 25 });
+
+        assert_eq!(first.total_bytes, Some(100));
+        assert!(second.speed <= first.speed);
+    }
+
+    #[test]
+    fn progress_tracker_marks_progress_unknown_when_bytes_exceed_expected_total() {
+        let mut tracker = RcloneProgressTracker::new(100);
+
+        let stats = tracker.record_stats(RcloneTransferStats { bytes: 120 });
+
+        assert_eq!(stats.total_bytes, None);
+    }
+
+    #[test]
+    fn progress_tracker_emits_zero_speed_after_stall() {
+        let mut tracker = RcloneProgressTracker::new(100);
+        std::thread::sleep(Duration::from_millis(20));
+        let recorded = tracker.record_stats(RcloneTransferStats { bytes: 50 });
+        assert!(recorded.speed > 0);
+        tracker.last_update_at = Some(Instant::now() - RCLONE_STALE_SPEED_TIMEOUT);
+
+        let stats = tracker.maybe_stale_stats(Instant::now()).expect("stale stats");
+
+        assert_eq!(stats.speed, 0);
+        assert_eq!(stats.bytes, 50);
+    }
+
+    #[test]
     fn parse_json_log_line_with_object() {
         let json = r#"{"time":"2025-12-03T16:18:24.49104384+03:00","level":"error","msg":"error reading source root directory: directory not found","object":"webdav root 'Quest Games/A Fishermans Tale v16+1.064 -QU'","objectType":"*webdav.Fs","source":"slog/logger.go:256"}"#;
         let parsed: RcloneJsonLogLine = serde_json::from_str(json).unwrap();
@@ -414,8 +525,6 @@ mod tests {
 
         let stats = parsed.stats.unwrap();
         assert_eq!(stats.bytes, 39841792);
-        assert_eq!(stats.total_bytes, 107369499);
-        assert_eq!(stats.speed, 19920887);
     }
 
     #[test]

@@ -9,7 +9,8 @@ use tokio::{fs, sync::mpsc::UnboundedSender};
 use tokio_util::sync::CancellationToken;
 use tracing::{debug, instrument, warn};
 
-use super::cli::{RcloneCli, RcloneTransferOperation, TransferStats};
+use super::cli::{RcloneCli, RcloneTransferOperation};
+use crate::downloader::TransferStats;
 
 #[derive(Debug, Clone)]
 pub(crate) struct RcloneStorage {

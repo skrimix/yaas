@@ -1,5 +1,5 @@
 use std::{
-    collections::{HashMap, VecDeque},
+    collections::HashMap,
     error::Error,
     io::SeekFrom,
     path::{Path, PathBuf},
@@ -34,6 +34,7 @@ use super::{
     RepoStorage,
 };
 use crate::{
+    downloader::TransferSpeedTracker,
     downloader::{AppDownloadProgress, TransferStats, config::DownloaderConfig, http_cache},
     models::{CloudApp, DownloadMode},
 };
@@ -830,7 +831,7 @@ async fn staged_progress_loop(
                 let speed = speed_tracker.record(bytes, started_at.elapsed().as_millis());
                 let _ = progress_tx.send(AppDownloadProgress::Transfer(TransferStats {
                     bytes,
-                    total_bytes,
+                    total_bytes: Some(total_bytes),
                     speed,
                 }));
                 if bytes >= total_bytes {
@@ -844,7 +845,7 @@ async fn staged_progress_loop(
     let speed = speed_tracker.record(bytes, started_at.elapsed().as_millis());
     let _ = progress_tx.send(AppDownloadProgress::Transfer(TransferStats {
         bytes,
-        total_bytes,
+        total_bytes: Some(total_bytes),
         speed,
     }));
     Ok(())
@@ -927,7 +928,7 @@ async fn stream_package_to_pipe(
             let speed = speed_tracker.record(downloaded_bytes, elapsed_millis);
             let _ = progress_tx.send(AppDownloadProgress::Transfer(TransferStats {
                 bytes: downloaded_bytes,
-                total_bytes,
+                total_bytes: Some(total_bytes),
                 speed,
             }));
             last_emit = elapsed_millis;
@@ -937,7 +938,7 @@ async fn stream_package_to_pipe(
     let final_speed = speed_tracker.record(downloaded_bytes, started_at.elapsed().as_millis());
     let _ = progress_tx.send(AppDownloadProgress::Transfer(TransferStats {
         bytes: downloaded_bytes,
-        total_bytes,
+        total_bytes: Some(total_bytes),
         speed: final_speed,
     }));
     debug!(downloaded_bytes, total_bytes, "Finished streaming YARC package");
@@ -977,50 +978,6 @@ async fn send_with_cancellation(
 
 fn send_status(progress_tx: &UnboundedSender<AppDownloadProgress>, status: impl Into<String>) {
     let _ = progress_tx.send(AppDownloadProgress::Status(status.into()));
-}
-
-#[derive(Debug)]
-struct TransferSpeedTracker {
-    samples: VecDeque<TransferSpeedSample>,
-    window_millis: u128,
-}
-
-impl TransferSpeedTracker {
-    fn new(window: Duration) -> Self {
-        let mut samples = VecDeque::new();
-        samples.push_back(TransferSpeedSample { bytes: 0, elapsed_millis: 0 });
-        Self { samples, window_millis: window.as_millis() }
-    }
-
-    fn record(&mut self, bytes: u64, elapsed_millis: u128) -> u64 {
-        self.samples.push_back(TransferSpeedSample { bytes, elapsed_millis });
-        let cutoff = elapsed_millis.saturating_sub(self.window_millis);
-
-        while self.samples.len() > 1
-            && self.samples.get(1).is_some_and(|sample| sample.elapsed_millis <= cutoff)
-        {
-            self.samples.pop_front();
-        }
-
-        let baseline = self.samples.front().expect("speed tracker must retain a baseline sample");
-        speed_bytes_per_sec(
-            bytes.saturating_sub(baseline.bytes),
-            elapsed_millis.saturating_sub(baseline.elapsed_millis),
-        )
-    }
-}
-
-#[derive(Clone, Copy, Debug)]
-struct TransferSpeedSample {
-    bytes: u64,
-    elapsed_millis: u128,
-}
-
-fn speed_bytes_per_sec(downloaded_bytes: u64, elapsed_millis: u128) -> u64 {
-    if elapsed_millis == 0 {
-        return 0;
-    }
-    ((downloaded_bytes as u128 * 1000) / elapsed_millis) as u64
 }
 
 async fn join_transfer_task(task: tokio::task::JoinHandle<Result<()>>) -> Result<()> {
@@ -1104,16 +1061,6 @@ mod tests {
         assert_eq!(app.version_code, 123);
         assert_eq!(app.last_updated, "2023-11-14 22:13 UTC");
         assert_eq!(app.size, 321_500_000);
-    }
-
-    #[test]
-    fn transfer_speed_tracker_uses_rolling_window() {
-        let mut tracker = TransferSpeedTracker::new(Duration::from_secs(2));
-
-        assert_eq!(tracker.record(1_000, 1_000), 1_000);
-        assert_eq!(tracker.record(2_000, 2_000), 1_000);
-        assert_eq!(tracker.record(3_000, 3_000), 1_000);
-        assert_eq!(tracker.record(13_000, 4_000), 5_500);
     }
 
     #[test]

@@ -1,11 +1,12 @@
-mod rclone;
-pub(crate) use rclone::TransferStats;
+mod progress;
+pub(crate) use progress::{TransferSpeedTracker, TransferStats};
 mod cloud_api;
 pub(crate) mod config;
 pub(crate) mod controller;
 pub(crate) mod download_metadata;
 mod http_cache;
 pub(crate) mod manager;
+mod rclone;
 mod repo;
 mod service;
 pub(crate) use service::Downloader;

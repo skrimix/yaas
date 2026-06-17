@@ -33,7 +33,7 @@ dependencies:
   flutter_localizations:
     sdk: flutter
 
-  rinf: ^8.8.0
+  rinf: ^8.10.0
   tuple: ^2.0.2
   meta: ^1.16.0
   flutter_svg: ^2.2.1

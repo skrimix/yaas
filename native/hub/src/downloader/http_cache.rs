@@ -12,6 +12,8 @@ use tokio::{
 use tokio_stream::StreamExt as _;
 use tracing::{debug, instrument, warn};
 
+use crate::downloader::SensitiveUrl;
+
 /// Per-URL metadata kept for caching decisions.
 #[derive(Debug, Clone, Default, Serialize, Deserialize)]
 pub(crate) struct MetaEntry {
@@ -106,7 +108,7 @@ pub(crate) enum DownloadResult {
 #[instrument(
     level = "debug",
     skip(client, progress),
-    fields(url = url, dst = %dst.display(), cache_dir = %cache_dir.display())
+    fields(url = %SensitiveUrl::new(url), dst = %dst.display(), cache_dir = %cache_dir.display())
 )]
 pub(crate) async fn update_file_cached(
     client: &reqwest::Client,
@@ -130,10 +132,20 @@ pub(crate) async fn update_file_cached(
         local_consistent && prev.and_then(|m| m.last_modified.as_ref()).is_some();
     let attempted_conditional = used_if_none_match || used_if_modified_since;
 
+    let sanitized_url = SensitiveUrl::new(url);
     let mut resp = if local_consistent {
-        apply_conditional_headers(client.get(url), prev).send().await?
+        apply_conditional_headers(client.get(url), prev)
+            .send()
+            .await
+            .map_err(reqwest::Error::without_url)
+            .with_context(|| format!("Failed to request {sanitized_url}"))?
     } else {
-        client.get(url).send().await?
+        client
+            .get(url)
+            .send()
+            .await
+            .map_err(reqwest::Error::without_url)
+            .with_context(|| format!("Failed to request {sanitized_url}"))?
     };
 
     let initial_status = resp.status();
@@ -142,7 +154,12 @@ pub(crate) async fn update_file_cached(
 
     if resp.status() == StatusCode::NOT_MODIFIED {
         if local_file_missing || !local_consistent {
-            resp = client.get(url).send().await?;
+            resp = client
+                .get(url)
+                .send()
+                .await
+                .map_err(reqwest::Error::without_url)
+                .with_context(|| format!("Failed to request {sanitized_url}"))?;
             server_status = resp.status().as_u16();
         } else {
             debug!(
@@ -158,7 +175,10 @@ pub(crate) async fn update_file_cached(
         }
     }
 
-    let resp = resp.error_for_status()?;
+    let resp = resp
+        .error_for_status()
+        .map_err(reqwest::Error::without_url)
+        .with_context(|| format!("Request failed for {sanitized_url}"))?;
     let header_meta = extract_header_meta(resp.headers());
 
     debug!(
@@ -186,7 +206,9 @@ pub(crate) async fn update_file_cached(
     let min_interval = Duration::from_millis(200);
     let mut last_reported: u64 = 0;
     while let Some(item) = stream.next().await {
-        let chunk = item?;
+        let chunk = item
+            .map_err(reqwest::Error::without_url)
+            .with_context(|| format!("Failed to read response body from {sanitized_url}"))?;
         tmp_file.write_all(&chunk).await?;
         md5_ctx.consume(&chunk);
         downloaded += chunk.len() as u64;

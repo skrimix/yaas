@@ -9,7 +9,7 @@ use anyhow::{Context, Result, anyhow, ensure};
 use tracing::{debug, info, warn};
 
 use crate::{
-    downloader::{config::DownloaderConfig, http_cache},
+    downloader::{SensitiveUrl, config::DownloaderConfig, http_cache},
     models::{InstalledDownloaderConfig, Settings},
     settings::SettingsHandler,
 };
@@ -106,7 +106,7 @@ impl DownloaderSources {
 
     pub(crate) async fn install_from_url(
         &self,
-        url: &str,
+        url: SensitiveUrl<'_>,
         select_as_active: bool,
     ) -> Result<DownloaderConfig> {
         let cfg =
@@ -282,9 +282,17 @@ fn read_configs(app_dir: &Path) -> Result<ReadConfigs> {
     Ok(ReadConfigs { configs, warnings })
 }
 
-async fn cache_config_from_url(app_dir: &Path, cache_key: &str, url: &str) -> Result<PathBuf> {
-    ensure!(is_http_url(url), "Config update URL must start with http:// or https://");
-    debug!(update_url = %url, cache_key = %cache_key, "Downloading downloader config from URL");
+async fn cache_config_from_url(
+    app_dir: &Path,
+    cache_key: &str,
+    url: SensitiveUrl<'_>,
+) -> Result<PathBuf> {
+    ensure!(is_http_url(url.as_str()), "Config update URL must start with http:// or https://");
+    debug!(
+        update_url = %url,
+        cache_key = %cache_key,
+        "Downloading downloader config from URL"
+    );
 
     let (cache_dir, cached_cfg_path) = config_download_cache_path(app_dir, cache_key);
 
@@ -294,7 +302,9 @@ async fn cache_config_from_url(app_dir: &Path, cache_key: &str, url: &str) -> Re
         .context("Failed to build HTTP client for downloader config update")?;
 
     let _ =
-        http_cache::update_file_cached(&client, url, &cached_cfg_path, &cache_dir, None).await?;
+        http_cache::update_file_cached(&client, url.as_str(), &cached_cfg_path, &cache_dir, None)
+            .await
+            .with_context(|| format!("Failed to download downloader config from {url}"))?;
 
     Ok(cached_cfg_path)
 }
@@ -302,8 +312,8 @@ async fn cache_config_from_url(app_dir: &Path, cache_key: &str, url: &str) -> Re
 async fn fetch_managed_config(
     app_dir: &Path,
     cache_key: &str,
-    url: &str,
-    source_url: Option<&str>,
+    url: SensitiveUrl<'_>,
+    source_url: Option<SensitiveUrl<'_>>,
     expected_id: Option<&str>,
     refuse_existing: bool,
 ) -> Result<DownloaderConfig> {
@@ -314,7 +324,7 @@ async fn fetch_managed_config(
 fn write_managed_config(
     app_dir: &Path,
     src: &Path,
-    source_url: Option<&str>,
+    source_url: Option<SensitiveUrl<'_>>,
     expected_id: Option<&str>,
     refuse_existing: bool,
 ) -> Result<DownloaderConfig> {
@@ -356,6 +366,7 @@ async fn refresh_configs(app_dir: &Path, configs: &[DownloaderConfig]) -> Refres
         };
 
         let refresh_result = async {
+            let update_url = SensitiveUrl::new(update_url);
             let _ = fetch_managed_config(app_dir, &cfg.id, update_url, None, Some(&cfg.id), false)
                 .await?;
             Ok::<(), anyhow::Error>(())
@@ -417,6 +428,7 @@ async fn migrate_legacy_config_if_needed(
             return Ok::<(), anyhow::Error>(());
         }
 
+        let update_url = SensitiveUrl::new(update_url);
         let _ =
             fetch_managed_config(app_dir, "_bootstrap", update_url, Some(update_url), None, true)
                 .await?;
@@ -489,7 +501,7 @@ mod tests {
         let err = write_managed_config(
             dir.path(),
             &src,
-            Some("https://other.example/config.json"),
+            Some(SensitiveUrl::new("https://other.example/config.json")),
             None,
             true,
         )
@@ -507,7 +519,7 @@ mod tests {
         let first = write_managed_config(
             dir.path(),
             &src,
-            Some("https://example.com/downloader.json"),
+            Some(SensitiveUrl::new("https://example.com/downloader.json")),
             None,
             true,
         )
@@ -517,7 +529,7 @@ mod tests {
         let err = write_managed_config(
             dir.path(),
             &src,
-            Some("https://example.com/downloader.json"),
+            Some(SensitiveUrl::new("https://example.com/downloader.json")),
             None,
             true,
         )

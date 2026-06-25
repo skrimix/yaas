@@ -8,7 +8,7 @@ use tracing::{debug, error, warn};
 
 use crate::{
     downloader::{
-        Downloader,
+        Downloader, SensitiveUrl,
         config::{DownloaderConfig, RepoLayoutKind},
         manager::DownloaderManager,
         repo,
@@ -173,7 +173,7 @@ impl DownloaderController {
         Ok(())
     }
 
-    async fn install_from_url(&self, url: &str) {
+    async fn install_from_url(&self, url: SensitiveUrl<'_>) {
         let result = async {
             let cfg = self.sources.install_from_url(url, true).await?;
             Ok::<_, anyhow::Error>(cfg.id)
@@ -344,9 +344,10 @@ impl DownloaderController {
             async move {
                 let receiver = InstallDownloaderConfigFromUrlRequest::get_dart_signal_receiver();
                 while let Some(req) = receiver.recv().await {
-                    let url = req.message.url.trim().to_string();
+                    let raw_url = req.message.url.trim().to_string();
+                    let url = SensitiveUrl::new(&raw_url);
                     debug!(url = %url, "Received InstallDownloaderConfigFromUrlRequest");
-                    controller.install_from_url(&url).await;
+                    controller.install_from_url(url).await;
                 }
 
                 panic!("InstallDownloaderConfigFromUrlRequest receiver closed")

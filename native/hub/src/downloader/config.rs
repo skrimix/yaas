@@ -5,6 +5,8 @@ use const_format::concatcp;
 use serde::Deserialize;
 use tracing::error;
 
+use crate::downloader::SensitiveUrl;
+
 #[derive(Debug, Clone, Deserialize)]
 pub(crate) struct DownloaderConfig {
     /// ID of the config. Used for cache separation.
@@ -110,7 +112,10 @@ impl DownloaderConfig {
         Ok(())
     }
 
-    pub(crate) fn validate_managed_remote(&self, source_url: Option<&str>) -> Result<()> {
+    pub(crate) fn validate_managed_remote(
+        &self,
+        source_url: Option<SensitiveUrl<'_>>,
+    ) -> Result<()> {
         let update_url = self
             .config_update_url
             .as_deref()
@@ -118,7 +123,8 @@ impl DownloaderConfig {
             .filter(|value| !value.is_empty())
             .context("config_update_url is required for managed downloader configs")?;
 
-        let parsed = reqwest::Url::parse(update_url)
+        let update_url = SensitiveUrl::new(update_url);
+        let parsed = reqwest::Url::parse(update_url.as_str())
             .with_context(|| format!("Invalid config_update_url: {update_url}"))?;
         ensure!(
             parsed.scheme() == "http" || parsed.scheme() == "https",
@@ -126,10 +132,11 @@ impl DownloaderConfig {
         );
 
         if let Some(source_url) = source_url {
-            let expected = source_url.trim();
             ensure!(
-                expected == update_url,
-                "Config update URL mismatch: expected {expected}, got {update_url}"
+                source_url.as_str().trim() == update_url.as_str(),
+                "Config update URL mismatch: expected {}, got {}",
+                source_url,
+                update_url
             );
         }
 
@@ -152,6 +159,32 @@ impl DownloaderConfig {
             .filter(|value| !value.is_empty())
             .unwrap_or_default()
             .to_string()
+    }
+}
+
+#[cfg(test)]
+mod managed_remote_tests {
+    use super::*;
+
+    #[test]
+    fn validate_managed_remote_sanitizes_url_mismatch() {
+        let cfg = DownloaderConfig {
+            config_update_url: Some(
+                "https://example.com/downloader_config?downloaded-secret".into(),
+            ),
+            ..Default::default()
+        };
+
+        let err = cfg
+            .validate_managed_remote(Some(SensitiveUrl::new(
+                "https://example.com/downloader_config?entered-secret",
+            )))
+            .unwrap_err();
+        let message = format!("{err:#}");
+
+        assert!(message.contains("https://example.com/downloader_config?redacted"));
+        assert!(!message.contains("downloaded-secret"));
+        assert!(!message.contains("entered-secret"));
     }
 }
 

@@ -1,7 +1,9 @@
+import 'dart:async';
 import 'dart:io' show Platform;
 import 'dart:math' as math;
 import 'package:flutter/material.dart';
 import 'package:rinf/rinf.dart';
+import 'package:toastification/toastification.dart';
 import '../../providers/adb_state.dart';
 import '../../src/bindings/bindings.dart';
 import '../../src/l10n/app_localizations.dart';
@@ -34,12 +36,18 @@ class DeviceActionsCard extends StatelessWidget {
               // Proximity sensor toggle
               const _ProximityToggle(),
 
-              const SizedBox(height: 16),
+              const SizedBox(height: 8),
 
               // Guardian toggle
               const _GuardianToggle(),
 
-              const SizedBox(height: 16),
+              Builder(builder: (context) {
+                final device = context.watch<DeviceState>();
+                if (!device.isConnected || device.isWireless) {
+                  return const SizedBox.shrink();
+                }
+                return const _StorageConnectionToggle();
+              }),
 
               // Wireless ADB (when not already enabled)
               Builder(
@@ -78,7 +86,7 @@ class DeviceActionsCard extends StatelessWidget {
 
               // Casting (Windows only)
               if (Platform.isWindows) ...[
-                const SizedBox(height: 16),
+                const SizedBox(height: 8),
                 _CastingRow(onStart: () => _handleCast(context)),
                 const SizedBox(height: 8),
                 const _CastingProgress(),
@@ -137,6 +145,145 @@ class DeviceActionsCard extends StatelessWidget {
 
     AdbRequest(command: const AdbCommandStartCasting(), commandKey: 'cast')
         .sendSignalToRust();
+  }
+}
+
+class _StorageConnectionToggle extends StatefulWidget {
+  const _StorageConnectionToggle();
+
+  @override
+  State<_StorageConnectionToggle> createState() =>
+      _StorageConnectionToggleState();
+}
+
+class _StorageConnectionToggleState extends State<_StorageConnectionToggle> {
+  StreamSubscription<RustSignalPack<AdbCommandCompletedEvent>>? _subscription;
+  bool? _pendingConnectedState;
+
+  @override
+  void initState() {
+    super.initState();
+    _subscription = AdbCommandCompletedEvent.rustSignalStream.listen((event) {
+      final signal = event.message;
+      if (signal.commandType == AdbCommandKind.storageConnectionSet &&
+          signal.commandKey == 'storage-connection') {
+        _showResult(signal.success);
+      }
+    });
+  }
+
+  @override
+  void dispose() {
+    _subscription?.cancel();
+    super.dispose();
+  }
+
+  void _toggle(bool connected) {
+    if (_pendingConnectedState != null) return;
+    setState(() => _pendingConnectedState = connected);
+    AdbRequest(
+      command: AdbCommandSetStorageConnection(value: connected),
+      commandKey: 'storage-connection',
+    ).sendSignalToRust();
+  }
+
+  void _showResult(bool success) {
+    if (!mounted) return;
+    final l10n = AppLocalizations.of(context);
+    final pendingState = _pendingConnectedState;
+    setState(() => _pendingConnectedState = null);
+
+    final description = success
+        ? pendingState == true
+            ? l10n.deviceStorageConnectedMessage
+            : l10n.deviceStorageResetMessage
+        : l10n.deviceStorageConnectionFailed;
+
+    toastification.show(
+      type: success ? ToastificationType.success : ToastificationType.error,
+      style: ToastificationStyle.flat,
+      title: Text(success ? l10n.commonSuccess : l10n.commonError),
+      description: Text(description),
+      autoCloseDuration: const Duration(seconds: 4),
+      backgroundColor: Theme.of(context).colorScheme.surfaceContainer,
+      borderSide: BorderSide.none,
+      alignment: Alignment.bottomRight,
+    );
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    final l10n = AppLocalizations.of(context);
+    final device = context.watch<DeviceState>();
+    final storageConnected = device.isStorageConnected;
+
+    if (_pendingConnectedState != null &&
+        storageConnected == _pendingConnectedState) {
+      WidgetsBinding.instance.addPostFrameCallback((_) {
+        if (mounted) setState(() => _pendingConnectedState = null);
+      });
+    }
+
+    final theme = Theme.of(context);
+    final isUpdating = _pendingConnectedState != null;
+    final isConnected = storageConnected == true;
+    final isEnabled = device.isConnected && !isUpdating;
+    final status = storageConnected == null
+        ? l10n.deviceStorageStatusUnknown
+        : isConnected
+            ? l10n.deviceStorageStatusConnected
+            : l10n.deviceStorageStatusDisconnected;
+    final tooltip = isConnected
+        ? l10n.deviceStorageResetTooltip
+        : l10n.deviceStorageConnectionTooltip;
+
+    return Row(
+      children: [
+        Icon(isConnected ? Icons.usb : Icons.usb_off),
+        const SizedBox(width: 8),
+        Expanded(
+          child: Column(
+            crossAxisAlignment: CrossAxisAlignment.start,
+            children: [
+              Text(l10n.deviceStorageConnection,
+                  style: theme.textTheme.titleSmall),
+              Text(
+                status,
+                style: theme.textTheme.bodySmall?.copyWith(
+                  color: theme.colorScheme.outline,
+                ),
+              ),
+            ],
+          ),
+        ),
+        if (isUpdating)
+          const SizedBox(
+            width: 60,
+            height: 40,
+            child: Center(
+              child: SizedBox(
+                width: 20,
+                height: 20,
+                child: CircularProgressIndicator(strokeWidth: 2),
+              ),
+            ),
+          )
+        else
+          Tooltip(
+            message: tooltip,
+            child: Switch.adaptive(
+              value: isConnected,
+              onChanged: isEnabled ? _toggle : null,
+              activeTrackColor:
+                  theme.colorScheme.primaryContainer.withValues(alpha: 0.6),
+              activeThumbColor:
+                  theme.colorScheme.primary.withValues(alpha: 0.8),
+              inactiveTrackColor: theme.colorScheme.surfaceContainerHighest,
+              inactiveThumbColor: theme.colorScheme.outline,
+            ),
+          ),
+      ],
+    );
   }
 }
 

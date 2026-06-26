@@ -681,6 +681,41 @@ class AppLocalizationsEn extends AppLocalizations {
   String get deviceEnableWirelessAdb => 'Enable ADB over Wi‑Fi';
 
   @override
+  String get deviceStorageConnection => 'Storage connection';
+
+  @override
+  String get deviceStorageConnectionTooltip =>
+      'Connect storage with MTP. The USB connection may restart.';
+
+  @override
+  String get deviceStorageResetTooltip =>
+      'Reset USB functions. The USB connection may restart.';
+
+  @override
+  String get deviceStorageStatusConnected => 'Connected';
+
+  @override
+  String get deviceStorageStatusDisconnected => 'Disconnected';
+
+  @override
+  String get deviceStorageStatusUnknown => 'Unknown';
+
+  @override
+  String get deviceStorageConnectedMessage =>
+      'MTP is enabled. The USB connection may restart.';
+
+  @override
+  String get deviceStorageResetMessage =>
+      'USB functions were reset. The USB connection may restart.';
+
+  @override
+  String get deviceStorageConnectionFailed =>
+      'Failed to update the storage connection.';
+
+  @override
+  String get usbSpeedLabel => 'USB speed';
+
+  @override
   String get copiedToClipboard => 'Copied to clipboard';
 
   @override

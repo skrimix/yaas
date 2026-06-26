@@ -691,6 +691,39 @@ class AppLocalizationsRu extends AppLocalizations {
   String get deviceEnableWirelessAdb => 'Включить ADB по Wi‑Fi';
 
   @override
+  String get deviceStorageConnection => 'Подключeние хранилища';
+
+  @override
+  String get deviceStorageConnectionTooltip =>
+      'Подключить хранилище через MTP. USB может перезапуститься.';
+
+  @override
+  String get deviceStorageResetTooltip => 'Сбросить функции USB.';
+
+  @override
+  String get deviceStorageStatusConnected => 'Подключено';
+
+  @override
+  String get deviceStorageStatusDisconnected => 'Отключено';
+
+  @override
+  String get deviceStorageStatusUnknown => 'Неизвестно';
+
+  @override
+  String get deviceStorageConnectedMessage =>
+      'MTP включен. USB может перезапуститься.';
+
+  @override
+  String get deviceStorageResetMessage => 'Функции USB сброшены.';
+
+  @override
+  String get deviceStorageConnectionFailed =>
+      'Не удалось обновить подключение хранилища.';
+
+  @override
+  String get usbSpeedLabel => 'Скорость USB';
+
+  @override
   String get copiedToClipboard => 'Скопировано в буфер обмена';
 
   @override

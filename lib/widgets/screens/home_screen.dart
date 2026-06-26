@@ -26,16 +26,20 @@ class HomeScreen extends StatelessWidget {
     required int batteryLevel,
     required Widget icon,
     bool isDimmed = false,
+    List<String> tooltipDetails = const [],
     AppLocalizations? l10n,
   }) {
     final clamped = batteryLevel.clamp(0, 100).toDouble();
-
-    final tooltip = '$title\n'
-        '${status != null ? '${(l10n ?? AppLocalizations.of(context)).statusLabel}: $status\n' : ''}'
-        '${(l10n ?? AppLocalizations.of(context)).batteryLabel}: $batteryLevel%';
+    final localizations = l10n ?? AppLocalizations.of(context);
+    final tooltipLines = [
+      title,
+      if (status != null) '${localizations.statusLabel}: $status',
+      '${localizations.batteryLabel}: $batteryLevel%',
+      ...tooltipDetails,
+    ];
 
     return Tooltip(
-      message: tooltip,
+      message: tooltipLines.join('\n'),
       child: Opacity(
         opacity: isDimmed ? 0.5 : 1.0,
         child: Column(
@@ -149,6 +153,10 @@ class HomeScreen extends StatelessWidget {
                                   context,
                                   title: l10n.headset,
                                   batteryLevel: deviceState.batteryLevel,
+                                  tooltipDetails: [
+                                    if (deviceState.usbSpeed != null)
+                                      '${l10n.usbSpeedLabel}: ${deviceState.usbSpeed}',
+                                  ],
                                   icon: SvgPicture.asset(
                                     'assets/svg/headset.svg',
                                     colorFilter: _monoIconFilter(context),

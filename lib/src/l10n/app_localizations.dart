@@ -1310,6 +1310,66 @@ abstract class AppLocalizations {
   /// **'Enable ADB over Wi‑Fi'**
   String get deviceEnableWirelessAdb;
 
+  /// No description provided for @deviceStorageConnection.
+  ///
+  /// In en, this message translates to:
+  /// **'Storage connection'**
+  String get deviceStorageConnection;
+
+  /// No description provided for @deviceStorageConnectionTooltip.
+  ///
+  /// In en, this message translates to:
+  /// **'Connect storage with MTP. The USB connection may restart.'**
+  String get deviceStorageConnectionTooltip;
+
+  /// No description provided for @deviceStorageResetTooltip.
+  ///
+  /// In en, this message translates to:
+  /// **'Reset USB functions. The USB connection may restart.'**
+  String get deviceStorageResetTooltip;
+
+  /// No description provided for @deviceStorageStatusConnected.
+  ///
+  /// In en, this message translates to:
+  /// **'Connected'**
+  String get deviceStorageStatusConnected;
+
+  /// No description provided for @deviceStorageStatusDisconnected.
+  ///
+  /// In en, this message translates to:
+  /// **'Disconnected'**
+  String get deviceStorageStatusDisconnected;
+
+  /// No description provided for @deviceStorageStatusUnknown.
+  ///
+  /// In en, this message translates to:
+  /// **'Unknown'**
+  String get deviceStorageStatusUnknown;
+
+  /// No description provided for @deviceStorageConnectedMessage.
+  ///
+  /// In en, this message translates to:
+  /// **'MTP is enabled. The USB connection may restart.'**
+  String get deviceStorageConnectedMessage;
+
+  /// No description provided for @deviceStorageResetMessage.
+  ///
+  /// In en, this message translates to:
+  /// **'USB functions were reset. The USB connection may restart.'**
+  String get deviceStorageResetMessage;
+
+  /// No description provided for @deviceStorageConnectionFailed.
+  ///
+  /// In en, this message translates to:
+  /// **'Failed to update the storage connection.'**
+  String get deviceStorageConnectionFailed;
+
+  /// No description provided for @usbSpeedLabel.
+  ///
+  /// In en, this message translates to:
+  /// **'USB speed'**
+  String get usbSpeedLabel;
+
   /// No description provided for @copiedToClipboard.
   ///
   /// In en, this message translates to:

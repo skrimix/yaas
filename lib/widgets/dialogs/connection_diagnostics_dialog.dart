@@ -166,6 +166,39 @@ class ConnectionDiagnosticsDialog extends StatelessWidget {
         ? '"${device.deviceName}" • ${device.deviceSerial}'
         : l10n.noDeviceConnected;
 
+    Widget? activeDeviceDetails() {
+      if (!device.isConnected) return null;
+      // final storageStatus = device.isStorageConnected == null
+      //     ? l10n.deviceStorageStatusUnknown
+      //     : device.isStorageConnected == true
+      //         ? l10n.deviceStorageStatusConnected
+      //         : l10n.deviceStorageStatusDisconnected;
+      final rows = <String>[
+        // '${l10n.deviceStorageConnection}: $storageStatus',
+        if (device.usbSpeed != null)
+          '${l10n.usbSpeedLabel}: ${device.usbSpeed}',
+      ];
+      if (rows.isEmpty) return null;
+      return Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        mainAxisSize: MainAxisSize.min,
+        children: rows
+            .map(
+              (row) => Padding(
+                padding: const EdgeInsets.symmetric(vertical: 2),
+                child: Text(
+                  row,
+                  style: Theme.of(context)
+                      .textTheme
+                      .bodySmall
+                      ?.copyWith(fontFamily: 'monospace'),
+                ),
+              ),
+            )
+            .toList(),
+      );
+    }
+
     final adbPath = settings.settings.adbPath;
     final adbPathDesc = (adbPath.isEmpty)
         ? l10n.diagnosticsUsingSystemPath
@@ -210,6 +243,7 @@ class ConnectionDiagnosticsDialog extends StatelessWidget {
               level: deviceLevel,
               title: l10n.diagnosticsActiveDevice,
               description: deviceDesc,
+              additionalContent: activeDeviceDetails(),
             ),
           ],
         ),

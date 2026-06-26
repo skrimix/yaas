@@ -36,6 +36,8 @@ class DeviceState extends ChangeNotifier {
 
   SpaceInfo? get spaceInfo => _device?.spaceInfo;
   bool? get guardianPaused => _device?.guardianPaused;
+  String? get usbSpeed => _device?.usbSpeed;
+  bool? get isStorageConnected => _device?.storageConnected;
 
   /// Whether the proximity sensor is currently disabled (faked/overridden).
   /// - true: sensor is disabled (faked as close)

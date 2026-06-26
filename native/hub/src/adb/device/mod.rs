@@ -69,6 +69,10 @@ pub(crate) struct AdbDevice {
     pub guardian_paused: Option<bool>,
     /// Whether the proximity sensor is currently disabled (faked/overridden) on the device
     pub proximity_disabled: Option<bool>,
+    /// Whether MTP storage is currently enabled over USB
+    pub storage_connected: Option<bool>,
+    /// Current USB speed reported by Android
+    pub usb_speed: Option<String>,
 }
 
 impl Display for AdbDevice {
@@ -114,6 +118,8 @@ impl AdbDevice {
             installed_packages: Vec::new(),
             guardian_paused: None,
             proximity_disabled: None,
+            storage_connected: None,
+            usb_speed: None,
         };
 
         // Read identity first to use manufacturer + model if available
@@ -171,16 +177,17 @@ impl AdbDevice {
             .to_string())
     }
 
-    /// Refreshes device information (packages, battery, space, guardian) in parallel
+    /// Refreshes device information (packages, battery, space, guardian, USB) in parallel
     #[instrument(level = "debug", skip(self), err)]
     pub(super) async fn refresh(&mut self) -> Result<()> {
         // Run all queries in parallel
-        let (packages_res, battery_res, space_res, guardian_res, proximity_res) = tokio::join!(
+        let (packages_res, battery_res, space_res, guardian_res, proximity_res, usb_res) = tokio::join!(
             self.query_package_list(),
             self.query_battery_info(),
             self.query_space_info(),
             self.query_guardian_state(),
             self.query_proximity_state(),
+            self.query_usb_state(),
         );
 
         let mut errors = Vec::new();
@@ -223,6 +230,17 @@ impl AdbDevice {
             Err(e) => {
                 errors.push(("proximity", e));
                 self.proximity_disabled = None;
+            }
+        }
+        match usb_res {
+            Ok((storage_connected, usb_speed)) => {
+                self.storage_connected = storage_connected;
+                self.usb_speed = usb_speed;
+            }
+            Err(e) => {
+                errors.push(("usb", e));
+                self.storage_connected = None;
+                self.usb_speed = None;
             }
         }
 
@@ -346,6 +364,14 @@ impl AdbDevice {
         Ok(())
     }
 
+    /// Sets USB storage connection state.
+    #[instrument(level = "debug", skip(self), err)]
+    pub(super) async fn set_storage_connection(&self, connected: bool) -> Result<()> {
+        let command = if connected { "svc usb setFunctions mtp" } else { "svc usb setFunctions" };
+        self.shell(command).await.context("Failed to set USB storage connection")?;
+        Ok(())
+    }
+
     /// Queries the guardian paused state from the device
     #[instrument(level = "debug", skip(self), err)]
     async fn query_guardian_state(&self) -> Result<Option<bool>> {
@@ -377,6 +403,31 @@ impl AdbDevice {
         trace!(output, "No virtual proximity state found");
 
         Ok(None)
+    }
+
+    /// Queries current USB functions and speed.
+    #[instrument(level = "debug", skip(self), err)]
+    async fn query_usb_state(&self) -> Result<(Option<bool>, Option<String>)> {
+        let storage_connected = match self.shell_checked("svc usb getFunctions").await {
+            Ok(output) => Some(output.split(',').any(|function| function.trim() == "mtp")),
+            Err(e) => {
+                trace!(error = e.as_ref() as &dyn Error, "Failed to query USB functions");
+                None
+            }
+        };
+        let speed = if !self.is_wireless {
+            match self.shell_checked("svc usb getUsbSpeed").await {
+                Ok(output) => format_usb_speed(&output),
+                Err(e) => {
+                    trace!(error = e.as_ref() as &dyn Error, "Failed to query USB speed");
+                    None
+                }
+            }
+        } else {
+            None
+        };
+
+        Ok((storage_connected, speed))
     }
 
     /// Queries the list of installed packages on the device
@@ -691,5 +742,50 @@ impl AdbDevice {
 
             sleep(STEP).await;
         }
+    }
+}
+
+pub(crate) fn format_usb_speed(output: &str) -> Option<String> {
+    let value = output.trim();
+    if value.is_empty() {
+        return None;
+    }
+    if let Ok(mbps) = value.parse::<u64>() {
+        if mbps >= 1024 {
+            let gbps = mbps as f64 / 1024.0;
+            let formatted = if gbps.fract() == 0.0 {
+                format!("{gbps:.0}")
+            } else {
+                format!("{gbps:.2}").trim_end_matches('0').trim_end_matches('.').to_string()
+            };
+            return Some(format!("{formatted} Gbps"));
+        }
+        return Some(format!("{mbps} Mbps"));
+    }
+    Some(value.to_string())
+}
+
+#[cfg(test)]
+mod tests {
+    use super::format_usb_speed;
+
+    #[test]
+    fn formats_numeric_usb_speed() {
+        assert_eq!(format_usb_speed("480\n").as_deref(), Some("480 Mbps"));
+    }
+
+    #[test]
+    fn formats_gigabit_usb_speed() {
+        assert_eq!(format_usb_speed("5120\n").as_deref(), Some("5 Gbps"));
+    }
+
+    #[test]
+    fn keeps_text_usb_speed() {
+        assert_eq!(format_usb_speed("high speed\n").as_deref(), Some("high speed"));
+    }
+
+    #[test]
+    fn ignores_empty_usb_values() {
+        assert_eq!(format_usb_speed(" \n"), None);
     }
 }

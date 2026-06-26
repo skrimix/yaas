@@ -617,6 +617,30 @@ impl AdbService {
                 result.map(|_| ()).context("Failed to set guardian paused state")
             }
 
+            AdbCommand::SetStorageConnection(connected) => {
+                let device = self.current_device().await?;
+                if device.is_wireless {
+                    AdbCommandCompletedEvent {
+                        command_type: AdbCommandKind::StorageConnectionSet,
+                        command_key: key.clone(),
+                        success: false,
+                    }
+                    .send_signal_to_dart();
+                    bail!("USB storage connection is only available over USB")
+                }
+
+                let result = device.set_storage_connection(connected).await;
+                let success = result.is_ok();
+                AdbCommandCompletedEvent {
+                    command_type: AdbCommandKind::StorageConnectionSet,
+                    command_key: key.clone(),
+                    success,
+                }
+                .send_signal_to_dart();
+
+                Ok(())
+            }
+
             AdbCommand::GetBatteryDump => {
                 let device = self.current_device().await?;
                 match device.battery_dump().await {

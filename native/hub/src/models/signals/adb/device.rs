@@ -22,6 +22,8 @@ pub(crate) struct AdbDevice {
     pub guardian_paused: Option<bool>,
     /// Whether the proximity sensor is currently disabled (faked/overridden) on the device
     pub proximity_disabled: Option<bool>,
+    pub storage_connected: Option<bool>,
+    pub usb_speed: Option<String>,
 }
 
 #[derive(Serialize, RustSignal)]
@@ -44,6 +46,8 @@ impl From<adb::device::AdbDevice> for AdbDevice {
             installed_packages: device.installed_packages,
             guardian_paused: device.guardian_paused,
             proximity_disabled: device.proximity_disabled,
+            storage_connected: device.storage_connected,
+            usb_speed: device.usb_speed,
         }
     }
 }

@@ -17,8 +17,10 @@ use tokio::{
 use tokio_util::sync::CancellationToken;
 use tracing::{Span, error, instrument, trace, warn};
 
-use crate::downloader::{TransferSpeedTracker, TransferStats};
-use crate::utils::{get_sys_proxy, resolve_binary_path};
+use crate::{
+    downloader::{TransferSpeedTracker, TransferStats},
+    utils::{get_sys_proxy, resolve_binary_path},
+};
 
 static CONNECTION_TIMEOUT: &str = "5s";
 static IO_IDLE_TIMEOUT: &str = "30s";

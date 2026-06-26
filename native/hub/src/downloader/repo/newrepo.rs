@@ -34,8 +34,10 @@ use super::{
     RepoStorage,
 };
 use crate::{
-    downloader::TransferSpeedTracker,
-    downloader::{AppDownloadProgress, TransferStats, config::DownloaderConfig, http_cache},
+    downloader::{
+        AppDownloadProgress, TransferSpeedTracker, TransferStats, config::DownloaderConfig,
+        http_cache,
+    },
     models::{CloudApp, DownloadMode},
 };
 

@@ -7,6 +7,7 @@ import 'package:rinf/rinf.dart';
 import '../../providers/settings_state.dart';
 import '../../src/bindings/bindings.dart';
 import '../../src/l10n/app_localizations.dart';
+import '../../utils/utils.dart';
 import '../common/selectable_link_text.dart';
 
 class DownloaderSetupDialog extends StatefulWidget {
@@ -44,15 +45,27 @@ class _DownloaderSetupDialogState extends State<DownloaderSetupDialog> {
     );
 
     return decoration.copyWith(
-      error: Tooltip(
-        message: errorText,
-        waitDuration: const Duration(milliseconds: 400),
-        child: Text(
-          errorText,
-          maxLines: 4,
-          overflow: TextOverflow.ellipsis,
-        ),
+      error: buildCopyableText(
+        context,
+        errorText,
+        style: Theme.of(context).textTheme.bodySmall?.copyWith(
+              color: Theme.of(context).colorScheme.error,
+            ),
+        maxLines: 4,
+        overflow: TextOverflow.ellipsis,
       ),
+    );
+  }
+
+  Widget _buildCopyableError(String error) {
+    return buildCopyableText(
+      context,
+      error,
+      style: Theme.of(context).textTheme.bodySmall?.copyWith(
+            color: Theme.of(context).colorScheme.error,
+          ),
+      maxLines: 3,
+      overflow: TextOverflow.ellipsis,
     );
   }
 
@@ -319,12 +332,7 @@ class _DownloaderSetupDialogState extends State<DownloaderSetupDialog> {
                 ),
                 if (settingsState.downloaderSourcesError != null) ...[
                   const SizedBox(height: 12),
-                  Text(
-                    settingsState.downloaderSourcesError!,
-                    style: Theme.of(context).textTheme.bodySmall?.copyWith(
-                          color: Theme.of(context).colorScheme.error,
-                        ),
-                  ),
+                  _buildCopyableError(settingsState.downloaderSourcesError!),
                 ],
                 const SizedBox(height: 12),
                 ConstrainedBox(

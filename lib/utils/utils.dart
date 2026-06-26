@@ -24,6 +24,36 @@ void copyToClipboard(BuildContext context, String text,
   );
 }
 
+Widget buildCopyableText(
+  BuildContext context,
+  String text, {
+  bool showTooltip = true,
+  TextStyle? style,
+  int? maxLines,
+  TextOverflow? overflow,
+}) {
+  final child = MouseRegion(
+    cursor: SystemMouseCursors.click,
+    child: GestureDetector(
+      onTap: () => copyToClipboard(context, text, description: text),
+      child: Text(
+        text,
+        style: style,
+        maxLines: maxLines,
+        overflow: overflow,
+      ),
+    ),
+  );
+
+  if (!showTooltip) return child;
+
+  return Tooltip(
+    message: AppLocalizations.of(context).clickToCopy,
+    waitDuration: const Duration(milliseconds: 300),
+    child: child,
+  );
+}
+
 String? formatDateTime(BuildContext context, DateTime dateTime) {
   final dateFormat = SystemDateTimeFormat.of(context);
   final datePattern = dateFormat.datePattern;

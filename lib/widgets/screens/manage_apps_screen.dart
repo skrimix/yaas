@@ -321,26 +321,6 @@ class _ManageAppsScreenState extends State<ManageAppsScreen> {
     return formatSize(totalBytes, 2);
   }
 
-  Widget _buildCopyableText(String text, bool showTooltip) {
-    return showTooltip
-        ? Tooltip(
-            message: AppLocalizations.of(context).clickToCopy,
-            waitDuration: const Duration(milliseconds: 300),
-            child: MouseRegion(
-                cursor: SystemMouseCursors.click,
-                child: GestureDetector(
-                  onTap: () => {
-                    copyToClipboard(context, text, description: text),
-                  },
-                  child: Text(text),
-                )),
-          )
-        : InkWell(
-            onTap: () => copyToClipboard(context, text, description: text),
-            child: Text(text),
-          );
-  }
-
   String _formatAppDetails(InstalledPackage app) {
     final l10n = AppLocalizations.of(context);
     return '${l10n.detailsPackageName} ${app.packageName}\n'
@@ -362,7 +342,7 @@ class _ManageAppsScreenState extends State<ManageAppsScreen> {
       spacing: 12,
       children: [
         Text(label),
-        copyable ? _buildCopyableText(value, true) : Text(value),
+        copyable ? buildCopyableText(context, value) : Text(value),
       ],
     );
   }
@@ -371,7 +351,7 @@ class _ManageAppsScreenState extends State<ManageAppsScreen> {
     showDialog(
       context: context,
       builder: (context) => AlertDialog(
-        title: _buildCopyableText(app.label, true),
+        title: buildCopyableText(context, app.label),
         content: Column(
           mainAxisSize: MainAxisSize.min,
           crossAxisAlignment: CrossAxisAlignment.start,

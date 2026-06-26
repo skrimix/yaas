@@ -11,6 +11,7 @@ import 'package:url_launcher/url_launcher.dart';
 import '../../providers/settings_state.dart';
 import '../../navigation.dart';
 import '../../src/l10n/app_localizations.dart';
+import '../../utils/utils.dart';
 import '../../utils/sideload_utils.dart';
 import '../common/selectable_link_text.dart';
 import '../dialogs/downloader_setup_dialog.dart';
@@ -937,7 +938,7 @@ class _SettingsScreenState extends State<SettingsScreen> {
           children: [
             const Icon(Icons.error_outline, color: Colors.red),
             const SizedBox(width: 8),
-            Expanded(child: Text(error)),
+            Expanded(child: buildCopyableText(context, error)),
             const SizedBox(width: 12),
             FilledButton.tonalIcon(
               onPressed: () {
@@ -1165,6 +1166,7 @@ class _SettingsScreenState extends State<SettingsScreen> {
                 icon: Icons.error_outline,
                 color: Theme.of(context).colorScheme.error,
                 text: settingsState.downloaderSourcesError!,
+                copyable: true,
               ),
             ),
           Container(
@@ -1350,18 +1352,30 @@ class _SettingsScreenState extends State<SettingsScreen> {
   }
 
   Widget _statusText(
-      {required IconData icon, required Color color, required String text}) {
+      {required IconData icon,
+      required Color color,
+      required String text,
+      bool copyable = false}) {
+    final style =
+        TextStyle(color: color, fontSize: 12, fontWeight: FontWeight.w600);
     return Row(
       children: [
         Icon(icon, color: color, size: 18),
         const SizedBox(width: 6),
         Flexible(
-          child: Text(
-            text,
-            style: TextStyle(
-                color: color, fontSize: 12, fontWeight: FontWeight.w600),
-            overflow: TextOverflow.ellipsis,
-          ),
+          child: copyable
+              ? buildCopyableText(
+                  context,
+                  text,
+                  style: style,
+                  maxLines: 1,
+                  overflow: TextOverflow.ellipsis,
+                )
+              : Text(
+                  text,
+                  style: style,
+                  overflow: TextOverflow.ellipsis,
+                ),
         ),
       ],
     );

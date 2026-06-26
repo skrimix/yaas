@@ -695,7 +695,7 @@ class AppLocalizationsRu extends AppLocalizations {
 
   @override
   String get deviceStorageConnectionTooltip =>
-      'Подключить хранилище через MTP. USB может перезапуститься.';
+      'Подключить хранилище через MTP.';
 
   @override
   String get deviceStorageResetTooltip => 'Сбросить функции USB.';
@@ -711,10 +711,11 @@ class AppLocalizationsRu extends AppLocalizations {
 
   @override
   String get deviceStorageConnectedMessage =>
-      'MTP включен. USB может перезапуститься.';
+      'MTP включен. USB будет перезапущен.';
 
   @override
-  String get deviceStorageResetMessage => 'Функции USB сброшены.';
+  String get deviceStorageResetMessage =>
+      'Функции USB сброшены. USB будет перезапущен.';
 
   @override
   String get deviceStorageConnectionFailed =>

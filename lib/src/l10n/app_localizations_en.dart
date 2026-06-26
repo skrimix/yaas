@@ -684,12 +684,10 @@ class AppLocalizationsEn extends AppLocalizations {
   String get deviceStorageConnection => 'Storage connection';
 
   @override
-  String get deviceStorageConnectionTooltip =>
-      'Connect storage with MTP. The USB connection may restart.';
+  String get deviceStorageConnectionTooltip => 'Connect storage with MTP.';
 
   @override
-  String get deviceStorageResetTooltip =>
-      'Reset USB functions. The USB connection may restart.';
+  String get deviceStorageResetTooltip => 'Reset USB functions.';
 
   @override
   String get deviceStorageStatusConnected => 'Connected';
@@ -702,11 +700,11 @@ class AppLocalizationsEn extends AppLocalizations {
 
   @override
   String get deviceStorageConnectedMessage =>
-      'MTP is enabled. The USB connection may restart.';
+      'MTP is enabled. The USB connection will restart.';
 
   @override
   String get deviceStorageResetMessage =>
-      'USB functions were reset. The USB connection may restart.';
+      'USB functions were reset. The USB connection will restart.';
 
   @override
   String get deviceStorageConnectionFailed =>

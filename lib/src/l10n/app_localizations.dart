@@ -1319,13 +1319,13 @@ abstract class AppLocalizations {
   /// No description provided for @deviceStorageConnectionTooltip.
   ///
   /// In en, this message translates to:
-  /// **'Connect storage with MTP. The USB connection may restart.'**
+  /// **'Connect storage with MTP.'**
   String get deviceStorageConnectionTooltip;
 
   /// No description provided for @deviceStorageResetTooltip.
   ///
   /// In en, this message translates to:
-  /// **'Reset USB functions. The USB connection may restart.'**
+  /// **'Reset USB functions.'**
   String get deviceStorageResetTooltip;
 
   /// No description provided for @deviceStorageStatusConnected.
@@ -1349,13 +1349,13 @@ abstract class AppLocalizations {
   /// No description provided for @deviceStorageConnectedMessage.
   ///
   /// In en, this message translates to:
-  /// **'MTP is enabled. The USB connection may restart.'**
+  /// **'MTP is enabled. The USB connection will restart.'**
   String get deviceStorageConnectedMessage;
 
   /// No description provided for @deviceStorageResetMessage.
   ///
   /// In en, this message translates to:
-  /// **'USB functions were reset. The USB connection may restart.'**
+  /// **'USB functions were reset. The USB connection will restart.'**
   String get deviceStorageResetMessage;
 
   /// No description provided for @deviceStorageConnectionFailed.

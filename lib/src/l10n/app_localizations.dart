@@ -944,6 +944,30 @@ abstract class AppLocalizations {
   /// **'{count, plural, one {{count} active task} other {{count} active tasks}}'**
   String activeTasks(int count);
 
+  /// No description provided for @activeTasksExitTitle.
+  ///
+  /// In en, this message translates to:
+  /// **'Tasks are still running'**
+  String get activeTasksExitTitle;
+
+  /// No description provided for @activeTasksExitMessage.
+  ///
+  /// In en, this message translates to:
+  /// **'{count, plural, one {Closing YAAS will cancel {count} active task. Exit anyway?} other {Closing YAAS will cancel {count} active tasks. Exit anyway?}}'**
+  String activeTasksExitMessage(int count);
+
+  /// No description provided for @exitAndCancelTasks.
+  ///
+  /// In en, this message translates to:
+  /// **'Exit and cancel tasks'**
+  String get exitAndCancelTasks;
+
+  /// No description provided for @cancellingTasksBeforeExit.
+  ///
+  /// In en, this message translates to:
+  /// **'Cancelling tasks before exit...'**
+  String get cancellingTasksBeforeExit;
+
   /// No description provided for @viewTasks.
   ///
   /// In en, this message translates to:

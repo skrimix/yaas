@@ -261,6 +261,17 @@
             }
         }
     },
+    "activeTasksExitTitle": "Задачи ещё выполняются",
+    "activeTasksExitMessage": "{count, plural, one {При закрытии YAAS будет отменена {count} активная задача. Всё равно выйти?} few {При закрытии YAAS будут отменены {count} активные задачи. Всё равно выйти?} many {При закрытии YAAS будут отменены {count} активных задач. Всё равно выйти?} other {При закрытии YAAS будут отменены {count} активных задач. Всё равно выйти?}}",
+    "@activeTasksExitMessage": {
+        "placeholders": {
+            "count": {
+                "type": "int"
+            }
+        }
+    },
+    "exitAndCancelTasks": "Выйти и отменить задачи",
+    "cancellingTasksBeforeExit": "Отмена задач перед выходом...",
     "viewTasks": "Задачи",
     "refreshAllData": "Обновить все данные",
     "noDeviceConnected": "Устройство не подключено",

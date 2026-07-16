@@ -1,3 +1,4 @@
+import 'dart:async';
 import 'dart:ui';
 
 import 'package:desktop_window/desktop_window.dart';
@@ -24,6 +25,7 @@ import 'providers/log_state.dart';
 import 'providers/app_state.dart';
 import 'navigation.dart';
 import 'widgets/common/status_bar.dart';
+import 'widgets/dialogs/active_tasks_close_dialog.dart';
 
 void main() async {
   WidgetsFlutterBinding.ensureInitialized();
@@ -92,19 +94,18 @@ class YAASApp extends StatefulWidget {
 }
 
 class _YAASAppState extends State<YAASApp> {
+  static const _shutdownWatchdog = Duration(seconds: 12);
+
   late final AppLifecycleListener _listener;
   Color? _linuxKdeAccent;
   bool _triedReadLinuxAccent = false;
+  bool _exitRequestInProgress = false;
 
   @override
   void initState() {
     super.initState();
     _listener = AppLifecycleListener(
-      onExitRequested: () async {
-        finalizeRust();
-        // TODO: Cooperative shutdown
-        return AppExitResponse.exit;
-      },
+      onExitRequested: _handleExitRequested,
     );
 
     // Initialize some providers.
@@ -212,6 +213,66 @@ class _YAASAppState extends State<YAASApp> {
     if (!mounted) return;
     if (color != null) {
       setState(() => _linuxKdeAccent = color);
+    }
+  }
+
+  Future<AppExitResponse> _handleExitRequested() async {
+    if (_exitRequestInProgress) {
+      return AppExitResponse.cancel;
+    }
+    _exitRequestInProgress = true;
+
+    var shouldExit = false;
+    try {
+      final activeTaskCount = context.read<TaskState>().activeTasks.length;
+      if (activeTaskCount > 0) {
+        final dialogContext = YAASApp.navigatorKey.currentContext;
+        if (dialogContext == null) {
+          debugPrint(
+              '[Shutdown] Navigator is not ready to confirm application exit');
+          return AppExitResponse.cancel;
+        }
+        shouldExit = await showActiveTasksCloseDialog(
+          context: dialogContext,
+          activeTaskCount: activeTaskCount,
+          prepareShutdown: _prepareRustShutdown,
+        );
+      } else {
+        await _prepareRustShutdown();
+        shouldExit = true;
+      }
+
+      if (!shouldExit) {
+        return AppExitResponse.cancel;
+      }
+
+      finalizeRust();
+      return AppExitResponse.exit;
+    } finally {
+      if (!shouldExit) {
+        _exitRequestInProgress = false;
+      }
+    }
+  }
+
+  Future<void> _prepareRustShutdown() async {
+    final ready = messages.AppShutdownReady.rustSignalStream.first.timeout(
+      _shutdownWatchdog,
+    );
+    messages.AppShutdownRequest().sendSignalToRust();
+
+    try {
+      final result = (await ready).message;
+      if (result.timedOut) {
+        debugPrint(
+          '[Shutdown] Timed out with ${result.remainingTasks} tasks remaining',
+        );
+      }
+    } on TimeoutException {
+      debugPrint('[Shutdown] Rust shutdown handshake timed out');
+    } catch (error, stackTrace) {
+      debugPrint('[Shutdown] Rust shutdown handshake failed: $error');
+      debugPrintStack(stackTrace: stackTrace);
     }
   }
 }

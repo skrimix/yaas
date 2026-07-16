@@ -490,6 +490,32 @@ class AppLocalizationsRu extends AppLocalizations {
   }
 
   @override
+  String get activeTasksExitTitle => 'Задачи ещё выполняются';
+
+  @override
+  String activeTasksExitMessage(int count) {
+    String _temp0 = intl.Intl.pluralLogic(
+      count,
+      locale: localeName,
+      other:
+          'При закрытии YAAS будут отменены $count активных задач. Всё равно выйти?',
+      many:
+          'При закрытии YAAS будут отменены $count активных задач. Всё равно выйти?',
+      few:
+          'При закрытии YAAS будут отменены $count активные задачи. Всё равно выйти?',
+      one:
+          'При закрытии YAAS будет отменена $count активная задача. Всё равно выйти?',
+    );
+    return '$_temp0';
+  }
+
+  @override
+  String get exitAndCancelTasks => 'Выйти и отменить задачи';
+
+  @override
+  String get cancellingTasksBeforeExit => 'Отмена задач перед выходом...';
+
+  @override
   String get viewTasks => 'Задачи';
 
   @override

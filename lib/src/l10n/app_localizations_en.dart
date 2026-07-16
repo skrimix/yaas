@@ -483,6 +483,26 @@ class AppLocalizationsEn extends AppLocalizations {
   }
 
   @override
+  String get activeTasksExitTitle => 'Tasks are still running';
+
+  @override
+  String activeTasksExitMessage(int count) {
+    String _temp0 = intl.Intl.pluralLogic(
+      count,
+      locale: localeName,
+      other: 'Closing YAAS will cancel $count active tasks. Exit anyway?',
+      one: 'Closing YAAS will cancel $count active task. Exit anyway?',
+    );
+    return '$_temp0';
+  }
+
+  @override
+  String get exitAndCancelTasks => 'Exit and cancel tasks';
+
+  @override
+  String get cancellingTasksBeforeExit => 'Cancelling tasks before exit...';
+
+  @override
   String get viewTasks => 'View tasks';
 
   @override

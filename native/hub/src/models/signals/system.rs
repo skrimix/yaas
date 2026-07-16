@@ -1,12 +1,21 @@
 use std::time::Duration;
 
-use rinf::RustSignal;
+use rinf::{DartSignal, RustSignal};
 use serde::{Deserialize, Serialize};
 use tracing::debug;
 
 #[derive(Serialize, Deserialize, RustSignal)]
 pub(crate) struct RustPanic {
     pub message: String,
+}
+
+#[derive(Serialize, Deserialize, DartSignal)]
+pub(crate) struct AppShutdownRequest {}
+
+#[derive(Serialize, Deserialize, RustSignal)]
+pub(crate) struct AppShutdownReady {
+    pub timed_out: bool,
+    pub remaining_tasks: u32,
 }
 
 #[derive(Serialize, Deserialize, RustSignal)]

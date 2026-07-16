@@ -9,7 +9,10 @@ use std::{
 };
 
 use rinf::{DartSignal, RustSignal};
-use tokio::sync::{Mutex, RwLock, Semaphore};
+use tokio::{
+    sync::{Mutex, Notify, RwLock, Semaphore},
+    time::timeout,
+};
 use tokio_stream::{StreamExt, wrappers::WatchStream};
 use tokio_util::sync::CancellationToken;
 use tracing::{debug, error, info, instrument, warn};
@@ -31,11 +34,50 @@ pub(crate) struct TaskManager {
     pub(super) adb_semaphore: Semaphore,
     pub(super) download_semaphore: Semaphore,
     id_counter: AtomicU64,
-    tasks: Mutex<HashMap<u64, (Task, CancellationToken)>>,
+    tasks: Mutex<TaskRegistry>,
+    tasks_changed: Notify,
+    shutdown_token: CancellationToken,
     pub(super) adb_service: Arc<AdbService>,
     pub(super) downloader_manager: Arc<DownloaderManager>,
     pub(super) downloads_catalog: Arc<DownloadsCatalog>,
     pub(super) settings: RwLock<Settings>,
+}
+
+struct TaskRegistry {
+    accepting_tasks: bool,
+    tasks: HashMap<u64, (Task, CancellationToken)>,
+}
+
+impl Default for TaskRegistry {
+    fn default() -> Self {
+        Self { accepting_tasks: true, tasks: HashMap::new() }
+    }
+}
+
+impl TaskRegistry {
+    fn insert(&mut self, id: u64, task: Task, token: CancellationToken) -> bool {
+        if !self.accepting_tasks {
+            debug!(task_id = id, "Ignoring task because shutdown has started");
+            return false;
+        }
+
+        self.tasks.insert(id, (task, token));
+        true
+    }
+
+    fn start_shutdown(&mut self) -> usize {
+        self.accepting_tasks = false;
+        for (_, token) in self.tasks.values() {
+            token.cancel();
+        }
+        self.tasks.len()
+    }
+}
+
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub(crate) struct TaskShutdownResult {
+    pub(crate) timed_out: bool,
+    pub(crate) remaining_tasks: usize,
 }
 
 impl TaskManager {
@@ -52,7 +94,9 @@ impl TaskManager {
             adb_semaphore: Semaphore::new(1),
             download_semaphore: Semaphore::new(1),
             id_counter: AtomicU64::new(0),
-            tasks: Mutex::new(HashMap::new()),
+            tasks: Mutex::new(TaskRegistry::default()),
+            tasks_changed: Notify::new(),
+            shutdown_token: CancellationToken::new(),
             adb_service,
             downloader_manager,
             downloads_catalog,
@@ -71,8 +115,17 @@ impl TaskManager {
             let handle = handle.clone();
             async move {
                 let mut stream = settings_stream;
-                while let Some(settings) = stream.next().await {
-                    *handle.settings.write().await = settings;
+                loop {
+                    tokio::select! {
+                        _ = handle.shutdown_token.cancelled() => break,
+                        settings = stream.next() => {
+                            if let Some(settings) = settings {
+                                *handle.settings.write().await = settings;
+                            } else {
+                                break;
+                            }
+                        }
+                    }
                 }
             }
         });
@@ -87,6 +140,10 @@ impl TaskManager {
 
         loop {
             tokio::select! {
+                _ = self.shutdown_token.cancelled() => {
+                    debug!("Stopping task request handler");
+                    break;
+                }
                 request = request_receiver.recv() => {
                     if let Some(request) = request {
                         self.clone().enqueue_task(request.message.task).await;
@@ -106,16 +163,18 @@ impl TaskManager {
     }
 
     #[instrument(level = "debug", skip(self))]
-    async fn enqueue_task(self: Arc<Self>, task: Task) -> u64 {
+    async fn enqueue_task(self: Arc<Self>, task: Task) -> Option<u64> {
         let id = self.id_counter.fetch_add(1, Ordering::Relaxed);
         let token = CancellationToken::new();
 
         debug!(task_id = id, task = ?task, "Creating new task");
 
-        let mut tasks = self.tasks.lock().await;
-        let active_tasks_count = tasks.len();
-        tasks.insert(id, (task.clone(), token.clone()));
-        drop(tasks);
+        let mut registry = self.tasks.lock().await;
+        let active_tasks_count = registry.tasks.len();
+        if !registry.insert(id, task.clone(), token.clone()) {
+            return None;
+        }
+        drop(registry);
 
         debug!(task_id = id, active_tasks = active_tasks_count + 1, "Task added to queue");
 
@@ -124,35 +183,59 @@ impl TaskManager {
             async move {
                 handle.process_task(id, task, token).await;
 
-                let mut tasks = handle.tasks.lock().await;
-                tasks.remove(&id);
-                let remaining_tasks = tasks.len();
-                drop(tasks);
+                let mut registry = handle.tasks.lock().await;
+                registry.tasks.remove(&id);
+                let remaining_tasks = registry.tasks.len();
+                drop(registry);
+                handle.tasks_changed.notify_one();
                 debug!(task_id = id, remaining_tasks = remaining_tasks, "Task removed from queue");
             }
         });
 
-        id
+        Some(id)
     }
 
     #[instrument(level = "debug", skip(self))]
     async fn cancel_task(self: Arc<Self>, task_id: u64) {
-        let tasks = self.tasks.lock().await;
-        if let Some((task, token)) = tasks.get(&task_id) {
+        let registry = self.tasks.lock().await;
+        if let Some((task, token)) = registry.tasks.get(&task_id) {
             info!(
                 task_id = task_id,
                 task = %task,
-                active_tasks = tasks.len(),
+                active_tasks = registry.tasks.len(),
                 "Received cancellation request for task"
             );
             token.cancel();
         } else {
             warn!(
                 task_id = task_id,
-                active_tasks = tasks.len(),
+                active_tasks = registry.tasks.len(),
                 "Task not found for cancellation - may have already completed"
             );
         }
+    }
+
+    pub(crate) async fn shutdown(&self, wait_timeout: Duration) -> TaskShutdownResult {
+        let active_tasks = {
+            let mut registry = self.tasks.lock().await;
+            registry.start_shutdown()
+        };
+        self.shutdown_token.cancel();
+
+        info!(active_tasks, "Cancelling tasks for application shutdown");
+        let result = wait_for_tasks(&self.tasks, &self.tasks_changed, wait_timeout).await;
+
+        if result.timed_out {
+            warn!(
+                remaining_tasks = result.remaining_tasks,
+                timeout_secs = wait_timeout.as_secs(),
+                "Timed out waiting for tasks to stop"
+            );
+        } else {
+            info!("All tasks stopped before application shutdown");
+        }
+
+        result
     }
 
     #[instrument(level = "debug", skip(self, token))]
@@ -387,6 +470,27 @@ impl TaskManager {
     }
 }
 
+async fn wait_for_tasks(
+    tasks: &Mutex<TaskRegistry>,
+    tasks_changed: &Notify,
+    wait_timeout: Duration,
+) -> TaskShutdownResult {
+    let wait = async {
+        loop {
+            let notified = tasks_changed.notified();
+            let remaining_tasks = tasks.lock().await.tasks.len();
+            if remaining_tasks == 0 {
+                return;
+            }
+            notified.await;
+        }
+    };
+
+    let timed_out = timeout(wait_timeout, wait).await.is_err();
+    let remaining_tasks = tasks.lock().await.tasks.len();
+    TaskShutdownResult { timed_out, remaining_tasks }
+}
+
 fn send_progress(progress: TaskProgress) {
     // Log significant status changes (not every progress update to avoid spam)
     match progress.status {
@@ -420,4 +524,84 @@ fn send_progress(progress: TaskProgress) {
     }
 
     progress.send_signal_to_dart();
+}
+
+#[cfg(test)]
+mod tests {
+    use std::{sync::Arc, time::Duration};
+
+    use tokio::sync::{Mutex, Notify};
+    use tokio_util::sync::CancellationToken;
+
+    use super::{TaskRegistry, wait_for_tasks};
+    use crate::models::signals::task::Task;
+
+    fn task(name: &str) -> Task {
+        Task::Download(name.to_string(), "com.example.app".to_string())
+    }
+
+    #[test]
+    fn shutdown_cancels_all_tasks() {
+        let first = CancellationToken::new();
+        let second = CancellationToken::new();
+        let mut registry = TaskRegistry::default();
+        assert!(registry.insert(1, task("First"), first.clone()));
+        assert!(registry.insert(2, task("Second"), second.clone()));
+
+        assert_eq!(registry.start_shutdown(), 2);
+        assert!(first.is_cancelled());
+        assert!(second.is_cancelled());
+    }
+
+    #[test]
+    fn shutdown_rejects_new_tasks() {
+        let mut registry = TaskRegistry::default();
+        registry.start_shutdown();
+
+        assert!(!registry.insert(1, task("Late"), CancellationToken::new()));
+        assert!(registry.tasks.is_empty());
+    }
+
+    #[tokio::test]
+    async fn shutdown_waits_for_tasks_to_finish() {
+        let token = CancellationToken::new();
+        let tasks = Arc::new(Mutex::new(TaskRegistry::default()));
+        let tasks_changed = Arc::new(Notify::new());
+        assert!(tasks.lock().await.insert(1, task("Running"), token.clone()));
+        tasks.lock().await.start_shutdown();
+
+        let worker_tasks = tasks.clone();
+        let worker_tasks_changed = tasks_changed.clone();
+        tokio::spawn(async move {
+            token.cancelled().await;
+            worker_tasks.lock().await.tasks.remove(&1);
+            worker_tasks_changed.notify_one();
+        });
+
+        let result = wait_for_tasks(&tasks, &tasks_changed, Duration::from_secs(1)).await;
+        assert!(!result.timed_out);
+        assert_eq!(result.remaining_tasks, 0);
+    }
+
+    #[tokio::test]
+    async fn shutdown_reports_tasks_left_after_timeout() {
+        let tasks = Mutex::new(TaskRegistry::default());
+        let tasks_changed = Notify::new();
+        assert!(tasks.lock().await.insert(1, task("Stuck"), CancellationToken::new()));
+
+        let result = wait_for_tasks(&tasks, &tasks_changed, Duration::from_millis(10)).await;
+        assert!(result.timed_out);
+        assert_eq!(result.remaining_tasks, 1);
+    }
+
+    #[tokio::test]
+    async fn shutdown_does_not_miss_early_completion() {
+        let tasks = Mutex::new(TaskRegistry::default());
+        let tasks_changed = Notify::new();
+        tasks_changed.notify_one();
+
+        let result = wait_for_tasks(&tasks, &tasks_changed, Duration::from_millis(10)).await;
+        assert!(!result.timed_out);
+        assert_eq!(result.remaining_tasks, 0);
+    }
 }

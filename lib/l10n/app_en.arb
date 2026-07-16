@@ -267,6 +267,17 @@
             }
         }
     },
+    "activeTasksExitTitle": "Tasks are still running",
+    "activeTasksExitMessage": "{count, plural, one {Closing YAAS will cancel {count} active task. Exit anyway?} other {Closing YAAS will cancel {count} active tasks. Exit anyway?}}",
+    "@activeTasksExitMessage": {
+        "placeholders": {
+            "count": {
+                "type": "int"
+            }
+        }
+    },
+    "exitAndCancelTasks": "Exit and cancel tasks",
+    "cancellingTasksBeforeExit": "Cancelling tasks before exit...",
     "viewTasks": "View tasks",
     "refreshAllData": "Refresh all data",
     "noDeviceConnected": "No device connected",

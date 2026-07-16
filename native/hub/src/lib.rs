@@ -12,8 +12,10 @@ use adb::AdbService;
 use anyhow::{Context, Result};
 use logging::SignalLayer;
 use mimalloc::MiMalloc;
-use models::signals::system::{AppVersionInfo, MediaConfigChanged, RustPanic};
-use rinf::RustSignal;
+use models::signals::system::{
+    AppShutdownReady, AppShutdownRequest, AppVersionInfo, MediaConfigChanged, RustPanic,
+};
+use rinf::{DartSignal, RustSignal};
 use settings::SettingsHandler;
 use task::TaskManager;
 use tokio::{sync::Notify, time::timeout};
@@ -58,6 +60,7 @@ pub(crate) mod built_info {
 }
 
 pub(crate) const USER_AGENT: &str = concat!("YAAS/", env!("CARGO_PKG_VERSION"));
+const TASK_SHUTDOWN_TIMEOUT: Duration = Duration::from_secs(10);
 
 fn main() {
     let portable_mode = std::env::args().any(|arg| arg == "--portable");
@@ -88,14 +91,55 @@ fn main() {
         runtime.block_on(async move {
             let init_start = Instant::now();
             // Initialize everything
-            timeout(Duration::from_secs(10), init(portable_mode))
+            let task_manager = timeout(Duration::from_secs(10), init(portable_mode))
                 .await
                 .expect("Core initialization timed out");
             info!("Core initialization completed in {:?}", init_start.elapsed());
 
-            tokio::select! {
-                _ = rinf::dart_shutdown() => {},
-                _ = panic_notify.notified() => {},
+            let shutdown_request_receiver = AppShutdownRequest::get_dart_signal_receiver();
+            enum ShutdownSource {
+                Dart,
+                Request,
+                Panic,
+            }
+
+            let source = tokio::select! {
+                _ = rinf::dart_shutdown() => ShutdownSource::Dart,
+                request = shutdown_request_receiver.recv() => {
+                    if request.is_some() {
+                        ShutdownSource::Request
+                    } else {
+                        ShutdownSource::Dart
+                    }
+                },
+                _ = panic_notify.notified() => ShutdownSource::Panic,
+            };
+
+            match source {
+                ShutdownSource::Panic => {}
+                ShutdownSource::Dart => {
+                    tokio::select! {
+                        _ = task_manager.shutdown(TASK_SHUTDOWN_TIMEOUT) => {},
+                        _ = panic_notify.notified() => {},
+                    }
+                }
+                ShutdownSource::Request => {
+                    let shutdown_result = tokio::select! {
+                        result = task_manager.shutdown(TASK_SHUTDOWN_TIMEOUT) => Some(result),
+                        _ = panic_notify.notified() => None,
+                    };
+                    if let Some(shutdown_result) = shutdown_result {
+                        AppShutdownReady {
+                            timed_out: shutdown_result.timed_out,
+                            remaining_tasks: shutdown_result.remaining_tasks as u32,
+                        }
+                        .send_signal_to_dart();
+                        tokio::select! {
+                            _ = rinf::dart_shutdown() => {},
+                            _ = panic_notify.notified() => {},
+                        }
+                    }
+                }
             }
         })
     });
@@ -104,12 +148,12 @@ fn main() {
 }
 
 #[instrument]
-async fn init(portable_mode: bool) {
+async fn init(portable_mode: bool) -> Arc<TaskManager> {
     let app_dir = resolve_app_dir(portable_mode);
-    init_in_dir(app_dir, portable_mode).await;
+    init_in_dir(app_dir, portable_mode).await
 }
 
-async fn init_in_dir(app_dir: PathBuf, portable_mode: bool) {
+async fn init_in_dir(app_dir: PathBuf, portable_mode: bool) -> Arc<TaskManager> {
     if !app_dir.exists() {
         std::fs::create_dir_all(&app_dir).expect("Failed to create app directory");
     }
@@ -160,7 +204,7 @@ async fn init_in_dir(app_dir: PathBuf, portable_mode: bool) {
     debug!("Creating downloader manager");
     let downloader_manager = DownloaderManager::new();
     debug!("Creating task manager");
-    let _task_manager = TaskManager::new(
+    let task_manager = TaskManager::new(
         adb_service.clone(),
         downloader_manager.clone(),
         downloads_catalog.clone(),
@@ -185,6 +229,8 @@ async fn init_in_dir(app_dir: PathBuf, portable_mode: bool) {
     // Log-related requests from Flutter
     debug!("Starting signal layer request handler");
     SignalLayer::start_request_handler(app_dir.join("logs"));
+
+    task_manager
 }
 
 fn setup_logging(app_dir: &Path) -> Result<()> {

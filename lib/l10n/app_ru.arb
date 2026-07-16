@@ -270,8 +270,8 @@
             }
         }
     },
-    "exitAndCancelTasks": "Выйти и отменить задачи",
-    "cancellingTasksBeforeExit": "Отмена задач перед выходом...",
+    "exitAndCancelTasks": "Выйти",
+    "cancellingTasksBeforeExit": "Отмена задач...",
     "viewTasks": "Задачи",
     "refreshAllData": "Обновить все данные",
     "noDeviceConnected": "Устройство не подключено",

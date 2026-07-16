@@ -276,8 +276,8 @@
             }
         }
     },
-    "exitAndCancelTasks": "Exit and cancel tasks",
-    "cancellingTasksBeforeExit": "Cancelling tasks before exit...",
+    "exitAndCancelTasks": "Exit",
+    "cancellingTasksBeforeExit": "Cancelling tasks...",
     "viewTasks": "View tasks",
     "refreshAllData": "Refresh all data",
     "noDeviceConnected": "No device connected",

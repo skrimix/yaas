@@ -959,13 +959,13 @@ abstract class AppLocalizations {
   /// No description provided for @exitAndCancelTasks.
   ///
   /// In en, this message translates to:
-  /// **'Exit and cancel tasks'**
+  /// **'Exit'**
   String get exitAndCancelTasks;
 
   /// No description provided for @cancellingTasksBeforeExit.
   ///
   /// In en, this message translates to:
-  /// **'Cancelling tasks before exit...'**
+  /// **'Cancelling tasks...'**
   String get cancellingTasksBeforeExit;
 
   /// No description provided for @viewTasks.

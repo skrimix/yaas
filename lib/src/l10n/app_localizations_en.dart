@@ -497,10 +497,10 @@ class AppLocalizationsEn extends AppLocalizations {
   }
 
   @override
-  String get exitAndCancelTasks => 'Exit and cancel tasks';
+  String get exitAndCancelTasks => 'Exit';
 
   @override
-  String get cancellingTasksBeforeExit => 'Cancelling tasks before exit...';
+  String get cancellingTasksBeforeExit => 'Cancelling tasks...';
 
   @override
   String get viewTasks => 'View tasks';

@@ -510,10 +510,10 @@ class AppLocalizationsRu extends AppLocalizations {
   }
 
   @override
-  String get exitAndCancelTasks => 'Выйти и отменить задачи';
+  String get exitAndCancelTasks => 'Выйти';
 
   @override
-  String get cancellingTasksBeforeExit => 'Отмена задач перед выходом...';
+  String get cancellingTasksBeforeExit => 'Отмена задач...';
 
   @override
   String get viewTasks => 'Задачи';

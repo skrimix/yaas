@@ -746,10 +746,17 @@ impl AdbDevice {
 }
 
 pub(crate) fn format_usb_speed(output: &str) -> Option<String> {
-    let value = output.trim();
+    let value = output
+        .trim()
+        .lines()
+        // Some weird states give error lines like "libc: access denied finding property ..."
+        .filter(|line| !line.starts_with("libc: "))
+        .collect::<Vec<&str>>()
+        .join("\n");
     if value.is_empty() {
         return None;
     }
+
     if let Ok(mbps) = value.parse::<u64>() {
         if mbps >= 1024 {
             let gbps = mbps as f64 / 1024.0;

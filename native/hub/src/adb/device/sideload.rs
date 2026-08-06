@@ -25,6 +25,31 @@ pub(crate) struct SideloadProgress {
     pub progress: Option<f32>,
 }
 
+fn progress_fraction(transferred: u64, total: u64, zero_total: f32) -> f32 {
+    if total == 0 { zero_total } else { (transferred as f32 / total as f32).clamp(0.0, 1.0) }
+}
+
+fn obb_progress(progress: &DirectoryTransferProgress) -> (f32, f32) {
+    let completed_file_fraction = if progress.total_files == 0 {
+        1.0
+    } else {
+        progress.transferred_files as f32 / progress.total_files as f32
+    };
+    let push_progress = progress_fraction(
+        progress.transferred_bytes,
+        progress.total_bytes,
+        completed_file_fraction,
+    );
+    let completed_current_file = progress.current_file.is_none() && progress.transferred_files > 0;
+    let file_progress = progress_fraction(
+        progress.current_file_progress.transferred_bytes,
+        progress.current_file_progress.total_bytes,
+        if completed_current_file { 1.0 } else { 0.0 },
+    );
+
+    (push_progress, file_progress)
+}
+
 impl AdbDevice {
     /// Executes an install script from the given path
     #[instrument(level = "debug", skip(self, token))]
@@ -348,11 +373,7 @@ impl AdbDevice {
                             last_update = now;
                             last_file_index = Some(progress.transferred_files as u64);
 
-                            let push_progress =
-                                progress.transferred_bytes as f32 / progress.total_bytes as f32;
-                            let file_progress = progress.current_file_progress.transferred_bytes
-                                as f32
-                                / progress.current_file_progress.total_bytes as f32;
+                            let (push_progress, file_progress) = obb_progress(&progress);
                             // Show currently transferred file, but don't overflow on final progress when transferred_files==total_files
                             let current_count =
                                 progress.total_files.min(progress.transferred_files + 1);
@@ -492,5 +513,58 @@ impl AdbDevice {
             }
             Err(e) => Err(e.into()),
         }
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use forensic_adb::FileTransferProgress;
+
+    use super::*;
+
+    fn directory_progress(
+        total_files: usize,
+        transferred_files: usize,
+        total_bytes: u64,
+        transferred_bytes: u64,
+        current_file: bool,
+        current_file_total_bytes: u64,
+        current_file_transferred_bytes: u64,
+    ) -> DirectoryTransferProgress {
+        DirectoryTransferProgress {
+            directory_name: None,
+            total_files,
+            transferred_files,
+            total_bytes,
+            transferred_bytes,
+            current_file: current_file.then(|| "main.obb".to_string()),
+            current_file_progress: FileTransferProgress {
+                total_bytes: current_file_total_bytes,
+                transferred_bytes: current_file_transferred_bytes,
+            },
+        }
+    }
+
+    #[test]
+    fn initial_obb_progress_is_zero() {
+        let progress = directory_progress(2, 0, 100, 0, false, 0, 0);
+
+        assert_eq!(obb_progress(&progress), (0.0, 0.0));
+    }
+
+    #[test]
+    fn final_obb_progress_is_complete() {
+        let progress = directory_progress(2, 2, 100, 100, false, 0, 0);
+
+        assert_eq!(obb_progress(&progress), (1.0, 1.0));
+    }
+
+    #[test]
+    fn zero_byte_obb_progress_uses_completed_files() {
+        let initial = directory_progress(1, 0, 0, 0, true, 0, 0);
+        let complete = directory_progress(1, 1, 0, 0, false, 0, 0);
+
+        assert_eq!(obb_progress(&initial), (0.0, 0.0));
+        assert_eq!(obb_progress(&complete), (1.0, 1.0));
     }
 }

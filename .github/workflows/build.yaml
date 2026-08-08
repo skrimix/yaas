@@ -76,10 +76,24 @@ jobs:
 
       - name: Install apt dependencies (Linux)
         if: matrix.target == 'linux'
-        uses: awalsh128/cache-apt-pkgs-action@latest
+        id: apt_dependencies
+        uses: awalsh128/cache-apt-pkgs-action@v1.6.0
         with:
-          packages: ninja-build libgtk-3-dev libasound2-dev libmpv-dev locate libmimalloc-dev libmimalloc2.0
+          packages: ninja-build libgtk-3-dev libasound2-dev libmpv-dev locate libmimalloc-dev libmimalloc2.0 libblas3 liblapack3
           version: 1
+
+      - name: Fix cached library registration (Linux)
+        if: matrix.target == 'linux' && steps.apt_dependencies.outputs.cache-hit == 'true'
+        run: |
+          library_dir="/usr/lib/$(dpkg-architecture -qDEB_HOST_MULTIARCH)"
+          for directory in blas lapack; do
+            for library in "$library_dir/$directory/"*.so.*; do
+              [ -e "$library" ] || continue
+              target="$library_dir/$(basename "$library")"
+              [ -e "$target" ] || sudo ln -sf "$library" "$target"
+            done
+          done
+          sudo ldconfig
 
       - name: Install other dependencies (Linux)
         if: matrix.target == 'linux'
@@ -92,20 +106,6 @@ jobs:
           # Install fastforge
           dart pub global activate fastforge
           echo "$HOME/.pub-cache/bin" >> $GITHUB_PATH
-
-      - name: Fix Linux dependencies cache
-        if: matrix.target == 'linux'
-        run: |
-          sudo update-alternatives --install \
-              /usr/lib/x86_64-linux-gnu/libblas.so.3 \
-              libblas.so.3-x86_64-linux-gnu \
-              /usr/lib/x86_64-linux-gnu/blas/libblas.so.3 \
-              10
-          sudo update-alternatives --install \
-              /usr/lib/x86_64-linux-gnu/liblapack.so.3 \
-              liblapack.so.3-x86_64-linux-gnu \
-              /usr/lib/x86_64-linux-gnu/lapack/liblapack.so.3 \
-              10
 
       - name: Install Rinf CLI tool
         uses: baptiste0928/cargo-install@v3

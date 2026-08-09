@@ -1153,19 +1153,19 @@ impl AdbService {
                 return Ok(());
             }
 
-            info!(%target, "ADB connect attempt");
+            debug!(%target, "Wireless ADB connect attempt");
             match tokio::time::timeout(ATTEMPT_TIMEOUT, self.adb_host.connect_device(&target)).await
             {
                 Ok(Ok(msg)) => {
-                    info!(response = %msg, "ADB connect ok");
+                    debug!(response = %msg, "Wireless ADB connect ok");
                     self.refresh_adb_state().await;
                     return Ok(());
                 }
                 Ok(Err(e)) => {
-                    debug!(error = &e as &dyn Error, %target, "ADB connect attempt failed");
+                    debug!(error = &e as &dyn Error, %target, "Wireless ADB connect attempt failed");
                 }
                 Err(_) => {
-                    debug!(%target, "ADB connect attempt timed out");
+                    debug!(%target, "Wireless ADB connect attempt timed out");
                 }
             }
 

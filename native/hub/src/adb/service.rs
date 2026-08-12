@@ -4,7 +4,6 @@ use std::{
     fmt,
     net::SocketAddr,
     path::{Path, PathBuf},
-    process::Stdio,
     sync::Arc,
     time::Duration,
 };
@@ -27,7 +26,10 @@ use tracing::{Instrument, Span, debug, error, info, info_span, instrument, trace
 
 use super::{
     device::{AdbDevice, DevicePatch, DeviceRefreshComponents},
-    monitor::{DeviceMonitorEvent, EVENT_BATCH_WINDOW, RECONCILIATION_INTERVAL, parse_logcat_line},
+    monitor::{
+        DeviceMonitorEvent, EVENT_BATCH_WINDOW, LOGCAT_COMMAND, RECONCILIATION_INTERVAL,
+        parse_logcat_line,
+    },
 };
 use crate::{
     adb::device::{BackupOptions, SideloadProgress},
@@ -1429,38 +1431,20 @@ impl AdbService {
     }
 
     async fn run_logcat_session(&self, target: &DeviceUpdateTarget) -> Result<()> {
-        let adb_path = resolve_binary_path(self.adb_path.read().await.as_deref(), "adb")?;
-        let mut command = Command::new(&adb_path);
-        command
-            .arg("-t")
-            .arg(&target.transport_id)
-            .arg("--exit-on-write-error")
-            .arg("logcat")
-            .args(["-b", "main,system,events", "-T", "1", "-v", "epoch"])
-            .args([
-                "AppInfoRetrieverService:D",
-                "GuardianGatekeeperAndSysPropMgr:I",
-                "SyncBossHAL:I",
-                "battery_level:I",
-                "storage_state:I",
-                "*:S",
-            ])
-            .stdin(Stdio::null())
-            .stdout(Stdio::piped())
-            .stderr(Stdio::null())
-            .kill_on_drop(true);
-        #[cfg(target_os = "windows")]
-        command.creation_flags(0x08000000); // CREATE_NO_WINDOW
+        let device = self.try_current_device().await.context("No device connected")?;
+        ensure!(target.matches(&device), "Selected device changed before logcat monitor start");
+        let inner = device.inner.clone();
 
         debug!(
             serial = %target.serial,
             transport_id = %target.transport_id,
-            path = %adb_path.display(),
             "Starting device logcat monitor"
         );
-        let mut child = command.spawn().context("Failed to start device logcat monitor")?;
-        let stdout = child.stdout.take().context("Device logcat monitor stdout was not piped")?;
-        let mut lines = BufReader::new(stdout).lines();
+        let stream = inner
+            .execute_host_shell_command_stream(LOGCAT_COMMAND)
+            .await
+            .context("Failed to start device logcat monitor")?;
+        let mut lines = BufReader::new(stream).lines();
         let mut pending_components = DeviceRefreshComponents::empty();
         let mut batch_deadline = None;
 
@@ -1490,8 +1474,7 @@ impl AdbService {
         }
 
         self.flush_monitor_queries(target, &mut pending_components);
-        let status = child.wait().await.context("Failed to wait for device logcat monitor")?;
-        bail!("Device logcat monitor exited with {status}")
+        bail!("Device logcat monitor stream ended")
     }
 
     fn handle_monitor_line(

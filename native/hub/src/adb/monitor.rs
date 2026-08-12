@@ -3,6 +3,11 @@ use crate::{adb::device::DeviceRefreshComponents, models::SpaceInfo};
 pub(super) const EVENT_BATCH_WINDOW: std::time::Duration = std::time::Duration::from_millis(750);
 pub(super) const RECONCILIATION_INTERVAL: std::time::Duration = std::time::Duration::from_secs(90);
 
+/// Logcat shell command streaming the buffers and tags parsed by [`parse_logcat_line`].
+pub(super) const LOGCAT_COMMAND: &str =
+    "logcat -b main,system,events -T 1 -v epoch AppInfoRetrieverService:D \
+     GuardianGatekeeperAndSysPropMgr:I SyncBossHAL:I battery_level:I storage_state:I *:S";
+
 const INTERNAL_STORAGE_UUID: &str = "41217664-9172-527a-b3d5-edabb50a7d69";
 
 #[derive(Debug, PartialEq, Eq)]

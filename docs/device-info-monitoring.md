@@ -31,8 +31,8 @@ Relevant code:
   - `AdbService::run_device_update_coordinator()` coalesces compatible selective queries and
     applies patches in order.
   - `AdbService::run_periodic_refresh()` contains the 5-minute interval.
-  - `AdbService::run_device_monitor()` runs logcat on the selected ADB transport and restarts it
-    on failure.
+  - `AdbService::run_device_monitor()` streams logcat from the selected device over the ADB shell
+    service and restarts it on failure.
   - `AdbService::run_device_reconciliation()` refreshes cheap control state every 90 seconds.
   - `AdbService::refresh_device()` requests all refresh components through the coordinator.
   - `AdbService::set_device()` emits the complete `DeviceChangedEvent` and notifies the monitor
@@ -369,11 +369,11 @@ Recommended handling:
 
 ## Logcat monitor
 
-YAAS starts the configured ADB executable for the selected transport:
+YAAS streams logcat from the selected device through the forensic-adb shell service
+(`Device::execute_host_shell_command_stream()`):
 
 ```sh
-adb -t <transport-id> --exit-on-write-error \
-  logcat -b main,system,events -T 1 -v epoch \
+logcat -b main,system,events -T 1 -v epoch \
   AppInfoRetrieverService:D \
   GuardianGatekeeperAndSysPropMgr:I \
   SyncBossHAL:I \
@@ -386,7 +386,7 @@ Notes:
 
 - `-T 1` may deliver one historical line. The initial full device refresh makes one harmless stale
   trigger acceptable.
-- A selected-device watch stops the process when the serial or transport ID changes.
+- A selected-device watch closes the stream when the serial or transport ID changes.
 - Failed processes restart with exponential backoff capped at 30 seconds.
 - Query events are combined in fixed 750 ms windows and sent to the coordinator without awaiting
   the results. Storage values are applied immediately through the same coordinator.

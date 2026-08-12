@@ -1491,6 +1491,14 @@ impl AdbService {
                 }
                 *pending_components |= components;
             }
+            Some(DeviceMonitorEvent::Charging(is_charging)) => {
+                if let Err(error) = self.enqueue_device_patch(
+                    target.clone(),
+                    DevicePatch { is_charging: Some(is_charging), ..DevicePatch::default() },
+                ) {
+                    warn!(error = error.as_ref() as &dyn Error, "Dropping device charging event");
+                }
+            }
             Some(DeviceMonitorEvent::Storage(space_info)) => {
                 if let Err(error) = self.enqueue_device_patch(
                     target.clone(),

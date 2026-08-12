@@ -23,6 +23,7 @@ InstalledPackage _package(String name) => InstalledPackage(
 
 AdbDevice _device({
   int batteryLevel = 50,
+  bool? isCharging,
   List<InstalledPackage>? packages,
 }) =>
     AdbDevice(
@@ -33,6 +34,7 @@ AdbDevice _device({
       transportId: '1',
       isWireless: false,
       batteryLevel: batteryLevel,
+      isCharging: isCharging,
       controllers: const HeadsetControllersInfo(),
       spaceInfo: SpaceInfo(total: _uint64(100), available: _uint64(50)),
       installedPackages: packages ?? [_package('com.example.app')],
@@ -71,6 +73,12 @@ void main() {
     events.add(_event(initial.copyWith(batteryLevel: 75)));
     await Future<void>.delayed(Duration.zero);
     expect(notifications, 2);
+    expect(identical(state.installedByPackage, packageLookup), isTrue);
+
+    events.add(_event(initial.copyWith(isCharging: () => true)));
+    await Future<void>.delayed(Duration.zero);
+    expect(notifications, 3);
+    expect(state.isCharging, isTrue);
     expect(identical(state.installedByPackage, packageLookup), isTrue);
   });
 

@@ -53,6 +53,7 @@ class DeviceState extends ChangeNotifier {
   bool get isWireless => _device?.isWireless ?? false;
   String get productName => _device?.product ?? 'N/A';
   int get batteryLevel => _device?.batteryLevel.toInt() ?? 0;
+  bool? get isCharging => _device?.isCharging;
 
   ControllerInfo? get leftController => _device?.controllers.left;
   ControllerInfo? get rightController => _device?.controllers.right;

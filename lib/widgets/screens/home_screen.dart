@@ -25,6 +25,7 @@ class HomeScreen extends StatelessWidget {
     String? status,
     required int batteryLevel,
     required Widget icon,
+    bool isCharging = false,
     bool isDimmed = false,
     List<String> tooltipDetails = const [],
     AppLocalizations? l10n,
@@ -34,7 +35,8 @@ class HomeScreen extends StatelessWidget {
     final tooltipLines = [
       title,
       if (status != null) '${localizations.statusLabel}: $status',
-      '${localizations.batteryLabel}: $batteryLevel%',
+      '${localizations.batteryLabel}: $batteryLevel%'
+          '${isCharging ? ' (${localizations.chargingLabel})' : ''}',
       ...tooltipDetails,
     ];
 
@@ -44,7 +46,23 @@ class HomeScreen extends StatelessWidget {
         opacity: isDimmed ? 0.5 : 1.0,
         child: Column(
           children: [
-            icon,
+            Stack(
+              clipBehavior: Clip.none,
+              children: [
+                icon,
+                if (isCharging)
+                  Positioned(
+                    top: -6,
+                    right: -6,
+                    child: Icon(
+                      Icons.bolt,
+                      key: const ValueKey('headset-charging-badge'),
+                      size: 14,
+                      color: Theme.of(context).colorScheme.primary,
+                    ),
+                  ),
+              ],
+            ),
             const SizedBox(height: 8),
             Container(
               width: 30,
@@ -153,6 +171,7 @@ class HomeScreen extends StatelessWidget {
                                   context,
                                   title: l10n.headset,
                                   batteryLevel: deviceState.batteryLevel,
+                                  isCharging: deviceState.isCharging == true,
                                   tooltipDetails: [
                                     if (deviceState.usbSpeed != null)
                                       '${l10n.usbSpeedLabel}: ${deviceState.usbSpeed}',

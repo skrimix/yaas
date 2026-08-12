@@ -1154,6 +1154,9 @@ class AppLocalizationsRu extends AppLocalizations {
   String get batteryLabel => 'Батарея';
 
   @override
+  String get chargingLabel => 'заряжается';
+
+  @override
   String get powerOffDevice => 'Выключить устройство';
 
   @override

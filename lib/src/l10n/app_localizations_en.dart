@@ -1135,6 +1135,9 @@ class AppLocalizationsEn extends AppLocalizations {
   String get batteryLabel => 'Battery';
 
   @override
+  String get chargingLabel => 'charging';
+
+  @override
   String get powerOffDevice => 'Power off device';
 
   @override

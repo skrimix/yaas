@@ -562,6 +562,7 @@
     "controllerStatusSearching": "Поиск",
     "controllerStatusUnknown": "Неизвестно",
     "batteryLabel": "Батарея",
+    "chargingLabel": "заряжается",
     "powerOffDevice": "Выключить устройство",
     "powerOffConfirm": "Вы уверены, что хотите выключить устройство?",
     "powerOffMenu": "Выключить...",

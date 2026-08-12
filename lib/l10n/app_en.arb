@@ -568,6 +568,7 @@
     "controllerStatusSearching": "Searching",
     "controllerStatusUnknown": "Unknown",
     "batteryLabel": "Battery",
+    "chargingLabel": "charging",
     "powerOffDevice": "Power off device",
     "powerOffConfirm": "Are you sure you want to power off the device?",
     "powerOffMenu": "Power off...",

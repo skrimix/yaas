@@ -155,8 +155,8 @@ I/battery_status: [5,2,1,1,Li-ion]
 ```
 
 Use `battery_level` as a low-noise trigger for the combined battery/controller query. This keeps
-both values on the same refresh path. `battery_status` is useful if charging state is added to the
-UI later.
+both values on the same refresh path. Apply `battery_status` directly for charging indication.
+Treat both status 2 (`Charging`) and status 5 (`Full`) as charging.
 
 References:
 
@@ -378,6 +378,7 @@ logcat -b main,system,events -T 1 -v epoch \
   GuardianGatekeeperAndSysPropMgr:I \
   SyncBossHAL:I \
   battery_level:I \
+  battery_status:I \
   storage_state:I \
   '*:S'
 ```
@@ -389,9 +390,9 @@ Notes:
 - A selected-device watch closes the stream when the serial or transport ID changes.
 - Failed processes restart with exponential backoff capped at 30 seconds.
 - Query events are combined in fixed 750 ms windows and sent to the coordinator without awaiting
-  the results. Storage values are applied immediately through the same coordinator.
-- `battery_status` is intentionally excluded because current YAAS state does not use it and it is
-  noisy on tested Quest 2 firmware.
+  the results. Storage and charging values are applied immediately through the same coordinator.
+- `battery_status` is applied directly as charging state. Android statuses `Charging` and `Full`
+  both count as charging, so firmware that alternates between them does not cause UI updates.
 
 `forensic-adb` currently reads shell output through completion rather than exposing a streaming
 reader. Its checked-out source is normally under:

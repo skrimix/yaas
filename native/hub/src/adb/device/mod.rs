@@ -53,7 +53,8 @@ impl DeviceRefreshComponents {
 /// Successful values returned by a selective device query.
 #[derive(Debug, Default)]
 pub(super) struct DevicePatch {
-    pub(super) battery_and_controllers: Option<(u8, HeadsetControllersInfo)>,
+    pub(super) battery_and_controllers: Option<(u8, Option<bool>, HeadsetControllersInfo)>,
+    pub(super) is_charging: Option<Option<bool>>,
     pub(super) space_info: Option<SpaceInfo>,
     pub(super) installed_packages: Option<Vec<InstalledPackage>>,
     pub(super) guardian_paused: Option<Option<bool>>,
@@ -87,6 +88,38 @@ use crate::{
     },
 };
 
+pub(super) fn charging_from_battery_status(status: u8) -> Option<bool> {
+    match status {
+        2 | 5 => Some(true),
+        3 | 4 => Some(false),
+        _ => None,
+    }
+}
+
+fn parse_battery_state(dump: &str) -> Result<(u8, Option<bool>)> {
+    let mut level = None;
+    let mut is_charging = None;
+
+    for line in dump.lines() {
+        let Some((key, value)) = line.trim().split_once(':') else {
+            continue;
+        };
+        match key {
+            "level" => level = value.trim().parse().ok(),
+            "status" => {
+                is_charging = value
+                    .split_whitespace()
+                    .next()
+                    .and_then(|status| status.parse().ok())
+                    .and_then(charging_from_battery_status)
+            }
+            _ => {}
+        }
+    }
+
+    Ok((level.context("Failed to parse device battery level from dumpsys output")?, is_charging))
+}
+
 /// Java tool used for package listing
 static LIST_APPS_DEX_BYTES: &[u8] = include_bytes!("../../../assets/list_apps.dex");
 const LIST_APPS_DEX_SHA256: const_hex::Buffer<32> =
@@ -111,6 +144,8 @@ pub(crate) struct AdbDevice {
     pub is_wireless: bool,
     /// Device battery level (0-100)
     pub battery_level: u8,
+    /// Whether the device is charging or full while connected to power
+    pub is_charging: Option<bool>,
     /// Information about connected controllers
     pub controllers: HeadsetControllersInfo,
     /// Device storage space information
@@ -166,6 +201,7 @@ impl AdbDevice {
             transport_id,
             is_wireless,
             battery_level: 0,
+            is_charging: None,
             controllers: HeadsetControllersInfo::default(),
             space_info: SpaceInfo::default(),
             installed_packages: Vec::new(),
@@ -335,15 +371,25 @@ impl AdbDevice {
             self.installed_packages = packages;
             changed = true;
         }
-        if let Some((battery_level, controllers)) = patch.battery_and_controllers {
+        if let Some((battery_level, is_charging, controllers)) = patch.battery_and_controllers {
             if self.battery_level != battery_level {
                 self.battery_level = battery_level;
+                changed = true;
+            }
+            if self.is_charging != is_charging {
+                self.is_charging = is_charging;
                 changed = true;
             }
             if self.controllers != controllers {
                 self.controllers = controllers;
                 changed = true;
             }
+        }
+        if let Some(is_charging) = patch.is_charging
+            && self.is_charging != is_charging
+        {
+            self.is_charging = is_charging;
+            changed = true;
         }
         if let Some(space_info) = patch.space_info
             && self.space_info != space_info
@@ -583,25 +629,15 @@ impl AdbDevice {
 
     /// Queries battery information for the device and controllers
     #[instrument(level = "debug", skip(self), err)]
-    async fn query_battery_info(&self) -> Result<(u8, HeadsetControllersInfo)> {
+    async fn query_battery_info(&self) -> Result<(u8, Option<bool>, HeadsetControllersInfo)> {
         let (battery_dump, controllers) =
             tokio::join!(self.battery_dump(), self.query_controllers());
         let battery_dump = battery_dump.context("Failed to get battery dump")?;
 
-        let device_level: u8 = battery_dump
-            .lines()
-            .find_map(|line| {
-                // Look for lines like "  level: 85"
-                if line.trim().starts_with("level:") {
-                    line.split(':').nth(1)?.trim().parse().ok()
-                } else {
-                    None
-                }
-            })
-            .context("Failed to parse device battery level from dumpsys output")?;
+        let (device_level, is_charging) = parse_battery_state(&battery_dump)?;
         trace!(level = device_level, "Parsed device battery level");
 
-        Ok((device_level, controllers?))
+        Ok((device_level, is_charging, controllers?))
     }
 
     /// Queries controller battery levels using rstest, with a dumpsys fallback.
@@ -906,7 +942,9 @@ mod tests {
 
     use forensic_adb::{Device, Host};
 
-    use super::{AdbDevice, DevicePatch, DeviceRefreshComponents, format_usb_speed};
+    use super::{
+        AdbDevice, DevicePatch, DeviceRefreshComponents, format_usb_speed, parse_battery_state,
+    };
     use crate::models::{InstalledPackage, SpaceInfo};
 
     async fn test_device() -> AdbDevice {
@@ -921,6 +959,7 @@ mod tests {
             transport_id: "1".to_string(),
             is_wireless: false,
             battery_level: 50,
+            is_charging: Some(false),
             controllers: Default::default(),
             space_info: SpaceInfo { total: 100, available: 50 },
             installed_packages: Vec::new(),
@@ -945,12 +984,49 @@ mod tests {
         let controllers =
             crate::models::vendor::quest_controller::HeadsetControllersInfo::default();
         let changed = device.apply_patch(DevicePatch {
-            battery_and_controllers: Some((75, controllers)),
+            battery_and_controllers: Some((75, Some(true), controllers)),
             ..DevicePatch::default()
         });
 
         assert!(changed);
         assert_eq!(device.battery_level, 75);
+        assert_eq!(device.is_charging, Some(true));
+    }
+
+    #[tokio::test]
+    async fn applies_charging_only_when_it_changes() {
+        let mut device = test_device().await;
+        let original_level = device.battery_level;
+        let original_controllers = device.controllers.clone();
+
+        assert!(
+            device.apply_patch(DevicePatch {
+                is_charging: Some(Some(true)),
+                ..DevicePatch::default()
+            })
+        );
+        assert_eq!(device.battery_level, original_level);
+        assert_eq!(device.controllers, original_controllers);
+        assert!(
+            !device.apply_patch(DevicePatch {
+                is_charging: Some(Some(true)),
+                ..DevicePatch::default()
+            })
+        );
+    }
+
+    #[test]
+    fn parses_battery_level_and_charging_state() {
+        assert_eq!(parse_battery_state("level: 85\nstatus: 2\n").unwrap(), (85, Some(true)));
+        assert_eq!(parse_battery_state("status: 5\nlevel: 100\n").unwrap(), (100, Some(true)));
+        assert_eq!(
+            parse_battery_state("level: 85\nstatus: 2 (Charging)\n").unwrap(),
+            (85, Some(true))
+        );
+        assert_eq!(parse_battery_state("level: 42\nstatus: 3\n").unwrap(), (42, Some(false)));
+        assert_eq!(parse_battery_state("level: 42\n").unwrap(), (42, None));
+        assert_eq!(parse_battery_state("level: 42\nstatus: 1\n").unwrap(), (42, None));
+        assert!(parse_battery_state("status: 2\n").is_err());
     }
 
     #[tokio::test]

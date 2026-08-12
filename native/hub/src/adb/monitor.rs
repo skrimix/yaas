@@ -1,18 +1,23 @@
-use crate::{adb::device::DeviceRefreshComponents, models::SpaceInfo};
+use crate::{
+    adb::device::{DeviceRefreshComponents, charging_from_battery_status},
+    models::SpaceInfo,
+};
 
 pub(super) const EVENT_BATCH_WINDOW: std::time::Duration = std::time::Duration::from_millis(750);
 pub(super) const RECONCILIATION_INTERVAL: std::time::Duration = std::time::Duration::from_secs(90);
 
 /// Logcat shell command streaming the buffers and tags parsed by [`parse_logcat_line`].
-pub(super) const LOGCAT_COMMAND: &str =
-    "logcat -b main,system,events -T 1 -v epoch AppInfoRetrieverService:D \
-     GuardianGatekeeperAndSysPropMgr:I SyncBossHAL:I battery_level:I storage_state:I *:S";
+pub(super) const LOGCAT_COMMAND: &str = "logcat -b main,system,events -T 1 -v epoch \
+                                         AppInfoRetrieverService:D \
+                                         GuardianGatekeeperAndSysPropMgr:I SyncBossHAL:I \
+                                         battery_level:I battery_status:I storage_state:I *:S";
 
 const INTERNAL_STORAGE_UUID: &str = "41217664-9172-527a-b3d5-edabb50a7d69";
 
 #[derive(Debug, PartialEq, Eq)]
 pub(super) enum DeviceMonitorEvent {
     Query(DeviceRefreshComponents),
+    Charging(Option<bool>),
     Storage(SpaceInfo),
 }
 
@@ -26,6 +31,7 @@ pub(super) fn parse_logcat_line(line: &str) -> Option<DeviceMonitorEvent> {
         "battery_level" => {
             Some(DeviceMonitorEvent::Query(DeviceRefreshComponents::BATTERY_AND_CONTROLLERS))
         }
+        "battery_status" => parse_battery_status_event(message).map(DeviceMonitorEvent::Charging),
         "SyncBossHAL" if is_controller_event(message) => {
             Some(DeviceMonitorEvent::Query(DeviceRefreshComponents::BATTERY_AND_CONTROLLERS))
         }
@@ -56,6 +62,20 @@ fn is_controller_event(message: &str) -> bool {
         || message.starts_with("Pulsar connected devices state change:")
         || message.starts_with("Refreshing input cache")
         || message.starts_with("Cache refresh complete")
+}
+
+fn parse_battery_status_event(message: &str) -> Option<Option<bool>> {
+    let fields = message.strip_prefix('[')?.strip_suffix(']')?.split(',').collect::<Vec<_>>();
+    if fields.len() != 5 {
+        return None;
+    }
+
+    let values = fields[..4]
+        .iter()
+        .map(|field| field.trim().parse::<u8>())
+        .collect::<std::result::Result<Vec<_>, _>>()
+        .ok()?;
+    Some(charging_from_battery_status(values[0]))
 }
 
 fn parse_storage_event(message: &str) -> Option<SpaceInfo> {
@@ -92,15 +112,43 @@ mod tests {
     }
 
     #[test]
-    fn parses_battery_event_but_ignores_battery_status() {
+    fn parses_battery_events() {
         assert_eq!(
             parse_logcat_line("1786559500.100  100  200 I battery_level: [85,4201,342]"),
             Some(DeviceMonitorEvent::Query(DeviceRefreshComponents::BATTERY_AND_CONTROLLERS))
         );
+        for status in [2, 5] {
+            assert_eq!(
+                parse_logcat_line(&format!(
+                    "1786559500.100  100  200 I battery_status: [{status},2,1,1,Li-ion]"
+                )),
+                Some(DeviceMonitorEvent::Charging(Some(true)))
+            );
+        }
+        for status in [3, 4] {
+            assert_eq!(
+                parse_logcat_line(&format!(
+                    "1786559500.100  100  200 I battery_status: [{status},2,1,0,Li-ion]"
+                )),
+                Some(DeviceMonitorEvent::Charging(Some(false)))
+            );
+        }
         assert_eq!(
-            parse_logcat_line("1786559500.100  100  200 I battery_status: [5,2,1,1,Li-ion]"),
-            None
+            parse_logcat_line("1786559500.100  100  200 I battery_status: [1,2,1,0,Li-ion]"),
+            Some(DeviceMonitorEvent::Charging(None))
         );
+    }
+
+    #[test]
+    fn ignores_malformed_battery_status_events() {
+        for line in [
+            "1786559500.100  100  200 I battery_status: [2,2,1,1]",
+            "1786559500.100  100  200 I battery_status: [charging,2,1,1,Li-ion]",
+            "1786559500.100  100  200 I battery_status: [2,good,1,1,Li-ion]",
+            "1786559500.100  100  200 I unrelated: [2,2,1,1,Li-ion]",
+        ] {
+            assert_eq!(parse_logcat_line(line), None);
+        }
     }
 
     #[test]

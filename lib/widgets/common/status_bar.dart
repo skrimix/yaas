@@ -81,8 +81,10 @@ class StatusBar extends StatelessWidget {
     DeviceState deviceState,
     AppLocalizations l10n,
   ) {
+    final chargingSuffix =
+        deviceState.isCharging == true ? ' (${l10n.chargingLabel})' : '';
     return Tooltip(
-      message: '${l10n.headset}: ${deviceState.batteryLevel}%\n'
+      message: '${l10n.headset}: ${deviceState.batteryLevel}%$chargingSuffix\n'
           '${l10n.leftController}: ${deviceState.controllerBatteryLevel(deviceState.leftController)}%\n'
           '${l10n.rightController}: ${deviceState.controllerBatteryLevel(deviceState.rightController)}%',
       child: Material(
@@ -123,7 +125,13 @@ class StatusBar extends StatelessWidget {
           },
           child: Row(
             children: [
-              const Icon(Icons.battery_full, size: 16),
+              Icon(
+                deviceState.isCharging == true
+                    ? Icons.battery_charging_full
+                    : Icons.battery_full,
+                key: const ValueKey('headset-battery-icon'),
+                size: 16,
+              ),
               const SizedBox(width: 2),
               Text('${deviceState.batteryLevel}%'),
               const SizedBox(width: 8),

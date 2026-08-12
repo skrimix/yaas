@@ -1,21 +1,32 @@
+import 'dart:async';
+
 import 'package:flutter/material.dart';
-import '../../providers/device_state.dart';
+import 'package:rinf/rinf.dart';
+
 import '../../src/bindings/bindings.dart';
 
 /// An animated refresh button that shows a spinning icon while refreshing
 /// and a checkmark when the device state updates.
 class AnimatedRefreshButton extends StatefulWidget {
-  final DeviceState deviceState;
   final String tooltip;
+  final AdbCommand command;
+  final AdbCommandKind commandType;
+  final String commandKey;
   final double size;
   final double iconSize;
+  final Stream<RustSignalPack<AdbCommandCompletedEvent>>? completionEvents;
+  final ValueChanged<AdbRequest>? requestSender;
 
   const AnimatedRefreshButton({
     super.key,
-    required this.deviceState,
     required this.tooltip,
+    required this.command,
+    required this.commandType,
+    required this.commandKey,
     this.size = 23,
     this.iconSize = 16,
+    this.completionEvents,
+    this.requestSender,
   });
 
   @override
@@ -31,7 +42,9 @@ class _AnimatedRefreshButtonState extends State<AnimatedRefreshButton>
 
   bool _isRefreshing = false;
   bool _showCheckmark = false;
-  DateTime? _lastDeviceUpdate;
+  StreamSubscription<RustSignalPack<AdbCommandCompletedEvent>>? _subscription;
+  Timer? _fallbackTimer;
+  Timer? _successTimer;
 
   @override
   void initState() {
@@ -53,28 +66,30 @@ class _AnimatedRefreshButtonState extends State<AnimatedRefreshButton>
       CurvedAnimation(parent: _successController, curve: Curves.elasticOut),
     );
 
-    // Listen for device updates to trigger success animation
-    widget.deviceState.addListener(_onDeviceStateChanged);
-    _lastDeviceUpdate = DateTime.now();
+    _subscription =
+        (widget.completionEvents ?? AdbCommandCompletedEvent.rustSignalStream)
+            .listen((event) {
+      final signal = event.message;
+      if (signal.commandType == widget.commandType &&
+          signal.commandKey == widget.commandKey &&
+          _isRefreshing) {
+        if (signal.success) {
+          _showSuccess();
+        } else {
+          _stopRefreshing();
+        }
+      }
+    });
   }
 
   @override
   void dispose() {
-    widget.deviceState.removeListener(_onDeviceStateChanged);
+    _subscription?.cancel();
+    _fallbackTimer?.cancel();
+    _successTimer?.cancel();
     _rotationController.dispose();
     _successController.dispose();
     super.dispose();
-  }
-
-  void _onDeviceStateChanged() {
-    if (_isRefreshing && widget.deviceState.device != null) {
-      final now = DateTime.now();
-      // Trigger success animation if device was updated shortly after refresh
-      if (_lastDeviceUpdate != null &&
-          now.difference(_lastDeviceUpdate!).inSeconds <= 5) {
-        _showSuccess();
-      }
-    }
   }
 
   void _onRefreshPressed() {
@@ -86,13 +101,18 @@ class _AnimatedRefreshButtonState extends State<AnimatedRefreshButton>
     });
 
     _rotationController.repeat();
-    _lastDeviceUpdate = DateTime.now();
-
-    AdbRequest(command: const AdbCommandRefreshDevice(), commandKey: '')
-        .sendSignalToRust();
+    final request =
+        AdbRequest(command: widget.command, commandKey: widget.commandKey);
+    final sender = widget.requestSender;
+    if (sender == null) {
+      request.sendSignalToRust();
+    } else {
+      sender(request);
+    }
 
     // Fallback: stop spinning after 5 seconds
-    Future.delayed(const Duration(seconds: 5), () {
+    _fallbackTimer?.cancel();
+    _fallbackTimer = Timer(const Duration(seconds: 5), () {
       if (_isRefreshing && mounted) {
         _stopRefreshing();
       }
@@ -102,6 +122,7 @@ class _AnimatedRefreshButtonState extends State<AnimatedRefreshButton>
   void _showSuccess() {
     if (!mounted) return;
 
+    _fallbackTimer?.cancel();
     _rotationController.stop();
     setState(() {
       _isRefreshing = false;
@@ -109,7 +130,8 @@ class _AnimatedRefreshButtonState extends State<AnimatedRefreshButton>
     });
 
     _successController.forward().then((_) {
-      Future.delayed(const Duration(milliseconds: 800), () {
+      _successTimer?.cancel();
+      _successTimer = Timer(const Duration(milliseconds: 800), () {
         if (mounted) {
           _successController.reverse().then((_) {
             if (mounted) {
@@ -126,6 +148,7 @@ class _AnimatedRefreshButtonState extends State<AnimatedRefreshButton>
   void _stopRefreshing() {
     if (!mounted) return;
 
+    _fallbackTimer?.cancel();
     _rotationController.stop();
     setState(() {
       _isRefreshing = false;

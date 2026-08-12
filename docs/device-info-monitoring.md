@@ -23,21 +23,23 @@ Both firmware images are Android 14/API 34. Their build IDs are in:
 
 ## Current YAAS refresh path
 
-The current periodic refresh runs every 60 seconds and refreshes every field together.
+The periodic full refresh runs every 5 minutes. Selective refresh requests and direct patches go
+through one coordinator.
 
 Relevant code:
 
 - `native/hub/src/adb/service.rs`
-  - `AdbService::start_adb_tasks()` starts the periodic task.
-  - `AdbService::run_periodic_refresh()` contains the 60-second interval.
-  - `AdbService::refresh_device()` clones the current `AdbDevice`, refreshes it, and replaces the
-    stored value.
+  - `AdbService::run_device_update_coordinator()` coalesces compatible selective queries and
+    applies patches in order.
+  - `AdbService::run_periodic_refresh()` contains the 5-minute interval.
+  - `AdbService::refresh_device()` requests all refresh components through the coordinator.
   - `AdbService::set_device()` emits the complete `DeviceChangedEvent`.
-  - `AdbService::execute_command()` refreshes after proximity and Guardian commands, but the
-    storage/MTP command does not currently refresh after success.
+  - `AdbService::execute_command()` requests targeted Guardian and proximity refreshes. A
+    successful storage/MTP command patches its requested value without querying over the changing
+    transport.
 - `native/hub/src/adb/device/mod.rs`
-  - `AdbDevice::refresh()` runs packages, battery/controllers, storage, Guardian, proximity, and
-    USB queries in parallel.
+  - `AdbDevice::query_components()` runs selected queries and returns a partial patch.
+  - `AdbDevice::apply_patch()` retains old values for failed or unrequested components.
   - `query_package_list()` runs the pushed `list_apps.dex` helper.
   - `query_battery_info()` runs `dumpsys battery` and `rstest info --json`.
   - `query_space_info()` runs the filesystem `stat` command.
@@ -52,15 +54,15 @@ Relevant code:
 - `native/hub/src/models/signals/adb/device.rs`
   - Defines the full device payload sent to Dart.
 - `lib/providers/device_state.dart`
-  - Rebuilds the installed-package lookup map for every complete device event.
+  - Ignores identical device events and rebuilds its package lookup only when packages change.
 
-Two implementation details matter when selective refreshes are added:
+Two coordinator rules matter when monitors are added:
 
-1. Concurrent tasks must not independently clone and replace the device. The later replacement
-   could restore stale values from its clone. Use one refresh coordinator or merge patches while
-   holding the device write lock.
-2. `AdbDevice::refresh()` currently replaces a failed component with an empty/default value.
-   Event-driven refresh failures should normally retain the last known value.
+1. Route monitor queries and direct values through the coordinator rather than writing device
+   state independently.
+2. Target patches by serial and ADB transport ID so results from an old connection are discarded.
+3. Updates are processed in order. A direct patch waits for an active query to finish; revisit this
+   if slow package queries make future event-driven updates noticeably late.
 
 ## Candidate event sources
 
@@ -146,8 +148,9 @@ I/battery_level: [85,4201,342]
 I/battery_status: [5,2,1,1,Li-ion]
 ```
 
-The displayed headset percentage can be updated directly from `battery_level`; it does not need a
-follow-up `dumpsys battery`. `battery_status` is useful if charging state is added to the UI later.
+Use `battery_level` as a low-noise trigger for the combined battery/controller query. This keeps
+both values on the same refresh path. `battery_status` is useful if charging state is added to the
+UI later.
 
 References:
 
@@ -211,7 +214,7 @@ Cache refresh complete
 ```
 
 Ignore unrelated `SyncBossHAL` power-state and telemetry messages. Debounce matching controller
-messages, then run one controller-only query.
+messages, then run one combined battery/controller query.
 
 Both firmware images contain:
 
@@ -352,8 +355,8 @@ Do not monitor all `android.hardware.usb` messages.
 
 Recommended handling:
 
-- After `SetStorageConnection`, wait briefly and query only USB functions/speed. This refresh is
-  currently missing.
+- After a successful `SetStorageConnection`, apply the requested MTP value directly. Do not issue a
+  follow-up query because changing USB functions can interrupt that ADB transport.
 - Let the ADB device tracker handle physical disconnection and reconnection.
 - If external MTP changes need to be detected later, debounce only `UsbPortManager` lines beginning
   with `USB port changed:` and refresh USB state once negotiation settles.
@@ -381,7 +384,7 @@ Notes:
 - Restart it with bounded backoff when the ADB transport closes.
 - Route parsed events into a coordinator. Do not start independent clone-and-replace refreshes from
   each log line.
-- Package, controller, and USB triggers need debouncing. Battery and storage values can be applied
+- Package, battery/controller, and USB triggers need debouncing. Storage values can be applied
   directly.
 
 `forensic-adb` currently reads shell output through completion rather than exposing a streaming
@@ -403,8 +406,7 @@ A useful first version would use refresh reasons similar to:
 
 ```text
 PACKAGES
-HEADSET_BATTERY
-CONTROLLERS
+BATTERY_AND_CONTROLLERS
 STORAGE
 GUARDIAN
 PROXIMITY
@@ -417,8 +419,9 @@ in parallel, and apply successful results to the latest stored device value.
 
 Suggested initial cadence:
 
-- Immediate direct update: `battery_level`, `storage_state`.
-- Event followed by a selective query: packages, controllers, Guardian.
+- Immediate direct update: `storage_state`.
+- Event followed by a selective query: packages, battery/controllers, Guardian. Either a headset
+  battery or controller trigger refreshes both battery and controller state.
 - Every 60-120 seconds: cheap proximity/Guardian/USB control-state reconciliation.
 - Every 5 minutes: full safety refresh.
 - After YAAS mutations: refresh only affected fields.

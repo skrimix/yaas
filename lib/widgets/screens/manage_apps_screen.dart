@@ -864,8 +864,10 @@ class _ManageAppsScreenState extends State<ManageAppsScreen> {
                         ),
                       ),
                       AnimatedRefreshButton(
-                        deviceState: deviceState,
                         tooltip: l10n.refreshAppsList,
+                        command: const AdbCommandRefreshPackages(),
+                        commandType: AdbCommandKind.refreshPackages,
+                        commandKey: 'refresh-packages',
                         size: 40,
                         iconSize: 24,
                       ),

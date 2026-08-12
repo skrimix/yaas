@@ -168,10 +168,12 @@ class StatusBar extends StatelessWidget {
     );
   }
 
-  Widget _buildRefreshButton(DeviceState deviceState, AppLocalizations l10n) {
+  Widget _buildRefreshButton(AppLocalizations l10n) {
     return AnimatedRefreshButton(
-      deviceState: deviceState,
       tooltip: l10n.refreshAllData,
+      command: const signals.AdbCommandRefreshDevice(),
+      commandType: signals.AdbCommandKind.refreshDevice,
+      commandKey: 'refresh-all',
     );
   }
 
@@ -275,7 +277,7 @@ class StatusBar extends StatelessWidget {
                 _buildDeviceInfo(context, deviceState, l10n),
                 _buildBatteryStatus(context, deviceState, l10n),
                 _buildStorageStatus(context, deviceState, l10n),
-                _buildRefreshButton(deviceState, l10n),
+                _buildRefreshButton(l10n),
               ] else ...[
                 const SizedBox(width: 8),
                 Text(l10n.noDeviceConnected),

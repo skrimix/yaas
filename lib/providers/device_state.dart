@@ -1,4 +1,8 @@
+import 'dart:async';
+
 import 'package:flutter/material.dart';
+import 'package:rinf/rinf.dart';
+
 import '../src/bindings/bindings.dart';
 import '../src/l10n/app_localizations.dart';
 
@@ -6,15 +10,34 @@ class DeviceState extends ChangeNotifier {
   AdbDevice? _device;
   AdbDevice? get device => _device;
   Map<String, InstalledPackage> _installedByPackage = const {};
+  late final StreamSubscription<RustSignalPack<DeviceChangedEvent>>
+      _deviceSubscription;
 
-  DeviceState() {
-    DeviceChangedEvent.rustSignalStream.listen((event) {
-      _device = event.message.device;
-      // Build a quick lookup map for installed packages by package name.
-      final pkgs = _device?.installedPackages ?? const <InstalledPackage>[];
-      _installedByPackage = {for (final p in pkgs) p.packageName: p};
+  DeviceState({Stream<RustSignalPack<DeviceChangedEvent>>? deviceEvents}) {
+    _deviceSubscription =
+        (deviceEvents ?? DeviceChangedEvent.rustSignalStream).listen((event) {
+      final nextDevice = event.message.device;
+      if (_device == nextDevice) return;
+
+      final oldPackages =
+          _device?.installedPackages ?? const <InstalledPackage>[];
+      final newPackages =
+          nextDevice?.installedPackages ?? const <InstalledPackage>[];
+      if (!listEquals(oldPackages, newPackages)) {
+        _installedByPackage = {
+          for (final package in newPackages) package.packageName: package,
+        };
+      }
+
+      _device = nextDevice;
       notifyListeners();
     });
+  }
+
+  @override
+  void dispose() {
+    _deviceSubscription.cancel();
+    super.dispose();
   }
 
   bool get isConnected => _device != null;

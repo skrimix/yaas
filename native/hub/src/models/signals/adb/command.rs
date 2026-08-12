@@ -25,6 +25,7 @@ pub(crate) enum AdbCommand {
     EnableWirelessAdb,
     /// Connect or reset USB storage functions.
     SetStorageConnection(bool),
+    RefreshPackages,
 }
 
 #[derive(Serialize, Deserialize, DartSignal)]
@@ -46,6 +47,8 @@ pub(crate) enum AdbCommandKind {
     ConnectTo,
     WirelessAdbEnable,
     StorageConnectionSet,
+    RefreshDevice,
+    RefreshPackages,
 }
 
 #[derive(Debug, Clone, Serialize, Deserialize, SignalPiece)]

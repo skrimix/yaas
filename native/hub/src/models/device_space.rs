@@ -8,7 +8,7 @@ pub(crate) static SPACE_INFO_COMMAND: &str = "stat -fc %S:%b:%a /data";
 ///
 /// Contains information about total and available storage space
 /// measured in bytes using the ByteUnit type.
-#[derive(Clone, Debug, Default, Serialize, SignalPiece)]
+#[derive(Clone, Debug, Default, PartialEq, Eq, Serialize, SignalPiece)]
 pub(crate) struct SpaceInfo {
     /// Total storage space in bytes
     pub total: u64,

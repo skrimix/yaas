@@ -1393,6 +1393,7 @@ dependencies = [
  "anyhow",
  "apk-info",
  "async-trait",
+ "bitflags 2.11.0",
  "built",
  "const-hex",
  "const_format",

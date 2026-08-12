@@ -12,6 +12,7 @@ use std::{
 
 use anyhow::{Context, Result, anyhow, bail};
 pub(crate) use backup::BackupOptions;
+use bitflags::bitflags;
 use const_format::concatcp;
 use derive_more::Debug;
 use forensic_adb::{Device, UnixPath};
@@ -22,6 +23,58 @@ pub(crate) use sideload::SideloadProgress;
 use tokio::{fs, time::sleep};
 use tracing::{Span, debug, error, info, instrument, trace, warn};
 pub(crate) mod battery_dump;
+
+bitflags! {
+    /// Device information fields that can be refreshed together.
+    #[derive(Clone, Copy, Debug, PartialEq, Eq)]
+    pub(super) struct DeviceRefreshComponents: u8 {
+        const PACKAGES = 1 << 0;
+        const BATTERY_AND_CONTROLLERS = 1 << 1;
+        const STORAGE = 1 << 2;
+        const GUARDIAN = 1 << 3;
+        const PROXIMITY = 1 << 4;
+        const USB = 1 << 5;
+    }
+}
+
+impl DeviceRefreshComponents {
+    /// All declared refresh components.
+    pub(super) const ALL: Self = Self::all();
+
+    /// Package metadata and free space are refreshed together.
+    pub(super) fn normalized(mut self) -> Self {
+        if self.contains(Self::PACKAGES) {
+            self |= Self::STORAGE;
+        }
+        self
+    }
+}
+
+/// Successful values returned by a selective device query.
+#[derive(Debug, Default)]
+pub(super) struct DevicePatch {
+    pub(super) battery_and_controllers: Option<(u8, HeadsetControllersInfo)>,
+    pub(super) space_info: Option<SpaceInfo>,
+    pub(super) installed_packages: Option<Vec<InstalledPackage>>,
+    pub(super) guardian_paused: Option<Option<bool>>,
+    pub(super) proximity_disabled: Option<Option<bool>>,
+    pub(super) usb_state: Option<(Option<bool>, Option<String>)>,
+    /// Applied after `usb_state`, so direct MTP updates take precedence.
+    pub(super) storage_connected: Option<Option<bool>>,
+}
+
+impl DevicePatch {
+    pub(super) fn storage_connected(connected: bool) -> Self {
+        Self { storage_connected: Some(Some(connected)), ..Self::default() }
+    }
+}
+
+/// Results from querying one or more device components.
+#[derive(Debug, Default)]
+pub(super) struct DeviceQueryOutcome {
+    pub(super) patch: DevicePatch,
+    pub(super) failures: Vec<(DeviceRefreshComponents, String)>,
+}
 
 use crate::{
     adb::PackageName,
@@ -130,7 +183,17 @@ impl AdbDevice {
                 "Failed to refresh device identity, using fallback name"
             ),
         }
-        device.refresh().boxed().await.context("Failed to refresh device info")?;
+        let outcome = device.query_components(DeviceRefreshComponents::ALL).boxed().await;
+        if !outcome.failures.is_empty() {
+            let errors = outcome
+                .failures
+                .iter()
+                .map(|(_, error)| error.as_str())
+                .collect::<Vec<_>>()
+                .join(", ");
+            warn!(errors, "Errors while refreshing device info");
+        }
+        device.apply_patch(outcome.patch);
         Ok(device)
     }
 
@@ -177,83 +240,147 @@ impl AdbDevice {
             .to_string())
     }
 
-    /// Refreshes device information (packages, battery, space, guardian, USB) in parallel
-    #[instrument(level = "debug", skip(self), err)]
-    pub(super) async fn refresh(&mut self) -> Result<()> {
-        // Run all queries in parallel
-        let (packages_res, battery_res, space_res, guardian_res, proximity_res, usb_res) = tokio::join!(
-            self.query_package_list(),
-            self.query_battery_info(),
-            self.query_space_info(),
-            self.query_guardian_state(),
-            self.query_proximity_state(),
-            self.query_usb_state(),
+    /// Queries selected device information fields in parallel.
+    #[instrument(level = "debug", skip(self))]
+    pub(super) async fn query_components(
+        &self,
+        components: DeviceRefreshComponents,
+    ) -> DeviceQueryOutcome {
+        let components = components.normalized();
+        let packages = async {
+            if components.contains(DeviceRefreshComponents::PACKAGES) {
+                Some(self.query_package_list().await)
+            } else {
+                None
+            }
+        };
+        let battery_and_controllers = async {
+            if components.contains(DeviceRefreshComponents::BATTERY_AND_CONTROLLERS) {
+                Some(self.query_battery_info().await)
+            } else {
+                None
+            }
+        };
+        let storage = async {
+            if components.contains(DeviceRefreshComponents::STORAGE) {
+                Some(self.query_space_info().await)
+            } else {
+                None
+            }
+        };
+        let guardian = async {
+            if components.contains(DeviceRefreshComponents::GUARDIAN) {
+                Some(self.query_guardian_state().await)
+            } else {
+                None
+            }
+        };
+        let proximity = async {
+            if components.contains(DeviceRefreshComponents::PROXIMITY) {
+                Some(self.query_proximity_state().await)
+            } else {
+                None
+            }
+        };
+        let usb = async {
+            if components.contains(DeviceRefreshComponents::USB) {
+                Some(self.query_usb_state().await)
+            } else {
+                None
+            }
+        };
+
+        let (packages, battery_and_controllers, storage, guardian, proximity, usb) =
+            tokio::join!(packages, battery_and_controllers, storage, guardian, proximity, usb,);
+
+        let mut outcome = DeviceQueryOutcome::default();
+        macro_rules! apply_result {
+            ($result:expr, $field:ident, $component:expr, $name:literal) => {
+                if let Some(result) = $result {
+                    match result {
+                        Ok(value) => outcome.patch.$field = Some(value),
+                        Err(error) => {
+                            outcome.failures.push(($component, format!("{}: {error:#}", $name)))
+                        }
+                    }
+                }
+            };
+        }
+        apply_result!(packages, installed_packages, DeviceRefreshComponents::PACKAGES, "packages");
+        apply_result!(
+            battery_and_controllers,
+            battery_and_controllers,
+            DeviceRefreshComponents::BATTERY_AND_CONTROLLERS,
+            "battery/controllers"
         );
+        apply_result!(storage, space_info, DeviceRefreshComponents::STORAGE, "storage");
+        apply_result!(guardian, guardian_paused, DeviceRefreshComponents::GUARDIAN, "guardian");
+        apply_result!(
+            proximity,
+            proximity_disabled,
+            DeviceRefreshComponents::PROXIMITY,
+            "proximity"
+        );
+        apply_result!(usb, usb_state, DeviceRefreshComponents::USB, "usb");
+        outcome
+    }
 
-        let mut errors = Vec::new();
+    /// Applies successful values and returns whether visible device state changed.
+    pub(super) fn apply_patch(&mut self, patch: DevicePatch) -> bool {
+        let mut changed = false;
 
-        // Apply results
-        match packages_res {
-            Ok(packages) => self.installed_packages = packages,
-            Err(e) => {
-                errors.push(("packages", e));
-                self.installed_packages = Vec::new();
-            }
+        if let Some(packages) = patch.installed_packages
+            && self.installed_packages != packages
+        {
+            self.installed_packages = packages;
+            changed = true;
         }
-        match battery_res {
-            Ok((level, controllers)) => {
-                self.battery_level = level;
+        if let Some((battery_level, controllers)) = patch.battery_and_controllers {
+            if self.battery_level != battery_level {
+                self.battery_level = battery_level;
+                changed = true;
+            }
+            if self.controllers != controllers {
                 self.controllers = controllers;
-            }
-            Err(e) => {
-                errors.push(("battery", e));
-                self.battery_level = 0;
-                self.controllers = HeadsetControllersInfo::default();
+                changed = true;
             }
         }
-        match space_res {
-            Ok(space_info) => self.space_info = space_info,
-            Err(e) => {
-                errors.push(("space", e));
-                self.space_info = SpaceInfo::default();
-            }
+        if let Some(space_info) = patch.space_info
+            && self.space_info != space_info
+        {
+            self.space_info = space_info;
+            changed = true;
         }
-        match guardian_res {
-            Ok(guardian_paused) => self.guardian_paused = guardian_paused,
-            Err(e) => {
-                errors.push(("guardian", e));
-                self.guardian_paused = None;
-            }
+        if let Some(guardian_paused) = patch.guardian_paused
+            && self.guardian_paused != guardian_paused
+        {
+            self.guardian_paused = guardian_paused;
+            changed = true;
         }
-        match proximity_res {
-            Ok(proximity_disabled) => self.proximity_disabled = proximity_disabled,
-            Err(e) => {
-                errors.push(("proximity", e));
-                self.proximity_disabled = None;
-            }
+        if let Some(proximity_disabled) = patch.proximity_disabled
+            && self.proximity_disabled != proximity_disabled
+        {
+            self.proximity_disabled = proximity_disabled;
+            changed = true;
         }
-        match usb_res {
-            Ok((storage_connected, usb_speed)) => {
+        if let Some((storage_connected, usb_speed)) = patch.usb_state {
+            if self.storage_connected != storage_connected {
                 self.storage_connected = storage_connected;
+                changed = true;
+            }
+            if self.usb_speed != usb_speed {
                 self.usb_speed = usb_speed;
-            }
-            Err(e) => {
-                errors.push(("usb", e));
-                self.storage_connected = None;
-                self.usb_speed = None;
+                changed = true;
             }
         }
-
-        if !errors.is_empty() {
-            let error_msg = errors
-                .into_iter()
-                .map(|(component, error)| format!("{component}: {error:#}"))
-                .collect::<Vec<_>>()
-                .join(", ");
-            warn!(errors = error_msg, "Errors while refreshing device info");
+        if let Some(storage_connected) = patch.storage_connected
+            && self.storage_connected != storage_connected
+        {
+            self.storage_connected = storage_connected;
+            changed = true;
         }
 
-        Ok(())
+        changed
     }
 
     /// Returns humanized `dumpsys battery` output from the device
@@ -408,21 +535,17 @@ impl AdbDevice {
     /// Queries current USB functions and speed.
     #[instrument(level = "debug", skip(self), err)]
     async fn query_usb_state(&self) -> Result<(Option<bool>, Option<String>)> {
-        let storage_connected = match self.shell_checked("svc usb getFunctions").await {
-            Ok(output) => Some(output.split(',').any(|function| function.trim() == "mtp")),
-            Err(e) => {
-                trace!(error = e.as_ref() as &dyn Error, "Failed to query USB functions");
-                None
-            }
-        };
+        let functions = self
+            .shell_checked("svc usb getFunctions")
+            .await
+            .context("Failed to query USB functions")?;
+        let storage_connected = Some(functions.split(',').any(|function| function.trim() == "mtp"));
         let speed = if !self.is_wireless {
-            match self.shell_checked("svc usb getUsbSpeed").await {
-                Ok(output) => format_usb_speed(&output),
-                Err(e) => {
-                    trace!(error = e.as_ref() as &dyn Error, "Failed to query USB speed");
-                    None
-                }
-            }
+            let output = self
+                .shell_checked("svc usb getUsbSpeed")
+                .await
+                .context("Failed to query USB speed")?;
+            format_usb_speed(&output)
         } else {
             None
         };
@@ -461,8 +584,9 @@ impl AdbDevice {
     /// Queries battery information for the device and controllers
     #[instrument(level = "debug", skip(self), err)]
     async fn query_battery_info(&self) -> Result<(u8, HeadsetControllersInfo)> {
-        // Get device battery level
-        let battery_dump = self.battery_dump().await.context("Failed to get battery dump")?;
+        let (battery_dump, controllers) =
+            tokio::join!(self.battery_dump(), self.query_controllers());
+        let battery_dump = battery_dump.context("Failed to get battery dump")?;
 
         let device_level: u8 = battery_dump
             .lines()
@@ -477,7 +601,12 @@ impl AdbDevice {
             .context("Failed to parse device battery level from dumpsys output")?;
         trace!(level = device_level, "Parsed device battery level");
 
-        // Get controller battery levels using rstest first, then fall back to dumpsys
+        Ok((device_level, controllers?))
+    }
+
+    /// Queries controller battery levels using rstest, with a dumpsys fallback.
+    #[instrument(level = "debug", skip(self), err)]
+    async fn query_controllers(&self) -> Result<HeadsetControllersInfo> {
         let controllers = match self.shell_checked(CONTROLLER_INFO_COMMAND_JSON).await {
             Ok(json) => match HeadsetControllersInfo::from_rstest_json(&json) {
                 Ok(info) => info,
@@ -506,8 +635,7 @@ impl AdbDevice {
             }
         };
         trace!(?controllers, "Parsed controller info");
-
-        Ok((device_level, controllers))
+        Ok(controllers)
     }
 
     /// Queries storage space information
@@ -774,7 +902,73 @@ pub(crate) fn format_usb_speed(output: &str) -> Option<String> {
 
 #[cfg(test)]
 mod tests {
-    use super::format_usb_speed;
+    use std::collections::BTreeMap;
+
+    use forensic_adb::{Device, Host};
+
+    use super::{AdbDevice, DevicePatch, DeviceRefreshComponents, format_usb_speed};
+    use crate::models::{InstalledPackage, SpaceInfo};
+
+    async fn test_device() -> AdbDevice {
+        AdbDevice {
+            inner: Device::new(Host::default(), "serial".to_string(), BTreeMap::new())
+                .await
+                .unwrap(),
+            name: Some("Quest".to_string()),
+            product: "hollywood".to_string(),
+            serial: "serial".to_string(),
+            true_serial: "serial".to_string(),
+            transport_id: "1".to_string(),
+            is_wireless: false,
+            battery_level: 50,
+            controllers: Default::default(),
+            space_info: SpaceInfo { total: 100, available: 50 },
+            installed_packages: Vec::new(),
+            guardian_paused: Some(false),
+            proximity_disabled: Some(false),
+            storage_connected: Some(false),
+            usb_speed: Some("5 Gbps".to_string()),
+        }
+    }
+
+    #[test]
+    fn package_refresh_also_refreshes_storage() {
+        let components = DeviceRefreshComponents::PACKAGES.normalized();
+        assert!(components.contains(DeviceRefreshComponents::PACKAGES));
+        assert!(components.contains(DeviceRefreshComponents::STORAGE));
+        assert_eq!(format!("{components:?}"), "DeviceRefreshComponents(PACKAGES | STORAGE)");
+    }
+
+    #[tokio::test]
+    async fn applies_battery_and_controllers_together() {
+        let mut device = test_device().await;
+        let controllers =
+            crate::models::vendor::quest_controller::HeadsetControllersInfo::default();
+        let changed = device.apply_patch(DevicePatch {
+            battery_and_controllers: Some((75, controllers)),
+            ..DevicePatch::default()
+        });
+
+        assert!(changed);
+        assert_eq!(device.battery_level, 75);
+    }
+
+    #[tokio::test]
+    async fn patch_changes_only_supplied_fields_and_detects_noop() {
+        let mut device = test_device().await;
+        let original_speed = device.usb_speed.clone();
+        let changed = device.apply_patch(DevicePatch {
+            installed_packages: Some(vec![InstalledPackage::default()]),
+            storage_connected: Some(Some(true)),
+            ..DevicePatch::default()
+        });
+
+        assert!(changed);
+        assert_eq!(device.installed_packages.len(), 1);
+        assert_eq!(device.storage_connected, Some(true));
+        assert_eq!(device.usb_speed, original_speed);
+        assert!(!device.apply_patch(DevicePatch::storage_connected(true)));
+    }
 
     #[test]
     fn formats_numeric_usb_speed() {

@@ -14,7 +14,7 @@ fn is_package_renamed(package_name: &str) -> bool {
 }
 
 /// Represents the size information of an installed application
-#[derive(Debug, Clone, Default, Deserialize, Serialize, SignalPiece)]
+#[derive(Debug, Clone, Default, PartialEq, Eq, Deserialize, Serialize, SignalPiece)]
 pub(crate) struct AppSize {
     app: u64,
     data: u64,
@@ -22,7 +22,7 @@ pub(crate) struct AppSize {
 }
 
 /// Represents an installed package on the device with its metadata
-#[derive(Debug, Clone, Default, Deserialize, Serialize, SignalPiece)]
+#[derive(Debug, Clone, Default, PartialEq, Eq, Deserialize, Serialize, SignalPiece)]
 pub(crate) struct InstalledPackage {
     uid: u64,
     system: bool,

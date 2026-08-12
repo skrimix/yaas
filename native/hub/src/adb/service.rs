@@ -11,20 +11,19 @@ use std::{
 use anyhow::{Context, Result, anyhow, bail, ensure};
 use derive_more::Debug;
 use forensic_adb::{DeviceBrief, DeviceInfo, DeviceState};
-use futures::FutureExt;
 use lazy_regex::{Lazy, Regex, lazy_regex};
 use mdns_sd::{ServiceDaemon, ServiceEvent};
 use rinf::{DartSignal, RustSignal};
 use tokio::{
     process::Command,
-    sync::{Mutex, RwLock, mpsc::UnboundedSender},
+    sync::{Mutex, RwLock, mpsc, mpsc::UnboundedSender, oneshot},
     time::{self, timeout},
 };
 use tokio_stream::{StreamExt, wrappers::WatchStream};
 use tokio_util::sync::CancellationToken;
 use tracing::{Instrument, Span, debug, error, info, info_span, instrument, trace, warn};
 
-use super::device::AdbDevice;
+use super::device::{AdbDevice, DevicePatch, DeviceRefreshComponents};
 use crate::{
     adb::device::{BackupOptions, SideloadProgress},
     models::{
@@ -75,6 +74,63 @@ struct CachedDeviceData {
     pub true_serial: String,
 }
 
+#[derive(Clone, Debug, PartialEq, Eq)]
+struct DeviceUpdateTarget {
+    serial: String,
+    transport_id: String,
+}
+
+impl DeviceUpdateTarget {
+    fn from_device(device: &AdbDevice) -> Self {
+        Self { serial: device.serial.clone(), transport_id: device.transport_id.clone() }
+    }
+
+    fn matches(&self, device: &AdbDevice) -> bool {
+        self.serial == device.serial && self.transport_id == device.transport_id
+    }
+}
+
+type DeviceUpdateCompletion = oneshot::Sender<std::result::Result<(), String>>;
+
+#[derive(Debug)]
+enum DeviceUpdateRequest {
+    Query {
+        target: DeviceUpdateTarget,
+        components: DeviceRefreshComponents,
+        completion: DeviceUpdateCompletion,
+    },
+    Apply {
+        target: DeviceUpdateTarget,
+        patch: DevicePatch,
+        completion: DeviceUpdateCompletion,
+    },
+}
+
+fn coalesce_queued_queries(
+    receiver: &mut mpsc::Receiver<DeviceUpdateRequest>,
+    pending: &mut Option<DeviceUpdateRequest>,
+    target: &DeviceUpdateTarget,
+    components: &mut DeviceRefreshComponents,
+    completions: &mut Vec<(DeviceRefreshComponents, DeviceUpdateCompletion)>,
+) {
+    while let Ok(next) = receiver.try_recv() {
+        match next {
+            DeviceUpdateRequest::Query {
+                target: next_target,
+                components: next_components,
+                completion,
+            } if next_target == *target => {
+                *components |= next_components;
+                completions.push((next_components, completion));
+            }
+            other => {
+                *pending = Some(other);
+                break;
+            }
+        }
+    }
+}
+
 /// Handles ADB state, device connections and commands
 #[derive(Debug)]
 pub(crate) struct AdbService {
@@ -88,6 +144,8 @@ pub(crate) struct AdbService {
     adb_state: RwLock<AdbState>,
     /// Currently connected device (if any)
     device: RwLock<Option<Arc<AdbDevice>>>,
+    /// Serializes and coalesces selective device-state updates.
+    device_update_sender: mpsc::Sender<DeviceUpdateRequest>,
     /// Serializes connect/disconnect operations to avoid races
     device_op_mutex: Mutex<()>,
     /// Cancellation token for running tasks
@@ -118,6 +176,7 @@ impl AdbService {
             settings_stream.next().await.expect("Settings stream closed on adb init");
         let adb_path = first_settings.adb_path;
         let adb_path = if adb_path.is_empty() { None } else { Some(adb_path) };
+        let (device_update_sender, device_update_receiver) = mpsc::channel(32);
         let handle = Arc::new(Self {
             adb_host: if cfg!(target_os = "windows") {
                 // No idea why, but it fails to connect on a Windows host without this
@@ -130,6 +189,7 @@ impl AdbService {
             adb_path: RwLock::new(adb_path),
             adb_state: RwLock::new(AdbState::default()),
             device: None.into(),
+            device_update_sender,
             device_op_mutex: Mutex::new(()),
             cancel_token: RwLock::new(CancellationToken::new()),
             device_data_cache: RwLock::new(HashMap::new()),
@@ -137,6 +197,12 @@ impl AdbService {
             preferred_connection_type: RwLock::new(first_settings.preferred_connection_type),
             app_dir,
         });
+        tokio::spawn(
+            handle
+                .clone()
+                .run_device_update_coordinator(device_update_receiver)
+                .instrument(info_span!("task_coordinate_device_updates")),
+        );
         tokio::spawn(
             {
                 let handle = handle.clone();
@@ -561,14 +627,39 @@ impl AdbService {
                 }
             }
 
-            AdbCommand::RefreshDevice => match self.refresh_device().await {
-                Ok(_) => Ok(()),
-                Err(e) => {
+            AdbCommand::RefreshDevice => {
+                let result = self.refresh_device().await;
+                AdbCommandCompletedEvent {
+                    command_type: AdbCommandKind::RefreshDevice,
+                    command_key: key.clone(),
+                    success: result.is_ok(),
+                }
+                .send_signal_to_dart();
+                if let Err(e) = result {
                     let error_msg = format!("Failed to refresh device: {e:#}");
                     send_toast("Refresh Failed".to_string(), error_msg, true, None);
                     Err(e.context("Failed to refresh device"))
+                } else {
+                    Ok(())
                 }
-            },
+            }
+
+            AdbCommand::RefreshPackages => {
+                let result = self.refresh_current_device(DeviceRefreshComponents::PACKAGES).await;
+                AdbCommandCompletedEvent {
+                    command_type: AdbCommandKind::RefreshPackages,
+                    command_key: key.clone(),
+                    success: result.is_ok(),
+                }
+                .send_signal_to_dart();
+                if let Err(e) = result {
+                    let error_msg = format!("Failed to refresh packages: {e:#}");
+                    send_toast("Refresh Failed".to_string(), error_msg, true, None);
+                    Err(e.context("Failed to refresh packages"))
+                } else {
+                    Ok(())
+                }
+            }
 
             // Power and device actions (parameterized)
             AdbCommand::Reboot(mode) => {
@@ -593,9 +684,11 @@ impl AdbService {
                     success,
                 }
                 .send_signal_to_dart();
-                // Refresh device state to update proximity_disabled field
-                if success {
-                    let _ = self.refresh_device().await;
+                if success
+                    && let Err(e) =
+                        self.refresh_device_for(&device, DeviceRefreshComponents::PROXIMITY).await
+                {
+                    warn!(error = e.as_ref() as &dyn Error, "Failed to refresh proximity state");
                 }
                 result.map(|_| ()).context("Failed to set proximity sensor")
             }
@@ -610,9 +703,11 @@ impl AdbService {
                     success,
                 }
                 .send_signal_to_dart();
-                // Refresh guardian state
-                if success {
-                    let _ = self.refresh_device().await;
+                if success
+                    && let Err(e) =
+                        self.refresh_device_for(&device, DeviceRefreshComponents::GUARDIAN).await
+                {
+                    warn!(error = e.as_ref() as &dyn Error, "Failed to refresh Guardian state");
                 }
                 result.map(|_| ()).context("Failed to set guardian paused state")
             }
@@ -631,6 +726,16 @@ impl AdbService {
 
                 let result = device.set_storage_connection(connected).await;
                 let success = result.is_ok();
+                if success
+                    && let Err(e) = self
+                        .request_device_patch(
+                            DeviceUpdateTarget::from_device(&device),
+                            DevicePatch::storage_connected(connected),
+                        )
+                        .await
+                {
+                    warn!(error = e.as_ref() as &dyn Error, "Failed to update cached MTP state");
+                }
                 AdbCommandCompletedEvent {
                     command_type: AdbCommandKind::StorageConnectionSet,
                     command_key: key.clone(),
@@ -852,6 +957,133 @@ impl AdbService {
         self.try_current_device().await.context("No device connected")
     }
 
+    /// Coordinates selective queries and direct device-state patches.
+    async fn run_device_update_coordinator(
+        self: Arc<Self>,
+        mut receiver: mpsc::Receiver<DeviceUpdateRequest>,
+    ) {
+        let mut pending = None;
+
+        loop {
+            let request = match pending.take() {
+                Some(request) => request,
+                None => match receiver.recv().await {
+                    Some(request) => request,
+                    None => return,
+                },
+            };
+
+            match request {
+                DeviceUpdateRequest::Query { target, mut components, completion } => {
+                    let mut completions = vec![(components, completion)];
+                    coalesce_queued_queries(
+                        &mut receiver,
+                        &mut pending,
+                        &target,
+                        &mut components,
+                        &mut completions,
+                    );
+
+                    let result = self.query_and_apply_device_update(&target, components).await;
+                    for (requested, completion) in completions {
+                        let completion_result = match &result {
+                            Ok(failures) => {
+                                let relevant = failures
+                                    .iter()
+                                    .filter(|(component, _)| requested.contains(*component))
+                                    .map(|(_, error)| error.as_str())
+                                    .collect::<Vec<_>>();
+                                if relevant.is_empty() { Ok(()) } else { Err(relevant.join(", ")) }
+                            }
+                            Err(error) => Err(error.clone()),
+                        };
+                        let _ = completion.send(completion_result);
+                    }
+                }
+                DeviceUpdateRequest::Apply { target, patch, completion } => {
+                    let result = self.apply_device_patch(&target, patch).await.map(|_| ());
+                    let _ = completion.send(result);
+                }
+            }
+        }
+    }
+
+    async fn query_and_apply_device_update(
+        &self,
+        target: &DeviceUpdateTarget,
+        components: DeviceRefreshComponents,
+    ) -> std::result::Result<Vec<(DeviceRefreshComponents, String)>, String> {
+        let device =
+            self.try_current_device().await.ok_or_else(|| "No device connected".to_string())?;
+        if !target.matches(&device) {
+            return Err("Device changed before refresh started".into());
+        }
+
+        let outcome = device.query_components(components).await;
+        self.apply_device_patch(target, outcome.patch).await?;
+        Ok(outcome.failures)
+    }
+
+    /// Applies a patch to the matching current device and emits it only when values changed.
+    async fn apply_device_patch(
+        &self,
+        target: &DeviceUpdateTarget,
+        patch: DevicePatch,
+    ) -> std::result::Result<bool, String> {
+        let mut current = self.device.write().await;
+        let device = current.as_ref().ok_or_else(|| "No device connected".to_string())?;
+        if !target.matches(device) {
+            return Err("Device changed while refresh was running".into());
+        }
+
+        let mut updated = (**device).clone();
+        if !updated.apply_patch(patch) {
+            return Ok(false);
+        }
+
+        let signal_device = updated.clone().into();
+        *current = Some(Arc::new(updated));
+        DeviceChangedEvent { device: Some(signal_device) }.send_signal_to_dart();
+        Ok(true)
+    }
+
+    async fn request_device_refresh(
+        &self,
+        target: DeviceUpdateTarget,
+        components: DeviceRefreshComponents,
+    ) -> Result<()> {
+        let (completion, receiver) = oneshot::channel();
+        // Normalize before enqueueing so failure attribution includes storage for package callers.
+        self.device_update_sender
+            .send(DeviceUpdateRequest::Query {
+                target,
+                components: components.normalized(),
+                completion,
+            })
+            .await
+            .context("Device update coordinator stopped")?;
+        receiver
+            .await
+            .context("Device update coordinator dropped refresh completion")?
+            .map_err(anyhow::Error::msg)
+    }
+
+    async fn request_device_patch(
+        &self,
+        target: DeviceUpdateTarget,
+        patch: DevicePatch,
+    ) -> Result<()> {
+        let (completion, receiver) = oneshot::channel();
+        self.device_update_sender
+            .send(DeviceUpdateRequest::Apply { target, patch, completion })
+            .await
+            .context("Device update coordinator stopped")?;
+        receiver
+            .await
+            .context("Device update coordinator dropped patch completion")?
+            .map_err(anyhow::Error::msg)
+    }
+
     /// Connects to an ADB device
     ///
     /// # Arguments
@@ -1017,8 +1249,9 @@ impl AdbService {
     /// Runs a periodic refresh of device information
     #[instrument(level = "debug", skip(self))]
     async fn run_periodic_refresh(&self) {
-        let refresh_interval = Duration::from_secs(60);
-        let mut interval = time::interval(refresh_interval);
+        let refresh_interval = Duration::from_secs(5 * 60);
+        let mut interval =
+            time::interval_at(time::Instant::now() + refresh_interval, refresh_interval);
         debug!(interval = ?refresh_interval, "Starting periodic device refresh");
 
         loop {
@@ -1182,13 +1415,21 @@ impl AdbService {
     pub(crate) async fn refresh_device(&self) -> Result<()> {
         let device = self.current_device().await?;
         Span::current().record("serial", &device.serial);
-        debug!("Refreshing device data");
-        let mut device_clone = (*device).clone();
-        device_clone.refresh().boxed().await?;
+        self.refresh_device_for(&device, DeviceRefreshComponents::ALL).await
+    }
 
-        let _ = self.set_device(Some(device_clone), Some(&device.serial)).await?;
-        debug!("Device data refreshed successfully");
-        Ok(())
+    async fn refresh_current_device(&self, components: DeviceRefreshComponents) -> Result<()> {
+        let device = self.current_device().await?;
+        self.refresh_device_for(&device, components).await
+    }
+
+    async fn refresh_device_for(
+        &self,
+        device: &AdbDevice,
+        components: DeviceRefreshComponents,
+    ) -> Result<()> {
+        debug!(serial = %device.serial, ?components, "Requesting device data refresh");
+        self.request_device_refresh(DeviceUpdateTarget::from_device(device), components).await
     }
 
     /// Installs an APK on the currently connected device
@@ -1210,7 +1451,9 @@ impl AdbService {
                 auto_reinstall_on_conflict,
             )
             .await;
-        self.refresh_device().await?;
+        if let Err(e) = self.refresh_device_for(device, DeviceRefreshComponents::PACKAGES).await {
+            warn!(error = e.as_ref() as &dyn Error, "Failed to refresh device after APK install");
+        }
         result
     }
 
@@ -1222,7 +1465,9 @@ impl AdbService {
         package: &PackageName,
     ) -> Result<()> {
         let result = device.uninstall_package(package).await;
-        self.refresh_device().await?;
+        if let Err(e) = self.refresh_device_for(device, DeviceRefreshComponents::PACKAGES).await {
+            warn!(error = e.as_ref() as &dyn Error, "Failed to refresh device after uninstall");
+        }
         result
     }
 
@@ -1246,7 +1491,9 @@ impl AdbService {
                 auto_reinstall_on_conflict,
             )
             .await;
-        self.refresh_device().await?;
+        if let Err(e) = self.refresh_device_for(device, DeviceRefreshComponents::PACKAGES).await {
+            warn!(error = e.as_ref() as &dyn Error, "Failed to refresh device after sideload");
+        }
         result
     }
 
@@ -1272,7 +1519,9 @@ impl AdbService {
         backup_path: &Path,
     ) -> Result<()> {
         let result = device.restore_backup(backup_path).await;
-        self.refresh_device().await?;
+        if let Err(e) = self.refresh_device_for(device, DeviceRefreshComponents::PACKAGES).await {
+            warn!(error = e.as_ref() as &dyn Error, "Failed to refresh device after restore");
+        }
         result
     }
 
@@ -1566,5 +1815,90 @@ fn display_target(addr: SocketAddr) -> String {
     match addr {
         SocketAddr::V4(_) => format!("{}:{}", addr.ip(), addr.port()),
         SocketAddr::V6(_) => format!("[{}]:{}", addr.ip(), addr.port()),
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    fn target(serial: &str) -> DeviceUpdateTarget {
+        DeviceUpdateTarget { serial: serial.to_string(), transport_id: "1".to_string() }
+    }
+
+    fn completion() -> DeviceUpdateCompletion {
+        let (sender, _receiver) = oneshot::channel();
+        sender
+    }
+
+    #[test]
+    fn coalesces_queries_until_a_direct_patch() {
+        let (sender, mut receiver) = mpsc::channel(8);
+        let target = target("serial");
+        sender
+            .try_send(DeviceUpdateRequest::Query {
+                target: target.clone(),
+                components: DeviceRefreshComponents::STORAGE,
+                completion: completion(),
+            })
+            .unwrap();
+        sender
+            .try_send(DeviceUpdateRequest::Apply {
+                target: target.clone(),
+                patch: DevicePatch::storage_connected(true),
+                completion: completion(),
+            })
+            .unwrap();
+        sender
+            .try_send(DeviceUpdateRequest::Query {
+                target: target.clone(),
+                components: DeviceRefreshComponents::GUARDIAN,
+                completion: completion(),
+            })
+            .unwrap();
+
+        let mut pending = None;
+        let mut components = DeviceRefreshComponents::PACKAGES;
+        let mut completions = vec![(components, completion())];
+        coalesce_queued_queries(
+            &mut receiver,
+            &mut pending,
+            &target,
+            &mut components,
+            &mut completions,
+        );
+
+        assert!(components.contains(DeviceRefreshComponents::PACKAGES));
+        assert!(components.contains(DeviceRefreshComponents::STORAGE));
+        assert_eq!(completions.len(), 2);
+        assert!(matches!(pending, Some(DeviceUpdateRequest::Apply { .. })));
+        assert!(matches!(receiver.try_recv(), Ok(DeviceUpdateRequest::Query { .. })));
+    }
+
+    #[test]
+    fn a_different_device_starts_a_new_query_batch() {
+        let (sender, mut receiver) = mpsc::channel(2);
+        sender
+            .try_send(DeviceUpdateRequest::Query {
+                target: target("other"),
+                components: DeviceRefreshComponents::STORAGE,
+                completion: completion(),
+            })
+            .unwrap();
+
+        let mut pending = None;
+        let mut components = DeviceRefreshComponents::PACKAGES;
+        let mut completions = vec![(components, completion())];
+        coalesce_queued_queries(
+            &mut receiver,
+            &mut pending,
+            &target("serial"),
+            &mut components,
+            &mut completions,
+        );
+
+        assert_eq!(components, DeviceRefreshComponents::PACKAGES);
+        assert_eq!(completions.len(), 1);
+        assert!(matches!(pending, Some(DeviceUpdateRequest::Query { .. })));
     }
 }

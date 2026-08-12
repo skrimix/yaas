@@ -1,8 +1,7 @@
 # Device info monitoring references
 
-This note collects references for making device info refreshes more reactive on Quest 2 and
-Quest 3. It records what was inspected, which event sources look useful, and which approaches
-depend on root access.
+This note records the reactive device monitor used by YAAS, the firmware sources behind it, and
+approaches that depend on root access.
 
 No implementation described here should assume that ADB runs as root.
 
@@ -32,11 +31,18 @@ Relevant code:
   - `AdbService::run_device_update_coordinator()` coalesces compatible selective queries and
     applies patches in order.
   - `AdbService::run_periodic_refresh()` contains the 5-minute interval.
+  - `AdbService::run_device_monitor()` runs logcat on the selected ADB transport and restarts it
+    on failure.
+  - `AdbService::run_device_reconciliation()` refreshes cheap control state every 90 seconds.
   - `AdbService::refresh_device()` requests all refresh components through the coordinator.
-  - `AdbService::set_device()` emits the complete `DeviceChangedEvent`.
+  - `AdbService::set_device()` emits the complete `DeviceChangedEvent` and notifies the monitor
+    when the selected transport changes.
   - `AdbService::execute_command()` requests targeted Guardian and proximity refreshes. A
     successful storage/MTP command patches its requested value without querying over the changing
-    transport.
+    transport. Timed proximity overrides schedule a verification 500 ms after their expiry.
+- `native/hub/src/adb/monitor.rs`
+  - Parses known logcat events and ignores unrelated or malformed lines.
+  - Defines the 750 ms event batch window and 90-second reconciliation interval.
 - `native/hub/src/adb/device/mod.rs`
   - `AdbDevice::query_components()` runs selected queries and returns a partial patch.
   - `AdbDevice::apply_patch()` retains old values for failed or unrequested components.
@@ -56,7 +62,7 @@ Relevant code:
 - `lib/providers/device_state.dart`
   - Ignores identical device events and rebuilds its package lookup only when packages change.
 
-Two coordinator rules matter when monitors are added:
+Three coordinator rules matter for monitors:
 
 1. Route monitor queries and direct values through the coordinator rather than writing device
    state independently.
@@ -361,17 +367,17 @@ Recommended handling:
 - If external MTP changes need to be detected later, debounce only `UsbPortManager` lines beginning
   with `USB port changed:` and refresh USB state once negotiation settles.
 
-## Suggested logcat monitor
+## Logcat monitor
 
-A single persistent process can cover the strongest stock-readable sources:
+YAAS starts the configured ADB executable for the selected transport:
 
 ```sh
-logcat -b main,system,events -T 1 -v epoch \
+adb -t <transport-id> --exit-on-write-error \
+  logcat -b main,system,events -T 1 -v epoch \
   AppInfoRetrieverService:D \
   GuardianGatekeeperAndSysPropMgr:I \
   SyncBossHAL:I \
   battery_level:I \
-  battery_status:I \
   storage_state:I \
   '*:S'
 ```
@@ -380,12 +386,12 @@ Notes:
 
 - `-T 1` may deliver one historical line. The initial full device refresh makes one harmless stale
   trigger acceptable.
-- The monitor must be cancelled when the selected device changes.
-- Restart it with bounded backoff when the ADB transport closes.
-- Route parsed events into a coordinator. Do not start independent clone-and-replace refreshes from
-  each log line.
-- Package, battery/controller, and USB triggers need debouncing. Storage values can be applied
-  directly.
+- A selected-device watch stops the process when the serial or transport ID changes.
+- Failed processes restart with exponential backoff capped at 30 seconds.
+- Query events are combined in fixed 750 ms windows and sent to the coordinator without awaiting
+  the results. Storage values are applied immediately through the same coordinator.
+- `battery_status` is intentionally excluded because current YAAS state does not use it and it is
+  noisy on tested Quest 2 firmware.
 
 `forensic-adb` currently reads shell output through completion rather than exposing a streaming
 reader. Its checked-out source is normally under:
@@ -394,15 +400,12 @@ reader. Its checked-out source is normally under:
 ~/.cargo/git/checkouts/forensic-adb-*/<revision>/src/lib.rs
 ```
 
-Implementation options are:
-
-1. Add a streaming shell API to `forensic-adb`.
-2. Spawn the configured ADB executable with `adb -s <serial> logcat ...` and consume stdout with
-   Tokio. Reuse the project's existing ADB-path resolution and Windows no-console handling.
+YAAS uses the configured ADB executable and consumes stdout with Tokio because `forensic-adb` does
+not expose a streaming shell reader.
 
 ## Refresh coordination and cadence
 
-A useful first version would use refresh reasons similar to:
+The monitor uses these refresh components:
 
 ```text
 PACKAGES
@@ -414,17 +417,18 @@ USB
 FULL
 ```
 
-The coordinator should OR pending reasons together, debounce where needed, run independent queries
-in parallel, and apply successful results to the latest stored device value.
+The coordinator combines pending reasons, runs independent queries in parallel, and applies
+successful results to the matching stored device value.
 
-Suggested initial cadence:
+Current cadence:
 
 - Immediate direct update: `storage_state`.
 - Event followed by a selective query: packages, battery/controllers, Guardian. Either a headset
   battery or controller trigger refreshes both battery and controller state.
-- Every 60-120 seconds: cheap proximity/Guardian/USB control-state reconciliation.
+- Every 90 seconds: Guardian and proximity reconciliation, plus USB state for USB connections.
 - Every 5 minutes: full safety refresh.
-- After YAAS mutations: refresh only affected fields.
+- After YAAS mutations: refresh only affected fields. A timed proximity override is re-queried
+  500 ms after it expires.
 
 After stock Q2 and Q3 testing shows that the monitors survive sleep, reconnect, install, controller
 wake/sleep, and timed proximity expiry, the full safety interval can be increased further.

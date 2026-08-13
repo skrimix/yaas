@@ -50,6 +50,8 @@ dependencies:
   icons_launcher: ^3.0.3
   video_player: ^2.11.1
   video_player_media_kit: ^2.0.0
+  media_kit: ^1.2.6
+  media_kit_video: ^2.0.1
   package_info_plus: ^9.0.0
 
   media_kit_libs_macos_video: any

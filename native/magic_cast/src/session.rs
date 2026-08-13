@@ -22,6 +22,7 @@ const MESSAGE_VIDEO_SEGMENT: u32 = 100;
 const MESSAGE_AUDIO_SEGMENT: u32 = 102;
 const MESSAGE_LAYER_CONFIGURATION: u32 = 300;
 const CALLBACK_TIMEOUT: Duration = Duration::from_secs(5);
+const VIDEO_STALL_TIMEOUT: Duration = Duration::from_secs(5);
 const MAX_CONSECUTIVE_NO_VIDEO_FAILURES: usize = 3;
 
 pub const AUDIO_SAMPLE_RATE: u32 = 48_000;
@@ -92,6 +93,19 @@ pub enum StreamEvent {
     Discontinuity,
 }
 
+/// Live playback stats, reported about once per second while playback is running.
+#[derive(Debug, Clone, Copy)]
+pub struct LiveStats {
+    /// Measured input frame rate over the last reporting window.
+    pub fps: f64,
+    /// Frames currently held in the playback buffer.
+    pub buffered_frames: u32,
+    /// Age of the oldest buffered frame; how far playout lags behind capture.
+    pub buffer_age_ms: f64,
+    /// Mean presentation latency of the frames presented in the last window.
+    pub latency_ms: f64,
+}
+
 /// Session-level events reported to the embedding application.
 #[derive(Debug)]
 pub enum SessionEvent {
@@ -101,10 +115,12 @@ pub enum SessionEvent {
     Recovering,
     /// The HTTP player client connected to the stream.
     PlayerConnected,
-    /// Paced playback started; the Matroska header was written to the player.
+    /// Paced playback started or resumed after a rebuffer.
     PlaybackStarted,
     /// The HTTP player disconnected.
     PlayerDisconnected,
+    /// Live playback stats.
+    Stats(LiveStats),
     /// The session ended; `Some(error)` on failure.
     Ended(Option<String>),
 }
@@ -136,6 +152,7 @@ pub struct LiveSession {
     active_connections: Arc<AtomicUsize>,
     connections: Arc<Mutex<Vec<TcpStream>>>,
     video_segments: Arc<AtomicUsize>,
+    last_video_at: Arc<Mutex<Option<Instant>>>,
     event_tx: mpsc::Sender<StreamEvent>,
     session_tx: mpsc::Sender<SessionEvent>,
 }
@@ -157,11 +174,11 @@ impl LiveControl {
 #[derive(Debug, Eq, PartialEq)]
 enum RecoveryOutcome {
     Recover {
-        reason: &'static str,
+        reason: String,
         consecutive_no_video: usize,
     },
     CrashLoop {
-        reason: &'static str,
+        reason: String,
     },
 }
 
@@ -195,6 +212,7 @@ impl RecoveryTracker {
         accepted: usize,
         active_connections: usize,
         video_segments: usize,
+        last_video_at: Option<Instant>,
     ) -> Option<RecoveryOutcome> {
         let produced_video = video_segments > self.video_segments_at_attempt_start;
         if produced_video {
@@ -203,12 +221,23 @@ impl RecoveryTracker {
 
         let reason = if active_connections == 0 && accepted > self.handled_connections {
             self.handled_connections = accepted;
-            "device stream closed"
+            "device stream closed".to_string()
         } else if active_connections == 0
             && accepted == self.handled_connections
             && now.saturating_duration_since(self.waiting_since) >= CALLBACK_TIMEOUT
         {
-            "device did not open a stream connection within 5 seconds"
+            format!(
+                "device did not open a stream connection within {:?}",
+                CALLBACK_TIMEOUT
+            )
+        } else if active_connections > 0
+            && produced_video
+            && last_video_at
+                .is_some_and(|last| now.saturating_duration_since(last) >= VIDEO_STALL_TIMEOUT)
+        {
+            // The connection is held open but video stopped flowing. Only arm the watchdog
+            // once the current attempt has produced video, so bring-up grace is unaffected.
+            format!("no video for {:?}", VIDEO_STALL_TIMEOUT)
         } else {
             return None;
         };
@@ -253,6 +282,7 @@ impl LiveSession {
             active_connections: Arc::new(AtomicUsize::new(0)),
             connections: Arc::new(Mutex::new(Vec::new())),
             video_segments: Arc::new(AtomicUsize::new(0)),
+            last_video_at: Arc::new(Mutex::new(None)),
             event_tx,
             session_tx,
         }
@@ -289,9 +319,14 @@ impl LiveSession {
         while !self.stop.load(Ordering::SeqCst) {
             let active_connections = self.active_connections.load(Ordering::SeqCst);
             let video_segments = self.video_segments.load(Ordering::SeqCst);
-            if let Some(outcome) =
-                recovery.poll(Instant::now(), accepted, active_connections, video_segments)
-            {
+            let last_video_at = *self.last_video_at.lock().expect("last video lock poisoned");
+            if let Some(outcome) = recovery.poll(
+                Instant::now(),
+                accepted,
+                active_connections,
+                video_segments,
+                last_video_at,
+            ) {
                 match outcome {
                     RecoveryOutcome::Recover {
                         reason,
@@ -524,6 +559,8 @@ impl LiveSession {
                         "first VideoSegment"
                     );
                 }
+                *self.last_video_at.lock().expect("last video lock poisoned") =
+                    Some(datagram.received_at);
                 let _ = self.event_tx.send(StreamEvent::Video(VideoPacket {
                     received_at: datagram.received_at,
                     layer_id,
@@ -1404,11 +1441,11 @@ mod tests {
         let mut tracker = RecoveryTracker::new(now, 0, 0);
 
         for connection in 1..=5 {
-            assert_eq!(tracker.poll(now, connection, 1, connection - 1), None);
+            assert_eq!(tracker.poll(now, connection, 1, connection - 1, None), None);
             assert_eq!(
-                tracker.poll(now, connection, 0, connection),
+                tracker.poll(now, connection, 0, connection, None),
                 Some(RecoveryOutcome::Recover {
-                    reason: "device stream closed",
+                    reason: "device stream closed".to_string(),
                     consecutive_no_video: 0,
                 })
             );
@@ -1423,18 +1460,18 @@ mod tests {
 
         for connection in 1..=2 {
             assert_eq!(
-                tracker.poll(now, connection, 0, 0),
+                tracker.poll(now, connection, 0, 0, None),
                 Some(RecoveryOutcome::Recover {
-                    reason: "device stream closed",
+                    reason: "device stream closed".to_string(),
                     consecutive_no_video: connection,
                 })
             );
             tracker.begin_attempt(now, connection, 0);
         }
         assert_eq!(
-            tracker.poll(now, 3, 0, 0),
+            tracker.poll(now, 3, 0, 0, None),
             Some(RecoveryOutcome::CrashLoop {
-                reason: "device stream closed"
+                reason: "device stream closed".to_string()
             })
         );
     }
@@ -1446,15 +1483,81 @@ mod tests {
         let mut tracker = RecoveryTracker::new(now, 0, 0);
 
         assert_eq!(
-            tracker.poll(timeout, 0, 0, 0),
+            tracker.poll(timeout, 0, 0, 0, None),
             Some(RecoveryOutcome::Recover {
-                reason: "device did not open a stream connection within 5 seconds",
+                reason: format!(
+                    "device did not open a stream connection within {:?}",
+                    CALLBACK_TIMEOUT
+                ),
                 consecutive_no_video: 1,
             })
         );
         tracker.begin_attempt(timeout, 0, 0);
-        assert_eq!(tracker.poll(timeout, 1, 1, 1), None);
+        assert_eq!(tracker.poll(timeout, 1, 1, 1, None), None);
         assert_eq!(tracker.consecutive_no_video, 0);
+    }
+
+    #[test]
+    fn recovery_tracker_recovers_on_video_stall() {
+        let now = Instant::now();
+        let mut tracker = RecoveryTracker::new(now, 0, 0);
+
+        // Video is flowing on an open connection.
+        assert_eq!(tracker.poll(now, 1, 1, 10, Some(now)), None);
+        // Video arrived within the stall window.
+        assert_eq!(
+            tracker.poll(
+                now + VIDEO_STALL_TIMEOUT,
+                1,
+                1,
+                20,
+                Some(now + VIDEO_STALL_TIMEOUT)
+            ),
+            None
+        );
+        // No new video for the whole stall window while the connection stays open.
+        assert_eq!(
+            tracker.poll(
+                now + VIDEO_STALL_TIMEOUT * 2,
+                1,
+                1,
+                20,
+                Some(now + VIDEO_STALL_TIMEOUT)
+            ),
+            Some(RecoveryOutcome::Recover {
+                reason: format!("no video for {:?}", VIDEO_STALL_TIMEOUT),
+                consecutive_no_video: 0,
+            })
+        );
+
+        // A new attempt disarms the watchdog until it produces video again.
+        tracker.begin_attempt(now + VIDEO_STALL_TIMEOUT * 2, 1, 20);
+        assert_eq!(
+            tracker.poll(
+                now + VIDEO_STALL_TIMEOUT * 3,
+                1,
+                1,
+                20,
+                Some(now + VIDEO_STALL_TIMEOUT)
+            ),
+            None
+        );
+    }
+
+    #[test]
+    fn recovery_tracker_stall_watchdog_waits_for_first_video() {
+        let now = Instant::now();
+        let mut tracker = RecoveryTracker::new(now, 0, 0);
+
+        // Connected but no video yet; an old timestamp must not trigger the watchdog.
+        assert_eq!(
+            tracker.poll(now + VIDEO_STALL_TIMEOUT * 2, 1, 1, 0, Some(now)),
+            None
+        );
+        assert_eq!(
+            tracker.poll(now + VIDEO_STALL_TIMEOUT * 2, 1, 1, 0, None),
+            None
+        );
     }
 
     #[test]

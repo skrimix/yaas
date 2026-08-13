@@ -44,6 +44,8 @@ pub(crate) enum NativeCastingState {
     /// No casting session is running
     Idle,
     Starting,
+    /// The device stream dropped and a recovery attempt is in progress
+    Reconnecting,
     /// Paced playback is running and the stream is being served
     Streaming,
 }
@@ -55,4 +57,16 @@ pub(crate) struct NativeCastingStateChanged {
     pub url: Option<String>,
     /// Error string if the session failed
     pub error: Option<String>,
+}
+
+#[derive(Serialize, Deserialize, RustSignal)]
+pub(crate) struct NativeCastingStats {
+    /// Measured input frame rate over the last second
+    pub fps: f64,
+    /// Frames currently held in the playback buffer
+    pub buffered_frames: u32,
+    /// Age of the oldest buffered frame in milliseconds
+    pub buffer_age_ms: f64,
+    /// Mean presentation latency over the last second in milliseconds
+    pub latency_ms: f64,
 }

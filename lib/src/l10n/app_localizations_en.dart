@@ -582,6 +582,25 @@ class AppLocalizationsEn extends AppLocalizations {
   String get castingToolRefresh => 'Refresh';
 
   @override
+  String get castStop => 'Stop';
+
+  @override
+  String get castConnecting => 'Connecting...';
+
+  @override
+  String get castReconnecting => 'Reconnecting...';
+
+  @override
+  String get settingsSectionExperimental => 'Experimental';
+
+  @override
+  String get settingsExperimentalNativeCast => 'Native casting';
+
+  @override
+  String get settingsExperimentalNativeCastWarning =>
+      'WIP: May have performance and stability issues. Limited functionality.';
+
+  @override
   String get connectDeviceToInstall => 'Connect a device to install apps';
 
   @override

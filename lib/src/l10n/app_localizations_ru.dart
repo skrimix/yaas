@@ -595,6 +595,25 @@ class AppLocalizationsRu extends AppLocalizations {
   String get castingToolRefresh => 'Обновить';
 
   @override
+  String get castStop => 'Остановить';
+
+  @override
+  String get castConnecting => 'Подключение...';
+
+  @override
+  String get castReconnecting => 'Переподключение...';
+
+  @override
+  String get settingsSectionExperimental => 'Экспериментальные';
+
+  @override
+  String get settingsExperimentalNativeCast => 'Нативная трансляция';
+
+  @override
+  String get settingsExperimentalNativeCastWarning =>
+      'В разработке: возможны проблемы с производительностью и стабильностью. Ограниченная функциональность.';
+
+  @override
   String get connectDeviceToInstall =>
       'Подключите устройство, чтобы устанавливать приложения';
 

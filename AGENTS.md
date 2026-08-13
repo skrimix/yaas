@@ -18,7 +18,7 @@ Key architectural components:
 - `lib/main.dart`: Entry point with Provider setup for state management
 - `native/hub/src/lib.rs`: Rust core entry point with async runtime
 - `lib/src/bindings/`: Auto-generated Dart-Rust communication layer
-- `lib/providers/`: State management (DeviceState, AdbState, CloudAppsState, TaskState, SettingsState)
+- `lib/providers/`: State management (DeviceState, AdbState, CastingState, CloudAppsState, TaskState, SettingsState)
 - `lib/widgets/`: UI components
 - `native/hub/src/models/`: Rust data models and signal definitions
 - `native/hub/src/casting_native.rs`: Native casting manager (bridges `native/magic_cast` sessions to rinf signals)

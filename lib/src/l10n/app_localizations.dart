@@ -1112,6 +1112,42 @@ abstract class AppLocalizations {
   /// **'Refresh'**
   String get castingToolRefresh;
 
+  /// No description provided for @castStop.
+  ///
+  /// In en, this message translates to:
+  /// **'Stop'**
+  String get castStop;
+
+  /// No description provided for @castConnecting.
+  ///
+  /// In en, this message translates to:
+  /// **'Connecting...'**
+  String get castConnecting;
+
+  /// No description provided for @castReconnecting.
+  ///
+  /// In en, this message translates to:
+  /// **'Reconnecting...'**
+  String get castReconnecting;
+
+  /// No description provided for @settingsSectionExperimental.
+  ///
+  /// In en, this message translates to:
+  /// **'Experimental'**
+  String get settingsSectionExperimental;
+
+  /// No description provided for @settingsExperimentalNativeCast.
+  ///
+  /// In en, this message translates to:
+  /// **'Native casting'**
+  String get settingsExperimentalNativeCast;
+
+  /// No description provided for @settingsExperimentalNativeCastWarning.
+  ///
+  /// In en, this message translates to:
+  /// **'WIP: May have performance and stability issues. Limited functionality.'**
+  String get settingsExperimentalNativeCastWarning;
+
   /// No description provided for @connectDeviceToInstall.
   ///
   /// In en, this message translates to:

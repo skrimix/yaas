@@ -26,6 +26,7 @@ class SettingsState extends ChangeNotifier {
     mdnsAutoConnect: true,
     popularityRange: PopularityRange.day7,
     autoReinstallOnConflict: true,
+    experimentalNativeCast: false,
   );
 
   bool _isLoading = false;
@@ -237,6 +238,12 @@ class SettingsState extends ChangeNotifier {
   void setPopularityRange(PopularityRange range) {
     if (_settings.popularityRange == range) return;
     _settings = _settings.copyWith(popularityRange: range);
+    notifyListeners();
+    SaveSettingsRequest(settings: _settings).sendSignalToRust();
+  }
+
+  void setExperimentalNativeCast(bool value) {
+    _settings = _settings.copyWith(experimentalNativeCast: value);
     notifyListeners();
     SaveSettingsRequest(settings: _settings).sendSignalToRust();
   }

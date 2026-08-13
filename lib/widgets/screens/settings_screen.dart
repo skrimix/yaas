@@ -626,6 +626,25 @@ class _SettingsScreenState extends State<SettingsScreen> {
         ],
       ),
       const SizedBox(height: SettingsConstants.sectionSpacing),
+      _buildSection(
+        title: l10n.settingsSectionExperimental,
+        children: [
+          SwitchListTile(
+            title: Text(l10n.settingsExperimentalNativeCast),
+            subtitle: Text(l10n.settingsExperimentalNativeCastWarning),
+            value: settingsState.settings.experimentalNativeCast,
+            onChanged: (v) {
+              settingsState.setExperimentalNativeCast(v);
+              setState(() {
+                _currentFormSettings =
+                    _currentFormSettings.copyWith(experimentalNativeCast: v);
+                _hasChanges = false;
+              });
+            },
+          ),
+        ],
+      ),
+      const SizedBox(height: SettingsConstants.sectionSpacing),
     ];
 
     // Downloader section

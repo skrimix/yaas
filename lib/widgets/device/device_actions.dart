@@ -7,8 +7,11 @@ import 'package:toastification/toastification.dart';
 import '../../providers/adb_state.dart';
 import '../../src/bindings/bindings.dart';
 import '../../src/l10n/app_localizations.dart';
+import '../casting/cast_screen.dart';
 import '../common/animated_adb_button.dart';
+import '../../providers/casting_state.dart';
 import '../../providers/device_state.dart';
+import '../../providers/settings_state.dart';
 import 'package:provider/provider.dart';
 
 class DeviceActionsCard extends StatelessWidget {
@@ -84,13 +87,28 @@ class DeviceActionsCard extends StatelessWidget {
                 },
               ),
 
-              // Casting (Windows only)
-              if (Platform.isWindows) ...[
-                const SizedBox(height: 8),
-                _CastingRow(onStart: () => _handleCast(context)),
-                const SizedBox(height: 8),
-                const _CastingProgress(),
-              ],
+              // Casting
+              Builder(
+                builder: (context) {
+                  final nativeEnabled = context.select<SettingsState, bool>(
+                      (s) => s.settings.experimentalNativeCast);
+                  if (!nativeEnabled && !Platform.isWindows) {
+                    return const SizedBox.shrink();
+                  }
+                  return Column(
+                    children: [
+                      const SizedBox(height: 8),
+                      if (nativeEnabled)
+                        const _NativeCastingRow()
+                      else ...[
+                        _CastingRow(onStart: () => _handleCast(context)),
+                        const SizedBox(height: 8),
+                        const _CastingProgress(),
+                      ],
+                    ],
+                  );
+                },
+              ),
             ],
           ),
         ),
@@ -537,6 +555,39 @@ class _CastingRow extends StatelessWidget {
           onPressed: onStart,
           icon: const Icon(Icons.play_arrow),
           label: Text(l10n.deviceStartCasting),
+        ),
+      ],
+    );
+  }
+}
+
+class _NativeCastingRow extends StatelessWidget {
+  const _NativeCastingRow();
+
+  @override
+  Widget build(BuildContext context) {
+    final l10n = AppLocalizations.of(context);
+    final casting = context.watch<CastingState>();
+    final active = casting.isActive;
+    return Row(
+      children: [
+        const Icon(Icons.cast),
+        const SizedBox(width: 8),
+        Expanded(
+          child: Text(l10n.deviceCasting,
+              style: Theme.of(context).textTheme.titleSmall),
+        ),
+        FilledButton.icon(
+          onPressed: () {
+            if (active) {
+              casting.stopCasting();
+            } else {
+              casting.startCasting();
+              CastScreen.open(context);
+            }
+          },
+          icon: Icon(active ? Icons.stop : Icons.play_arrow),
+          label: Text(active ? l10n.castStop : l10n.deviceStartCasting),
         ),
       ],
     );

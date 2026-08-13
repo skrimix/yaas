@@ -91,6 +91,8 @@ pub(crate) struct Settings {
     popularity_range: PopularityRange,
     /// Auto reinstall app on incompatible update or downgrade (requires debuggable app for data backup)
     pub auto_reinstall_on_conflict: bool,
+    /// Enable the experimental native casting feature
+    pub experimental_native_cast: bool,
 }
 
 impl Default for Settings {
@@ -126,6 +128,7 @@ impl Default for Settings {
             mdns_auto_connect: true,
             popularity_range: PopularityRange::default(),
             auto_reinstall_on_conflict: true,
+            experimental_native_cast: false,
         }
     }
 }

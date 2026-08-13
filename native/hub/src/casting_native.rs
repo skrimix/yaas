@@ -16,14 +16,14 @@ use crate::{
     models::signals::{
         casting::{
             GetNativeCastingStateRequest, NativeCastingState, NativeCastingStateChanged,
-            StartNativeCastingRequest, StopNativeCastingRequest,
+            NativeCastingStats, StartNativeCastingRequest, StopNativeCastingRequest,
         },
         system::Toast,
     },
 };
 
-const DEFAULT_WIDTH: u32 = 1800;
-const DEFAULT_HEIGHT: u32 = 1920;
+const DEFAULT_RESOLUTION: (u32, u32) = (1800, 1920);
+const QUEST_3_RESOLUTION: (u32, u32) = (2064, 2208);
 const XRSP_PORT: u16 = 4445;
 /// Stop the session if no HTTP player connects within this time to avoid unbounded buffering.
 const PLAYER_CONNECT_TIMEOUT: std::time::Duration = std::time::Duration::from_secs(30);
@@ -128,6 +128,11 @@ impl NativeCastingManager {
             }
         };
         let serial = device.true_serial.clone();
+        let (width, height) = if device.product.eq_ignore_ascii_case("eureka") {
+            QUEST_3_RESOLUTION
+        } else {
+            DEFAULT_RESOLUTION
+        };
         let adb = match self.adb_service.resolved_adb_path().await {
             Ok(path) => path,
             Err(e) => {
@@ -145,8 +150,8 @@ impl NativeCastingManager {
             serial: Some(serial),
             adb,
             fps,
-            width: DEFAULT_WIDTH,
-            height: DEFAULT_HEIGHT,
+            width,
+            height,
             audio,
             xrsp_port: XRSP_PORT,
             http_port: 0,
@@ -236,7 +241,7 @@ impl NativeCastingManager {
             SessionEvent::Recovering => {
                 info!("Native casting: recovering device stream");
                 if let Some(url) = self.current_url_for(session_id).await {
-                    self.emit_state(NativeCastingState::Starting, Some(url), None);
+                    self.emit_state(NativeCastingState::Reconnecting, Some(url), None);
                 }
             }
             SessionEvent::PlayerConnected => {
@@ -252,6 +257,15 @@ impl NativeCastingManager {
             SessionEvent::PlayerDisconnected => {
                 info!("Native casting: player disconnected; stopping session");
                 self.stop_session_if_current(session_id).await;
+            }
+            SessionEvent::Stats(stats) => {
+                NativeCastingStats {
+                    fps: stats.fps,
+                    buffered_frames: stats.buffered_frames,
+                    buffer_age_ms: stats.buffer_age_ms,
+                    latency_ms: stats.latency_ms,
+                }
+                .send_signal_to_dart();
             }
             SessionEvent::Ended(error) => {
                 let (active, superseded) = {

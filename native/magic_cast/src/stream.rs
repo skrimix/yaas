@@ -19,7 +19,8 @@ use crate::cadence::{AdaptivePacer, PacingAction, PacingConfig};
 use crate::matroska::{self, AUDIO_TRACK, Tracks, VIDEO_TRACK};
 use crate::session::{
     AUDIO_CHANNELS, AUDIO_SAMPLE_RATE, AudioPacket, CastConfig, LiveControl, LiveSession,
-    SessionEvent, StreamEvent, VideoPacket, effective_fixed_fps, h264_dimensions_from_avcc,
+    LiveStats, SessionEvent, StreamEvent, VideoPacket, effective_fixed_fps,
+    h264_dimensions_from_avcc,
 };
 
 const AUDIO_TIMESTAMP_JITTER_TOLERANCE_MS: i64 = 20;
@@ -217,6 +218,7 @@ fn run_http_sink(
     let _ = session_tx.send(SessionEvent::PlayerConnected);
 
     let mut playout = PacedPlayout::new(&config)?;
+    playout.set_event_sender(session_tx.clone());
     while !stop.load(Ordering::SeqCst) {
         let now = Instant::now();
         if !playout.started && playout.ready_to_start() {
@@ -418,8 +420,12 @@ struct PacedPlayout {
     input_video_frames: usize,
     admitted_video_frames: usize,
     status_window_start: Option<Instant>,
+    status_window_input_frames: usize,
+    latency_window_sum_ms: f64,
+    latency_window_count: usize,
     max_buffer_age: Duration,
     frame_latency_ms: Vec<f64>,
+    event_tx: Option<mpsc::Sender<SessionEvent>>,
     rebuffer_started: Option<Instant>,
     rebuffer_time: Duration,
     pending_resync: Option<PendingResync>,
@@ -456,8 +462,12 @@ impl PacedPlayout {
             input_video_frames: 0,
             admitted_video_frames: 0,
             status_window_start: None,
+            status_window_input_frames: 0,
+            latency_window_sum_ms: 0.0,
+            latency_window_count: 0,
             max_buffer_age: Duration::ZERO,
             frame_latency_ms: Vec::new(),
+            event_tx: None,
             rebuffer_started: None,
             rebuffer_time: Duration::ZERO,
             pending_resync: None,
@@ -469,6 +479,17 @@ impl PacedPlayout {
             generated_silence_ms: 0,
             dropped_audio_packets: 0,
         })
+    }
+
+    /// Sets the channel for [`SessionEvent::Stats`] and playback-resumed notifications.
+    fn set_event_sender(&mut self, tx: mpsc::Sender<SessionEvent>) {
+        self.event_tx = Some(tx);
+    }
+
+    fn emit(&self, event: SessionEvent) {
+        if let Some(tx) = &self.event_tx {
+            let _ = tx.send(event);
+        }
     }
 
     fn handle_discontinuity(&mut self, now: Instant) {
@@ -585,11 +606,11 @@ impl PacedPlayout {
             }
         }
 
-        if self.pacer.is_filling()
-            && self.pacer.resume_if_ready(now_ns, self.video_buffer.len())
-            && let Some(started) = self.rebuffer_started.take()
-        {
-            self.rebuffer_time += now.saturating_duration_since(started);
+        if self.pacer.is_filling() && self.pacer.resume_if_ready(now_ns, self.video_buffer.len()) {
+            if let Some(started) = self.rebuffer_started.take() {
+                self.rebuffer_time += now.saturating_duration_since(started);
+            }
+            self.emit(SessionEvent::PlaybackStarted);
         }
 
         match self.pacer.poll(now_ns, self.video_buffer.len()) {
@@ -747,8 +768,10 @@ impl PacedPlayout {
             .expect("paced playback origin was set at start");
         let candidate = presentation_ns.saturating_sub(origin_ns) / 1_000_000;
         let pts_ms = monotonic_pts_ms(candidate as i64, &mut self.last_pts_ms);
-        self.frame_latency_ms
-            .push(presentation_ns.saturating_sub(frame.received_ns) as f64 / 1_000_000.0);
+        let latency_ms = presentation_ns.saturating_sub(frame.received_ns) as f64 / 1_000_000.0;
+        self.frame_latency_ms.push(latency_ms);
+        self.latency_window_sum_ms += latency_ms;
+        self.latency_window_count += 1;
         TimedPacket::Video {
             pts_ms,
             is_keyframe: frame.is_keyframe,
@@ -773,7 +796,8 @@ impl PacedPlayout {
 
     fn log_live_status(&mut self, now: Instant) {
         let start = *self.status_window_start.get_or_insert(now);
-        if now.saturating_duration_since(start) < Duration::from_secs(1) {
+        let elapsed = now.saturating_duration_since(start);
+        if elapsed < Duration::from_secs(1) {
             return;
         }
         let now_ns = self.instant_ns(now);
@@ -782,14 +806,34 @@ impl PacedPlayout {
             .front()
             .map(|oldest| now_ns.saturating_sub(oldest.received_ns) as f64 / 1_000_000.0)
             .unwrap_or(0.0);
+        let input_frames = self.input_video_frames;
+        let window_frames = input_frames.saturating_sub(self.status_window_input_frames);
+        let fps = window_frames as f64 / elapsed.as_secs_f64();
         debug!(
             source_fps = format_args!("{:.2}", self.pacer.estimated_fps()),
+            input_fps = format_args!("{fps:.2}"),
             buffered_frames = self.video_buffer.len(),
             buffer_age_ms = format_args!("{buffer_age_ms:.1}"),
             target_buffer_frames = self.pacer.target_buffer_frames(),
             "paced playback status"
         );
+        if self.started {
+            let latency_ms = if self.latency_window_count > 0 {
+                self.latency_window_sum_ms / self.latency_window_count as f64
+            } else {
+                0.0
+            };
+            self.emit(SessionEvent::Stats(LiveStats {
+                fps,
+                buffered_frames: self.video_buffer.len() as u32,
+                buffer_age_ms,
+                latency_ms,
+            }));
+        }
         self.status_window_start = Some(now);
+        self.status_window_input_frames = input_frames;
+        self.latency_window_sum_ms = 0.0;
+        self.latency_window_count = 0;
     }
 
     fn wait_timeout(&self, now: Instant) -> Duration {

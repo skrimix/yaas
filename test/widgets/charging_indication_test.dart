@@ -8,6 +8,7 @@ import 'package:provider/provider.dart';
 import 'package:rinf/rinf.dart';
 import 'package:yaas/providers/adb_state.dart';
 import 'package:yaas/providers/device_state.dart';
+import 'package:yaas/providers/settings_state.dart';
 import 'package:yaas/providers/task_state.dart';
 import 'package:yaas/src/bindings/bindings.dart';
 import 'package:yaas/src/l10n/app_localizations.dart';
@@ -56,6 +57,7 @@ void main() {
         providers: [
           ChangeNotifierProvider.value(value: deviceState),
           ChangeNotifierProvider(create: (_) => AdbStateProvider()),
+          ChangeNotifierProvider(create: (_) => SettingsState()),
           ChangeNotifierProvider(create: (_) => TaskState()),
         ],
         child: MaterialApp(

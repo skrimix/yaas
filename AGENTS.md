@@ -10,6 +10,7 @@ This is a hybrid Flutter-Rust application:
 
 - **UI**: Flutter (Dart) with Provider for state management
 - **Core**: Rust (`native/hub` crate) integrated via Rinf framework
+- **Casting**: Rust (`native/magic_cast` crate) implements Meta Quest casting (XRSP protocol / "Magic Cast", adaptive paced playout, live Matroska over local HTTP)
 - **Communication**: Rinf handles Flutter-Rust message passing through generated bindings
 - **Build System**: Uses `just` for task automation, Flutter for frontend builds, Cargo for Rust compilation
 
@@ -20,6 +21,7 @@ Key architectural components:
 - `lib/providers/`: State management (DeviceState, AdbState, CloudAppsState, TaskState, SettingsState)
 - `lib/widgets/`: UI components
 - `native/hub/src/models/`: Rust data models and signal definitions
+- `native/hub/src/casting_native.rs`: Native casting manager (bridges `native/magic_cast` sessions to rinf signals)
 
 ## Build, Test, and Development Commands
 - `just run`: Generate Rinf bindings and run the app in debug.

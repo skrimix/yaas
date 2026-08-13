@@ -1,0 +1,14 @@
+[package]
+name = "magic-cast"
+version = "0.1.0"
+edition = "2024"
+
+[dependencies]
+bytes = "1.12"
+oxideav-mkv = "0.0.9"
+tracing = "0.1"
+uuid = { version = "1.18", features = ["v4"] }
+
+[dev-dependencies]
+oxideav-core = "0.1.29"
+tracing-subscriber = { version = "0.3", features = ["env-filter"] }

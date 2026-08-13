@@ -30,6 +30,7 @@ use tracing_subscriber::{EnvFilter, fmt, layer::SubscriberExt};
 use crate::{
     backups_catalog::BackupsCatalog,
     casting::CastingManager,
+    casting_native::NativeCastingManager,
     downloader::{
         controller::DownloaderController, downloads_catalog::DownloadsCatalog,
         manager::DownloaderManager,
@@ -48,6 +49,7 @@ pub(crate) mod adb;
 pub(crate) mod archive;
 pub(crate) mod backups_catalog;
 pub(crate) mod casting;
+pub(crate) mod casting_native;
 pub(crate) mod downloader;
 pub(crate) mod logging;
 pub(crate) mod models;
@@ -91,9 +93,10 @@ fn main() {
         runtime.block_on(async move {
             let init_start = Instant::now();
             // Initialize everything
-            let task_manager = timeout(Duration::from_secs(10), init(portable_mode))
-                .await
-                .expect("Core initialization timed out");
+            let (task_manager, native_casting) =
+                timeout(Duration::from_secs(10), init(portable_mode))
+                    .await
+                    .expect("Core initialization timed out");
             info!("Core initialization completed in {:?}", init_start.elapsed());
 
             let shutdown_request_receiver = AppShutdownRequest::get_dart_signal_receiver();
@@ -118,12 +121,14 @@ fn main() {
             match source {
                 ShutdownSource::Panic => {}
                 ShutdownSource::Dart => {
+                    native_casting.shutdown().await;
                     tokio::select! {
                         _ = task_manager.shutdown(TASK_SHUTDOWN_TIMEOUT) => {},
                         _ = panic_notify.notified() => {},
                     }
                 }
                 ShutdownSource::Request => {
+                    native_casting.shutdown().await;
                     let shutdown_result = tokio::select! {
                         result = task_manager.shutdown(TASK_SHUTDOWN_TIMEOUT) => Some(result),
                         _ = panic_notify.notified() => None,
@@ -148,12 +153,15 @@ fn main() {
 }
 
 #[instrument]
-async fn init(portable_mode: bool) -> Arc<TaskManager> {
+async fn init(portable_mode: bool) -> (Arc<TaskManager>, Arc<NativeCastingManager>) {
     let app_dir = resolve_app_dir(portable_mode);
     init_in_dir(app_dir, portable_mode).await
 }
 
-async fn init_in_dir(app_dir: PathBuf, portable_mode: bool) -> Arc<TaskManager> {
+async fn init_in_dir(
+    app_dir: PathBuf,
+    portable_mode: bool,
+) -> (Arc<TaskManager>, Arc<NativeCastingManager>) {
     if !app_dir.exists() {
         std::fs::create_dir_all(&app_dir).expect("Failed to create app directory");
     }
@@ -226,11 +234,15 @@ async fn init_in_dir(app_dir: PathBuf, portable_mode: bool) -> Arc<TaskManager> 
     debug!("Creating casting manager");
     CastingManager::start(app_dir.clone());
 
+    // Native casting requests
+    debug!("Creating native casting manager");
+    let native_casting = NativeCastingManager::start(adb_service.clone());
+
     // Log-related requests from Flutter
     debug!("Starting signal layer request handler");
     SignalLayer::start_request_handler(app_dir.join("logs"));
 
-    task_manager
+    (task_manager, native_casting)
 }
 
 fn setup_logging(app_dir: &Path) -> Result<()> {

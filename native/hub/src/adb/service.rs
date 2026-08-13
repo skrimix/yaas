@@ -1019,6 +1019,11 @@ impl AdbService {
         self.try_current_device().await.context("No device connected")
     }
 
+    #[instrument(skip(self), level = "debug", err)]
+    pub(crate) async fn resolved_adb_path(&self) -> Result<PathBuf> {
+        resolve_binary_path(self.adb_path.read().await.as_deref(), "adb")
+    }
+
     /// Coordinates selective queries and direct device-state patches.
     async fn run_device_update_coordinator(
         self: Arc<Self>,

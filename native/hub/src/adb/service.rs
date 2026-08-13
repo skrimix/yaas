@@ -1125,6 +1125,7 @@ impl AdbService {
 
         let mut updated = (**device).clone();
         if !updated.apply_patch(patch) {
+            trace!(serial = %target.serial, "Device patch did not change state");
             return Ok(false);
         }
 
@@ -1486,12 +1487,14 @@ impl AdbService {
     ) {
         match parse_logcat_line(line) {
             Some(DeviceMonitorEvent::Query(components)) => {
+                trace!(?components, "Device monitor query event");
                 if pending_components.is_empty() {
                     *batch_deadline = Some(time::Instant::now() + EVENT_BATCH_WINDOW);
                 }
                 *pending_components |= components;
             }
             Some(DeviceMonitorEvent::Charging(is_charging)) => {
+                trace!(?is_charging, "Device monitor charging event");
                 if let Err(error) = self.enqueue_device_patch(
                     target.clone(),
                     DevicePatch { is_charging: Some(is_charging), ..DevicePatch::default() },
@@ -1500,6 +1503,7 @@ impl AdbService {
                 }
             }
             Some(DeviceMonitorEvent::Storage(space_info)) => {
+                trace!(?space_info, "Device monitor storage event");
                 if let Err(error) = self.enqueue_device_patch(
                     target.clone(),
                     DevicePatch { space_info: Some(space_info), ..DevicePatch::default() },
@@ -1521,6 +1525,7 @@ impl AdbService {
         }
 
         let components = std::mem::replace(pending_components, DeviceRefreshComponents::empty());
+        debug!(?components, "Device monitor triggered refresh");
         if let Err(error) = self.enqueue_device_refresh(target.clone(), components) {
             warn!(
                 error = error.as_ref() as &dyn Error,
@@ -1547,6 +1552,7 @@ impl AdbService {
             if !device.is_wireless {
                 components |= DeviceRefreshComponents::USB;
             }
+            debug!(serial = %device.serial, ?components, "Enqueuing device reconciliation refresh");
             if let Err(error) =
                 self.enqueue_device_refresh(DeviceUpdateTarget::from_device(&device), components)
             {

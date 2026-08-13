@@ -24,7 +24,7 @@ humansize = "2.1"
 lazy-regex = "3.4"
 log = { version = "0.4", features = [
     "max_level_trace",
-    "release_max_level_debug",
+    "release_max_level_trace",
 ] } # needed for tracing-log
 mimalloc = "0.1"
 rinf = { version = "=8.10.0", features = ["show-backtrace"] }
@@ -43,7 +43,7 @@ tokio-stream = { version = "0.1", features = ["fs", "io-util", "sync"] }
 tokio-util = { version = "0.7", features = ["compat"] }
 tracing = { version = "0.1", features = [
     "max_level_trace",
-    "release_max_level_debug",
+    "release_max_level_trace",
 ] }
 tracing-appender = "0.2"
 tracing-subscriber = { version = "0.3", features = [

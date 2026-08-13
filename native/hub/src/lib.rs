@@ -261,7 +261,7 @@ fn setup_logging(app_dir: &Path) -> Result<()> {
                 // .with_span_events(FmtSpan::NEW | FmtSpan::CLOSE)
                 .event_format(fmt::format().pretty()),
         )
-        .with(EnvFilter::new("debug,hyper_util=info"));
+        .with(EnvFilter::new("trace,hyper_util=info"));
 
     tracing::subscriber::set_global_default(subscriber)
         .context("Failed to set global subscriber")?;

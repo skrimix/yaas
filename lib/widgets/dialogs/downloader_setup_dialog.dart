@@ -186,96 +186,103 @@ class _DownloaderSetupDialogState extends State<DownloaderSetupDialog> {
     final isRemoving = _removingSourceId == source.id;
     final showRemoveAction = isRemoving || _hoveredSourceId == source.id;
 
-    return Material(
-      color: selected
-          ? colorScheme.secondaryContainer.withValues(alpha: 0.45)
-          : Colors.transparent,
-      borderRadius: BorderRadius.circular(12),
-      child: InkWell(
+    return MouseRegion(
+      onEnter: (_) {
+        if (_hoveredSourceId != source.id) {
+          setState(() {
+            _hoveredSourceId = source.id;
+          });
+        }
+      },
+      onExit: (_) {
+        if (_hoveredSourceId == source.id) {
+          setState(() {
+            _hoveredSourceId = null;
+          });
+        }
+      },
+      child: Material(
+        color: selected
+            ? colorScheme.secondaryContainer.withValues(alpha: 0.45)
+            : Colors.transparent,
         borderRadius: BorderRadius.circular(12),
-        onHover: (hovering) {
-          if (_hoveredSourceId == source.id && !hovering) {
-            setState(() {
-              _hoveredSourceId = null;
-            });
-          } else if (_hoveredSourceId != source.id && hovering) {
-            setState(() {
-              _hoveredSourceId = source.id;
-            });
-          }
-        },
-        onTap: enabled && !selected
-            ? () {
-                context.read<SettingsState>().selectDownloaderSource(source.id);
-                Navigator.of(context).pop();
-              }
-            : null,
-        child: Padding(
-          padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 10),
-          child: Row(
-            crossAxisAlignment: CrossAxisAlignment.start,
-            children: [
-              Padding(
-                padding: const EdgeInsets.only(top: 2),
-                child: Radio<String>(value: source.id),
-              ),
-              const SizedBox(width: 8),
-              Expanded(
-                child: Column(
-                  crossAxisAlignment: CrossAxisAlignment.start,
-                  children: [
-                    Text(
-                      source.displayName,
-                      style: theme.textTheme.titleSmall,
-                    ),
-                    const SizedBox(height: 2),
-                    Text(
-                      source.id,
-                      style: theme.textTheme.bodySmall?.copyWith(
-                        color: colorScheme.onSurfaceVariant,
-                        fontStyle: FontStyle.italic,
+        child: InkWell(
+          borderRadius: BorderRadius.circular(12),
+          onTap: enabled && !selected
+              ? () {
+                  context
+                      .read<SettingsState>()
+                      .selectDownloaderSource(source.id);
+                  Navigator.of(context).pop();
+                }
+              : null,
+          child: Padding(
+            padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 10),
+            child: Row(
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                Padding(
+                  padding: const EdgeInsets.only(top: 2),
+                  child: Radio<String>(value: source.id),
+                ),
+                const SizedBox(width: 8),
+                Expanded(
+                  child: Column(
+                    crossAxisAlignment: CrossAxisAlignment.start,
+                    children: [
+                      Text(
+                        source.displayName,
+                        style: theme.textTheme.titleSmall,
                       ),
-                    ),
-                    if (source.description.isNotEmpty) ...[
-                      const SizedBox(height: 6),
-                      SelectableLinkText(
-                        text: source.description,
+                      const SizedBox(height: 2),
+                      Text(
+                        source.id,
                         style: theme.textTheme.bodySmall?.copyWith(
                           color: colorScheme.onSurfaceVariant,
+                          fontStyle: FontStyle.italic,
                         ),
                       ),
+                      if (source.description.isNotEmpty) ...[
+                        const SizedBox(height: 6),
+                        SelectableLinkText(
+                          text: source.description,
+                          style: theme.textTheme.bodySmall?.copyWith(
+                            color: colorScheme.onSurfaceVariant,
+                          ),
+                        ),
+                      ],
                     ],
-                  ],
-                ),
-              ),
-              const SizedBox(width: 8),
-              Visibility(
-                visible: showRemoveAction,
-                child: IgnorePointer(
-                  ignoring: !showRemoveAction,
-                  child: IconButton(
-                    tooltip: AppLocalizations.of(context)
-                        .downloaderSourceRemoveTooltip(source.displayName),
-                    onPressed: enabled && !isRemoving
-                        ? () => _confirmRemoveSource(source)
-                        : null,
-                    constraints: const BoxConstraints.tightFor(
-                      width: 36,
-                      height: 36,
-                    ),
-                    padding: const EdgeInsets.all(6),
-                    iconSize: 24,
-                    icon: isRemoving
-                        ? const SizedBox(
-                            width: 16,
-                            height: 16,
-                            child: CircularProgressIndicator(strokeWidth: 2),
-                          )
-                        : const Icon(Icons.delete_outline),
                   ),
                 ),
-              ),
-            ],
+                const SizedBox(width: 8),
+                Visibility(
+                  visible: showRemoveAction,
+                  child: IgnorePointer(
+                    ignoring: !showRemoveAction,
+                    child: IconButton(
+                      tooltip: AppLocalizations.of(context)
+                          .downloaderSourceRemoveTooltip(source.displayName),
+                      onPressed: enabled && !isRemoving
+                          ? () => _confirmRemoveSource(source)
+                          : null,
+                      constraints: const BoxConstraints.tightFor(
+                        width: 36,
+                        height: 36,
+                      ),
+                      padding: const EdgeInsets.all(6),
+                      iconSize: 24,
+                      icon: isRemoving
+                          ? const SizedBox(
+                              width: 16,
+                              height: 16,
+                              child: CircularProgressIndicator(strokeWidth: 2),
+                            )
+                          : const Icon(Icons.delete_outline),
+                    ),
+                  ),
+                ),
+              ],
+            ),
           ),
         ),
       ),

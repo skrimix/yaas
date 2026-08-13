@@ -12,7 +12,7 @@ use tracing::{debug, info, instrument, warn};
 use super::super::http_cache::{self, DownloadResult};
 use crate::{
     archive::{extract_single_from_archive, list_archive_file_paths},
-    downloader::{config::DownloaderConfig, http_cache::compute_md5_file, repo},
+    downloader::{config::DownloaderConfig, http_cache::compute_md5_file},
     models::signals::downloader::progress::DownloaderInitProgress,
 };
 
@@ -31,6 +31,7 @@ fn is_zip_url(value: &str) -> bool {
 pub(crate) async fn prepare_rclone_files(
     cache_dir: &Path,
     cfg: &DownloaderConfig,
+    generated_config_filename: Option<&str>,
 ) -> Result<(PathBuf, PathBuf)> {
     let bin_source = cfg
         .rclone_path
@@ -43,9 +44,8 @@ pub(crate) async fn prepare_rclone_files(
     let config_is_url = maybe_config_source.map(is_http_url).unwrap_or(false);
 
     if maybe_config_source.is_none() {
-        let repo = repo::make_repo_from_config(cfg);
         // If the repo provides its own config we only handle the binary here.
-        if let Some(conf_name) = repo.generated_config_filename() {
+        if let Some(conf_name) = generated_config_filename {
             if !bin_is_url {
                 let conf_dst = cache_dir.join(conf_name);
                 return Ok((PathBuf::from(bin_source), conf_dst));
@@ -303,7 +303,7 @@ mod tests {
         let dir = tempdir().unwrap();
         let cfg = cfg_local("/bin/echo", "/tmp/rclone.conf");
         let (bin, conf) =
-            prepare_rclone_files(dir.path(), &cfg).await.expect("Prepare files failed");
+            prepare_rclone_files(dir.path(), &cfg, None).await.expect("Prepare files failed");
         assert_eq!(bin, PathBuf::from("/bin/echo"));
         assert_eq!(conf, PathBuf::from("/tmp/rclone.conf"));
     }
@@ -317,8 +317,9 @@ mod tests {
             disable_randomize_remote: true,
             ..Default::default()
         };
-        let err =
-            prepare_rclone_files(dir.path(), &cfg).await.expect_err("Prepare files should fail");
+        let err = prepare_rclone_files(dir.path(), &cfg, None)
+            .await
+            .expect_err("Prepare files should fail");
         let msg = format!("{:#}", err);
         assert!(msg.contains("must both be local or both be URLs"));
     }
@@ -381,7 +382,8 @@ mod tests {
         };
 
         // First run downloads both files
-        let (bin, conf) = prepare_rclone_files(dir.path(), &cfg).await.expect("First run failed");
+        let (bin, conf) =
+            prepare_rclone_files(dir.path(), &cfg, None).await.expect("First run failed");
         assert!(bin.exists());
         assert!(conf.exists());
 
@@ -394,7 +396,7 @@ mod tests {
 
         // Second run: server replies 304, function should still succeed and use cache
         let (bin2, conf2) =
-            prepare_rclone_files(dir.path(), &cfg).await.expect("Second run failed");
+            prepare_rclone_files(dir.path(), &cfg, None).await.expect("Second run failed");
         assert_eq!(bin2, bin);
         assert_eq!(conf2, conf);
     }

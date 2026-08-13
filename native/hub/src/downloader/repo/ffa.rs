@@ -14,7 +14,7 @@ use tracing::{Instrument, Span, debug, instrument, warn};
 
 use super::{
     BuildStorageArgs, BuildStorageResult, Repo, RepoAppList, RepoCapabilities, RepoDownloadResult,
-    RepoStorage,
+    RepoStorage, RuntimeFiles,
 };
 use crate::{
     downloader::{
@@ -50,6 +50,19 @@ impl Repo for FFARepo {
             supports_download_mode_selection: false,
             supports_donation_upload: true,
         }
+    }
+
+    async fn prepare_runtime(
+        &self,
+        cache_dir: &Path,
+        cfg: &DownloaderConfig,
+    ) -> Result<RuntimeFiles> {
+        let (rclone_path, rclone_config_path) =
+            rclone::prepare_rclone_files(cache_dir, cfg, self.generated_config_filename()).await?;
+        Ok(RuntimeFiles {
+            rclone_path: Some(rclone_path),
+            rclone_config_path: Some(rclone_config_path),
+        })
     }
 
     #[instrument(level = "debug", name = "repo.build_storage", fields(layout = %self.id()))]

@@ -18,17 +18,13 @@ pub(crate) const LEGACY_CONFIG_FILENAME: &str = "downloader.json";
 const MANAGED_CONFIGS_DIR: &str = "downloader_configs";
 
 #[derive(Debug, Clone, Default)]
-pub(crate) struct LoadedSources {
+pub(crate) struct SourceSnapshot {
     pub(crate) configs: Vec<DownloaderConfig>,
     pub(crate) active_config_id: Option<String>,
     pub(crate) warnings: Vec<String>,
 }
 
-impl LoadedSources {
-    pub(crate) fn is_empty(&self) -> bool {
-        self.configs.is_empty()
-    }
-
+impl SourceSnapshot {
     pub(crate) fn active_config(&self) -> Option<DownloaderConfig> {
         let active_config_id = self.active_config_id.as_deref()?;
         self.configs.iter().find(|cfg| cfg.id == active_config_id).cloned()
@@ -43,10 +39,6 @@ impl LoadedSources {
                 description: cfg.effective_description(),
             })
             .collect()
-    }
-
-    pub(crate) fn warning_message(&self) -> Option<String> {
-        warnings_to_message(&self.warnings)
     }
 }
 
@@ -67,12 +59,12 @@ impl RefreshReport {
 }
 
 #[derive(Debug, Clone)]
-pub(crate) struct DownloaderSources {
+pub(crate) struct SourceStore {
     app_dir: PathBuf,
     settings_handler: Arc<SettingsHandler>,
 }
 
-impl DownloaderSources {
+impl SourceStore {
     pub(crate) fn new(app_dir: PathBuf, settings_handler: Arc<SettingsHandler>) -> Self {
         Self { app_dir, settings_handler }
     }
@@ -81,21 +73,17 @@ impl DownloaderSources {
         &self.app_dir
     }
 
-    pub(crate) fn load(
-        &self,
-        extra_warnings: impl IntoIterator<Item = String>,
-    ) -> Result<LoadedSources> {
-        let mut loaded = read_configs(&self.app_dir)?;
-        loaded.warnings.extend(extra_warnings);
+    pub(crate) fn load(&self) -> Result<SourceSnapshot> {
+        let loaded = read_configs(&self.app_dir)?;
         let active_config_id = resolve_active_config_id(
             &loaded.configs,
             current_active_config_id(&self.settings_handler),
         );
 
-        Ok(LoadedSources { configs: loaded.configs, active_config_id, warnings: loaded.warnings })
+        Ok(SourceSnapshot { configs: loaded.configs, active_config_id, warnings: loaded.warnings })
     }
 
-    pub(crate) fn persist_active_config(&self, sources: &LoadedSources) -> Result<()> {
+    pub(crate) fn persist_active_config(&self, sources: &SourceSnapshot) -> Result<()> {
         let current_active_id = current_active_config_id(&self.settings_handler);
         if sources.active_config_id.as_deref() == Some(current_active_id.as_str()) {
             return Ok(());
@@ -149,16 +137,18 @@ impl DownloaderSources {
         refresh_configs(&self.app_dir, configs).await
     }
 
-    pub(crate) async fn refresh_active(&self, sources: &LoadedSources) -> RefreshReport {
-        match sources.active_config() {
+    pub(crate) async fn refresh_active(&self) -> Result<RefreshReport> {
+        let sources = self.load()?;
+        let report = match sources.active_config() {
             Some(active_cfg) => {
                 refresh_configs(&self.app_dir, std::slice::from_ref(&active_cfg)).await
             }
             None => RefreshReport::default(),
-        }
+        };
+        Ok(report)
     }
 
-    pub(crate) fn inactive_configs(&self, sources: &LoadedSources) -> Vec<DownloaderConfig> {
+    pub(crate) fn inactive_configs(&self, sources: &SourceSnapshot) -> Vec<DownloaderConfig> {
         let active_id = sources.active_config_id.as_deref();
         sources.configs.iter().filter(|cfg| Some(cfg.id.as_str()) != active_id).cloned().collect()
     }
@@ -659,7 +649,7 @@ mod tests {
         let dir = tempdir().unwrap();
         let app_dir = dir.path().to_path_buf();
         let settings = SettingsHandler::new(app_dir.clone(), true).unwrap();
-        let sources = DownloaderSources::new(app_dir.clone(), settings.clone());
+        let sources = SourceStore::new(app_dir.clone(), settings.clone());
 
         let alpha = managed_config_path(&app_dir, "alpha");
         let beta = managed_config_path(&app_dir, "beta");
@@ -683,7 +673,7 @@ mod tests {
         let dir = tempdir().unwrap();
         let app_dir = dir.path().to_path_buf();
         let settings = SettingsHandler::new(app_dir.clone(), true).unwrap();
-        let sources = DownloaderSources::new(app_dir.clone(), settings.clone());
+        let sources = SourceStore::new(app_dir.clone(), settings.clone());
 
         let only = managed_config_path(&app_dir, "only");
         std::fs::create_dir_all(managed_configs_dir(&app_dir)).unwrap();

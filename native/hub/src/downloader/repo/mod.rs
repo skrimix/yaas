@@ -1,4 +1,7 @@
-use std::{path::Path, sync::Arc};
+use std::{
+    path::{Path, PathBuf},
+    sync::Arc,
+};
 
 use anyhow::Result;
 use async_trait::async_trait;
@@ -19,8 +22,15 @@ mod newrepo;
 #[derive(Debug)]
 pub(super) struct BuildStorageResult {
     pub storage: RepoStorage,
-    /// If Some, Downloader should persist this remote name into settings.
+    /// If Some, the downloader session should persist this remote name into settings.
     pub persist_remote: Option<String>,
+}
+
+/// Runtime files a repo needs before storage can be built (e.g. rclone binary/config).
+#[derive(Debug, Default)]
+pub(super) struct RuntimeFiles {
+    pub rclone_path: Option<PathBuf>,
+    pub rclone_config_path: Option<PathBuf>,
 }
 
 #[derive(Debug)]
@@ -47,6 +57,16 @@ pub(super) trait Repo: Send + Sync {
     fn id(&self) -> &'static str;
 
     fn capabilities(&self) -> RepoCapabilities;
+
+    /// Prepare runtime files (e.g. download rclone binary/config) needed before
+    /// building storage. Repos that don't need any runtime files use the default.
+    async fn prepare_runtime(
+        &self,
+        _cache_dir: &Path,
+        _cfg: &DownloaderConfig,
+    ) -> Result<RuntimeFiles> {
+        Ok(RuntimeFiles::default())
+    }
 
     async fn build_storage(&self, args: BuildStorageArgs<'_>) -> Result<BuildStorageResult>;
 
@@ -104,7 +124,7 @@ pub(super) struct BuildStorageArgs<'a> {
     pub rclone_path: Option<&'a Path>,
     pub rclone_config_path: Option<&'a Path>,
     pub root_dir: &'a str,
-    /// Remote selected by Downloader. Repo may keep or replace it.
+    /// Remote selected by the downloader session. Repo may keep or replace it.
     pub remote_name: &'a str,
     pub bandwidth_limit: &'a str,
     pub remote_name_filter_regex: Option<String>,

@@ -1,4 +1,4 @@
-use std::{error::Error, path::Path, sync::Arc};
+use std::{error::Error, sync::Arc};
 
 use anyhow::{Context, Result};
 use rinf::{DartSignal, RustSignal};
@@ -8,11 +8,13 @@ use tracing::{debug, error, warn};
 
 use crate::{
     downloader::{
-        Downloader, SensitiveUrl,
-        config::{DownloaderConfig, RepoLayoutKind},
+        DownloaderSession, SensitiveUrl,
+        config::DownloaderConfig,
         manager::DownloaderManager,
         repo,
-        sources::{DownloaderSources, LoadedSources, RefreshReport, runtime_cache_dir},
+        sources::{
+            RefreshReport, SourceSnapshot, SourceStore, runtime_cache_dir, warnings_to_message,
+        },
     },
     models::signals::{
         downloader::{
@@ -32,19 +34,9 @@ use crate::{
 #[derive(Clone)]
 pub(crate) struct DownloaderController {
     manager: Arc<DownloaderManager>,
-    sources: DownloaderSources,
+    sources: SourceStore,
     settings_handler: Arc<SettingsHandler>,
-    reload_guard: Arc<Mutex<()>>,
-}
-
-#[derive(Debug, Clone, Copy)]
-enum ReloadReason {
-    Startup,
-    Retry,
-    Install,
-    Remove,
-    Select,
-    ManualRefresh,
+    reconcile_guard: Arc<Mutex<()>>,
 }
 
 struct DownloaderAvailabilityReporter {
@@ -61,9 +53,9 @@ impl DownloaderController {
     ) -> Arc<Self> {
         Arc::new(Self {
             manager,
-            sources: DownloaderSources::new(app_dir, settings_handler.clone()),
+            sources: SourceStore::new(app_dir, settings_handler.clone()),
             settings_handler,
-            reload_guard: Arc::new(Mutex::new(())),
+            reconcile_guard: Arc::new(Mutex::new(())),
         })
     }
 
@@ -76,74 +68,81 @@ impl DownloaderController {
         self.start_request_handlers();
     }
 
+    /// Startup pipeline:
+    /// 1. migrate the legacy single-config file into managed sources,
+    /// 2. best-effort network refresh of the active source, so the first
+    ///    session starts with the freshest config,
+    /// 3. sync disk state with runtime and UI (starts the session),
+    /// 4. refresh the remaining sources in the background.
     async fn startup(self: Arc<Self>) {
-        let migration_warning = self.sources.migrate_legacy_config_if_needed().await.map(|error| {
-            warn!(
-                error = error.as_ref() as &dyn Error,
-                "Failed to migrate legacy downloader config"
-            );
-            send_error_toast("Failed to migrate legacy downloader config", &error);
-            format!("{error:#}")
-        });
+        let mut warnings = self.migrate_legacy_config().await;
+        warnings.extend(self.refresh_active_source().await);
 
-        let mut warnings = migration_warning.into_iter().collect::<Vec<_>>();
-
-        let initial_sources = match self.sources.load(warnings.clone()) {
-            Ok(sources) => sources,
-            Err(e) => {
-                error!(error = e.as_ref() as &dyn Error, "Failed to load downloader sources");
-                return;
+        match self.sync("startup", warnings).await {
+            Ok(sources) => {
+                let inactive_configs = self.sources.inactive_configs(&sources);
+                if !inactive_configs.is_empty() {
+                    self.clone().spawn_background_refresh(inactive_configs);
+                }
             }
-        };
-
-        if !initial_sources.is_empty() {
-            let report = self.sources.refresh_active(&initial_sources).await;
-            if let Some(warning) = report.warning_message() {
-                warnings.push(warning);
-            }
-        }
-
-        let inactive_configs = match self.reload_and_apply(ReloadReason::Startup, warnings).await {
-            Ok(sources) => self.sources.inactive_configs(&sources),
             Err(e) => {
                 error!(error = e.as_ref() as &dyn Error, "Failed to initialize downloader");
-                return;
             }
-        };
-
-        if !inactive_configs.is_empty() {
-            self.clone().spawn_background_refresh(inactive_configs);
         }
     }
 
-    async fn reload_and_apply(
-        &self,
-        reason: ReloadReason,
-        extra_warnings: Vec<String>,
-    ) -> Result<LoadedSources> {
-        let _guard = self.reload_guard.lock().await;
-        debug!(?reason, "Reloading downloader sources");
+    async fn migrate_legacy_config(&self) -> Vec<String> {
+        let Some(error) = self.sources.migrate_legacy_config_if_needed().await else {
+            return Vec::new();
+        };
+        warn!(error = error.as_ref() as &dyn Error, "Failed to migrate legacy downloader config");
+        send_error_toast("Failed to migrate legacy downloader config", &error);
+        vec![format!("{error:#}")]
+    }
 
-        let sources = self.sources.load(extra_warnings)?;
-        self.sources.persist_active_config(&sources)?;
-        send_sources_changed(&sources, false);
-
-        if sources.is_empty() {
-            self.manager.clear().await;
-            DownloaderAvailabilityChanged { needs_setup: true, ..Default::default() }
-                .send_signal_to_dart();
-            return Ok(sources);
+    async fn refresh_active_source(&self) -> Vec<String> {
+        match self.sources.refresh_active().await {
+            Ok(report) => report.warning_message().into_iter().collect(),
+            Err(e) => {
+                debug!(
+                    error = e.as_ref() as &dyn Error,
+                    "Skipping active source refresh during startup"
+                );
+                Vec::new()
+            }
         }
+    }
 
-        let active_cfg = sources
-            .active_config()
-            .context("Active downloader config disappeared during reload")?;
-        self.start_downloader(active_cfg).await?;
+    /// Reloads sources from disk, reconciles and persists the active config,
+    /// emits UI signals and (re)starts the downloader session for the active
+    /// config. Every source mutation must be followed by a sync.
+    async fn sync(
+        &self,
+        reason: &'static str,
+        extra_warnings: Vec<String>,
+    ) -> Result<SourceSnapshot> {
+        let _guard = self.reconcile_guard.lock().await;
+        debug!(reason, "Syncing downloader sources");
+
+        let sources = self.sources.load()?;
+        self.sources.persist_active_config(&sources)?;
+        send_sources_changed(&sources, false, &extra_warnings);
+
+        match sources.active_config() {
+            Some(active_cfg) => self.start_session(active_cfg).await?,
+            None => {
+                self.manager.clear().await;
+                DownloaderAvailabilityChanged { needs_setup: true, ..Default::default() }
+                    .send_signal_to_dart();
+            }
+        }
 
         Ok(sources)
     }
 
-    async fn start_downloader(&self, cfg: DownloaderConfig) -> Result<()> {
+    /// Starts a new session for the given config, replacing any running one.
+    /// Reports progress to the UI via availability signals.
+    async fn start_session(&self, cfg: DownloaderConfig) -> Result<()> {
         let repo = repo::make_repo_from_config(&cfg);
         let availability = DownloaderAvailabilityReporter::new(&cfg, repo.capabilities());
 
@@ -153,47 +152,37 @@ impl DownloaderController {
         let cache_dir = runtime_cache_dir(self.sources.app_dir(), &cfg.id);
         let _ = tokio::fs::create_dir_all(&cache_dir).await;
 
-        let (rclone_path, rclone_config_path) = prepare_downloader_runtime(&cache_dir, &cfg)
+        let runtime_files = repo
+            .prepare_runtime(&cache_dir, &cfg)
             .await
             .inspect_err(|e| availability.send_error("prepare downloader", e))?;
 
-        let downloader = Downloader::new(
+        let session = DownloaderSession::new(
             Arc::new(cfg),
+            repo,
             cache_dir,
-            rclone_path,
-            rclone_config_path,
+            runtime_files,
             self.settings_handler.clone(),
             WatchStream::new(self.settings_handler.subscribe()),
         )
         .await
         .inspect_err(|e| availability.send_error("initialize downloader", e))?;
 
-        self.manager.replace(downloader).await;
+        self.manager.replace(session).await;
         availability.send_available();
         Ok(())
     }
 
     async fn install_from_url(&self, url: SensitiveUrl<'_>) {
-        let result = async {
-            let cfg = self.sources.install_from_url(url, true).await?;
-            Ok::<_, anyhow::Error>(cfg.id)
+        let outcome = async {
+            let config_id = self.sources.install_from_url(url, true).await?.id;
+            self.sync("install", Vec::new()).await.context("Failed to initialize downloader")?;
+            Ok::<_, anyhow::Error>(config_id)
         }
         .await;
 
-        match result {
+        match outcome {
             Ok(config_id) => {
-                if let Err(e) = self.reload_and_apply(ReloadReason::Install, Vec::new()).await {
-                    error!(
-                        error = e.as_ref() as &dyn Error,
-                        "Downloader init after config install failed"
-                    );
-                    let message = format!("Failed to initialize downloader: {:#}", e);
-                    DownloaderConfigInstallResult { success: false, error: Some(message.clone()) }
-                        .send_signal_to_dart();
-                    Toast::send("Failed to add downloader source".into(), message, true, None);
-                    return;
-                }
-
                 DownloaderConfigInstallResult { success: true, error: None }.send_signal_to_dart();
                 Toast::send(
                     "Downloader source added".into(),
@@ -204,102 +193,88 @@ impl DownloaderController {
             }
             Err(e) => {
                 error!(error = e.as_ref() as &dyn Error, "Failed to install downloader source");
-                DownloaderConfigInstallResult { success: false, error: Some(format!("{:#}", e)) }
+                let message = format!("{:#}", e);
+                DownloaderConfigInstallResult { success: false, error: Some(message.clone()) }
                     .send_signal_to_dart();
-                Toast::send(
-                    "Failed to add downloader source".into(),
-                    format!("{:#}", e),
-                    true,
-                    None,
-                );
+                Toast::send("Failed to add downloader source".into(), message, true, None);
             }
         }
     }
 
     async fn remove_source(&self, config_id: String) {
-        match self.sources.remove(&config_id) {
-            Ok(()) => {
-                let reload_result = self.reload_and_apply(ReloadReason::Remove, Vec::new()).await;
-                let cleanup_result = self.sources.delete_cache_dir(&config_id);
-
-                let mut errors = Vec::new();
-                if let Err(e) = reload_result {
-                    error!(
-                        error = e.as_ref() as &dyn Error,
-                        config_id = %config_id,
-                        "Downloader init after source removal failed"
-                    );
-                    errors.push(format!(
-                        "Source removed, but failed to initialize downloader: {:#}",
-                        e
-                    ));
-                }
-                if let Err(e) = cleanup_result {
-                    error!(
-                        error = e.as_ref() as &dyn Error,
-                        config_id = %config_id,
-                        "Downloader cache cleanup after source removal failed"
-                    );
-                    errors.push(format!("Source removed, but failed to clean cache: {:#}", e));
-                }
-
-                let error = (!errors.is_empty()).then(|| errors.join("\n"));
-                let success = error.is_none();
-
-                DownloaderSourceRemovedResult {
-                    config_id: config_id.clone(),
-                    success,
-                    error: error.clone(),
-                }
-                .send_signal_to_dart();
-
-                match error {
-                    Some(error) => {
-                        Toast::send("Downloader source removed".into(), error, true, None)
-                    }
-                    None => Toast::send(
-                        "Downloader source removed".into(),
-                        format!("Removed source {config_id}"),
-                        false,
-                        None,
-                    ),
-                }
+        if let Err(e) = self.sources.remove(&config_id) {
+            error!(
+                error = e.as_ref() as &dyn Error,
+                config_id = %config_id,
+                "Failed to remove downloader source"
+            );
+            DownloaderSourceRemovedResult {
+                config_id: config_id.clone(),
+                success: false,
+                error: Some(format!("{:#}", e)),
             }
-            Err(e) => {
-                error!(
-                    error = e.as_ref() as &dyn Error,
-                    config_id = %config_id,
-                    "Failed to remove downloader source"
-                );
-                DownloaderSourceRemovedResult {
-                    config_id: config_id.clone(),
-                    success: false,
-                    error: Some(format!("{:#}", e)),
-                }
-                .send_signal_to_dart();
-                Toast::send(
-                    "Failed to remove downloader source".into(),
-                    format!("{:#}", e),
-                    true,
-                    None,
-                );
-            }
+            .send_signal_to_dart();
+            Toast::send(
+                "Failed to remove downloader source".into(),
+                format!("{:#}", e),
+                true,
+                None,
+            );
+            return;
+        }
+
+        let mut errors = Vec::new();
+        if let Err(e) = self.sync("remove", Vec::new()).await {
+            error!(
+                error = e.as_ref() as &dyn Error,
+                config_id = %config_id,
+                "Downloader init after source removal failed"
+            );
+            errors.push(format!("Source removed, but failed to initialize downloader: {:#}", e));
+        }
+        if let Err(e) = self.sources.delete_cache_dir(&config_id) {
+            error!(
+                error = e.as_ref() as &dyn Error,
+                config_id = %config_id,
+                "Downloader cache cleanup after source removal failed"
+            );
+            errors.push(format!("Source removed, but failed to clean cache: {:#}", e));
+        }
+
+        let error = (!errors.is_empty()).then(|| errors.join("\n"));
+
+        DownloaderSourceRemovedResult {
+            config_id: config_id.clone(),
+            success: error.is_none(),
+            error: error.clone(),
+        }
+        .send_signal_to_dart();
+
+        match error {
+            Some(error) => Toast::send("Downloader source removed".into(), error, true, None),
+            None => Toast::send(
+                "Downloader source removed".into(),
+                format!("Removed source {config_id}"),
+                false,
+                None,
+            ),
         }
     }
 
     async fn select_source(&self, config_id: &str) {
-        if let Err(e) = self.sources.select_active(config_id) {
-            send_error_toast("Failed to switch downloader source", &e);
-            return;
+        let result = async {
+            self.sources.select_active(config_id)?;
+            self.sync("select", Vec::new()).await
         }
+        .await;
 
-        if let Err(e) = self.reload_and_apply(ReloadReason::Select, Vec::new()).await {
+        if let Err(e) = result {
             send_error_toast("Failed to switch downloader source", &e);
         }
     }
 
     async fn manual_refresh(&self) {
-        let loaded = match self.sources.load(Vec::new()) {
+        let loaded = match self.sources.load() {
             Ok(sources) => sources,
             Err(e) => {
                 send_error_toast("Failed to refresh downloader sources", &e);
@@ -307,13 +282,13 @@ impl DownloaderController {
             }
         };
 
-        send_sources_changed(&loaded, true);
+        send_sources_changed(&loaded, true, &[]);
 
         let report = self.sources.refresh_all(&loaded.configs).await;
         send_refresh_complete_toast(&report);
 
         let warnings = report.warning_message().into_iter().collect();
-        if let Err(e) = self.reload_and_apply(ReloadReason::ManualRefresh, warnings).await {
+        if let Err(e) = self.sync("manual refresh", warnings).await {
             send_error_toast("Failed to refresh downloader sources", &e);
         }
     }
@@ -323,90 +298,66 @@ impl DownloaderController {
             let report = self.sources.refresh_all(&configs).await;
             let warnings: Vec<_> = report.warning_message().into_iter().collect();
 
-            let sources = match self.sources.load(warnings) {
-                Ok(sources) => sources,
+            match self.sources.load() {
+                Ok(sources) => send_sources_changed(&sources, false, &warnings),
                 Err(e) => {
                     warn!(
                         error = e.as_ref() as &dyn Error,
                         "Failed to reload downloader sources after background refresh"
                     );
-                    return;
                 }
-            };
-
-            send_sources_changed(&sources, false);
+            }
         });
     }
 
     fn start_request_handlers(self: Arc<Self>) {
-        tokio::spawn({
-            let controller = self.clone();
-            async move {
-                let receiver = InstallDownloaderConfigFromUrlRequest::get_dart_signal_receiver();
-                while let Some(req) = receiver.recv().await {
-                    let raw_url = req.message.url.trim().to_string();
-                    let url = SensitiveUrl::new(&raw_url);
-                    debug!(url = %url, "Received InstallDownloaderConfigFromUrlRequest");
-                    controller.install_from_url(url).await;
-                }
+        self.spawn_request_handler(
+            |controller, req: InstallDownloaderConfigFromUrlRequest| async move {
+                let raw_url = req.url.trim().to_string();
+                let url = SensitiveUrl::new(&raw_url);
+                debug!(url = %url, "Received InstallDownloaderConfigFromUrlRequest");
+                controller.install_from_url(url).await;
+            },
+        );
 
-                panic!("InstallDownloaderConfigFromUrlRequest receiver closed")
-            }
+        self.spawn_request_handler(|controller, req: RemoveDownloaderSourceRequest| async move {
+            let config_id = req.config_id.trim().to_string();
+            debug!(config_id = %config_id, "Received RemoveDownloaderSourceRequest");
+            controller.remove_source(config_id).await;
         });
 
-        tokio::spawn({
-            let controller = self.clone();
-            async move {
-                let receiver = RemoveDownloaderSourceRequest::get_dart_signal_receiver();
-                while let Some(req) = receiver.recv().await {
-                    let config_id = req.message.config_id.trim().to_string();
-                    debug!(config_id = %config_id, "Received RemoveDownloaderSourceRequest");
-                    controller.remove_source(config_id).await;
-                }
-
-                panic!("RemoveDownloaderSourceRequest receiver closed")
-            }
+        self.spawn_request_handler(|controller, req: SelectDownloaderSourceRequest| async move {
+            controller.select_source(req.config_id.trim()).await;
         });
 
-        tokio::spawn({
-            let controller = self.clone();
-            async move {
-                let receiver = SelectDownloaderSourceRequest::get_dart_signal_receiver();
-                while let Some(req) = receiver.recv().await {
-                    let config_id = req.message.config_id.trim().to_string();
-                    controller.select_source(&config_id).await;
-                }
+        self.spawn_request_handler(
+            |controller, _req: RefreshDownloaderSourcesRequest| async move {
+                controller.manual_refresh().await;
+            },
+        );
 
-                panic!("SelectDownloaderSourceRequest receiver closed")
+        self.spawn_request_handler(|controller, _req: RetryDownloaderInitRequest| async move {
+            if let Err(e) = controller.sync("retry", Vec::new()).await {
+                send_error_toast("Failed to initialize downloader", &e);
             }
         });
+    }
 
-        tokio::spawn({
-            let controller = self.clone();
-            async move {
-                let receiver = RefreshDownloaderSourcesRequest::get_dart_signal_receiver();
-                while receiver.recv().await.is_some() {
-                    controller.manual_refresh().await;
-                }
-
-                panic!("RefreshDownloaderSourcesRequest receiver closed")
+    /// Spawns a task dispatching Dart requests of type `S` to `handler`.
+    fn spawn_request_handler<S, F, Fut>(self: &Arc<Self>, handler: F)
+    where
+        S: DartSignal + Send + 'static,
+        F: Fn(Arc<Self>, S) -> Fut + Send + 'static,
+        Fut: std::future::Future<Output = ()> + Send + 'static,
+    {
+        let controller = self.clone();
+        tokio::spawn(async move {
+            let receiver = S::get_dart_signal_receiver();
+            while let Some(req) = receiver.recv().await {
+                handler(controller.clone(), req.message).await;
             }
-        });
 
-        tokio::spawn({
-            let controller = self.clone();
-            async move {
-                let receiver = RetryDownloaderInitRequest::get_dart_signal_receiver();
-                while receiver.recv().await.is_some() {
-                    if let Err(e) =
-                        controller.reload_and_apply(ReloadReason::Retry, Vec::new()).await
-                    {
-                        send_error_toast("Failed to initialize downloader", &e);
-                    }
-                }
-
-                panic!("RetryDownloaderInitRequest receiver closed")
-            }
+            panic!("{} receiver closed", std::any::type_name::<S>())
         });
     }
 }
@@ -450,24 +401,14 @@ impl DownloaderAvailabilityReporter {
     }
 }
 
-async fn prepare_downloader_runtime(
-    cache_dir: &Path,
-    cfg: &DownloaderConfig,
-) -> Result<(Option<std::path::PathBuf>, Option<std::path::PathBuf>)> {
-    match cfg.layout {
-        RepoLayoutKind::Ffa => crate::downloader::rclone::prepare_rclone_files(cache_dir, cfg)
-            .await
-            .map(|(rclone_path, rclone_config_path)| (Some(rclone_path), Some(rclone_config_path))),
-        RepoLayoutKind::NewRepo => Ok((None, None)),
-    }
-}
-
-fn send_sources_changed(sources: &LoadedSources, refreshing: bool) {
+fn send_sources_changed(sources: &SourceSnapshot, refreshing: bool, extra_warnings: &[String]) {
+    let mut warnings = sources.warnings.clone();
+    warnings.extend(extra_warnings.iter().cloned());
     DownloaderSourcesChanged {
         configs: sources.installed_configs(),
         active_config_id: sources.active_config_id.clone(),
         refreshing,
-        error: sources.warning_message(),
+        error: warnings_to_message(&warnings),
     }
     .send_signal_to_dart();
 }

@@ -8,8 +8,8 @@ mod http_cache;
 pub(crate) mod manager;
 mod rclone;
 mod repo;
-mod service;
-pub(crate) use service::Downloader;
+mod session;
+pub(crate) use session::DownloaderSession;
 pub(crate) mod downloads_catalog;
 pub(crate) mod sources;
 

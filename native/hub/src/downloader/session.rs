@@ -34,13 +34,11 @@ use crate::{
     settings::SettingsHandler,
 };
 
-pub(crate) struct Downloader {
+pub(crate) struct DownloaderSession {
     config: Arc<DownloaderConfig>,
+    repo: Arc<dyn repo::Repo>,
     cache_dir: PathBuf,
-    rclone_path: Option<PathBuf>,
-    rclone_config_path: Option<PathBuf>,
-    root_dir: String,
-    list_path: String,
+    runtime_files: repo::RuntimeFiles,
     cloud_apps: Arc<Mutex<Vec<CloudApp>>>,
     donation_blacklist: Arc<Mutex<Vec<String>>>,
     storage: RwLock<repo::RepoStorage>,
@@ -50,24 +48,21 @@ pub(crate) struct Downloader {
     download_mode: RwLock<DownloadMode>,
     cancel_token: CancellationToken,
     http_client: reqwest::Client,
-    repo: Arc<dyn repo::Repo>,
     installation_id: String,
 }
 
-impl Downloader {
-    #[instrument(level = "debug", skip(settings_stream))]
-    pub(crate) async fn new(
+impl DownloaderSession {
+    #[instrument(level = "debug", skip(repo, settings_handler, settings_stream))]
+    pub(super) async fn new(
         config: Arc<DownloaderConfig>,
+        repo: Arc<dyn repo::Repo>,
         cache_dir: PathBuf,
-        rclone_path: Option<PathBuf>,
-        rclone_config_path: Option<PathBuf>,
+        runtime_files: repo::RuntimeFiles,
         settings_handler: Arc<SettingsHandler>,
         mut settings_stream: WatchStream<Settings>,
     ) -> Result<Arc<Self>> {
         let settings =
             settings_stream.next().await.expect("Settings stream closed on downloader init");
-
-        let repo = repo::make_repo_from_config(&config);
 
         let http_client = reqwest::Client::builder()
             .user_agent(crate::USER_AGENT)
@@ -87,44 +82,23 @@ impl Downloader {
             );
         }
 
-        let built = repo
-            .build_storage(repo::BuildStorageArgs {
-                rclone_path: rclone_path.as_deref(),
-                rclone_config_path: rclone_config_path.as_deref(),
-                root_dir: &config.root_dir,
-                remote_name: &settings.rclone_remote_name,
-                bandwidth_limit: &settings.bandwidth_limit,
-                remote_name_filter_regex: config.remote_name_filter_regex.clone(),
-                allow_randomize_remote: !config.disable_randomize_remote,
-            })
-            .await?;
-        // If the repo asked us to persist a remote, update settings
-        if let Some(remote) = &built.persist_remote
-            && *remote != settings.rclone_remote_name
-        {
-            debug!(
-                old = settings.rclone_remote_name,
-                new = remote,
-                "Remote name changed on repo request, persisting to settings"
-            );
-            let mut updated = settings.clone();
-            updated.rclone_remote_name = remote.clone();
-            let _ = settings_handler.save_settings(&updated);
-        }
-        let storage = built.storage;
-
-        let root_dir = config.root_dir.clone();
-        let list_path = config.list_path.clone();
+        let storage = build_repo_storage(
+            &repo,
+            &config,
+            &runtime_files,
+            &settings,
+            &settings_handler,
+            !config.disable_randomize_remote,
+        )
+        .await?;
 
         let cancel_token = CancellationToken::new();
 
         let handle = Arc::new(Self {
             config,
+            repo,
             cache_dir,
-            rclone_path,
-            rclone_config_path,
-            root_dir,
-            list_path,
+            runtime_files,
             cloud_apps: Arc::new(Mutex::new(Vec::new())),
             donation_blacklist: Arc::new(Mutex::new(Vec::new())),
             storage: RwLock::new(storage),
@@ -134,92 +108,56 @@ impl Downloader {
             download_mode: RwLock::new(settings.download_mode),
             cancel_token,
             http_client,
-            repo,
             installation_id: settings.installation_id.clone(),
         });
 
+        handle.spawn_tasks(&settings, settings_stream, &settings_handler);
+
+        Ok(handle)
+    }
+
+    fn spawn_tasks(
+        self: &Arc<Self>,
+        settings: &Settings,
+        mut settings_stream: WatchStream<Settings>,
+        settings_handler: &Arc<SettingsHandler>,
+    ) {
         tokio::spawn({
-            let handle = handle.clone();
+            let handle = self.clone();
             async move {
                 handle.receive_commands().await;
             }
         });
 
         tokio::spawn({
-            let handle = handle.clone();
+            let handle = self.clone();
+            let settings_handler = settings_handler.clone();
+            let mut prev_remote_name = settings.rclone_remote_name.clone();
+            let mut prev_bandwidth_limit = settings.bandwidth_limit.clone();
             async move {
-                debug!("Downloader starting to listen for settings changes");
+                debug!("Downloader session starting to listen for settings changes");
                 loop {
                     tokio::select! {
                         _ = handle.cancel_token.cancelled() => {
-                            debug!("Downloader settings listener cancelled, exiting");
+                            debug!("Downloader session settings listener cancelled, exiting");
                             return;
                         }
                         maybe_settings = settings_stream.next() => {
                             let Some(settings) = maybe_settings else {
-                                panic!("Settings stream closed for Downloader");
+                                panic!("Settings stream closed for DownloaderSession");
                             };
-                            debug!("Downloader received settings update");
+                            debug!("Downloader session received settings update");
                             debug!(?settings, "New settings");
 
-                            // Rebuild storage on settings changes, do not randomize the remote
-                            let built = handle
-                                .repo
-                                .build_storage(repo::BuildStorageArgs {
-                                    rclone_path: handle.rclone_path.as_deref(),
-                                    rclone_config_path: handle.rclone_config_path.as_deref(),
-                                    root_dir: &handle.root_dir,
-                                    remote_name: &settings.rclone_remote_name,
-                                    bandwidth_limit: &settings.bandwidth_limit,
-                                    remote_name_filter_regex: handle.config.remote_name_filter_regex.clone(),
-                                    allow_randomize_remote: false,
-                                })
-                                .await;
+                            // Rebuild storage only when storage-relevant settings change
+                            let storage_inputs_changed =
+                                settings.rclone_remote_name != prev_remote_name
+                                    || settings.bandwidth_limit != prev_bandwidth_limit;
+                            prev_remote_name = settings.rclone_remote_name.clone();
+                            prev_bandwidth_limit = settings.bandwidth_limit.clone();
 
-                            let new_storage = match built {
-                                Ok(res) => {
-                                    if let Some(remote) = res.persist_remote
-                                        && remote != settings.rclone_remote_name {
-                                            let mut updated = settings.clone();
-                                            updated.rclone_remote_name = remote.clone();
-                                            let _ = settings_handler.save_settings(&updated);
-                                        }
-                                    res.storage
-                                }
-                                Err(e) => {
-                                    error!(error = e.as_ref() as &dyn Error, "Failed to rebuild storage on settings change");
-                                    handle.storage.read().await.clone()
-                                }
-                            };
-
-                            if new_storage != *handle.storage.read().await {
-                                info!("Downloader storage config changed, recreating and refreshing app list");
-                                handle.current_load_token.read().await.cancel();
-                                let new_token = handle.cancel_token.child_token();
-                                *handle.current_load_token.write().await = new_token.clone();
-
-                                *handle.storage.write().await = new_storage;
-
-                                match handle
-                                    .repo
-                                    .list_remotes(handle.storage.read().await.clone())
-                                    .await
-                                {
-                                    Ok(remotes) => {
-                                        RcloneRemotesChanged { remotes, error: None }.send_signal_to_dart();
-                                    }
-                                    Err(e) => {
-                                        error!(error = e.as_ref() as &dyn Error, "Failed to get downloader remotes after reload");
-                                        RcloneRemotesChanged {
-                                            remotes: Vec::new(),
-                                            error: Some(format!("Failed to get remotes: {:#}", e)),
-                                        }
-                                        .send_signal_to_dart();
-                                    }
-                                }
-
-                                // Refresh app list
-                                handle.load_app_list(true, new_token).await;
+                            if storage_inputs_changed {
+                                handle.refresh_storage(&settings, &settings_handler).await;
                             }
 
                             let mut download_dir = handle.download_dir.write().await;
@@ -229,12 +167,9 @@ impl Downloader {
                                 *download_dir = new_download_dir;
                             }
 
-                            // Update legacy release.json toggle
-                            let mut legacy_flag = handle.write_legacy_release_json.write().await;
-                            *legacy_flag = settings.write_legacy_release_json;
-
-                            let mut download_mode = handle.download_mode.write().await;
-                            *download_mode = settings.download_mode;
+                            *handle.write_legacy_release_json.write().await =
+                                settings.write_legacy_release_json;
+                            *handle.download_mode.write().await = settings.download_mode;
                         }
                     }
                 }
@@ -244,38 +179,69 @@ impl Downloader {
 
         // On init, send rclone remotes list
         tokio::spawn({
-            let handle = handle.clone();
+            let handle = self.clone();
             async move {
                 tokio::select! {
                     _ = handle.cancel_token.cancelled() => {
-                        debug!("Downloader cancelled before sending initial remotes");
+                        debug!("Downloader session cancelled before sending initial remotes");
                     }
-                    res = async {
-                        let storage = handle.storage.read().await.clone();
-                        handle.repo.list_remotes(storage).await
-                    } => {
-                        match res {
-                            Ok(remotes) => {
-                                RcloneRemotesChanged { remotes, error: None }.send_signal_to_dart();
-                            }
-                            Err(e) => {
-                                error!(
-                                    error = e.as_ref() as &dyn Error,
-                                    "Failed to get downloader remotes on init"
-                                );
-                                RcloneRemotesChanged {
-                                    remotes: Vec::new(),
-                                    error: Some(format!("Failed to get remotes: {:#}", e)),
-                                }
-                                .send_signal_to_dart();
-                            }
-                        }
-                    }
+                    _ = handle.send_remotes() => {}
                 }
             }
         });
+    }
 
-        Ok(handle)
+    /// Rebuilds storage from the given settings; if it changed, refreshes
+    /// the remotes list and the app list. Never randomizes the remote.
+    async fn refresh_storage(&self, settings: &Settings, settings_handler: &Arc<SettingsHandler>) {
+        let new_storage = match build_repo_storage(
+            &self.repo,
+            &self.config,
+            &self.runtime_files,
+            settings,
+            settings_handler,
+            false,
+        )
+        .await
+        {
+            Ok(storage) => storage,
+            Err(e) => {
+                error!(
+                    error = e.as_ref() as &dyn Error,
+                    "Failed to rebuild storage on settings change"
+                );
+                return;
+            }
+        };
+
+        if new_storage == *self.storage.read().await {
+            return;
+        }
+
+        info!("Downloader storage config changed, recreating and refreshing app list");
+        self.current_load_token.read().await.cancel();
+        let new_token = self.cancel_token.child_token();
+        *self.current_load_token.write().await = new_token.clone();
+        *self.storage.write().await = new_storage;
+
+        self.send_remotes().await;
+        self.load_app_list(true, new_token).await;
+    }
+
+    async fn send_remotes(&self) {
+        match self.repo.list_remotes(self.storage.read().await.clone()).await {
+            Ok(remotes) => {
+                RcloneRemotesChanged { remotes, error: None }.send_signal_to_dart();
+            }
+            Err(e) => {
+                error!(error = e.as_ref() as &dyn Error, "Failed to get downloader remotes");
+                RcloneRemotesChanged {
+                    remotes: Vec::new(),
+                    error: Some(format!("Failed to get remotes: {:#}", e)),
+                }
+                .send_signal_to_dart();
+            }
+        }
     }
 
     /// Returns the cached CloudApp (if any) that matches the given full name
@@ -338,19 +304,7 @@ impl Downloader {
                 request = get_rclone_remotes_receiver.recv() => {
                     if request.is_some() {
                         debug!("Received GetRcloneRemotesRequest");
-                        let remotes = self
-                            .repo
-                            .list_remotes(self.storage.read().await.clone())
-                            .await;
-                        match remotes {
-                            Ok(remotes) => {
-                                RcloneRemotesChanged { remotes, error: None }.send_signal_to_dart();
-                            }
-                            Err(e) => {
-                                error!(error = e.as_ref() as &dyn Error, "Failed to get downloader remotes");
-                                RcloneRemotesChanged { remotes: Vec::new(), error: Some(format!("Failed to get remotes: {:#}", e)) }.send_signal_to_dart();
-                            }
-                        }
+                        self.send_remotes().await;
                     } else {
                         info!("GetRcloneRemotesRequest receiver closed, shutting down downloader command loop");
                         return;
@@ -483,7 +437,7 @@ impl Downloader {
         send_event(true, None, None, None);
 
         let storage = self.storage.read().await.clone();
-        let list_path = self.list_path.clone();
+        let list_path = self.config.list_path.clone();
         let cache_dir = self.cache_dir.clone();
         let client = self.http_client.clone();
 
@@ -673,4 +627,42 @@ impl Downloader {
 
         Ok(dst_dir.display().to_string())
     }
+}
+
+/// Builds storage via the repo and persists the remote name back into
+/// settings when the repo asks for it.
+async fn build_repo_storage(
+    repo: &Arc<dyn repo::Repo>,
+    config: &DownloaderConfig,
+    runtime_files: &repo::RuntimeFiles,
+    settings: &Settings,
+    settings_handler: &Arc<SettingsHandler>,
+    allow_randomize_remote: bool,
+) -> Result<repo::RepoStorage> {
+    let built = repo
+        .build_storage(repo::BuildStorageArgs {
+            rclone_path: runtime_files.rclone_path.as_deref(),
+            rclone_config_path: runtime_files.rclone_config_path.as_deref(),
+            root_dir: &config.root_dir,
+            remote_name: &settings.rclone_remote_name,
+            bandwidth_limit: &settings.bandwidth_limit,
+            remote_name_filter_regex: config.remote_name_filter_regex.clone(),
+            allow_randomize_remote,
+        })
+        .await?;
+
+    if let Some(remote) = &built.persist_remote
+        && *remote != settings.rclone_remote_name
+    {
+        debug!(
+            old = settings.rclone_remote_name,
+            new = remote,
+            "Remote name changed on repo request, persisting to settings"
+        );
+        let mut updated = settings.clone();
+        updated.rclone_remote_name = remote.clone();
+        let _ = settings_handler.save_settings(&updated);
+    }
+
+    Ok(built.storage)
 }

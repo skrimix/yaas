@@ -372,6 +372,7 @@ impl LiveSession {
                         port = address.port(),
                         "device connected"
                     );
+                    stream.set_nonblocking(false)?;
                     stream.set_nodelay(true).ok();
                     self.active_connections.fetch_add(1, Ordering::SeqCst);
                     let _ = self.session_tx.send(SessionEvent::DeviceConnected);

@@ -32,11 +32,14 @@ require_cmd unzip
 
 mkdir -p dist
 
+echo "==> Resolving locked Flutter dependencies..."
+flutter pub get --enforce-lockfile
+
 echo "==> Generating Rinf bindings..."
 rinf gen
 
 echo "==> Building AppImage with fastforge..."
-fastforge package --platform linux --targets appimage --skip-clean
+fastforge package --platform linux --targets appimage --skip-clean --build-no-pub
 
 echo "==> Locating built AppImage under dist/..."
 shopt -s globstar nullglob

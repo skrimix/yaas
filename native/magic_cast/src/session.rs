@@ -6,7 +6,7 @@
 use std::io::{self, Read, Write};
 use std::net::{Shutdown, TcpListener, TcpStream};
 use std::path::PathBuf;
-use std::process::{Child, Command};
+use std::process::{Child, Command, Output, Stdio};
 use std::sync::atomic::{AtomicBool, AtomicUsize, Ordering};
 use std::sync::{Arc, Mutex, mpsc};
 use std::thread;
@@ -1105,18 +1105,22 @@ fn reconnect_adb_and_setup(config: &CastConfig, stop: &AtomicBool) -> Result<()>
 
 fn wait_for_adb_device(config: &CastConfig, stop: &AtomicBool) -> Result<bool> {
     let mut command = adb_command(config, &["wait-for-device"]);
-    debug!(?command, "run adb");
-    let mut child = command.spawn()?;
+    let mut child = command
+        .stdout(Stdio::piped())
+        .stderr(Stdio::piped())
+        .spawn()?;
     loop {
         if stop.load(Ordering::SeqCst) {
             terminate_child(&mut child);
             return Ok(false);
         }
-        if let Some(status) = child.try_wait()? {
-            if status.success() {
+        if child.try_wait()?.is_some() {
+            let output = child.wait_with_output()?;
+            log_adb_result(&command, &output, false);
+            if output.status.success() {
                 return Ok(true);
             }
-            return Err(format!("adb wait-for-device exited with {status}").into());
+            return Err(format_adb_failure(&["wait-for-device"], &output).into());
         }
         thread::sleep(Duration::from_millis(100));
     }
@@ -1332,34 +1336,74 @@ fn run_adb_teardown(config: &CastConfig) {
 }
 
 fn run_adb(config: &CastConfig, command_args: &[&str]) -> Result<()> {
-    let status = run_adb_status(config, command_args)?;
-    if !status.success() {
-        return Err(format!("adb command exited with {status}: {command_args:?}").into());
+    let output = run_adb_output(config, command_args, false)?;
+    if !output.status.success() {
+        return Err(format_adb_failure(command_args, &output).into());
     }
     Ok(())
 }
 
 fn run_adb_best_effort(config: &CastConfig, command_args: &[&str]) -> Result<()> {
-    let status = run_adb_status(config, command_args)?;
-    if !status.success() {
-        debug!("best-effort adb command exited with {status}");
-    }
+    run_adb_output(config, command_args, true)?;
     Ok(())
 }
 
-fn run_adb_status(
+fn run_adb_output(
     config: &CastConfig,
     command_args: &[&str],
-) -> io::Result<std::process::ExitStatus> {
+    best_effort: bool,
+) -> io::Result<Output> {
     let mut command = adb_command(config, command_args);
-    debug!(?command, "run adb");
-    command.status()
+    let output = command.output()?;
+    log_adb_result(&command, &output, best_effort);
+    Ok(output)
+}
+
+/// Logs a finished adb command with its captured output.
+fn log_adb_result(command: &Command, output: &Output, best_effort: bool) {
+    let stdout = String::from_utf8_lossy(&output.stdout);
+    let stderr = String::from_utf8_lossy(&output.stderr);
+    let stdout = stdout.trim();
+    let stderr = stderr.trim();
+    if output.status.success() {
+        debug!(?command, stdout, stderr, "run adb");
+    } else if best_effort {
+        debug!(
+            ?command,
+            status = %output.status,
+            stdout,
+            stderr,
+            "best-effort adb command failed"
+        );
+    } else {
+        debug!(
+            ?command,
+            status = %output.status,
+            stdout,
+            stderr,
+            "adb command failed"
+        );
+    }
+}
+
+fn format_adb_failure(command_args: &[&str], output: &Output) -> String {
+    let stderr = String::from_utf8_lossy(&output.stderr);
+    let stderr = stderr.trim();
+    if stderr.is_empty() {
+        format!(
+            "adb command exited with {}: {command_args:?}",
+            output.status
+        )
+    } else {
+        format!(
+            "adb command exited with {}: {command_args:?}: {stderr}",
+            output.status
+        )
+    }
 }
 
 fn adb_device_available(config: &CastConfig) -> Result<bool> {
-    let mut command = adb_command(config, &["get-state"]);
-    debug!(?command, "run adb");
-    let output = command.output()?;
+    let output = run_adb_output(config, &["get-state"], true)?;
     let stdout = String::from_utf8_lossy(&output.stdout);
     if output.status.success() {
         return Ok(stdout.trim() == "device");

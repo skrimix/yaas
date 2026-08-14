@@ -1447,7 +1447,7 @@ impl AdbService {
             "Starting device logcat monitor"
         );
         let stream = inner
-            .execute_host_shell_command_stream(LOGCAT_COMMAND)
+            .shell_stream(LOGCAT_COMMAND)
             .await
             .context("Failed to start device logcat monitor")?;
         let mut lines = BufReader::new(stream).lines();

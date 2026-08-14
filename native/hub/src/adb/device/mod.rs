@@ -240,7 +240,7 @@ impl AdbDevice {
     pub(super) async fn query_identity(device: &Device) -> Result<String> {
         let manufacturer = tokio::time::timeout(
             Duration::from_millis(800),
-            device.execute_host_shell_command("getprop ro.product.manufacturer"),
+            device.shell("getprop ro.product.manufacturer"),
         )
         .await
         .context("Timed out reading ro.product.manufacturer")?
@@ -249,7 +249,7 @@ impl AdbDevice {
         .to_string();
         let model = tokio::time::timeout(
             Duration::from_millis(800),
-            device.execute_host_shell_command("getprop ro.product.model"),
+            device.shell("getprop ro.product.model"),
         )
         .await
         .context("Timed out reading ro.product.model")?
@@ -269,7 +269,7 @@ impl AdbDevice {
     #[instrument(level = "debug", skip(device), err)]
     pub(super) async fn query_true_serial(device: &Device) -> Result<String> {
         Ok(device
-            .execute_host_shell_command("getprop ro.serialno")
+            .shell("getprop ro.serialno")
             .await
             .context("Failed to read ro.serialno")?
             .trim()
@@ -444,36 +444,40 @@ impl AdbDevice {
     #[instrument(level = "debug", skip(self), err, ret)]
     pub(super) async fn shell(&self, command: &str) -> Result<String> {
         self.inner
-            .execute_host_shell_command(command)
+            .shell(command)
             .await
             .context("Failed to execute shell command")
             .inspect(|v| trace!(output = ?v, "Shell command executed"))
     }
 
     /// Executes a shell command and fails if exit code is non-zero.
-    /// Appends `; printf '\n%s' $?` and parses the final line as the exit status.
     #[instrument(level = "debug", skip(self), err, ret)]
     pub(super) async fn shell_checked(&self, command: &str) -> Result<String> {
         let shell_output = self
-            .shell(&format!("{} ; printf '\\n%s' $?", command))
+            .inner
+            .shell_v2(command)
             .await
             .context(format!("Failed to execute checked shell command: {command}"))?;
-        let (output, exit_code) = match shell_output.rsplit_once('\n') {
-            Some(parts) => parts,
-            None => {
-                let trimmed = shell_output.trim();
-                if !trimmed.is_empty() && trimmed.chars().all(|c| c.is_ascii_digit()) {
-                    ("", trimmed)
-                } else {
-                    return Err(anyhow!("Failed to extract exit code"));
-                }
-            }
-        };
-        if exit_code != "0" {
-            error!(exit_code, output, "Shell command returned non-zero exit code");
-            bail!("Command {command} failed with exit code {exit_code}. Output: {output}");
+        let stdout = std::str::from_utf8(&shell_output.stdout)
+            .context("Shell command stdout is not valid UTF-8")?
+            .replace("\r\n", "\n");
+        let stderr = std::str::from_utf8(&shell_output.stderr)
+            .context("Shell command stderr is not valid UTF-8")?
+            .replace("\r\n", "\n");
+        if shell_output.exit_code != 0 {
+            error!(
+                exit_code = shell_output.exit_code,
+                stdout, stderr, "Shell command returned non-zero exit code"
+            );
+            bail!(
+                "Command {command} failed with exit code {}. stdout: {stdout}; stderr: {stderr}",
+                shell_output.exit_code
+            );
         }
-        Ok(output.to_string())
+        if !stderr.is_empty() {
+            trace!(stderr, "Shell command wrote to stderr");
+        }
+        Ok(stdout)
     }
 
     /// Reboots the device with the given mode

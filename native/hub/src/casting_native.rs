@@ -249,9 +249,17 @@ impl NativeCastingManager {
                 player_connected.store(true, Ordering::SeqCst);
             }
             SessionEvent::PlaybackStarted => {
-                info!("Native casting: playback started");
-                if let Some(url) = self.current_url_for(session_id).await {
-                    self.emit_state(NativeCastingState::Streaming, Some(url), None);
+                // The event also fires on every rebuffer recovery; only the actual
+                // transition into Streaming is worth logging and reporting.
+                if self.last_state.read().expect("state lock poisoned").state
+                    == NativeCastingState::Streaming
+                {
+                    debug!("Native casting: playback resumed after rebuffer");
+                } else {
+                    info!("Native casting: playback started");
+                    if let Some(url) = self.current_url_for(session_id).await {
+                        self.emit_state(NativeCastingState::Streaming, Some(url), None);
+                    }
                 }
             }
             SessionEvent::PlayerDisconnected => {

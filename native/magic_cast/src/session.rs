@@ -5,6 +5,8 @@
 
 use std::io::{self, Read, Write};
 use std::net::{Shutdown, TcpListener, TcpStream};
+#[cfg(target_os = "windows")]
+use std::os::windows::process::CommandExt;
 use std::path::PathBuf;
 use std::process::{Child, Command, Output, Stdio};
 use std::sync::atomic::{AtomicBool, AtomicUsize, Ordering};
@@ -1436,6 +1438,10 @@ fn adb_command(config: &CastConfig, command_args: &[&str]) -> Command {
         command.arg("-s").arg(serial);
     }
     command.args(command_args);
+
+    #[cfg(target_os = "windows")]
+    command.creation_flags(0x08000000); // CREATE_NO_WINDOW
+
     command
 }
 

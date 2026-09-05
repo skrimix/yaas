@@ -166,6 +166,8 @@
     "settingsCleanupKeepOneVersion": "Keep one version",
     "settingsCleanupKeepTwoVersions": "Keep two versions",
     "settingsCleanupKeepAllVersions": "Keep all versions",
+    "settingsFavorites": "Favorites",
+    "settingsDownloaderSource": "Downloader source",
     "settingsBrowse": "Browse",
     "selectLabel": "Select {label}",
     "@selectLabel": {

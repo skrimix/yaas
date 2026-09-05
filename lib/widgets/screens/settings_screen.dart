@@ -14,6 +14,7 @@ import '../../src/l10n/app_localizations.dart';
 import '../../utils/utils.dart';
 import '../../utils/sideload_utils.dart';
 import '../common/selectable_link_text.dart';
+import '../common/setting_row.dart';
 import '../dialogs/downloader_setup_dialog.dart';
 
 enum SettingTextField {
@@ -25,7 +26,7 @@ enum SettingTextField {
 }
 
 class SettingsConstants {
-  static const double sectionSpacing = 12.0;
+  static const double sectionSpacing = 24.0;
   static const double padding = 16.0;
   static const double verticalSpacing = 8.0;
   static const double iconButtonSize = 32.0;
@@ -334,27 +335,33 @@ class _SettingsScreenState extends State<SettingsScreen> {
       return const Center(child: CircularProgressIndicator());
     }
 
-    return Column(
-      children: [
-        Padding(
-          padding: const EdgeInsets.fromLTRB(
-            SettingsConstants.padding,
-            SettingsConstants.padding,
-            SettingsConstants.padding,
-            SettingsConstants.verticalSpacing,
-          ),
-          child: _buildHeader(l10n),
-        ),
-        Expanded(
-          child: SingleChildScrollView(
-            padding: const EdgeInsets.all(SettingsConstants.padding),
-            child: Column(
-              crossAxisAlignment: CrossAxisAlignment.start,
-              children: _buildSettingsSections(l10n, settingsState),
+    return Align(
+      alignment: Alignment.topCenter,
+      child: ConstrainedBox(
+        constraints: const BoxConstraints(maxWidth: 1000),
+        child: Column(
+          children: [
+            Padding(
+              padding: const EdgeInsets.fromLTRB(
+                SettingsConstants.padding,
+                SettingsConstants.padding,
+                SettingsConstants.padding,
+                SettingsConstants.verticalSpacing,
+              ),
+              child: _buildHeader(l10n),
             ),
-          ),
+            Expanded(
+              child: SingleChildScrollView(
+                padding: const EdgeInsets.all(SettingsConstants.padding),
+                child: Column(
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  children: _buildSettingsSections(l10n, settingsState),
+                ),
+              ),
+            ),
+          ],
         ),
-      ],
+      ),
     );
   }
 
@@ -375,44 +382,54 @@ class _SettingsScreenState extends State<SettingsScreen> {
   }
 
   Widget _buildHeader(AppLocalizations l10n) {
-    return Row(
-      mainAxisAlignment: MainAxisAlignment.spaceBetween,
-      children: [
-        Text(
-          l10n.settingsTitle,
-          style: Theme.of(context).textTheme.headlineMedium,
-        ),
-        Row(
-          children: [
-            ValueListenableBuilder<bool>(
-              valueListenable: _isShiftPressedNotifier,
-              builder: (context, isShiftPressed, _) {
-                final bool enabled = isShiftPressed || _hasChanges;
-                return SizedBox(
-                  height: SettingsConstants.iconButtonSize,
-                  width: SettingsConstants.iconButtonSize,
-                  child: IconButton.filledTonal(
-                    onPressed: enabled
-                        ? (isShiftPressed ? _resetToDefaults : _revertChanges)
-                        : null,
-                    iconSize: SettingsConstants.iconSize,
-                    icon: Icon(isShiftPressed ? Icons.restart_alt : Icons.undo),
-                    tooltip: isShiftPressed
-                        ? l10n.settingsResetToDefaults
-                        : l10n.settingsRevertChangesTooltip,
-                  ),
-                );
-              },
-            ),
-            const SizedBox(width: SettingsConstants.verticalSpacing),
-            FilledButton.icon(
-              onPressed: _hasChanges ? _saveSettings : null,
-              icon: const Icon(Icons.save),
-              label: Text(l10n.settingsSaveChanges),
-            ),
-          ],
-        ),
-      ],
+    return SizedBox(
+      width: double.infinity,
+      child: Wrap(
+        alignment: WrapAlignment.spaceBetween,
+        crossAxisAlignment: WrapCrossAlignment.center,
+        spacing: 16,
+        runSpacing: 12,
+        children: [
+          Text(
+            l10n.settingsTitle,
+            style: Theme.of(context).textTheme.headlineMedium,
+          ),
+          Row(
+            mainAxisSize: MainAxisSize.min,
+            children: [
+              ValueListenableBuilder<bool>(
+                valueListenable: _isShiftPressedNotifier,
+                builder: (context, isShiftPressed, _) {
+                  final bool enabled = isShiftPressed || _hasChanges;
+                  return SizedBox(
+                    height: SettingsConstants.iconButtonSize,
+                    width: SettingsConstants.iconButtonSize,
+                    child: IconButton.filledTonal(
+                      onPressed: enabled
+                          ? (isShiftPressed ? _resetToDefaults : _revertChanges)
+                          : null,
+                      iconSize: SettingsConstants.iconSize,
+                      icon:
+                          Icon(isShiftPressed ? Icons.restart_alt : Icons.undo),
+                      tooltip: isShiftPressed
+                          ? l10n.settingsResetToDefaults
+                          : l10n.settingsRevertChangesTooltip,
+                    ),
+                  );
+                },
+              ),
+              const SizedBox(width: SettingsConstants.verticalSpacing),
+              Flexible(
+                child: FilledButton.icon(
+                  onPressed: _hasChanges ? _saveSettings : null,
+                  icon: const Icon(Icons.save),
+                  label: Text(l10n.settingsSaveChanges),
+                ),
+              ),
+            ],
+          ),
+        ],
+      ),
     );
   }
 
@@ -422,42 +439,35 @@ class _SettingsScreenState extends State<SettingsScreen> {
       _buildSection(
         title: l10n.settingsSectionAppearance,
         children: [
-          Padding(
-            padding: const EdgeInsets.symmetric(
-                vertical: SettingsConstants.verticalSpacing),
-            child: DropdownButtonFormField<ThemePreference>(
-              initialValue: _currentFormSettings.themePreference,
-              items: [
-                DropdownMenuItem(
-                  value: ThemePreference.auto,
-                  child: Text(l10n.themeAuto),
-                ),
-                DropdownMenuItem(
-                  value: ThemePreference.dark,
-                  child: Text(l10n.themeDark),
-                ),
-                DropdownMenuItem(
-                  value: ThemePreference.light,
-                  child: Text(l10n.themeLight),
-                ),
-              ],
-              onChanged: (value) {
-                if (value == null) return;
-                settingsState.setThemePreference(value);
-                setState(() {
-                  _currentFormSettings =
-                      _currentFormSettings.copyWith(themePreference: value);
-                  _hasChanges = false;
-                });
-              },
-              decoration: InputDecoration(
-                labelText: l10n.settingsTheme,
-                border: const OutlineInputBorder(),
+          _buildDropdownSetting<ThemePreference>(
+            label: l10n.settingsTheme,
+            value: _currentFormSettings.themePreference,
+            items: [
+              DropdownMenuItem(
+                value: ThemePreference.auto,
+                child: Text(l10n.themeAuto),
               ),
-            ),
+              DropdownMenuItem(
+                value: ThemePreference.dark,
+                child: Text(l10n.themeDark),
+              ),
+              DropdownMenuItem(
+                value: ThemePreference.light,
+                child: Text(l10n.themeLight),
+              ),
+            ],
+            onChanged: (value) {
+              if (value == null) return;
+              settingsState.setThemePreference(value);
+              setState(() {
+                _currentFormSettings =
+                    _currentFormSettings.copyWith(themePreference: value);
+                _hasChanges = false;
+              });
+            },
           ),
-          SwitchListTile(
-            title: Text(l10n.settingsUseSystemColor),
+          _buildSwitchSetting(
+            label: l10n.settingsUseSystemColor,
             value: settingsState.settings.useSystemColor,
             onChanged: (v) {
               settingsState.setUseSystemColor(v);
@@ -527,21 +537,22 @@ class _SettingsScreenState extends State<SettingsScreen> {
               }
             },
           ),
-          const Divider(height: 24),
           Consumer<SettingsState>(builder: (context, settings, _) {
             final hasFavorites = settings.favoritePackages.isNotEmpty;
-            return Align(
-              alignment: Alignment.centerLeft,
-              child: FilledButton.tonalIcon(
-                onPressed: hasFavorites
-                    ? () async {
-                        final confirmed = await _confirmClearFavorites(l10n);
-                        if (!confirmed) return;
-                        settings.clearFavorites();
-                      }
-                    : null,
-                icon: const Icon(Icons.star_outline),
-                label: Text(l10n.clearFavorites),
+            return SettingRow(
+              label: l10n.settingsFavorites,
+              control: Align(
+                alignment: Alignment.centerRight,
+                child: TextButton(
+                  onPressed: hasFavorites
+                      ? () async {
+                          final confirmed = await _confirmClearFavorites(l10n);
+                          if (!confirmed) return;
+                          settings.clearFavorites();
+                        }
+                      : null,
+                  child: Text(l10n.commonClear),
+                ),
               ),
             );
           }),
@@ -575,10 +586,9 @@ class _SettingsScreenState extends State<SettingsScreen> {
             isDirectory: false,
             currentValue: _currentFormSettings.adbPath,
           ),
-          const SizedBox(height: SettingsConstants.verticalSpacing),
-          SwitchListTile(
-            title: Text(l10n.settingsMdnsAutoConnect),
-            subtitle: Text(l10n.settingsMdnsAutoConnectHelp),
+          _buildSwitchSetting(
+            label: l10n.settingsMdnsAutoConnect,
+            description: l10n.settingsMdnsAutoConnectHelp,
             value: _currentFormSettings.mdnsAutoConnect,
             onChanged: (v) {
               setState(() {
@@ -588,9 +598,9 @@ class _SettingsScreenState extends State<SettingsScreen> {
               });
             },
           ),
-          SwitchListTile(
-            title: Text(l10n.settingsAutoReinstallOnConflict),
-            subtitle: Text(l10n.settingsAutoReinstallOnConflictHelp),
+          _buildSwitchSetting(
+            label: l10n.settingsAutoReinstallOnConflict,
+            description: l10n.settingsAutoReinstallOnConflictHelp,
             value: _currentFormSettings.autoReinstallOnConflict,
             onChanged: (v) {
               setState(() {
@@ -617,21 +627,16 @@ class _SettingsScreenState extends State<SettingsScreen> {
               }
             },
           ),
-          if (Platform.isWindows)
-            Padding(
-              padding:
-                  const EdgeInsets.only(top: SettingsConstants.verticalSpacing),
-              child: _buildCastingToolCard(context),
-            ),
+          if (Platform.isWindows) _buildCastingToolCard(context),
         ],
       ),
       const SizedBox(height: SettingsConstants.sectionSpacing),
       _buildSection(
         title: l10n.settingsSectionExperimental,
         children: [
-          SwitchListTile(
-            title: Text(l10n.settingsExperimentalNativeCast),
-            subtitle: Text(l10n.settingsExperimentalNativeCastWarning),
+          _buildSwitchSetting(
+            label: l10n.settingsExperimentalNativeCast,
+            description: l10n.settingsExperimentalNativeCastWarning,
             value: settingsState.settings.experimentalNativeCast,
             onChanged: (v) {
               settingsState.setExperimentalNativeCast(v);
@@ -644,7 +649,6 @@ class _SettingsScreenState extends State<SettingsScreen> {
           ),
         ],
       ),
-      const SizedBox(height: SettingsConstants.sectionSpacing),
     ];
 
     // Downloader section
@@ -654,25 +658,11 @@ class _SettingsScreenState extends State<SettingsScreen> {
         title: l10n.settingsSectionDownloader,
         children: [
           if (settingsState.isDownloaderInitializing)
-            Padding(
-              padding: const EdgeInsets.only(
-                bottom: SettingsConstants.verticalSpacing,
-              ),
-              child: _buildDownloaderInitBanner(l10n, settingsState),
-            ),
+            _buildDownloaderInitBanner(l10n, settingsState),
           if (!settingsState.isDownloaderInitializing &&
               settingsState.downloaderError != null)
-            Padding(
-              padding: const EdgeInsets.only(
-                bottom: SettingsConstants.verticalSpacing,
-              ),
-              child: _buildDownloaderErrorBanner(
-                l10n,
-                settingsState.downloaderError!,
-              ),
-            ),
-          if (settingsState.downloaderSources.isNotEmpty)
-            _buildDownloaderSourceSummary(l10n, settingsState),
+            _buildDownloaderErrorBanner(l10n, settingsState.downloaderError!),
+          _buildDownloaderSourceSummary(l10n, settingsState),
           if (settingsState.isDownloaderAvailable) ...[
             if (settingsState.downloaderSupportsRemoteSelection)
               _buildRcloneRemoteSelector(l10n),
@@ -686,7 +676,8 @@ class _SettingsScreenState extends State<SettingsScreen> {
                   child: Text(
                     l10n.settingsBandwidthHelper,
                     style: Theme.of(context).textTheme.bodySmall?.copyWith(
-                          color: Theme.of(context).hintColor,
+                          color: Theme.of(context).colorScheme.primary,
+                          decoration: TextDecoration.underline,
                         ),
                   ),
                 ),
@@ -710,10 +701,9 @@ class _SettingsScreenState extends State<SettingsScreen> {
             ),
             if (settingsState.downloaderSupportsDownloadModeSelection)
               _buildDownloadModeSetting(l10n),
-            const SizedBox(height: SettingsConstants.verticalSpacing),
-            SwitchListTile(
-              title: Text(l10n.settingsWriteLegacyReleaseJson),
-              subtitle: Text(l10n.settingsWriteLegacyReleaseJsonHelp),
+            _buildSwitchSetting(
+              label: l10n.settingsWriteLegacyReleaseJson,
+              description: l10n.settingsWriteLegacyReleaseJsonHelp,
               value: _currentFormSettings.writeLegacyReleaseJson,
               onChanged: (v) {
                 setState(() {
@@ -724,18 +714,6 @@ class _SettingsScreenState extends State<SettingsScreen> {
               },
             ),
           ],
-          Align(
-            alignment: Alignment.centerLeft,
-            child: Row(
-              children: [
-                TextButton.icon(
-                  onPressed: _showDownloaderSourcesDialog,
-                  icon: const Icon(Icons.cloud_download),
-                  label: Text(l10n.installDownloaderConfigFromUrl),
-                ),
-              ],
-            ),
-          ),
         ],
       ),
     ]);
@@ -761,17 +739,74 @@ class _SettingsScreenState extends State<SettingsScreen> {
     return Column(
       crossAxisAlignment: CrossAxisAlignment.start,
       children: [
-        Text(
-          title,
-          style: Theme.of(context).textTheme.titleMedium,
+        Padding(
+          padding: const EdgeInsets.only(left: 16, bottom: 8),
+          child: Text(title, style: Theme.of(context).textTheme.titleSmall),
         ),
         Card(
-          child: Padding(
-            padding: const EdgeInsets.all(SettingsConstants.padding),
-            child: Column(children: children),
+          margin: EdgeInsets.zero,
+          elevation: 0,
+          clipBehavior: Clip.antiAlias,
+          child: Column(
+            crossAxisAlignment: CrossAxisAlignment.stretch,
+            children: [
+              for (var i = 0; i < children.length; i++) ...[
+                if (i > 0)
+                  Divider(
+                    height: 1,
+                    indent: 16,
+                    endIndent: 16,
+                    color: Theme.of(context)
+                        .colorScheme
+                        .outlineVariant
+                        .withValues(alpha: 0.45),
+                  ),
+                children[i],
+              ],
+            ],
           ),
         ),
       ],
+    );
+  }
+
+  Widget _buildSwitchSetting({
+    required String label,
+    String? description,
+    required bool value,
+    required ValueChanged<bool> onChanged,
+  }) {
+    return MergeSemantics(
+      child: InkWell(
+        onTap: () => onChanged(!value),
+        child: SettingRow(
+          label: label,
+          description: description == null ? null : Text(description),
+          compact: true,
+          control: Switch(value: value, onChanged: onChanged),
+        ),
+      ),
+    );
+  }
+
+  InputDecoration _controlDecoration({String? hintText}) {
+    final colors = Theme.of(context).colorScheme;
+    final border = OutlineInputBorder(
+      borderRadius: BorderRadius.circular(8),
+      borderSide: BorderSide.none,
+    );
+    return InputDecoration(
+      hintText: hintText,
+      filled: true,
+      fillColor: colors.surfaceContainerHighest.withValues(alpha: 0.55),
+      isDense: true,
+      contentPadding: const EdgeInsets.symmetric(horizontal: 12, vertical: 12),
+      border: border,
+      enabledBorder: border,
+      disabledBorder: border,
+      focusedBorder: border.copyWith(
+        borderSide: BorderSide(color: colors.primary, width: 2),
+      ),
     );
   }
 
@@ -784,124 +819,112 @@ class _SettingsScreenState extends State<SettingsScreen> {
       });
     }
 
-    return Column(
-      crossAxisAlignment: CrossAxisAlignment.start,
-      children: [
-        Row(
-          children: [
-            const Icon(Icons.cast),
-            const SizedBox(width: 8),
-            Expanded(
-              child: Text(AppLocalizations.of(context).castingToolTitle),
-            ),
-            FilledButton.tonal(
-              onPressed: () async {
-                final confirmed = await showDialog<bool>(
-                  context: context,
-                  builder: (ctx) => AlertDialog(
-                    title: Text(AppLocalizations.of(context)
-                        .castingToolInstallUpdateTitle),
-                    content: Text(AppLocalizations.of(context)
-                        .castingToolInstallUpdateDesc),
-                    actions: [
-                      TextButton(
-                        onPressed: () => Navigator.pop(ctx, false),
-                        child: Text(AppLocalizations.of(context).commonCancel),
-                      ),
-                      FilledButton(
-                        onPressed: () => Navigator.pop(ctx, true),
-                        child:
-                            Text(AppLocalizations.of(context).commonDownload),
+    return SettingRow(
+      label: AppLocalizations.of(context).castingToolTitle,
+      control: Align(
+        alignment: Alignment.centerRight,
+        child: TextButton(
+          onPressed: () async {
+            final confirmed = await showDialog<bool>(
+              context: context,
+              builder: (ctx) => AlertDialog(
+                title: Text(
+                    AppLocalizations.of(context).castingToolInstallUpdateTitle),
+                content: Text(
+                    AppLocalizations.of(context).castingToolInstallUpdateDesc),
+                actions: [
+                  TextButton(
+                    onPressed: () => Navigator.pop(ctx, false),
+                    child: Text(AppLocalizations.of(context).commonCancel),
+                  ),
+                  FilledButton(
+                    onPressed: () => Navigator.pop(ctx, true),
+                    child: Text(AppLocalizations.of(context).commonDownload),
+                  ),
+                ],
+              ),
+            );
+            if (confirmed == true) {
+              const DownloadCastingBundleRequest().sendSignalToRust();
+              if (!context.mounted) return;
+              final l10n = AppLocalizations.of(context);
+              ScaffoldMessenger.of(context).showSnackBar(
+                SnackBar(content: Text(l10n.castingToolDownloading)),
+              );
+            }
+          },
+          child: Text(AppLocalizations.of(context).castingToolDownloadUpdate),
+        ),
+      ),
+      footer: StreamBuilder(
+        stream: CastingStatusChanged.rustSignalStream,
+        builder: (context, snapshot) {
+          final msg = snapshot.data?.message;
+          final installed = msg?.installed == true;
+          final path = msg?.exePath ?? '';
+          return Column(
+            crossAxisAlignment: CrossAxisAlignment.start,
+            children: [
+              Row(
+                children: [
+                  Icon(installed ? Icons.check_circle : Icons.info_outline,
+                      size: 16,
+                      color: installed
+                          ? Colors.green
+                          : Theme.of(context).colorScheme.secondary),
+                  const SizedBox(width: 6),
+                  Expanded(
+                    child: Text(
+                      installed
+                          ? '${AppLocalizations.of(context).castingToolStatusInstalled}${path.isNotEmpty ? ' • $path' : ''}'
+                          : AppLocalizations.of(context)
+                              .castingToolStatusNotInstalled,
+                      style: Theme.of(context).textTheme.bodySmall,
+                      overflow: TextOverflow.ellipsis,
+                    ),
+                  ),
+                  IconButton(
+                    tooltip: AppLocalizations.of(context).castingToolRefresh,
+                    onPressed: () =>
+                        const GetCastingStatusRequest().sendSignalToRust(),
+                    icon: const Icon(Icons.refresh, size: 18),
+                  ),
+                ],
+              ),
+              const SizedBox(height: 6),
+              StreamBuilder(
+                stream: CastingDownloadProgress.rustSignalStream,
+                builder: (context, snap2) {
+                  final prog = snap2.data?.message;
+                  if (installed || prog == null) {
+                    return const SizedBox.shrink();
+                  }
+                  final total = prog.total?.toInt().toDouble();
+                  final received = prog.received.toInt().toDouble();
+                  final value = total == null || total == 0
+                      ? null
+                      : math.min(1.0, math.max(0.0, received / total));
+                  final percent = value == null ? null : (value * 100).round();
+                  final l10n = AppLocalizations.of(context);
+                  return Column(
+                    crossAxisAlignment: CrossAxisAlignment.start,
+                    children: [
+                      LinearProgressIndicator(value: value),
+                      const SizedBox(height: 4),
+                      Text(
+                        percent == null
+                            ? l10n.castingToolDownloading
+                            : '${l10n.castingToolDownloading} ($percent%)',
+                        style: Theme.of(context).textTheme.bodySmall,
                       ),
                     ],
-                  ),
-                );
-                if (confirmed == true) {
-                  const DownloadCastingBundleRequest().sendSignalToRust();
-                  if (!context.mounted) return;
-                  final l10n = AppLocalizations.of(context);
-                  ScaffoldMessenger.of(context).showSnackBar(
-                    SnackBar(content: Text(l10n.castingToolDownloading)),
                   );
-                }
-              },
-              child:
-                  Text(AppLocalizations.of(context).castingToolDownloadUpdate),
-            ),
-          ],
-        ),
-        const SizedBox(height: 8),
-        StreamBuilder(
-          stream: CastingStatusChanged.rustSignalStream,
-          builder: (context, snapshot) {
-            final msg = snapshot.data?.message;
-            final installed = msg?.installed == true;
-            final path = msg?.exePath ?? '';
-            return Column(
-              crossAxisAlignment: CrossAxisAlignment.start,
-              children: [
-                Row(
-                  children: [
-                    Icon(installed ? Icons.check_circle : Icons.info_outline,
-                        size: 16,
-                        color: installed
-                            ? Colors.green
-                            : Theme.of(context).colorScheme.secondary),
-                    const SizedBox(width: 6),
-                    Expanded(
-                      child: Text(
-                        installed
-                            ? '${AppLocalizations.of(context).castingToolStatusInstalled}${path.isNotEmpty ? ' • $path' : ''}'
-                            : AppLocalizations.of(context)
-                                .castingToolStatusNotInstalled,
-                        style: Theme.of(context).textTheme.bodySmall,
-                        overflow: TextOverflow.ellipsis,
-                      ),
-                    ),
-                    IconButton(
-                      tooltip: AppLocalizations.of(context).castingToolRefresh,
-                      onPressed: () =>
-                          const GetCastingStatusRequest().sendSignalToRust(),
-                      icon: const Icon(Icons.refresh, size: 18),
-                    ),
-                  ],
-                ),
-                const SizedBox(height: 6),
-                StreamBuilder(
-                  stream: CastingDownloadProgress.rustSignalStream,
-                  builder: (context, snap2) {
-                    final prog = snap2.data?.message;
-                    if (installed || prog == null) {
-                      return const SizedBox.shrink();
-                    }
-                    final total = prog.total?.toInt().toDouble();
-                    final received = prog.received.toInt().toDouble();
-                    final value = total == null || total == 0
-                        ? null
-                        : math.min(1.0, math.max(0.0, received / total));
-                    final percent =
-                        value == null ? null : (value * 100).round();
-                    final l10n = AppLocalizations.of(context);
-                    return Column(
-                      crossAxisAlignment: CrossAxisAlignment.start,
-                      children: [
-                        LinearProgressIndicator(value: value),
-                        const SizedBox(height: 4),
-                        Text(
-                          percent == null
-                              ? l10n.castingToolDownloading
-                              : '${l10n.castingToolDownloading} ($percent%)',
-                          style: Theme.of(context).textTheme.bodySmall,
-                        ),
-                      ],
-                    );
-                  },
-                ),
-              ],
-            );
-          },
-        ),
-      ],
+                },
+              ),
+            ],
+          );
+        },
+      ),
     );
   }
 
@@ -909,39 +932,19 @@ class _SettingsScreenState extends State<SettingsScreen> {
     AppLocalizations l10n,
     SettingsState settingsState,
   ) {
-    return Card(
-      child: Padding(
-        padding: const EdgeInsets.all(12),
-        child: Row(
-          children: [
-            const SizedBox(
-              width: 16,
-              height: 16,
-              child: CircularProgressIndicator(strokeWidth: 2),
-            ),
-            const SizedBox(width: 12),
-            Expanded(
-              child: Column(
-                crossAxisAlignment: CrossAxisAlignment.start,
-                children: [
-                  Text(l10n.preparingDownloader),
-                  const SizedBox(height: 4),
-                  LinearProgressIndicator(
-                    value: settingsState.downloaderInitProgress,
-                  ),
-                  if (settingsState.isDownloaderInitDownloadActive) ...[
-                    const SizedBox(height: 4),
-                    Text(
-                      l10n.downloadingRcloneFiles,
-                      style: Theme.of(context).textTheme.bodySmall,
-                    ),
-                  ],
-                ],
-              ),
-            ),
-          ],
-        ),
+    return SettingRow(
+      label: l10n.preparingDownloader,
+      description: settingsState.isDownloaderInitDownloadActive
+          ? Text(l10n.downloadingRcloneFiles)
+          : null,
+      compact: true,
+      control: const SizedBox(
+        width: 20,
+        height: 20,
+        child: CircularProgressIndicator(strokeWidth: 2),
       ),
+      footer:
+          LinearProgressIndicator(value: settingsState.downloaderInitProgress),
     );
   }
 
@@ -949,25 +952,28 @@ class _SettingsScreenState extends State<SettingsScreen> {
     AppLocalizations l10n,
     String error,
   ) {
-    return Card(
-      color: Colors.red.withValues(alpha: 0.08),
-      child: Padding(
-        padding: const EdgeInsets.all(12),
-        child: Row(
-          children: [
-            const Icon(Icons.error_outline, color: Colors.red),
-            const SizedBox(width: 8),
-            Expanded(child: buildCopyableText(context, error)),
-            const SizedBox(width: 12),
-            FilledButton.tonalIcon(
-              onPressed: () {
-                const RetryDownloaderInitRequest().sendSignalToRust();
-              },
-              icon: const Icon(Icons.refresh),
+    return Padding(
+      padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 14),
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.stretch,
+        children: [
+          _statusText(
+            icon: Icons.error_outline,
+            color: Theme.of(context).colorScheme.error,
+            text: error,
+            copyable: true,
+          ),
+          const SizedBox(height: 8),
+          Align(
+            alignment: Alignment.centerRight,
+            child: TextButton.icon(
+              onPressed: () =>
+                  const RetryDownloaderInitRequest().sendSignalToRust(),
+              icon: const Icon(Icons.refresh, size: 18),
               label: Text(l10n.retry),
             ),
-          ],
-        ),
+          ),
+        ],
       ),
     );
   }
@@ -982,10 +988,11 @@ class _SettingsScreenState extends State<SettingsScreen> {
     return _buildTextSetting(
       field: field,
       label: label,
-      trailing: IconButton.filledTonal(
-        icon: const Icon(Icons.folder_open),
+      fullWidth: true,
+      trailing: TextButton.icon(
+        icon: const Icon(Icons.folder_open, size: 18),
         onPressed: () => _pickPath(field, isDirectory, currentValue, label),
-        tooltip: l10n.settingsBrowse,
+        label: Text(l10n.settingsBrowse),
       ),
     );
   }
@@ -994,28 +1001,23 @@ class _SettingsScreenState extends State<SettingsScreen> {
     required SettingTextField field,
     required String label,
     Widget? trailing,
-    String? helperText,
     Widget? helper,
-    bool enabled = true,
+    bool fullWidth = false,
   }) {
-    final controller = _textControllers[field];
-
-    return Padding(
-      padding: const EdgeInsets.symmetric(
-          vertical: SettingsConstants.verticalSpacing),
-      child: Row(
+    return SettingRow(
+      label: label,
+      description: helper,
+      fullWidth: fullWidth,
+      control: Row(
         children: [
           Expanded(
-            child: TextField(
-              enabled: enabled,
-              controller: controller,
-              decoration: InputDecoration(
-                labelText: label,
-                helperText: helper == null ? helperText : null,
-                border: const OutlineInputBorder(),
-                helper: helper,
+            child: Semantics(
+              label: label,
+              child: TextField(
+                controller: _textControllers[field],
+                decoration: _controlDecoration(),
+                onChanged: (value) => _updateSetting(field, value),
               ),
-              onChanged: (value) => _updateSetting(field, value),
             ),
           ),
           if (trailing != null) ...[
@@ -1027,56 +1029,75 @@ class _SettingsScreenState extends State<SettingsScreen> {
     );
   }
 
+  Widget _dropdownControl<T>({
+    required String label,
+    required T? value,
+    required List<DropdownMenuItem<T>> items,
+    required ValueChanged<T?>? onChanged,
+    Widget? hint,
+  }) {
+    return Semantics(
+      label: label,
+      child: DropdownButtonFormField<T>(
+        initialValue: value,
+        isExpanded: true,
+        itemHeight: null,
+        hint: hint,
+        items: items,
+        selectedItemBuilder: (context) => items
+            .map((item) => Align(
+                  alignment: Alignment.centerLeft,
+                  child: DefaultTextStyle.merge(
+                    maxLines: 1,
+                    overflow: TextOverflow.ellipsis,
+                    child: item.child,
+                  ),
+                ))
+            .toList(),
+        onChanged: onChanged,
+        decoration: _controlDecoration(),
+        borderRadius: BorderRadius.circular(8),
+      ),
+    );
+  }
+
   Widget _buildDropdownSetting<T>({
     required String label,
     required T value,
     required List<DropdownMenuItem<T>> items,
     required ValueChanged<T?>? onChanged,
-    Widget? disabledHint,
+    String? description,
   }) {
-    return Padding(
-      padding: const EdgeInsets.symmetric(
-          vertical: SettingsConstants.verticalSpacing),
-      child: DropdownButtonFormField<T>(
-        disabledHint: disabledHint,
-        initialValue: value,
+    return SettingRow(
+      label: label,
+      description: description == null ? null : Text(description),
+      enabled: onChanged != null,
+      control: _dropdownControl(
+        label: label,
+        value: value,
         items: items,
         onChanged: onChanged,
-        decoration: InputDecoration(
-          labelText: label,
-          border: const OutlineInputBorder(),
-        ),
       ),
     );
   }
 
   Widget _buildDownloadModeSetting(AppLocalizations l10n) {
-    return Padding(
-      padding: const EdgeInsets.symmetric(
-          vertical: SettingsConstants.verticalSpacing),
-      child: DropdownButtonFormField<DownloadMode>(
-        initialValue: _currentFormSettings.downloadMode,
-        items: DownloadMode.values.map((mode) {
-          return DropdownMenuItem(
-            value: mode,
-            child: Text(_formatDownloadMode(l10n, mode)),
-          );
-        }).toList(),
-        onChanged: (value) {
-          if (value == null) return;
-          setState(() => _currentFormSettings =
-              _currentFormSettings.copyWith(downloadMode: value));
-          _checkForChanges();
-        },
-        decoration: InputDecoration(
-          labelText: l10n.settingsDownloadMode,
-          border: const OutlineInputBorder(),
-          suffixIcon: Tooltip(
-            message: l10n.settingsDownloadModeHelp,
-            child: const Icon(Icons.info_outline),
-          ),
-        ),
-      ),
+    return _buildDropdownSetting<DownloadMode>(
+      label: l10n.settingsDownloadMode,
+      description: l10n.settingsDownloadModeHelp,
+      value: _currentFormSettings.downloadMode,
+      items: DownloadMode.values.map((mode) {
+        return DropdownMenuItem(
+          value: mode,
+          child: Text(_formatDownloadMode(l10n, mode)),
+        );
+      }).toList(),
+      onChanged: (value) {
+        if (value == null) return;
+        setState(() => _currentFormSettings =
+            _currentFormSettings.copyWith(downloadMode: value));
+        _checkForChanges();
+      },
     );
   }
 
@@ -1084,83 +1105,68 @@ class _SettingsScreenState extends State<SettingsScreen> {
     final settingsState = _settingsState!;
     final remotes = settingsState.rcloneRemotes;
     final currentRemote = _currentFormSettings.rcloneRemoteName;
-    final isCurrentInList = remotes.contains(currentRemote);
-    final dropdownValue = isCurrentInList ? currentRemote : null;
-    final items = <DropdownMenuItem<String>>[
-      ...remotes.map((r) => DropdownMenuItem(value: r, child: Text(r))),
-    ];
+    final dropdownValue =
+        remotes.contains(currentRemote) ? currentRemote : null;
+    final error = settingsState.remotesError;
 
-    return Padding(
-      padding: const EdgeInsets.symmetric(
-          vertical: SettingsConstants.verticalSpacing),
-      child: Column(
-        crossAxisAlignment: CrossAxisAlignment.start,
+    return SettingRow(
+      label: l10n.settingsRcloneRemote,
+      control: Row(
         children: [
-          // Status (error/warning) above the selector
-          if (settingsState.remotesError != null)
-            Padding(
-              padding: const EdgeInsets.only(bottom: 8),
-              child: Tooltip(
-                message: settingsState.remotesError ?? '',
-                child: _statusText(
-                  icon: Icons.error_outline,
-                  color: Theme.of(context).colorScheme.error,
-                  text:
-                      '${l10n.settingsFailedToLoadRemotes}: ${settingsState.remotesError ?? ''}',
-                ),
-              ),
-            )
-          else if (!settingsState.isRemotesLoading && remotes.isEmpty)
-            Padding(
-              padding: const EdgeInsets.only(bottom: 8),
-              child: _statusText(
-                icon: Icons.warning_amber_rounded,
-                color: Colors.amber,
-                text: l10n.settingsNoRemotesFound,
-              ),
+          Expanded(
+            child: _dropdownControl<String>(
+              label: l10n.settingsRcloneRemote,
+              value: dropdownValue,
+              hint: currentRemote.isEmpty ? null : Text(currentRemote),
+              items: remotes
+                  .map((remote) => DropdownMenuItem(
+                        value: remote,
+                        child: Text(remote),
+                      ))
+                  .toList(),
+              onChanged: settingsState.isRemotesLoading || remotes.isEmpty
+                  ? null
+                  : (value) {
+                      if (value == null) return;
+                      _updateSetting(SettingTextField.rcloneRemoteName, value,
+                          updateController: true);
+                    },
             ),
-          Row(
-            children: [
-              Expanded(
-                child: DropdownButtonFormField<String>(
-                  initialValue: dropdownValue,
-                  items: items,
-                  onChanged: (value) {
-                    if (value == null) return;
-                    _updateSetting(SettingTextField.rcloneRemoteName, value,
-                        updateController: true);
-                  },
-                  decoration: InputDecoration(
-                    labelText: l10n.settingsRcloneRemote,
-                    border: const OutlineInputBorder(),
+          ),
+          const SizedBox(width: 8),
+          SizedBox(
+            width: 40,
+            height: 40,
+            child: settingsState.isRemotesLoading
+                ? const Center(
+                    child: SizedBox(
+                      width: 18,
+                      height: 18,
+                      child: CircularProgressIndicator(strokeWidth: 2),
+                    ),
+                  )
+                : IconButton(
+                    onPressed: settingsState.refreshRcloneRemotes,
+                    tooltip: l10n.refresh,
+                    icon: const Icon(Icons.refresh, size: 20),
                   ),
-                ),
-              ),
-              const SizedBox(width: SettingsConstants.verticalSpacing),
-              SizedBox(
-                height: SettingsConstants.iconButtonSize,
-                width: SettingsConstants.iconButtonSize,
-                child: settingsState.isRemotesLoading
-                    ? const Center(
-                        child: SizedBox(
-                          width: 18,
-                          height: 18,
-                          child: CircularProgressIndicator(strokeWidth: 2),
-                        ),
-                      )
-                    : IconButton.filledTonal(
-                        onPressed: () {
-                          settingsState.refreshRcloneRemotes();
-                        },
-                        iconSize: SettingsConstants.iconSize,
-                        tooltip: l10n.refresh,
-                        icon: const Icon(Icons.refresh),
-                      ),
-              ),
-            ],
           ),
         ],
       ),
+      footer: error != null
+          ? _statusText(
+              icon: Icons.error_outline,
+              color: Theme.of(context).colorScheme.error,
+              text: '${l10n.settingsFailedToLoadRemotes}: $error',
+              copyable: true,
+            )
+          : !settingsState.isRemotesLoading && remotes.isEmpty
+              ? _statusText(
+                  icon: Icons.info_outline,
+                  color: Theme.of(context).colorScheme.onSurfaceVariant,
+                  text: l10n.settingsNoRemotesFound,
+                )
+              : null,
     );
   }
 
@@ -1168,66 +1174,35 @@ class _SettingsScreenState extends State<SettingsScreen> {
     AppLocalizations l10n,
     SettingsState settingsState,
   ) {
-    final selectedId = settingsState.downloaderConfigId;
     final selectedSource = settingsState.activeDownloaderConfig;
-
-    return Padding(
-      padding: const EdgeInsets.symmetric(
-        vertical: SettingsConstants.verticalSpacing,
-      ),
-      child: Column(
+    return SettingRow(
+      label: l10n.settingsDownloaderSource,
+      description: Column(
         crossAxisAlignment: CrossAxisAlignment.start,
         children: [
-          if (settingsState.downloaderSourcesError != null)
-            Padding(
-              padding: const EdgeInsets.only(bottom: 8),
-              child: _statusText(
-                icon: Icons.error_outline,
-                color: Theme.of(context).colorScheme.error,
-                text: settingsState.downloaderSourcesError!,
-                copyable: true,
-              ),
-            ),
-          Container(
-            width: double.infinity,
-            padding: const EdgeInsets.all(12),
-            decoration: BoxDecoration(
-              color: Theme.of(context)
-                  .colorScheme
-                  .surfaceContainerHighest
-                  .withValues(alpha: 0.45),
-              borderRadius: BorderRadius.circular(12),
-            ),
-            child: Column(
-              crossAxisAlignment: CrossAxisAlignment.start,
-              children: [
-                Text(
-                  selectedSource?.displayName ??
-                      l10n.downloaderSourceNoSelection,
-                  style: Theme.of(context).textTheme.titleSmall,
-                ),
-                if (selectedId != null) ...[
-                  Text(
-                    selectedId,
-                    style: Theme.of(context).textTheme.bodySmall?.copyWith(
-                          color: Theme.of(context).hintColor,
-                          fontStyle: FontStyle.italic,
-                        ),
-                  ),
-                ],
-                if (selectedSource != null &&
-                    selectedSource.description.isNotEmpty) ...[
-                  const SizedBox(height: 4),
-                  SelectableLinkText(
-                    text: selectedSource.description,
-                    style: Theme.of(context).textTheme.bodySmall,
-                  ),
-                ],
-              ],
-            ),
-          ),
+          Text(selectedSource?.displayName ?? l10n.downloaderSourceNoSelection),
+          if (selectedSource != null &&
+              selectedSource.description.isNotEmpty) ...[
+            const SizedBox(height: 4),
+            SelectableLinkText(text: selectedSource.description),
+          ],
         ],
       ),
+      control: Align(
+        alignment: Alignment.centerRight,
+        child: TextButton(
+          onPressed: _showDownloaderSourcesDialog,
+          child: Text(l10n.installDownloaderConfigFromUrl),
+        ),
+      ),
+      footer: settingsState.downloaderSourcesError == null
+          ? null
+          : _statusText(
+              icon: Icons.error_outline,
+              color: Theme.of(context).colorScheme.error,
+              text: settingsState.downloaderSourcesError!,
+              copyable: true,
+            ),
     );
   }
 
@@ -1267,7 +1242,7 @@ class _SettingsScreenState extends State<SettingsScreen> {
                 ),
               ),
               const SizedBox(width: 8),
-              Text(app_theme.seedLabel(l10n, key)),
+              Flexible(child: Text(app_theme.seedLabel(l10n, key))),
             ],
           ),
         );
@@ -1288,59 +1263,53 @@ class _SettingsScreenState extends State<SettingsScreen> {
               ),
             ),
             const SizedBox(width: 8),
-            Text(l10n.settingsCustomInput),
+            Flexible(child: Text(l10n.settingsCustomInput)),
           ],
         ),
       ),
     ];
 
-    return Padding(
-      padding: const EdgeInsets.symmetric(
-          vertical: SettingsConstants.verticalSpacing),
-      child: Column(
-        crossAxisAlignment: CrossAxisAlignment.start,
-        children: [
-          DropdownButtonFormField<String>(
-            initialValue: dropdownValue,
-            items: items,
-            onChanged: settingsState.settings.useSystemColor
-                ? null
-                : (value) {
-                    if (value == null) return;
-                    if (value == customValue) {
-                      setState(() {
-                        _seedColorCustom = true;
-                      });
-                    } else {
-                      setState(() {
-                        _seedColorCustom = false;
-                      });
-                      settingsState.setSeedColorKey(value);
-                      setState(() {
-                        _currentFormSettings =
-                            _currentFormSettings.copyWith(seedColorKey: value);
-                        _hasChanges = false;
-                      });
-                    }
-                  },
-            decoration: InputDecoration(
-              labelText: l10n.settingsSeedColor,
-              border: const OutlineInputBorder(),
-            ),
-          ),
-          if (shouldUseCustom)
-            Padding(
-              padding:
-                  const EdgeInsets.only(top: SettingsConstants.verticalSpacing),
+    return Column(
+      crossAxisAlignment: CrossAxisAlignment.start,
+      children: [
+        _buildDropdownSetting<String>(
+          label: l10n.settingsSeedColor,
+          value: dropdownValue,
+          items: items,
+          onChanged: settingsState.settings.useSystemColor
+              ? null
+              : (value) {
+                  if (value == null) return;
+                  if (value == customValue) {
+                    setState(() {
+                      _seedColorCustom = true;
+                    });
+                  } else {
+                    setState(() {
+                      _seedColorCustom = false;
+                    });
+                    settingsState.setSeedColorKey(value);
+                    setState(() {
+                      _currentFormSettings =
+                          _currentFormSettings.copyWith(seedColorKey: value);
+                      _hasChanges = false;
+                    });
+                  }
+                },
+        ),
+        if (shouldUseCustom)
+          SettingRow(
+            label: l10n.settingsCustomInput,
+            description: Text(l10n.settingsCustomColorHint),
+            enabled: !settingsState.settings.useSystemColor,
+            control: Semantics(
+              label: l10n.settingsCustomInput,
               child: TextField(
                 controller: _customColorController,
                 enabled: !settingsState.settings.useSystemColor,
-                decoration: InputDecoration(
-                  labelText: l10n.settingsCustomInput,
-                  hintText: 'FF5733',
+                decoration: _controlDecoration(hintText: 'FF5733').copyWith(
                   prefixText: '#',
-                  border: const OutlineInputBorder(),
-                  helperText: l10n.settingsCustomColorHint,
+                  errorMaxLines: 2,
                   errorText: _customColorController.text.isNotEmpty &&
                           app_theme
                                   .parseHexColor(_customColorController.text) ==
@@ -1365,8 +1334,8 @@ class _SettingsScreenState extends State<SettingsScreen> {
                 },
               ),
             ),
-        ],
-      ),
+          ),
+      ],
     );
   }
 
@@ -1387,14 +1356,8 @@ class _SettingsScreenState extends State<SettingsScreen> {
                   context,
                   text,
                   style: style,
-                  maxLines: 1,
-                  overflow: TextOverflow.ellipsis,
                 )
-              : Text(
-                  text,
-                  style: style,
-                  overflow: TextOverflow.ellipsis,
-                ),
+              : Text(text, style: style),
         ),
       ],
     );

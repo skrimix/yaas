@@ -166,6 +166,8 @@
     "settingsCleanupKeepOneVersion": "Хранить одну версию",
     "settingsCleanupKeepTwoVersions": "Хранить две версии",
     "settingsCleanupKeepAllVersions": "Хранить все версии",
+    "settingsFavorites": "Избранное",
+    "settingsDownloaderSource": "Источник загрузчика",
     "settingsBrowse": "Обзор",
     "selectLabel": "Выберите: {label}",
     "@selectLabel": {

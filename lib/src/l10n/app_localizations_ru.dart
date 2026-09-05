@@ -392,6 +392,12 @@ class AppLocalizationsRu extends AppLocalizations {
   String get settingsCleanupKeepAllVersions => 'Хранить все версии';
 
   @override
+  String get settingsFavorites => 'Избранное';
+
+  @override
+  String get settingsDownloaderSource => 'Источник загрузчика';
+
+  @override
   String get settingsBrowse => 'Обзор';
 
   @override

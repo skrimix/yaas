@@ -800,6 +800,18 @@ abstract class AppLocalizations {
   /// **'Keep all versions'**
   String get settingsCleanupKeepAllVersions;
 
+  /// No description provided for @settingsFavorites.
+  ///
+  /// In en, this message translates to:
+  /// **'Favorites'**
+  String get settingsFavorites;
+
+  /// No description provided for @settingsDownloaderSource.
+  ///
+  /// In en, this message translates to:
+  /// **'Downloader source'**
+  String get settingsDownloaderSource;
+
   /// No description provided for @settingsBrowse.
   ///
   /// In en, this message translates to:

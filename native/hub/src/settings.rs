@@ -2,7 +2,7 @@ use std::{
     error::Error,
     fs,
     path::{Path, PathBuf},
-    sync::Arc,
+    sync::{Arc, Mutex},
 };
 
 use anyhow::{Context, Result, ensure};
@@ -17,6 +17,7 @@ use crate::models::{Settings, signals::settings::*};
 pub(crate) struct SettingsHandler {
     settings_file_path: PathBuf,
     watch_tx: watch::Sender<Settings>,
+    write_guard: Arc<Mutex<()>>,
 }
 
 impl SettingsHandler {
@@ -26,8 +27,11 @@ impl SettingsHandler {
         ensure!(app_dir.is_absolute(), "App directory is not absolute");
 
         let watch_tx = watch::Sender::<Settings>::new(Settings::new(portable_mode));
-        let handler =
-            Arc::new(Self { settings_file_path: app_dir.join("settings.json"), watch_tx });
+        let handler = Arc::new(Self {
+            settings_file_path: app_dir.join("settings.json"),
+            watch_tx,
+            write_guard: Arc::new(Mutex::new(())),
+        });
 
         match handler.load_settings(portable_mode) {
             Ok(s) => s,
@@ -103,9 +107,8 @@ impl SettingsHandler {
                     if request.is_some() {
                         debug!("Received ResetSettingsToDefaultsRequest");
                         let handler = self.clone();
-                        let current = handler.watch_tx.borrow();
-                        let result =
-                            handler.load_default_settings(Some(current.installation_id.clone()), portable_mode);
+                        let installation_id = handler.watch_tx.borrow().installation_id.clone();
+                        let result = handler.load_default_settings(Some(installation_id), portable_mode);
 
                         match result {
                             Ok(settings) => {
@@ -177,6 +180,7 @@ impl SettingsHandler {
 
         debug!(path = %self.settings_file_path.display(), "Loading settings from file");
 
+        let _guard = self.write_guard.lock().unwrap();
         let settings = Settings::load_from_file(&self.settings_file_path, portable_mode)
             .context("Failed to load settings from file")?;
 
@@ -188,6 +192,33 @@ impl SettingsHandler {
     /// Save settings to file and notify subscribers/UI
     #[instrument(level = "debug", skip(self, settings))]
     pub(crate) fn save_settings(&self, settings: &Settings) -> Result<()> {
+        let _guard = self.write_guard.lock().unwrap();
+        self.save_settings_locked(settings)
+    }
+
+    pub(crate) fn update_active_downloader(&self, id: &str) -> Result<()> {
+        self.update_settings(|settings| settings.active_downloader_config_id = id.to_string())
+    }
+
+    pub(crate) fn update_downloader_remote(&self, expected: &str, remote: &str) -> Result<()> {
+        self.update_settings(|settings| {
+            if settings.rclone_remote_name == expected {
+                settings.rclone_remote_name = remote.to_string();
+            }
+        })
+    }
+
+    fn update_settings(&self, update: impl FnOnce(&mut Settings)) -> Result<()> {
+        let _guard = self.write_guard.lock().unwrap();
+        let mut settings = self.watch_tx.borrow().clone();
+        update(&mut settings);
+        if settings == *self.watch_tx.borrow() {
+            return Ok(());
+        }
+        self.save_settings_locked(&settings)
+    }
+
+    fn save_settings_locked(&self, settings: &Settings) -> Result<()> {
         info!(path = %self.settings_file_path.display(), settings = ?settings, "Saving settings to file");
 
         // Ensure parent directory exists
@@ -256,5 +287,28 @@ impl SettingsHandler {
         self.save_settings(&settings)?;
         info!("Default settings loaded and saved");
         Ok(settings)
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[tokio::test]
+    async fn downloader_updates_preserve_current_settings_and_newer_remote_selection() {
+        let dir = tempfile::tempdir().unwrap();
+        let handler = SettingsHandler::new(dir.path().to_path_buf(), true).unwrap();
+        let mut settings = handler.subscribe().borrow().clone();
+        settings.bandwidth_limit = "12M".into();
+        settings.rclone_remote_name = "user-choice".into();
+        handler.save_settings(&settings).unwrap();
+        handler.update_active_downloader("source-b").unwrap();
+        handler.update_downloader_remote("obsolete-choice", "fallback").unwrap();
+        let latest = handler.subscribe().borrow().clone();
+        assert_eq!(latest.bandwidth_limit, "12M");
+        assert_eq!(latest.active_downloader_config_id, "source-b");
+        assert_eq!(latest.rclone_remote_name, "user-choice");
+        handler.update_downloader_remote("user-choice", "resolved-choice").unwrap();
+        assert_eq!(handler.subscribe().borrow().rclone_remote_name, "resolved-choice");
     }
 }

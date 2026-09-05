@@ -1,6 +1,7 @@
 import 'dart:async';
 
 import 'package:flutter/material.dart';
+import 'package:rinf/rinf.dart';
 import '../src/bindings/bindings.dart';
 
 class CloudAppsState extends ChangeNotifier {
@@ -16,6 +17,7 @@ class CloudAppsState extends ChangeNotifier {
   final Map<String, List<CloudApp>> _appsByPackage = {};
   final Set<String> _donationBlacklist = {};
   Timer? _slowLoadingTimer;
+  final List<StreamSubscription<dynamic>> _subscriptions = [];
 
   List<CloudApp> get apps => _apps;
   String? get error => _error;
@@ -46,8 +48,13 @@ class CloudAppsState extends ChangeNotifier {
     return '${_mediaBaseUrl}videos/$packageName.mp4';
   }
 
-  CloudAppsState() {
-    CloudAppsChangedEvent.rustSignalStream.listen((event) {
+  CloudAppsState({
+    Stream<RustSignalPack<CloudAppsChangedEvent>>? catalogEvents,
+    Stream<RustSignalPack<DownloaderAvailabilityChanged>>? availabilityEvents,
+    Stream<RustSignalPack<MediaConfigChanged>>? mediaEvents,
+  }) {
+    _subscriptions.add((catalogEvents ?? CloudAppsChangedEvent.rustSignalStream)
+        .listen((event) {
       _isLoading = event.message.isLoading;
       _error = event.message.error;
 
@@ -63,14 +70,13 @@ class CloudAppsState extends ChangeNotifier {
       if (apps != null) {
         _setApps(apps);
       }
-      if (_error != null) {
-        _setApps([]);
-      }
       notifyListeners();
-    });
+    }));
 
     // Reset state when downloader becomes unavailable, and auto-load when it becomes available
-    DownloaderAvailabilityChanged.rustSignalStream.listen((event) {
+    _subscriptions.add(
+        (availabilityEvents ?? DownloaderAvailabilityChanged.rustSignalStream)
+            .listen((event) {
       final msg = event.message;
       if (!msg.available) {
         _setApps([]);
@@ -87,10 +93,11 @@ class CloudAppsState extends ChangeNotifier {
           load();
         }
       }
-    });
+    }));
 
     // Receive media config from Rust
-    MediaConfigChanged.rustSignalStream.listen((event) {
+    _subscriptions.add(
+        (mediaEvents ?? MediaConfigChanged.rustSignalStream).listen((event) {
       final cfg = event.message;
       final newUrl = cfg.mediaBaseUrl.endsWith('/')
           ? cfg.mediaBaseUrl
@@ -105,7 +112,16 @@ class CloudAppsState extends ChangeNotifier {
         changed = true;
       }
       if (changed) notifyListeners();
-    });
+    }));
+  }
+
+  @override
+  void dispose() {
+    _slowLoadingTimer?.cancel();
+    for (final subscription in _subscriptions) {
+      subscription.cancel();
+    }
+    super.dispose();
   }
 
   void _setApps(List<CloudApp> newApps) {

@@ -880,6 +880,7 @@ class _DownloadAppsScreenState extends State<DownloadAppsScreen> {
         final hasDownloader = settingsState.isDownloaderAvailable;
 
         if (cloudAppsState.isLoading &&
+            cloudAppsState.apps.isEmpty &&
             !showDownloaderInit &&
             !showDownloaderError) {
           final remotes = settingsState.rcloneRemotes;
@@ -948,6 +949,7 @@ class _DownloadAppsScreenState extends State<DownloadAppsScreen> {
         }
 
         if (cloudAppsState.error != null &&
+            cloudAppsState.apps.isEmpty &&
             !showDownloaderInit &&
             !showDownloaderError) {
           return Center(
@@ -983,6 +985,22 @@ class _DownloadAppsScreenState extends State<DownloadAppsScreen> {
           body: SafeArea(
             child: Column(
               children: [
+                if (cloudAppsState.isLoading) const LinearProgressIndicator(),
+                if (cloudAppsState.error != null &&
+                    cloudAppsState.apps.isNotEmpty)
+                  MaterialBanner(
+                    content: Text(
+                        '${l10n.errorLoadingApps}: ${cloudAppsState.error}'),
+                    actions: [
+                      TextButton.icon(
+                        onPressed: cloudAppsState.isLoading
+                            ? null
+                            : cloudAppsState.refresh,
+                        icon: const Icon(Icons.refresh),
+                        label: Text(l10n.retry),
+                      ),
+                    ],
+                  ),
                 if (settingsState.downloaderNeedsSetup)
                   Padding(
                     padding: const EdgeInsets.fromLTRB(16, 16, 16, 8),

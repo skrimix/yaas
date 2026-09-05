@@ -155,14 +155,6 @@ impl RcloneJsonLogLine {
     }
 }
 
-/// Converts a JSON log line to human-readable format, or returns the original line if parsing fails.
-fn convert_json_log_line(line: &str) -> String {
-    match serde_json::from_str::<RcloneJsonLogLine>(line) {
-        Ok(log_line) => log_line.to_human_readable(),
-        Err(_) => line.to_string(),
-    }
-}
-
 #[derive(Debug)]
 pub(super) enum RcloneTransferOperation {
     Copy,
@@ -334,93 +326,91 @@ impl RcloneCli {
         args.extend_from_slice(&[&source, &dest]);
 
         let use_json_log = stats_tx.is_some();
-        let mut child = self.command(&args, use_json_log).stderr(Stdio::piped()).spawn()?;
-        let stderr = child.stderr.take().context("Failed to get stderr")?;
-        let mut lines = BufReader::new(stderr).lines();
+        let child = self.command(&args, use_json_log).stderr(Stdio::piped()).spawn()?;
+        finish_transfer(child, total_bytes, stats_tx, cancellation_token, use_json_log).await
+    }
+}
 
-        let transfer_future = async {
-            // Collect non-stat lines for error reporting
-            let mut stderr_lines: Vec<String> = Vec::new();
+async fn finish_transfer(
+    mut child: tokio::process::Child,
+    total_bytes: Option<u64>,
+    stats_tx: Option<UnboundedSender<TransferStats>>,
+    cancellation_token: Option<CancellationToken>,
+    use_json_log: bool,
+) -> Result<()> {
+    let stderr = child.stderr.take().context("Failed to get stderr")?;
+    let mut lines = BufReader::new(stderr).lines();
 
-            if let (Some(stats_tx), Some(total_bytes)) = (stats_tx, total_bytes) {
-                let mut progress_tracker = RcloneProgressTracker::new(total_bytes);
-                let mut stale_tick = time::interval(RCLONE_STATS_INTERVAL);
-                stale_tick.set_missed_tick_behavior(MissedTickBehavior::Delay);
-                stale_tick.tick().await;
+    let transfer_future = async {
+        // Collect non-stat lines for error reporting
+        let mut stderr_lines: Vec<String> = Vec::new();
 
-                loop {
-                    tokio::select! {
-                        line = lines.next_line() => {
-                            let Some(line) = line? else {
-                                break;
-                            };
+        let mut stats_tx = stats_tx;
+        let mut progress_tracker = total_bytes.map(RcloneProgressTracker::new);
+        let mut stale_tick = time::interval(RCLONE_STATS_INTERVAL);
+        stale_tick.set_missed_tick_behavior(MissedTickBehavior::Delay);
+        stale_tick.tick().await;
 
-                            match serde_json::from_str::<RcloneJsonLogLine>(&line) {
-                                Ok(log_line) => {
-                                    if let Some(stats) = log_line.stats {
-                                        trace!(?stats, "Parsed rclone stats");
-                                        let normalized = progress_tracker.record_stats(stats);
-                                        trace!(?normalized, "Sending stats update");
-                                        if stats_tx.send(normalized).is_err() {
-                                            warn!("Stats receiver dropped, stopping stats processing.");
-                                            break;
-                                        }
-                                    } else {
-                                        stderr_lines.push(log_line.to_human_readable());
-                                    }
-                                }
-                                Err(_) => {
-                                    stderr_lines.push(line);
-                                }
-                            }
-                        }
-                        _ = stale_tick.tick() => {
-                            if let Some(stale_stats) = progress_tracker.maybe_stale_stats(Instant::now()) {
-                                trace!(?stale_stats, "Sending stale speed reset");
-                                if stats_tx.send(stale_stats).is_err() {
-                                    warn!("Stats receiver dropped, stopping stale stats processing.");
-                                    break;
-                                }
-                            }
-                        }
-                    }
-                }
-            }
-
-            let status = child.wait().await?;
-            match status.success() {
-                true => Ok(()),
-                false => {
-                    while let Some(line) = lines.next_line().await? {
-                        if use_json_log {
-                            stderr_lines.push(convert_json_log_line(&line));
-                        } else {
-                            stderr_lines.push(line);
-                        }
-                    }
-                    let stderr_str = stderr_lines.join("\n");
-                    error!(code = status.code().unwrap_or(-1), stderr = %stderr_str, "Rclone transfer failed");
-                    Err(anyhow!(
-                        "Rclone failed with exit code: {}, stderr: {}",
-                        status.code().map_or("unknown".to_string(), |c| c.to_string()),
-                        stderr_str
-                    ))
-                }
-            }
-        };
-
-        if let Some(token) = cancellation_token {
+        loop {
             tokio::select! {
-                res = transfer_future => res,
-                _ = token.cancelled() => {
-                    warn!("Rclone transfer cancelled by token");
-                    child.kill().await.context("Failed to kill rclone process")?;
-                    Err(anyhow!("Download cancelled"))
+                line = lines.next_line() => {
+                    let Some(line) = line? else { break };
+                    if use_json_log {
+                        match serde_json::from_str::<RcloneJsonLogLine>(&line) {
+                            Ok(log_line) => {
+                                if let Some(stats) = log_line.stats {
+                                    if let (Some(tx), Some(tracker)) = (&stats_tx, &mut progress_tracker)
+                                        && tx.send(tracker.record_stats(stats)).is_err()
+                                    {
+                                        stats_tx = None;
+                                    }
+                                } else {
+                                    stderr_lines.push(log_line.to_human_readable());
+                                }
+                            }
+                            Err(_) => stderr_lines.push(line),
+                        }
+                    } else {
+                        stderr_lines.push(line);
+                    }
+                }
+                _ = stale_tick.tick(), if stats_tx.is_some() => {
+                    if let (Some(tx), Some(tracker)) = (&stats_tx, &mut progress_tracker)
+                        && let Some(stats) = tracker.maybe_stale_stats(Instant::now())
+                        && tx.send(stats).is_err()
+                    {
+                        stats_tx = None;
+                    }
                 }
             }
-        } else {
-            transfer_future.await
         }
+
+        let status = child.wait().await?;
+        match status.success() {
+            true => Ok(()),
+            false => {
+                let stderr_str = stderr_lines.join("\n");
+                error!(code = status.code().unwrap_or(-1), stderr = %stderr_str, "Rclone transfer failed");
+                Err(anyhow!(
+                    "Rclone failed with exit code: {}, stderr: {}",
+                    status.code().map_or("unknown".to_string(), |c| c.to_string()),
+                    stderr_str
+                ))
+            }
+        }
+    };
+
+    if let Some(token) = cancellation_token {
+        tokio::select! {
+            res = transfer_future => res,
+            _ = token.cancelled() => {
+                warn!("Rclone transfer cancelled by token");
+                child.kill().await.context("Failed to kill rclone process")?;
+                Err(anyhow!("Download cancelled"))
+            }
+        }
+    } else {
+        transfer_future.await
     }
 }
 
@@ -456,6 +446,92 @@ pub(crate) async fn list_remotes(
 #[cfg(test)]
 mod tests {
     use super::*;
+
+    fn test_child(mode: &str) -> tokio::process::Child {
+        let mut command = Command::new(std::env::current_exe().unwrap());
+        command
+            .args(["--exact", "downloader::rclone::cli::tests::stderr_child", "--nocapture"])
+            .env("YAAS_RCLONE_TEST_CHILD", mode)
+            .stdin(Stdio::null())
+            .stdout(Stdio::null())
+            .stderr(Stdio::piped())
+            .kill_on_drop(true);
+        command.spawn().unwrap()
+    }
+
+    #[test]
+    fn stderr_child() {
+        let Ok(mode) = std::env::var("YAAS_RCLONE_TEST_CHILD") else {
+            return;
+        };
+        use std::io::Write;
+        let mut stderr = std::io::stderr().lock();
+        if mode == "progress" || mode == "cancel" {
+            writeln!(stderr, r#"{{"level":"notice","msg":"stats","time":"2026-01-01T00:00:00Z","stats":{{"bytes":1}}}}"#).unwrap();
+            stderr.flush().unwrap();
+        }
+        for _ in 0..20_000 {
+            writeln!(stderr, "diagnostic {}", "x".repeat(128)).unwrap();
+        }
+        writeln!(stderr, "last diagnostic").unwrap();
+        stderr.flush().unwrap();
+        if mode == "cancel" {
+            loop {
+                std::thread::park();
+            }
+        }
+        std::process::exit(if mode == "failure" { 7 } else { 0 });
+    }
+
+    #[tokio::test]
+    async fn drains_large_stderr_without_progress_and_preserves_errors() {
+        for mode in ["success", "failure"] {
+            let result = tokio::time::timeout(
+                Duration::from_secs(10),
+                finish_transfer(test_child(mode), None, None, None, false),
+            )
+            .await
+            .expect("stderr pipe deadlocked");
+            if mode == "success" {
+                result.unwrap();
+            } else {
+                let error = result.unwrap_err().to_string();
+                assert!(error.contains("7"));
+                assert!(error.contains("last diagnostic"));
+            }
+        }
+    }
+
+    #[tokio::test]
+    async fn drains_stderr_after_progress_receiver_closes() {
+        let (tx, rx) = tokio::sync::mpsc::unbounded_channel();
+        drop(rx);
+        tokio::time::timeout(
+            Duration::from_secs(10),
+            finish_transfer(test_child("progress"), Some(100), Some(tx), None, true),
+        )
+        .await
+        .expect("stderr pipe deadlocked")
+        .unwrap();
+    }
+
+    #[tokio::test]
+    async fn cancellation_kills_and_reaps_transfer() {
+        let token = CancellationToken::new();
+        let (tx, mut rx) = tokio::sync::mpsc::unbounded_channel();
+        let task = tokio::spawn(finish_transfer(
+            test_child("cancel"),
+            Some(100),
+            Some(tx),
+            Some(token.clone()),
+            true,
+        ));
+        tokio::time::timeout(Duration::from_secs(10), rx.recv()).await.unwrap().unwrap();
+        token.cancel();
+        let error =
+            tokio::time::timeout(Duration::from_secs(5), task).await.unwrap().unwrap().unwrap_err();
+        assert!(error.to_string().contains("cancelled"));
+    }
 
     #[test]
     fn progress_tracker_derives_speed_from_bytes() {
@@ -589,19 +665,5 @@ mod tests {
         };
 
         assert_eq!(log_line.format_time(), "2025/12/03 16:18:24");
-    }
-
-    #[test]
-    fn convert_json_log_line_valid() {
-        let json = r#"{"time":"2025-12-03T16:25:39.000000000+03:00","level":"error","msg":"test message","source":"test"}"#;
-        let result = convert_json_log_line(json);
-        assert_eq!(result, "2025/12/03 16:25:39 ERROR : test message");
-    }
-
-    #[test]
-    fn convert_json_log_line_invalid_returns_original() {
-        let invalid = "not valid json at all";
-        let result = convert_json_log_line(invalid);
-        assert_eq!(result, invalid);
     }
 }

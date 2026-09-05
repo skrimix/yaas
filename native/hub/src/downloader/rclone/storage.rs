@@ -17,8 +17,6 @@ pub(crate) struct RcloneStorage {
     client: RcloneCli,
     remote: String,
     root_dir: String,
-    // Keep original string for equality, compile once for runtime use
-    remote_filter_regex_str: Option<String>,
     remote_filter_regex: Option<Regex>,
 }
 
@@ -46,9 +44,20 @@ impl RcloneStorage {
             client: RcloneCli::new(rclone_path, config_path, bandwidth_limit),
             remote,
             root_dir,
-            remote_filter_regex_str: remote_filter_regex,
             remote_filter_regex: compiled,
         }
+    }
+
+    pub(crate) fn remote(&self) -> &str {
+        &self.remote
+    }
+
+    pub(crate) fn set_remote(&mut self, remote: String) {
+        self.remote = remote;
+    }
+
+    pub(crate) fn set_bandwidth_limit(&mut self, limit: String) {
+        self.client.set_bandwidth_limit(limit);
     }
 
     fn format_remote_path(&self, path: &str) -> String {
@@ -179,51 +188,9 @@ fn filter_remotes_with_regex(remotes: Vec<String>, regex: Option<&Regex>) -> Vec
     }
 }
 
-impl PartialEq for RcloneStorage {
-    fn eq(&self, other: &Self) -> bool {
-        self.client == other.client
-            && self.remote == other.remote
-            && self.root_dir == other.root_dir
-            && self.remote_filter_regex_str == other.remote_filter_regex_str
-    }
-}
-
-impl Eq for RcloneStorage {}
-
 #[cfg(test)]
 mod tests {
     use super::*;
-
-    #[test]
-    fn storage_equality_reflects_bandwidth_limit() {
-        let base = RcloneStorage::new(
-            PathBuf::from("rclone"),
-            PathBuf::from("config"),
-            "root".to_string(),
-            "remote".to_string(),
-            "".to_string(),
-            None,
-        );
-        let same = RcloneStorage::new(
-            PathBuf::from("rclone"),
-            PathBuf::from("config"),
-            "root".to_string(),
-            "remote".to_string(),
-            "".to_string(),
-            None,
-        );
-        let with_limit = RcloneStorage::new(
-            PathBuf::from("rclone"),
-            PathBuf::from("config"),
-            "root".to_string(),
-            "remote".to_string(),
-            "2M".to_string(),
-            None,
-        );
-
-        assert_eq!(base, same, "identical bandwidth limits should be equal");
-        assert_ne!(base, with_limit, "changing bandwidth limit should change storage equality");
-    }
 
     #[test]
     fn upload_destination_is_remote_directory_for_rclone_copy() {

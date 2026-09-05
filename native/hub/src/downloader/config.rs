@@ -7,7 +7,7 @@ use tracing::error;
 
 use crate::downloader::SensitiveUrl;
 
-#[derive(Debug, Clone, Deserialize)]
+#[derive(Debug, Clone, Deserialize, PartialEq, Eq)]
 pub(crate) struct DownloaderConfig {
     /// ID of the config. Used for cache separation.
     pub id: String,
@@ -143,6 +143,35 @@ impl DownloaderConfig {
         Ok(())
     }
 
+    /// Compares the configuration used by a session on the current platform.
+    pub(crate) fn same_runtime(&self, other: &Self) -> bool {
+        if self.id != other.id || self.layout != other.layout {
+            return false;
+        }
+        match self.layout {
+            RepoLayoutKind::Ffa => {
+                let binary = |cfg: &Self| {
+                    cfg.rclone_path
+                        .as_ref()
+                        .and_then(|path| path.resolve_for_current_platform().ok())
+                };
+                binary(self) == binary(other)
+                    && self.rclone_config_path == other.rclone_config_path
+                    && self.remote_name_filter_regex == other.remote_name_filter_regex
+                    && self.disable_randomize_remote == other.disable_randomize_remote
+                    && self.root_dir == other.root_dir
+                    && self.list_path == other.list_path
+                    && self.donation_remote_name == other.donation_remote_name
+                    && self.donation_remote_path == other.donation_remote_path
+                    && self.donation_blacklist_path == other.donation_blacklist_path
+            }
+            RepoLayoutKind::NewRepo => {
+                self.base_url.as_deref().map(|url| url.trim_end_matches('/'))
+                    == other.base_url.as_deref().map(|url| url.trim_end_matches('/'))
+            }
+        }
+    }
+
     pub(crate) fn effective_display_name(&self) -> String {
         self.display_name
             .as_deref()
@@ -220,7 +249,7 @@ pub(crate) enum RepoLayoutKind {
     NewRepo,
 }
 
-#[derive(Debug, Clone, Deserialize)]
+#[derive(Debug, Clone, Deserialize, PartialEq, Eq)]
 #[serde(untagged)]
 pub(crate) enum RclonePath {
     Single(String),

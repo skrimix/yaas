@@ -1,42 +1,25 @@
-use std::{
-    path::{Path, PathBuf},
-    sync::Arc,
-};
+use std::path::Path;
 
 use anyhow::Result;
-use async_trait::async_trait;
-use derive_more::Debug;
 use tokio::sync::mpsc::UnboundedSender;
 use tokio_util::sync::CancellationToken;
 
 use self::{ffa::FFARepo, newrepo::NewRepo};
-use super::{AppDownloadProgress, TransferStats, rclone::RcloneStorage};
+use super::{AppDownloadProgress, TransferStats};
 use crate::{
     downloader::config::{DownloaderConfig, RepoLayoutKind},
-    models::{CloudApp, DownloadMode, signals::downloader::availability::RepoCapabilities},
+    models::{
+        CloudApp, DownloadMode, Settings, signals::downloader::availability::RepoCapabilities,
+    },
 };
 
 mod ffa;
 mod newrepo;
 
-#[derive(Debug)]
-pub(super) struct BuildStorageResult {
-    pub storage: RepoStorage,
-    /// If Some, the downloader session should persist this remote name into settings.
-    pub persist_remote: Option<String>,
-}
-
-/// Runtime files a repo needs before storage can be built (e.g. rclone binary/config).
-#[derive(Debug, Default)]
-pub(super) struct RuntimeFiles {
-    pub rclone_path: Option<PathBuf>,
-    pub rclone_config_path: Option<PathBuf>,
-}
-
-#[derive(Debug)]
+#[derive(Debug, Clone)]
 pub(super) struct RepoAppList {
     pub apps: Vec<CloudApp>,
-    /// Package names that repo doesn't want donations for.
+    /// Package names that the repository excludes from donations.
     pub donation_blacklist: Vec<String>,
 }
 
@@ -45,89 +28,118 @@ pub(super) struct RepoDownloadResult {
     pub skipped: bool,
 }
 
-#[derive(Debug, Clone, Eq, PartialEq)]
-pub(super) enum RepoStorage {
-    Ffa(RcloneStorage),
-    NewRepo(newrepo::NewRepoStorage),
+/// A repository and the runtime state used by its operations.
+#[derive(Debug, Clone)]
+pub(super) enum Repo {
+    Ffa(Box<FFARepo>),
+    NewRepo(NewRepo),
 }
 
-/// High-level operations a repository must implement.
-#[async_trait]
-pub(super) trait Repo: Send + Sync {
-    fn id(&self) -> &'static str;
+pub(super) fn capabilities(layout: RepoLayoutKind) -> RepoCapabilities {
+    match layout {
+        RepoLayoutKind::Ffa => FFARepo::capabilities(),
+        RepoLayoutKind::NewRepo => NewRepo::capabilities(),
+    }
+}
 
-    fn capabilities(&self) -> RepoCapabilities;
-
-    /// Prepare runtime files (e.g. download rclone binary/config) needed before
-    /// building storage. Repos that don't need any runtime files use the default.
-    async fn prepare_runtime(
-        &self,
-        _cache_dir: &Path,
-        _cfg: &DownloaderConfig,
-    ) -> Result<RuntimeFiles> {
-        Ok(RuntimeFiles::default())
+impl Repo {
+    pub(super) async fn new(
+        cfg: &DownloaderConfig,
+        cache_dir: &Path,
+        settings: &Settings,
+        cancel: &CancellationToken,
+    ) -> Result<(Self, Option<String>)> {
+        match cfg.layout {
+            RepoLayoutKind::Ffa => {
+                let (repo, remote) = FFARepo::new(cfg, cache_dir, settings, cancel).await?;
+                Ok((Self::Ffa(Box::new(repo)), remote))
+            }
+            RepoLayoutKind::NewRepo => Ok((Self::NewRepo(NewRepo::from_config(cfg)), None)),
+        }
     }
 
-    async fn build_storage(&self, args: BuildStorageArgs<'_>) -> Result<BuildStorageResult>;
+    pub(super) fn remote(&self) -> Option<&str> {
+        match self {
+            Self::Ffa(repo) => Some(repo.remote()),
+            Self::NewRepo(_) => None,
+        }
+    }
 
-    async fn list_remotes(&self, storage: RepoStorage) -> Result<Vec<String>>;
+    pub(super) fn set_bandwidth_limit(&mut self, limit: String) {
+        if let Self::Ffa(repo) = self {
+            repo.set_bandwidth_limit(limit);
+        }
+    }
 
-    async fn load_app_list(
+    pub(super) async fn select_remote(&mut self, requested: &str) -> Result<Option<String>> {
+        match self {
+            Self::Ffa(repo) => repo.select_remote(requested).await.map(Some),
+            Self::NewRepo(_) => Ok(None),
+        }
+    }
+
+    pub(super) async fn list_remotes(&self) -> Result<Vec<String>> {
+        match self {
+            Self::Ffa(repo) => repo.list_remotes().await,
+            Self::NewRepo(repo) => repo.list_remotes().await,
+        }
+    }
+
+    pub(super) async fn load_app_list(
         &self,
-        storage: RepoStorage,
-        list_path: String,
         cache_dir: &Path,
         http_client: &reqwest::Client,
         cancellation_token: CancellationToken,
-    ) -> Result<RepoAppList>;
+    ) -> Result<RepoAppList> {
+        match self {
+            Self::Ffa(repo) => repo.load_app_list(cache_dir, cancellation_token).await,
+            Self::NewRepo(repo) => {
+                repo.load_app_list(cache_dir, http_client, cancellation_token).await
+            }
+        }
+    }
 
-    #[allow(clippy::too_many_arguments)]
-    async fn download_app(
+    pub(super) async fn download_app(
         &self,
-        storage: RepoStorage,
         app_full_name: &str,
         destination_dir: &Path,
-        cache_dir: &Path,
         http_client: &reqwest::Client,
         download_mode: DownloadMode,
         progress_tx: UnboundedSender<AppDownloadProgress>,
         cancellation_token: CancellationToken,
-    ) -> Result<RepoDownloadResult>;
+    ) -> Result<RepoDownloadResult> {
+        match self {
+            Self::Ffa(repo) => {
+                repo.download_app(app_full_name, destination_dir, progress_tx, cancellation_token)
+                    .await
+            }
+            Self::NewRepo(repo) => {
+                repo.download_app(
+                    app_full_name,
+                    destination_dir,
+                    http_client,
+                    download_mode,
+                    progress_tx,
+                    cancellation_token,
+                )
+                .await
+            }
+        }
+    }
 
-    async fn upload_donation_archive(
+    pub(super) async fn upload_donation_archive(
         &self,
-        storage: RepoStorage,
-        config: &DownloaderConfig,
         archive_path: &Path,
         stats_tx: Option<UnboundedSender<TransferStats>>,
         cancellation_token: CancellationToken,
-    ) -> Result<()>;
-
-    /// If the repo generates its own rclone config at runtime, return the
-    /// suggested filename to be used. Otherwise None.
-    fn generated_config_filename(&self) -> Option<&'static str> {
-        None
+    ) -> Result<()> {
+        match self {
+            Self::Ffa(repo) => {
+                repo.upload_donation_archive(archive_path, stats_tx, cancellation_token).await
+            }
+            Self::NewRepo(repo) => {
+                repo.upload_donation_archive(archive_path, stats_tx, cancellation_token).await
+            }
+        }
     }
-}
-
-/// Factory: choose a concrete repo based on config.
-pub(super) fn make_repo_from_config(cfg: &DownloaderConfig) -> Arc<dyn Repo> {
-    match cfg.layout {
-        RepoLayoutKind::Ffa => Arc::new(FFARepo::from_config(cfg)),
-        RepoLayoutKind::NewRepo => Arc::new(NewRepo::from_config(cfg)),
-    }
-}
-
-/// Arguments for building storage, passed to repo implementations.
-#[derive(Debug)]
-pub(super) struct BuildStorageArgs<'a> {
-    pub rclone_path: Option<&'a Path>,
-    pub rclone_config_path: Option<&'a Path>,
-    pub root_dir: &'a str,
-    /// Remote selected by the downloader session. Repo may keep or replace it.
-    pub remote_name: &'a str,
-    pub bandwidth_limit: &'a str,
-    pub remote_name_filter_regex: Option<String>,
-    /// Whether repo is allowed to pick a different remote automatically.
-    pub allow_randomize_remote: bool,
 }

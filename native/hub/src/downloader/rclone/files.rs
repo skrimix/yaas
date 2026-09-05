@@ -7,6 +7,7 @@ use std::{
 use anyhow::{Context, Result, bail, ensure};
 use rinf::RustSignal;
 use tokio::fs;
+use tokio_util::sync::CancellationToken;
 use tracing::{debug, info, instrument, warn};
 
 use super::super::http_cache::{self, DownloadResult};
@@ -31,8 +32,9 @@ fn is_zip_url(value: &str) -> bool {
 pub(crate) async fn prepare_rclone_files(
     cache_dir: &Path,
     cfg: &DownloaderConfig,
-    generated_config_filename: Option<&str>,
+    cancel: &CancellationToken,
 ) -> Result<(PathBuf, PathBuf)> {
+    ensure!(!cancel.is_cancelled(), "Downloader initialization cancelled");
     let bin_source = cfg
         .rclone_path
         .as_ref()
@@ -42,36 +44,6 @@ pub(crate) async fn prepare_rclone_files(
 
     let bin_is_url = is_http_url(&bin_source);
     let config_is_url = maybe_config_source.map(is_http_url).unwrap_or(false);
-
-    if maybe_config_source.is_none() {
-        // If the repo provides its own config we only handle the binary here.
-        if let Some(conf_name) = generated_config_filename {
-            if !bin_is_url {
-                let conf_dst = cache_dir.join(conf_name);
-                return Ok((PathBuf::from(bin_source), conf_dst));
-            } else {
-                // Remote rclone binary, download it, but skip config (generated later by repo).
-                let bin_dst = cache_dir.join(if cfg!(windows) { "rclone.exe" } else { "rclone" });
-                let client = build_http_client()?;
-                if is_zip_url(&bin_source) {
-                    ensure_remote_rclone_from_zip(&client, &bin_source, cache_dir, &bin_dst)
-                        .await?;
-                } else {
-                    ensure_remote_file(
-                        &client,
-                        &bin_source,
-                        &bin_dst,
-                        cache_dir,
-                        true,
-                        "rclone binary",
-                    )
-                    .await?;
-                }
-                let conf_dst = cache_dir.join(conf_name);
-                return Ok((bin_dst, conf_dst));
-            }
-        }
-    }
 
     let config_source = match maybe_config_source {
         Some(v) => v,
@@ -96,14 +68,30 @@ pub(crate) async fn prepare_rclone_files(
 
     let client = build_http_client()?;
 
-    ensure_remote_file(&client, config_source, &conf_dst, cache_dir, false, "rclone config")
-        .await?;
+    ensure_remote_file(
+        &client,
+        config_source,
+        &conf_dst,
+        cache_dir,
+        false,
+        "rclone config",
+        cancel,
+    )
+    .await?;
 
     if is_zip_url(&bin_source) {
-        ensure_remote_rclone_from_zip(&client, &bin_source, cache_dir, &bin_dst).await?;
+        ensure_remote_rclone_from_zip(&client, &bin_source, cache_dir, &bin_dst, cancel).await?;
     } else {
-        ensure_remote_file(&client, &bin_source, &bin_dst, cache_dir, true, "rclone binary")
-            .await?;
+        ensure_remote_file(
+            &client,
+            &bin_source,
+            &bin_dst,
+            cache_dir,
+            true,
+            "rclone binary",
+            cancel,
+        )
+        .await?;
     }
 
     Ok((bin_dst, conf_dst))
@@ -129,8 +117,19 @@ async fn ensure_remote_file(
     cache_dir: &Path,
     set_executable: bool,
     label: &str,
+    cancel: &CancellationToken,
 ) -> Result<()> {
-    match http_cache::update_file_cached(client, src, dst, cache_dir, Some(init_progress)).await {
+    match cancel
+        .run_until_cancelled(http_cache::update_file_cached(
+            client,
+            src,
+            dst,
+            cache_dir,
+            Some(init_progress),
+        ))
+        .await
+        .context("Downloader initialization cancelled")?
+    {
         Ok(DownloadResult::NotModified) => {
             debug!("{} not modified, using cached copy", label);
         }
@@ -169,12 +168,21 @@ async fn ensure_remote_rclone_from_zip(
     url: &str,
     cache_dir: &Path,
     bin_dst: &Path,
+    cancel: &CancellationToken,
 ) -> Result<()> {
     let zip_path = cache_dir.join("rclone.zip");
     let md5_path = cache_dir.join("rclone.bin.md5");
 
-    match http_cache::update_file_cached(client, url, &zip_path, cache_dir, Some(init_progress))
+    match cancel
+        .run_until_cancelled(http_cache::update_file_cached(
+            client,
+            url,
+            &zip_path,
+            cache_dir,
+            Some(init_progress),
+        ))
         .await
+        .context("Downloader initialization cancelled")?
     {
         Ok(DownloadResult::NotModified) => {
             debug!("rclone.zip not modified");
@@ -194,14 +202,14 @@ async fn ensure_remote_rclone_from_zip(
             }
 
             info!("Extracting rclone binary from cached zip");
-            extract_rclone_from_zip(&zip_path, cache_dir, bin_dst).await?;
+            extract_rclone_from_zip(&zip_path, cache_dir, bin_dst, cancel).await?;
             if let Err(e) = write_md5_file(bin_dst, &md5_path).await {
                 warn!(error = e.as_ref() as &dyn Error, "Failed to write rclone MD5 stamp");
             }
         }
         Ok(DownloadResult::Downloaded(_)) => {
             info!(path = %zip_path.display(), "Fetched rclone zip, extracting binary");
-            extract_rclone_from_zip(&zip_path, cache_dir, bin_dst).await?;
+            extract_rclone_from_zip(&zip_path, cache_dir, bin_dst, cancel).await?;
             if let Err(e) = write_md5_file(bin_dst, &md5_path).await {
                 warn!(error = e.as_ref() as &dyn Error, "Failed to write rclone MD5 stamp");
             }
@@ -217,7 +225,7 @@ async fn ensure_remote_rclone_from_zip(
                 e
             );
             if !bin_dst.exists() {
-                extract_rclone_from_zip(&zip_path, cache_dir, bin_dst).await?;
+                extract_rclone_from_zip(&zip_path, cache_dir, bin_dst, cancel).await?;
                 if let Err(e) = write_md5_file(bin_dst, &md5_path).await {
                     warn!(error = e.as_ref() as &dyn Error, "Failed to write rclone MD5 stamp");
                 }
@@ -236,8 +244,13 @@ async fn ensure_remote_rclone_from_zip(
     Ok(())
 }
 
-async fn extract_rclone_from_zip(zip_path: &Path, cache_dir: &Path, bin_dst: &Path) -> Result<()> {
-    let entries = list_archive_file_paths(zip_path)
+async fn extract_rclone_from_zip(
+    zip_path: &Path,
+    cache_dir: &Path,
+    bin_dst: &Path,
+    cancel: &CancellationToken,
+) -> Result<()> {
+    let entries = list_archive_file_paths(zip_path, Some(cancel))
         .await
         .with_context(|| format!("Failed to list entries of {}", zip_path.display()))?;
 
@@ -258,7 +271,7 @@ async fn extract_rclone_from_zip(zip_path: &Path, cache_dir: &Path, bin_dst: &Pa
     candidates.sort_by_key(|s| s.len());
     let chosen = candidates[0];
 
-    extract_single_from_archive(zip_path, cache_dir, chosen)
+    extract_single_from_archive(zip_path, cache_dir, chosen, Some(cancel))
         .await
         .with_context(|| format!("Failed to extract '{}' from {}", chosen, zip_path.display()))?;
 
@@ -302,8 +315,9 @@ mod tests {
     async fn prepare_files_returns_local_paths_when_both_local() {
         let dir = tempdir().unwrap();
         let cfg = cfg_local("/bin/echo", "/tmp/rclone.conf");
-        let (bin, conf) =
-            prepare_rclone_files(dir.path(), &cfg, None).await.expect("Prepare files failed");
+        let (bin, conf) = prepare_rclone_files(dir.path(), &cfg, &CancellationToken::new())
+            .await
+            .expect("Prepare files failed");
         assert_eq!(bin, PathBuf::from("/bin/echo"));
         assert_eq!(conf, PathBuf::from("/tmp/rclone.conf"));
     }
@@ -317,7 +331,7 @@ mod tests {
             disable_randomize_remote: true,
             ..Default::default()
         };
-        let err = prepare_rclone_files(dir.path(), &cfg, None)
+        let err = prepare_rclone_files(dir.path(), &cfg, &CancellationToken::new())
             .await
             .expect_err("Prepare files should fail");
         let msg = format!("{:#}", err);
@@ -382,8 +396,9 @@ mod tests {
         };
 
         // First run downloads both files
-        let (bin, conf) =
-            prepare_rclone_files(dir.path(), &cfg, None).await.expect("First run failed");
+        let (bin, conf) = prepare_rclone_files(dir.path(), &cfg, &CancellationToken::new())
+            .await
+            .expect("First run failed");
         assert!(bin.exists());
         assert!(conf.exists());
 
@@ -395,8 +410,9 @@ mod tests {
         }
 
         // Second run: server replies 304, function should still succeed and use cache
-        let (bin2, conf2) =
-            prepare_rclone_files(dir.path(), &cfg, None).await.expect("Second run failed");
+        let (bin2, conf2) = prepare_rclone_files(dir.path(), &cfg, &CancellationToken::new())
+            .await
+            .expect("Second run failed");
         assert_eq!(bin2, bin);
         assert_eq!(conf2, conf);
     }

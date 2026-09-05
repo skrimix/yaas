@@ -11,7 +11,6 @@ use std::{
 };
 
 use anyhow::{Context, Result, anyhow, bail, ensure};
-use async_trait::async_trait;
 use derive_more::Debug;
 use futures::StreamExt as _;
 use tempfile::TempDir;
@@ -29,10 +28,7 @@ use yarc::{
     manifest::ReleaseManifest,
 };
 
-use super::{
-    BuildStorageArgs, BuildStorageResult, Repo, RepoAppList, RepoCapabilities, RepoDownloadResult,
-    RepoStorage,
-};
+use super::{RepoAppList, RepoCapabilities, RepoDownloadResult};
 use crate::{
     downloader::{
         AppDownloadProgress, TransferSpeedTracker, TransferStats, config::DownloaderConfig,
@@ -56,12 +52,12 @@ struct NewRepoRuntime {
 }
 
 #[derive(Debug, Clone)]
-pub(in crate::downloader) struct NewRepoStorage {
+pub(in crate::downloader) struct NewRepo {
     base_url: String,
     runtime: Arc<Mutex<NewRepoRuntime>>,
 }
 
-impl NewRepoStorage {
+impl NewRepo {
     fn new(base_url: String) -> Self {
         Self { base_url, runtime: Arc::new(Mutex::new(NewRepoRuntime::default())) }
     }
@@ -91,47 +87,28 @@ impl NewRepoStorage {
         self.runtime.lock().await.yarc_key
     }
 
-    async fn set_key(&self, yarc_key: [u8; 32]) {
-        self.runtime.lock().await.yarc_key = Some(yarc_key);
+    async fn release_for_download(&self, app_full_name: &str) -> Option<(AppRelease, [u8; 32])> {
+        let runtime = self.runtime.lock().await;
+        Some((runtime.releases_by_full_name.get(app_full_name)?.clone(), runtime.yarc_key?))
     }
-
-    async fn release_for_download(&self, app_full_name: &str) -> Option<AppRelease> {
-        self.runtime.lock().await.releases_by_full_name.get(app_full_name).cloned()
-    }
-}
-
-impl PartialEq for NewRepoStorage {
-    fn eq(&self, other: &Self) -> bool {
-        self.base_url == other.base_url
-    }
-}
-
-impl Eq for NewRepoStorage {}
-
-#[derive(Debug, Clone)]
-pub(super) struct NewRepo {
-    base_url: String,
 }
 
 impl NewRepo {
     pub(super) fn from_config(cfg: &DownloaderConfig) -> Self {
-        let base_url = cfg
-            .base_url
-            .as_deref()
-            .expect("validated new-repo config must have base_url")
-            .trim_end_matches('/')
-            .to_string();
-        Self { base_url }
+        Self::new(
+            cfg.base_url
+                .as_deref()
+                .expect("validated new-repo base_url")
+                .trim_end_matches('/')
+                .to_string(),
+        )
     }
-}
 
-#[async_trait]
-impl Repo for NewRepo {
     fn id(&self) -> &'static str {
         "new-repo"
     }
 
-    fn capabilities(&self) -> RepoCapabilities {
+    pub(super) fn capabilities() -> RepoCapabilities {
         RepoCapabilities {
             supports_remote_selection: false,
             supports_bandwidth_limit: false,
@@ -140,42 +117,29 @@ impl Repo for NewRepo {
         }
     }
 
-    async fn build_storage(&self, _args: BuildStorageArgs<'_>) -> Result<BuildStorageResult> {
-        Ok(BuildStorageResult {
-            storage: RepoStorage::NewRepo(NewRepoStorage::new(self.base_url.clone())),
-            persist_remote: None,
-        })
-    }
-
-    async fn list_remotes(&self, _storage: RepoStorage) -> Result<Vec<String>> {
+    pub(super) async fn list_remotes(&self) -> Result<Vec<String>> {
         Ok(Vec::new())
     }
 
     #[instrument(
         level = "debug",
         name = "repo.load_app_list",
-        skip(storage, http_client, cancellation_token),
+        skip(self, http_client, cancellation_token),
         fields(layout = %self.id())
     )]
-    async fn load_app_list(
+    pub(super) async fn load_app_list(
         &self,
-        storage: RepoStorage,
-        _list_path: String,
         cache_dir: &Path,
         http_client: &reqwest::Client,
         cancellation_token: CancellationToken,
     ) -> Result<RepoAppList> {
-        let RepoStorage::NewRepo(storage) = storage else {
-            unreachable!("ffa storage passed to new-repo backend");
-        };
-
         ensure_not_cancelled(&cancellation_token)?;
-        debug!(url = %storage.list_url(), "Fetching app list decryption key");
+        debug!(url = %self.list_url(), "Fetching app list decryption key");
         let yarc_key =
-            match fetch_yarc_key(http_client, &storage.list_url(), &cancellation_token).await {
+            match fetch_yarc_key(http_client, &self.list_url(), &cancellation_token).await {
                 Ok(key) => key,
                 Err(error) => {
-                    if let Some(existing) = storage.current_key().await {
+                    if let Some(existing) = self.current_key().await {
                         warn!(
                             error = error.as_ref() as &dyn Error,
                             "Failed to refresh decryption key, reusing cached key"
@@ -186,11 +150,10 @@ impl Repo for NewRepo {
                     }
                 }
             };
-        storage.set_key(yarc_key).await;
 
         let list_path = cache_remote_file(
             http_client,
-            &storage.list_url(),
+            &self.list_url(),
             cache_dir,
             "newrepo/list.yarc",
             &cancellation_token,
@@ -221,7 +184,7 @@ impl Repo for NewRepo {
             }
         }
 
-        storage.update_index(&app_list.releases, yarc_key).await;
+        self.update_index(&app_list.releases, yarc_key).await;
         info!(app_count = apps.len(), "Loaded app list");
         Ok(RepoAppList { apps, donation_blacklist: Vec::new() })
     }
@@ -229,59 +192,42 @@ impl Repo for NewRepo {
     #[instrument(
         level = "debug",
         name = "repo.download_app",
-        skip(storage, http_client, progress_tx, cancellation_token),
+        skip(self, http_client, progress_tx, cancellation_token),
         fields(layout = %self.id(), app_full_name = app_full_name)
     )]
-    async fn download_app(
+    pub(super) async fn download_app(
         &self,
-        storage: RepoStorage,
         app_full_name: &str,
         destination_dir: &Path,
-        _cache_dir: &Path,
         http_client: &reqwest::Client,
         download_mode: DownloadMode,
         progress_tx: UnboundedSender<AppDownloadProgress>,
         cancellation_token: CancellationToken,
     ) -> Result<RepoDownloadResult> {
-        let RepoStorage::NewRepo(storage) = storage else {
-            unreachable!("ffa storage passed to new-repo backend");
-        };
-
         ensure_not_cancelled(&cancellation_token)?;
         info!(
             app_full_name,
             destination = %destination_dir.display(),
             "Starting app download"
         );
-        let release = storage.release_for_download(app_full_name).await.ok_or_else(|| {
-            anyhow!(
-                "No release metadata found for `{app_full_name}`. Refresh the cloud app list and \
-                 try again."
-            )
-        })?;
+        let (release, yarc_key) =
+            self.release_for_download(app_full_name).await.ok_or_else(|| {
+                anyhow!(
+                    "No release metadata found for `{app_full_name}`. Refresh the cloud app list \
+                     and try again."
+                )
+            })?;
         debug!(
             release_name = %release.release_name,
             manifest_hash = %release.manifest_hash,
             "Resolved release metadata"
         );
-        let yarc_key = match storage.current_key().await {
-            Some(key) => key,
-            None => {
-                send_status(&progress_tx, "Fetching decryption key...");
-                debug!(url = %storage.list_url(), "Refreshing missing decryption key");
-                let key =
-                    fetch_yarc_key(http_client, &storage.list_url(), &cancellation_token).await?;
-                storage.set_key(key).await;
-                key
-            }
-        };
-
         send_status(&progress_tx, "Fetching manifest...");
         debug!(
             manifest_hash = %release.manifest_hash,
             "Fetching manifest"
         );
-        let manifest_url = storage.manifest_url(&release.manifest_hash);
+        let manifest_url = self.manifest_url(&release.manifest_hash);
         let manifest_bytes = send_with_cancellation(
             http_client.get(&manifest_url),
             &manifest_url,
@@ -358,7 +304,7 @@ impl Repo for NewRepo {
         debug!(path = %temp_dir_path.display(), "Created temporary extraction directory");
         let download_result = async {
             send_status(&progress_tx, "Starting package download...");
-            let blob_url = storage.blob_url(&manifest.yarc_id);
+            let blob_url = self.blob_url(&manifest.yarc_id);
             match download_mode {
                 DownloadMode::Staged => {
                     let package_path = temp_dir_path.join("package.yarc");
@@ -461,10 +407,8 @@ impl Repo for NewRepo {
         download_result.map(|()| RepoDownloadResult { skipped: false })
     }
 
-    async fn upload_donation_archive(
+    pub(super) async fn upload_donation_archive(
         &self,
-        _storage: RepoStorage,
-        _config: &DownloaderConfig,
         _archive_path: &Path,
         _stats_tx: Option<UnboundedSender<TransferStats>>,
         _cancellation_token: CancellationToken,
@@ -1051,6 +995,36 @@ mod tests {
             last_modified_time: 1_700_000_000,
             manifest_hash: "a".repeat(64),
         }
+    }
+
+    #[tokio::test]
+    async fn failed_catalog_refresh_retains_key_and_release_index() {
+        use wiremock::{Mock, MockServer, ResponseTemplate, matchers::method};
+        let server = MockServer::start().await;
+        Mock::given(method("HEAD"))
+            .respond_with(
+                ResponseTemplate::new(200).insert_header("x-yaas-key", const_hex::encode([8; 32])),
+            )
+            .mount(&server)
+            .await;
+        Mock::given(method("GET"))
+            .respond_with(ResponseTemplate::new(200).set_body_string("invalid catalog"))
+            .mount(&server)
+            .await;
+        let repo = NewRepo::new(server.uri());
+        let release = sample_release();
+        repo.update_index(std::slice::from_ref(&release), [7; 32]).await;
+        let dir = tempfile::tempdir().unwrap();
+        assert!(
+            repo.load_app_list(dir.path(), &reqwest::Client::new(), CancellationToken::new())
+                .await
+                .is_err()
+        );
+        assert_eq!(repo.current_key().await, Some([7; 32]));
+        assert_eq!(
+            repo.release_for_download(&release.release_name).await,
+            Some((release, [7; 32]))
+        );
     }
 
     #[test]

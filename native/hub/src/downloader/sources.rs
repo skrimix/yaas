@@ -92,19 +92,6 @@ impl SourceStore {
         save_active_config_id(&self.settings_handler, sources.active_config_id.as_deref())
     }
 
-    pub(crate) async fn install_from_url(
-        &self,
-        url: SensitiveUrl<'_>,
-        select_as_active: bool,
-    ) -> Result<DownloaderConfig> {
-        let cfg =
-            fetch_managed_config(&self.app_dir, "_bootstrap", url, Some(url), None, true).await?;
-        if select_as_active {
-            save_active_config_id(&self.settings_handler, Some(&cfg.id))?;
-        }
-        Ok(cfg)
-    }
-
     pub(crate) fn select_active(&self, config_id: &str) -> Result<()> {
         ensure!(!config_id.is_empty(), "Downloader config ID must not be empty");
 
@@ -123,29 +110,7 @@ impl SourceStore {
         let path = managed_config_path(&self.app_dir, config_id);
         ensure!(path.exists(), "Downloader config is not installed: {config_id}");
 
-        fs::remove_file(&path).with_context(|| format!("Failed to delete {}", path.display()))?;
-
-        let loaded = read_configs(&self.app_dir)?;
-        let next_active_id = resolve_active_config_id(
-            &loaded.configs,
-            current_active_config_id(&self.settings_handler),
-        );
-        save_active_config_id(&self.settings_handler, next_active_id.as_deref())
-    }
-
-    pub(crate) async fn refresh_all(&self, configs: &[DownloaderConfig]) -> RefreshReport {
-        refresh_configs(&self.app_dir, configs).await
-    }
-
-    pub(crate) async fn refresh_active(&self) -> Result<RefreshReport> {
-        let sources = self.load()?;
-        let report = match sources.active_config() {
-            Some(active_cfg) => {
-                refresh_configs(&self.app_dir, std::slice::from_ref(&active_cfg)).await
-            }
-            None => RefreshReport::default(),
-        };
-        Ok(report)
+        fs::remove_file(&path).with_context(|| format!("Failed to delete {}", path.display()))
     }
 
     pub(crate) fn inactive_configs(&self, sources: &SourceSnapshot) -> Vec<DownloaderConfig> {
@@ -159,6 +124,93 @@ impl SourceStore {
 
     pub(crate) fn delete_cache_dir(&self, config_id: &str) -> Result<()> {
         delete_config_cache_dir(&self.app_dir, config_id)
+    }
+}
+
+/// Files owned by one configuration fetch until the controller accepts it.
+pub(super) struct ConfigFetch {
+    temp: tempfile::TempDir,
+    url: String,
+    expected_id: Option<String>,
+}
+
+impl ConfigFetch {
+    /// Called under the controller lock to snapshot the configuration cache.
+    pub(super) fn new(app_dir: &Path, url: &str, expected_id: Option<&str>) -> Result<Self> {
+        let temp = tempfile::tempdir()?;
+        if let Some(id) = expected_id {
+            let cache = runtime_cache_dir(app_dir, id).join("source");
+            for name in ["downloader_config.json", "meta.json"] {
+                let path = cache.join(name);
+                if path.exists() {
+                    fs::copy(path, temp.path().join(name))?;
+                }
+            }
+        }
+        Ok(Self { temp, url: url.to_string(), expected_id: expected_id.map(str::to_string) })
+    }
+
+    pub(super) async fn fetch(self) -> Result<Self> {
+        let client = reqwest::Client::builder()
+            .user_agent(crate::USER_AGENT)
+            .connect_timeout(std::time::Duration::from_secs(10))
+            .timeout(std::time::Duration::from_secs(60))
+            .build()?;
+        http_cache::update_file_cached(
+            &client,
+            &self.url,
+            &self.temp.path().join("downloader_config.json"),
+            self.temp.path(),
+            None,
+        )
+        .await?;
+        let cfg =
+            DownloaderConfig::load_from_path(self.temp.path().join("downloader_config.json"))?;
+        cfg.validate_managed_remote(
+            self.expected_id.is_none().then(|| SensitiveUrl::new(&self.url)),
+        )?;
+        if let Some(id) = &self.expected_id {
+            ensure!(
+                cfg.id == *id,
+                "Downloaded downloader config changed ID: expected {id}, got {}",
+                cfg.id
+            );
+        }
+        Ok(self)
+    }
+
+    /// Commits only after the controller has checked the source revision.
+    pub(super) fn commit(self, app_dir: &Path) -> Result<DownloaderConfig> {
+        let cfg = write_managed_config(
+            app_dir,
+            &self.temp.path().join("downloader_config.json"),
+            self.expected_id.is_none().then(|| SensitiveUrl::new(&self.url)),
+            self.expected_id.as_deref(),
+            self.expected_id.is_none(),
+        )?;
+        let cache = runtime_cache_dir(app_dir, &cfg.id).join("source");
+        // A cache failure must not turn a successful source mutation into a failed install.
+        if let Err(error) = (|| -> Result<()> {
+            fs::create_dir_all(&cache)?;
+            for name in ["downloader_config.json", "meta.json"] {
+                let path = self.temp.path().join(name);
+                if path.exists() {
+                    fs::copy(path, cache.join(name))?;
+                }
+            }
+            Ok(())
+        })() {
+            warn!(%error, "Failed to save source download cache");
+        }
+        Ok(cfg)
+    }
+}
+
+pub(super) struct CacheLease(pub Arc<tokio::sync::Notify>);
+
+impl Drop for CacheLease {
+    fn drop(&mut self) {
+        self.0.notify_waiters();
     }
 }
 
@@ -198,14 +250,7 @@ fn save_active_config_id(
     settings_handler: &Arc<SettingsHandler>,
     config_id: Option<&str>,
 ) -> Result<()> {
-    let mut settings = current_settings(settings_handler);
-    let new_id = config_id.unwrap_or_default().to_string();
-    if settings.active_downloader_config_id == new_id {
-        return Ok(());
-    }
-
-    settings.active_downloader_config_id = new_id;
-    settings_handler.save_settings(&settings)
+    settings_handler.update_active_downloader(config_id.unwrap_or_default())
 }
 
 fn resolve_active_config_id(configs: &[DownloaderConfig], desired_id: String) -> Option<String> {
@@ -346,6 +391,7 @@ fn write_managed_config(
     Ok(cfg)
 }
 
+#[cfg(test)]
 async fn refresh_configs(app_dir: &Path, configs: &[DownloaderConfig]) -> RefreshReport {
     let mut report = RefreshReport::default();
 
@@ -662,6 +708,7 @@ mod tests {
         save_active_config_id(&settings, Some("beta")).unwrap();
 
         sources.remove("beta").unwrap();
+        sources.persist_active_config(&sources.load().unwrap()).unwrap();
 
         assert!(!beta.exists());
         assert!(alpha.exists());
@@ -683,6 +730,7 @@ mod tests {
         save_active_config_id(&settings, Some("only")).unwrap();
 
         sources.remove("only").unwrap();
+        sources.persist_active_config(&sources.load().unwrap()).unwrap();
 
         assert!(!only.exists());
         assert_eq!(current_active_config_id(&settings), "");

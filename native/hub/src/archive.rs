@@ -61,36 +61,56 @@ where
     let mut cmd = TokioCommand::new(&bin);
     cmd.args(args).stdin(Stdio::null()).stdout(Stdio::null()).stderr(Stdio::piped());
 
+    let output = run_7z_command(cmd, cancel).await?;
+    ensure!(
+        output.status.success(),
+        "7-Zip exited with status: {}, stderr:\n{}",
+        output.status,
+        String::from_utf8_lossy(&output.stderr)
+    );
+    Ok(())
+}
+
+async fn run_7z_command(
+    mut cmd: TokioCommand,
+    cancel: Option<&CancellationToken>,
+) -> Result<std::process::Output> {
+    let cancel = cancel.cloned().unwrap_or_default();
+    ensure!(!cancel.is_cancelled(), "Archive operation cancelled");
+    cmd.kill_on_drop(true);
     #[cfg(target_os = "windows")]
     cmd.creation_flags(0x08000000); // CREATE_NO_WINDOW
 
     let mut child = cmd.spawn().context("Failed to spawn 7-Zip process")?;
+    let mut stdout = child.stdout.take();
     let mut stderr = child.stderr.take();
-
-    let status = if let Some(tok) = cancel {
-        tokio::select! {
-            status = child.wait() => status.context("Failed to wait for 7-Zip process")?,
-            _ = tok.cancelled() => {
-                let _ = child.kill().await;
-                return Err(anyhow!(io::Error::new(io::ErrorKind::Interrupted, "extraction cancelled")));
-            }
-        }
-    } else {
-        child.wait().await.context("Failed to wait for 7-Zip process")?
+    let mut stdout_bytes = Vec::new();
+    let mut stderr_bytes = Vec::new();
+    let output = async {
+        tokio::try_join!(
+            child.wait(),
+            async {
+                if let Some(stdout) = &mut stdout {
+                    stdout.read_to_end(&mut stdout_bytes).await?;
+                }
+                Ok::<_, io::Error>(())
+            },
+            async {
+                if let Some(stderr) = &mut stderr {
+                    stderr.read_to_end(&mut stderr_bytes).await?;
+                }
+                Ok::<_, io::Error>(())
+            },
+        )
     };
-
-    if !status.success() {
-        let stderr_text = if let Some(ref mut stderr_pipe) = stderr {
-            let mut buf = Vec::new();
-            stderr_pipe.read_to_end(&mut buf).await.ok();
-            String::from_utf8_lossy(&buf).into_owned()
-        } else {
-            String::new()
-        };
-        ensure!(false, "7-Zip exited with status: {}, stderr:\n{}", status, stderr_text);
-    }
-
-    Ok(())
+    let (status, (), ()) = tokio::select! {
+        output = output => output.context("Failed to wait for 7-Zip process")?,
+        _ = cancel.cancelled() => {
+            child.kill().await.context("Failed to stop 7-Zip process")?;
+            return Err(io::Error::new(io::ErrorKind::Interrupted, "Archive operation cancelled").into());
+        }
+    };
+    Ok(std::process::Output { status, stdout: stdout_bytes, stderr: stderr_bytes })
 }
 
 /// Create a ZIP archive from the contents of `src_dir` into `dest_dir` with the given file name.
@@ -203,19 +223,16 @@ pub(crate) async fn decompress_all_7z_in_dir(
 }
 
 /// Run 7-Zip and capture stdout.
-async fn run_7z_to_string<I, S>(args: I) -> Result<String>
+async fn run_7z_to_string<I, S>(args: I, cancel: Option<&CancellationToken>) -> Result<String>
 where
     I: IntoIterator<Item = S>,
     S: AsRef<OsStr>,
 {
     let bin = get_7z_path()?;
 
-    let output = TokioCommand::new(&bin)
-        .args(args)
-        .stdin(Stdio::null())
-        .output()
-        .await
-        .context("Failed to run 7-Zip")?;
+    let mut cmd = TokioCommand::new(&bin);
+    cmd.args(args).stdin(Stdio::null()).stdout(Stdio::piped()).stderr(Stdio::piped());
+    let output = run_7z_command(cmd, cancel).await?;
 
     let stdout = String::from_utf8_lossy(&output.stdout).into_owned();
     let stderr = String::from_utf8_lossy(&output.stderr).into_owned();
@@ -230,13 +247,16 @@ where
 
 /// List file paths contained in an archive using 7-Zip.
 /// Returns only file entries (directories are filtered out).
-pub(crate) async fn list_archive_file_paths(archive: &Path) -> Result<Vec<String>> {
+/// Cancellation stops the process and waits for it to exit.
+pub(crate) async fn list_archive_file_paths(
+    archive: &Path,
+    cancel: Option<&CancellationToken>,
+) -> Result<Vec<String>> {
     // Use technical list for easier parsing
-    let out = run_7z_to_string([
-        OsString::from("l"),
-        OsString::from("-slt"),
-        archive.as_os_str().to_os_string(),
-    ])
+    let out = run_7z_to_string(
+        [OsString::from("l"), OsString::from("-slt"), archive.as_os_str().to_os_string()],
+        cancel,
+    )
     .await?;
     Ok(parse_7z_slt_listing(&out))
 }
@@ -285,10 +305,12 @@ fn parse_7z_slt_listing(out: &str) -> Vec<String> {
 }
 
 /// Extract a single entry from an archive into `dest_dir`, flattening paths (7z `e`).
+/// Cancellation stops the process and waits for it to exit.
 pub(crate) async fn extract_single_from_archive(
     archive: &Path,
     dest_dir: &Path,
     entry: &str,
+    cancel: Option<&CancellationToken>,
 ) -> Result<()> {
     let mut out_arg = OsString::from("-o");
     out_arg.push(dest_dir.as_os_str());
@@ -300,7 +322,7 @@ pub(crate) async fn extract_single_from_archive(
             archive.as_os_str().to_os_string(),
             OsString::from(entry),
         ],
-        None,
+        cancel,
     )
     .await
 }
@@ -312,6 +334,52 @@ mod tests {
     use tempfile::tempdir;
 
     use super::*;
+
+    #[test]
+    fn archive_child() {
+        use fs4::fs_std::FileExt;
+        let Some(path) = std::env::var_os("YAAS_ARCHIVE_TEST_LOCK") else { return };
+        let file = std::fs::File::create(&path).unwrap();
+        file.lock_exclusive().unwrap();
+        std::fs::write(Path::new(&path).with_extension("ready"), "ready").unwrap();
+        loop {
+            std::thread::park();
+        }
+    }
+
+    #[tokio::test]
+    async fn cancellation_waits_for_archive_process_to_exit() {
+        use fs4::fs_std::FileExt;
+        use tokio::time::{Duration, timeout};
+
+        // Listing captures stdout; extraction discards it. Both must join the child.
+        for capture_stdout in [false, true] {
+            let dir = tempdir().unwrap();
+            let lock = dir.path().join("child.lock");
+            let ready = lock.with_extension("ready");
+            let cancel = CancellationToken::new();
+            let mut cmd = TokioCommand::new(std::env::current_exe().unwrap());
+            cmd.args(["--exact", "archive::tests::archive_child", "--nocapture"])
+                .env("YAAS_ARCHIVE_TEST_LOCK", &lock)
+                .stdin(Stdio::null())
+                .stdout(if capture_stdout { Stdio::piped() } else { Stdio::null() })
+                .stderr(Stdio::piped());
+            let token = cancel.clone();
+            let task = tokio::spawn(async move { run_7z_command(cmd, Some(&token)).await });
+            let started = timeout(Duration::from_secs(5), async {
+                while !ready.exists() {
+                    tokio::time::sleep(Duration::from_millis(10)).await;
+                }
+            })
+            .await;
+            cancel.cancel();
+            let error = timeout(Duration::from_secs(5), task).await.unwrap().unwrap().unwrap_err();
+            started.unwrap();
+            assert!(error.to_string().contains("cancelled"));
+            let file = std::fs::File::options().read(true).write(true).open(lock).unwrap();
+            assert!(file.try_lock_exclusive().unwrap(), "Archive process is still running");
+        }
+    }
 
     #[test]
     fn parse_7z_listing() {
@@ -629,7 +697,8 @@ Offset = 17198364
             .await
             .expect("zip creation should succeed");
 
-        let files = list_archive_file_paths(&archive_path).await.expect("listing should succeed");
+        let files =
+            list_archive_file_paths(&archive_path, None).await.expect("listing should succeed");
         assert!(files.iter().any(|p| p.ends_with("first.txt")));
         assert!(files.iter().any(|p| p.ends_with("second.txt")));
 
@@ -640,7 +709,7 @@ Offset = 17198364
             .clone();
         let dest_dir = tempdir().unwrap();
 
-        extract_single_from_archive(&archive_path, dest_dir.path(), &entry)
+        extract_single_from_archive(&archive_path, dest_dir.path(), &entry, None)
             .await
             .expect("single-file extraction should succeed");
 

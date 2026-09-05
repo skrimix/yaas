@@ -170,7 +170,7 @@ impl RcloneTransferOperation {
     }
 }
 
-#[derive(Debug, Clone, PartialEq, Eq)]
+#[derive(Debug, Clone)]
 pub(super) struct RcloneCli {
     rclone_path: PathBuf,
     config_path: PathBuf,
@@ -196,6 +196,10 @@ impl RcloneCli {
             };
         Span::current().record("sys_proxy", sys_proxy.as_deref());
         Self { rclone_path: resolved_path, config_path, sys_proxy, bandwidth_limit }
+    }
+
+    pub(super) fn set_bandwidth_limit(&mut self, limit: String) {
+        self.bandwidth_limit = limit;
     }
 
     #[instrument(skip(self), level = "debug")]

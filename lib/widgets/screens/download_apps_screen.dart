@@ -1046,7 +1046,9 @@ class _DownloadAppsScreenState extends State<DownloadAppsScreen> {
                         IconButton(
                           icon: const Icon(Icons.refresh),
                           tooltip: l10n.refresh,
-                          onPressed: () => cloudAppsState.refresh(),
+                          onPressed: cloudAppsState.isLoading
+                              ? null
+                              : cloudAppsState.refresh,
                         ),
                       ],
                     ),

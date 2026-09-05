@@ -145,6 +145,7 @@ class CloudAppsState extends ChangeNotifier {
   }
 
   void refresh() {
+    if (_isLoading) return;
     _isLoading = true;
     notifyListeners();
     LoadCloudAppsRequest(refresh: true).sendSignalToRust();

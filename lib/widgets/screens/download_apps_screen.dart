@@ -854,6 +854,45 @@ class _DownloadAppsScreenState extends State<DownloadAppsScreen> {
     );
   }
 
+  Widget _buildSlowLoadingRemoteButton(SettingsState settingsState) {
+    final l10n = AppLocalizations.of(context);
+    final remotes = settingsState.rcloneRemotes;
+    final currentRemote = settingsState.settings.rcloneRemoteName;
+    return PopupMenuButton<String>(
+      initialValue: remotes.contains(currentRemote) ? currentRemote : null,
+      // No animation to avoid "deactivated widget" errors when showSlowHint resets
+      popUpAnimationStyle: AnimationStyle.noAnimation,
+      onSelected: (value) {
+        if (value != currentRemote) {
+          settingsState.setRcloneRemoteName(value);
+        }
+      },
+      itemBuilder: (context) => remotes
+          .map((r) => PopupMenuItem(
+                value: r,
+                child: Row(
+                  children: [
+                    if (r == currentRemote)
+                      Icon(Icons.check,
+                          size: 18,
+                          color: Theme.of(context).colorScheme.primary)
+                    else
+                      const SizedBox(width: 18),
+                    const SizedBox(width: 8),
+                    Text(r),
+                  ],
+                ),
+              ))
+          .toList(),
+      child: Text(
+        l10n.loadingAppsSlowHintButton,
+        style: Theme.of(context).textTheme.bodySmall?.copyWith(
+              color: Theme.of(context).colorScheme.primary,
+            ),
+      ),
+    );
+  }
+
   @override
   Widget build(BuildContext context) {
     final settingsState = context.watch<SettingsState>();
@@ -878,17 +917,17 @@ class _DownloadAppsScreenState extends State<DownloadAppsScreen> {
         final showDownloaderError =
             !showDownloaderInit && settingsState.downloaderError != null;
         final hasDownloader = settingsState.isDownloaderAvailable;
+        final showSlowHint = cloudAppsState.isLoading &&
+            cloudAppsState.isLoadingSlow &&
+            !showDownloaderInit &&
+            !showDownloaderError &&
+            settingsState.downloaderSupportsRemoteSelection &&
+            settingsState.rcloneRemotes.length > 1;
 
         if (cloudAppsState.isLoading &&
             cloudAppsState.apps.isEmpty &&
             !showDownloaderInit &&
             !showDownloaderError) {
-          final remotes = settingsState.rcloneRemotes;
-          final currentRemote = settingsState.settings.rcloneRemoteName;
-          final showSlowHint =
-              settingsState.downloaderSupportsRemoteSelection &&
-                  cloudAppsState.isLoadingSlow &&
-                  remotes.length > 1;
           return Center(
             child: Column(
               mainAxisSize: MainAxisSize.min,
@@ -906,42 +945,7 @@ class _DownloadAppsScreenState extends State<DownloadAppsScreen> {
                     textAlign: TextAlign.center,
                   ),
                   const SizedBox(height: 8),
-                  PopupMenuButton<String>(
-                    initialValue:
-                        remotes.contains(currentRemote) ? currentRemote : null,
-                    // No animation to avoid "deactivated widget" errors when showSlowHint resets
-                    popUpAnimationStyle: AnimationStyle.noAnimation,
-                    onSelected: (value) {
-                      if (value != currentRemote) {
-                        settingsState.setRcloneRemoteName(value);
-                      }
-                    },
-                    itemBuilder: (context) => remotes
-                        .map((r) => PopupMenuItem(
-                              value: r,
-                              child: Row(
-                                children: [
-                                  if (r == currentRemote)
-                                    Icon(Icons.check,
-                                        size: 18,
-                                        color: Theme.of(context)
-                                            .colorScheme
-                                            .primary)
-                                  else
-                                    const SizedBox(width: 18),
-                                  const SizedBox(width: 8),
-                                  Text(r),
-                                ],
-                              ),
-                            ))
-                        .toList(),
-                    child: Text(
-                      l10n.loadingAppsSlowHintButton,
-                      style: Theme.of(context).textTheme.bodySmall?.copyWith(
-                            color: Theme.of(context).colorScheme.primary,
-                          ),
-                    ),
-                  ),
+                  _buildSlowLoadingRemoteButton(settingsState),
                 ],
               ],
             ),
@@ -986,6 +990,16 @@ class _DownloadAppsScreenState extends State<DownloadAppsScreen> {
             child: Column(
               children: [
                 if (cloudAppsState.isLoading) const LinearProgressIndicator(),
+                if (showSlowHint && cloudAppsState.apps.isNotEmpty)
+                  MaterialBanner(
+                    content: Text(l10n.loadingAppsSlowHint),
+                    actions: [
+                      Padding(
+                        padding: const EdgeInsets.all(8),
+                        child: _buildSlowLoadingRemoteButton(settingsState),
+                      ),
+                    ],
+                  ),
                 if (cloudAppsState.error != null &&
                     cloudAppsState.apps.isNotEmpty)
                   MaterialBanner(

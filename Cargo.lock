@@ -1905,8 +1905,10 @@ name = "magic-cast"
 version = "0.1.0"
 dependencies = [
  "bytes",
+ "forensic-adb",
  "oxideav-core",
  "oxideav-mkv",
+ "tokio",
  "tracing",
  "tracing-subscriber",
  "uuid",

@@ -3,6 +3,7 @@
 //! [`CastingSession`] handles XRSP setup and recovery, paces incoming media, and serves a live
 //! Matroska stream to one HTTP client.
 
+mod adb;
 pub mod cadence;
 pub mod matroska;
 mod session;

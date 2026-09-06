@@ -6,7 +6,6 @@
 use std::collections::VecDeque;
 use std::io::{self, Read, Write};
 use std::net::{TcpListener, TcpStream};
-use std::path::PathBuf;
 use std::sync::atomic::{AtomicBool, Ordering};
 use std::sync::{Arc, mpsc};
 use std::thread;
@@ -34,10 +33,10 @@ const RESYNC_ON_LAG: bool = false;
 
 #[derive(Clone, Debug)]
 pub struct SessionConfig {
-    /// Device serial passed to adb (`-s`). `None` uses adb's default device selection.
-    pub serial: Option<String>,
-    /// Path to the adb binary.
-    pub adb: PathBuf,
+    /// Device selected on an already running ADB server.
+    ///
+    /// The device must support ADB shell v2 to report command exit codes.
+    pub device: forensic_adb::Device,
     /// Requested capture frame rate (`0` = device default, about 30).
     pub fps: u32,
     /// Requested capture width.
@@ -82,14 +81,13 @@ impl CastingSession {
         let (session_tx, session_rx) = mpsc::channel();
 
         let cast_config = CastConfig {
-            serial: config.serial.clone(),
+            device: config.device.clone(),
             fps: config.fps,
             width: config.width,
             height: config.height,
             audio: config.audio,
             adaptively_skip_frames: false,
             port: config.xrsp_port,
-            adb: config.adb.clone(),
         };
         let session = LiveSession::new(cast_config, stop.clone(), stream_tx, session_tx.clone());
         let control = session.control();
@@ -1357,8 +1355,7 @@ mod tests {
 
     fn test_playout_config() -> PlayoutConfig {
         PlayoutConfig::new(&SessionConfig {
-            serial: None,
-            adb: PathBuf::from("adb"),
+            device: crate::adb::test_device(),
             fps: 60,
             width: 1800,
             height: 1920,
@@ -1370,14 +1367,13 @@ mod tests {
 
     fn test_cast_config() -> CastConfig {
         CastConfig {
-            serial: None,
+            device: crate::adb::test_device(),
             fps: 60,
             width: 1800,
             height: 1920,
             audio: true,
             adaptively_skip_frames: false,
             port: 4445,
-            adb: PathBuf::from("adb"),
         }
     }
 

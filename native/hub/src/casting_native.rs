@@ -127,28 +127,13 @@ impl NativeCastingManager {
                 return;
             }
         };
-        let serial = device.true_serial.clone();
         let (width, height) = if device.product.eq_ignore_ascii_case("eureka") {
             QUEST_3_RESOLUTION
         } else {
             DEFAULT_RESOLUTION
         };
-        let adb = match self.adb_service.resolved_adb_path().await {
-            Ok(path) => path,
-            Err(e) => {
-                Toast::send(
-                    "Cannot start casting".to_string(),
-                    format!("ADB binary not found: {:#}", e),
-                    true,
-                    None,
-                );
-                return;
-            }
-        };
-
         let config = magic_cast::SessionConfig {
-            serial: Some(serial),
-            adb,
+            device: device.inner.clone(),
             fps,
             width,
             height,

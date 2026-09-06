@@ -5,10 +5,6 @@
 
 use std::io::{self, Read, Write};
 use std::net::{Shutdown, TcpListener, TcpStream};
-#[cfg(target_os = "windows")]
-use std::os::windows::process::CommandExt;
-use std::path::PathBuf;
-use std::process::{Child, Command, Output, Stdio};
 use std::sync::atomic::{AtomicBool, AtomicUsize, Ordering};
 use std::sync::{Arc, Mutex, mpsc};
 use std::thread;
@@ -17,6 +13,8 @@ use std::time::{Duration, Instant};
 use bytes::{Bytes, BytesMut};
 use tracing::{debug, info, warn};
 use uuid::Uuid;
+
+use crate::adb;
 
 const MESSAGE_HANDSHAKE: u32 = 1;
 const MESSAGE_PING: u32 = 3;
@@ -34,14 +32,13 @@ pub type Result<T> = std::result::Result<T, Box<dyn std::error::Error + Send + S
 
 #[derive(Clone, Debug)]
 pub struct CastConfig {
-    pub serial: Option<String>,
+    pub device: forensic_adb::Device,
     pub fps: u32,
     pub width: u32,
     pub height: u32,
     pub audio: bool,
     pub adaptively_skip_frames: bool,
     pub port: u16,
-    pub adb: PathBuf,
 }
 
 #[derive(Debug)]
@@ -302,13 +299,20 @@ impl LiveSession {
         listener.set_nonblocking(true)?;
         info!(port = self.config.port, "XRSP server listening");
 
-        let result = self.run_accept_loop(&listener);
-        run_adb_teardown(&self.config);
+        let runtime = tokio::runtime::Builder::new_current_thread()
+            .enable_all()
+            .build()?;
+        let result = self.run_accept_loop(&listener, &runtime);
+        runtime.block_on(run_adb_teardown(&self.config));
         result
     }
 
-    fn run_accept_loop(&self, listener: &TcpListener) -> Result<()> {
-        run_adb_setup_with_reconnect(&self.config, &self.stop)?;
+    fn run_accept_loop(
+        &self,
+        listener: &TcpListener,
+        runtime: &tokio::runtime::Runtime,
+    ) -> Result<()> {
+        runtime.block_on(run_adb_setup_with_reconnect(&self.config, &self.stop))?;
 
         let mut accepted = 0usize;
         let mut workers = Vec::new();
@@ -342,7 +346,8 @@ impl LiveSession {
                         let _ = self.session_tx.send(SessionEvent::Recovering);
                         self.reset_host_session_state();
                         reap_finished_workers(&mut workers);
-                        run_adb_recovery_with_reconnect(&self.config, &self.stop)?;
+                        runtime
+                            .block_on(run_adb_recovery_with_reconnect(&self.config, &self.stop))?;
                         recovery.begin_attempt(
                             Instant::now(),
                             accepted,
@@ -1063,39 +1068,44 @@ fn find_annex_b_start(payload: &[u8], from: usize) -> Option<usize> {
     None
 }
 
-fn run_adb_setup_with_reconnect(config: &CastConfig, stop: &AtomicBool) -> Result<()> {
-    match run_adb_setup(config) {
+async fn run_adb_setup_with_reconnect(config: &CastConfig, stop: &AtomicBool) -> Result<()> {
+    match run_adb_setup(config).await {
         Ok(()) => Ok(()),
         Err(error) => {
             warn!("initial ADB setup failed: {error}; reconnecting ADB");
-            reconnect_adb_and_setup(config, stop)
+            reconnect_adb_and_setup(config, stop).await
         }
     }
 }
 
-fn run_adb_recovery_with_reconnect(config: &CastConfig, stop: &AtomicBool) -> Result<()> {
-    match run_adb_recovery(config) {
+async fn run_adb_recovery_with_reconnect(config: &CastConfig, stop: &AtomicBool) -> Result<()> {
+    match run_adb_recovery(config).await {
         Ok(()) => Ok(()),
         Err(error) => {
             warn!("casting recovery failed: {error}; reconnecting ADB");
-            reconnect_adb_and_setup(config, stop)
+            reconnect_adb_and_setup(config, stop).await
         }
     }
 }
 
-fn reconnect_adb_and_setup(config: &CastConfig, stop: &AtomicBool) -> Result<()> {
+async fn reconnect_adb_and_setup(config: &CastConfig, stop: &AtomicBool) -> Result<()> {
     loop {
-        run_adb_best_effort(config, &["reconnect"])?;
+        if stop.load(Ordering::SeqCst) {
+            return Ok(());
+        }
+        if let Err(error) = adb::reconnect(&config.device).await {
+            debug!("ADB reconnect failed: {error}");
+        }
         info!("waiting for ADB device");
-        if !wait_for_adb_device(config, stop)? {
+        if !adb::wait_for_device(&config.device, stop).await? {
             return Ok(());
         }
         info!("ADB device available; rebuilding casting setup");
 
-        match run_adb_setup(config) {
+        match run_adb_setup(config).await {
             Ok(()) => return Ok(()),
             Err(error) => {
-                if adb_device_available(config)? {
+                if adb::device_available(&config.device).await? {
                     return Err(
                         format!("ADB setup failed while device was available: {error}").into(),
                     );
@@ -1106,133 +1116,92 @@ fn reconnect_adb_and_setup(config: &CastConfig, stop: &AtomicBool) -> Result<()>
     }
 }
 
-fn wait_for_adb_device(config: &CastConfig, stop: &AtomicBool) -> Result<bool> {
-    let mut command = adb_command(config, &["wait-for-device"]);
-    let mut child = command
-        .stdout(Stdio::piped())
-        .stderr(Stdio::piped())
-        .spawn()?;
-    loop {
-        if stop.load(Ordering::SeqCst) {
-            terminate_child(&mut child);
-            return Ok(false);
-        }
-        if child.try_wait()?.is_some() {
-            let output = child.wait_with_output()?;
-            log_adb_result(&command, &output, false);
-            if output.status.success() {
-                return Ok(true);
-            }
-            return Err(format_adb_failure(&["wait-for-device"], &output).into());
-        }
-        thread::sleep(Duration::from_millis(100));
-    }
-}
-
-fn terminate_child(child: &mut Child) {
-    let _ = child.kill();
-    let _ = child.wait();
-}
-
-fn run_adb_setup(config: &CastConfig) -> Result<()> {
+async fn run_adb_setup(config: &CastConfig) -> Result<()> {
+    let serial = adb::shell(&config.device, &["getprop", "ro.serialno"]).await?;
     let session_id = Uuid::new_v4().to_string();
     let reconnect_delay = Duration::from_millis(500);
     let init_delay = Duration::from_secs(1);
     let fps = effective_fixed_fps(config.fps).to_string();
     let min_fps = if config.adaptively_skip_frames {
-        "\"\""
+        ""
     } else {
         fps.as_str()
     };
 
-    run_adb_best_effort(
-        config,
+    adb::shell_best_effort(
+        &config.device,
         &[
-            "shell",
             "am",
             "startservice",
             "-a",
             "STOP_CASTING",
             "com.oculus.metacam/com.oculus.metacam.casting.CastingService",
         ],
-    )?;
-    thread::sleep(reconnect_delay);
-    run_adb_best_effort(
-        config,
+    )
+    .await?;
+    tokio::time::sleep(reconnect_delay).await;
+    adb::shell_best_effort(
+        &config.device,
         &[
-            "shell",
             "am",
             "broadcast",
             "-a",
             "com.oculus.magicislandcastingservice.STOP_CASTING",
         ],
-    )?;
-    run_adb_best_effort(
-        config,
+    )
+    .await?;
+    adb::shell_best_effort(
+        &config.device,
         &[
-            "shell",
             "am",
             "broadcast",
             "-a",
             "com.oculus.magicislandcastingservice.DISABLE_PANEL_STREAMING",
         ],
-    )?;
-    thread::sleep(reconnect_delay);
-    run_adb(
-        config,
+    )
+    .await?;
+    tokio::time::sleep(reconnect_delay).await;
+    adb::shell(
+        &config.device,
+        &["setprop", "debug.oculus.command_line_media_capture", "true"],
+    )
+    .await?;
+    adb::shell(
+        &config.device,
+        &["setprop", "debug.oculus.magic.enabled", "1"],
+    )
+    .await?;
+    adb::shell(
+        &config.device,
+        &["setprop", "debug.oculus.magic.serialNumber", serial.trim()],
+    )
+    .await?;
+    adb::shell(
+        &config.device,
+        &["setprop", "debug.oculus.magic.maxFps", &fps],
+    )
+    .await?;
+    adb::shell(
+        &config.device,
+        &["setprop", "debug.oculus.magic.minFps", min_fps],
+    )
+    .await?;
+    if let Err(error) = adb::remove_reverse(&config.device, config.port).await {
+        debug!("casting reverse removal failed: {error}");
+    }
+    adb::shell(
+        &config.device,
         &[
-            "shell",
-            "setprop",
-            "debug.oculus.command_line_media_capture",
-            "true",
-        ],
-    )?;
-    run_adb(
-        config,
-        &["shell", "setprop", "debug.oculus.magic.enabled", "1"],
-    )?;
-    run_adb(
-        config,
-        &[
-            "shell",
-            "setprop",
-            "debug.oculus.magic.serialNumber",
-            config.serial.as_deref().unwrap_or(""),
-        ],
-    )?;
-    run_adb(
-        config,
-        &["shell", "setprop", "debug.oculus.magic.maxFps", &fps],
-    )?;
-    run_adb(
-        config,
-        &["shell", "setprop", "debug.oculus.magic.minFps", min_fps],
-    )?;
-    run_adb_best_effort(
-        config,
-        &["reverse", "--remove", &format!("tcp:{}", config.port)],
-    )?;
-    run_adb(
-        config,
-        &[
-            "shell",
             "setprop",
             "debug.oculus.magic.port",
             &config.port.to_string(),
         ],
-    )?;
-    run_adb(
-        config,
+    )
+    .await?;
+    adb::reverse(&config.device, config.port).await?;
+    adb::shell(
+        &config.device,
         &[
-            "reverse",
-            &format!("tcp:{}", config.port),
-            &format!("tcp:{}", config.port),
-        ],
-    )?;
-    run_adb(
-        config,
-        &[
-            "shell",
             "am",
             "start-foreground-service",
             "-n",
@@ -1241,12 +1210,12 @@ fn run_adb_setup(config: &CastConfig) -> Result<()> {
             "use_openxr",
             "true",
         ],
-    )?;
-    thread::sleep(init_delay);
-    run_adb(
-        config,
+    )
+    .await?;
+    tokio::time::sleep(init_delay).await;
+    adb::shell(
+        &config.device,
         &[
-            "shell",
             "am",
             "startservice",
             "-a",
@@ -1259,25 +1228,25 @@ fn run_adb_setup(config: &CastConfig) -> Result<()> {
             &session_id,
             "com.oculus.metacam/com.oculus.metacam.casting.CastingService",
         ],
-    )?;
+    )
+    .await?;
     Ok(())
 }
 
-fn run_adb_recovery(config: &CastConfig) -> Result<()> {
-    run_adb(
-        config,
+async fn run_adb_recovery(config: &CastConfig) -> Result<()> {
+    adb::shell(
+        &config.device,
         &[
-            "shell",
             "am",
             "broadcast",
             "-a",
             "com.oculus.magicisland.sdk.intent.CONNECT",
         ],
-    )?;
-    run_adb(
-        config,
+    )
+    .await?;
+    adb::shell(
+        &config.device,
         &[
-            "shell",
             "am",
             "broadcast",
             "-a",
@@ -1286,11 +1255,11 @@ fn run_adb_recovery(config: &CastConfig) -> Result<()> {
             "cmd",
             r#"{"settings":{"name":"guardian_paused","action":"set","val":true}}"#,
         ],
-    )?;
-    run_adb(
-        config,
+    )
+    .await?;
+    adb::shell(
+        &config.device,
         &[
-            "shell",
             "am",
             "start-foreground-service",
             "-n",
@@ -1299,151 +1268,42 @@ fn run_adb_recovery(config: &CastConfig) -> Result<()> {
             "use_openxr",
             "true",
         ],
-    )?;
-    thread::sleep(Duration::from_secs(1));
-    run_adb(
-        config,
+    )
+    .await?;
+    tokio::time::sleep(Duration::from_secs(1)).await;
+    adb::shell(
+        &config.device,
         &[
-            "shell",
             "am",
             "broadcast",
             "-a",
             "com.oculus.magicislandcastingservice.CONNECT",
         ],
-    )?;
-    thread::sleep(Duration::from_secs(1));
+    )
+    .await?;
+    tokio::time::sleep(Duration::from_secs(1)).await;
     Ok(())
 }
 
 /// Best-effort device cleanup after a session ends, matching the official tool's shutdown
 /// broadcast and removing the `adb reverse` forward set up at session start.
-fn run_adb_teardown(config: &CastConfig) {
-    if let Err(error) = run_adb_best_effort(
-        config,
+async fn run_adb_teardown(config: &CastConfig) {
+    if let Err(error) = adb::shell_best_effort(
+        &config.device,
         &[
-            "shell",
             "am",
             "broadcast",
             "-a",
             "com.oculus.magicislandcastingservice.DISABLE_PANEL_STREAMING",
         ],
-    ) {
+    )
+    .await
+    {
         debug!("casting teardown broadcast failed: {error}");
     }
-    if let Err(error) = run_adb_best_effort(
-        config,
-        &["reverse", "--remove", &format!("tcp:{}", config.port)],
-    ) {
+    if let Err(error) = adb::remove_reverse(&config.device, config.port).await {
         debug!("casting teardown reverse removal failed: {error}");
     }
-}
-
-fn run_adb(config: &CastConfig, command_args: &[&str]) -> Result<()> {
-    let output = run_adb_output(config, command_args, false)?;
-    if !output.status.success() {
-        return Err(format_adb_failure(command_args, &output).into());
-    }
-    Ok(())
-}
-
-fn run_adb_best_effort(config: &CastConfig, command_args: &[&str]) -> Result<()> {
-    run_adb_output(config, command_args, true)?;
-    Ok(())
-}
-
-fn run_adb_output(
-    config: &CastConfig,
-    command_args: &[&str],
-    best_effort: bool,
-) -> io::Result<Output> {
-    let mut command = adb_command(config, command_args);
-    let output = command.output()?;
-    log_adb_result(&command, &output, best_effort);
-    Ok(output)
-}
-
-/// Logs a finished adb command with its captured output.
-fn log_adb_result(command: &Command, output: &Output, best_effort: bool) {
-    let stdout = String::from_utf8_lossy(&output.stdout);
-    let stderr = String::from_utf8_lossy(&output.stderr);
-    let stdout = stdout.trim();
-    let stderr = stderr.trim();
-    if output.status.success() {
-        debug!(?command, stdout, stderr, "run adb");
-    } else if best_effort {
-        debug!(
-            ?command,
-            status = %output.status,
-            stdout,
-            stderr,
-            "best-effort adb command failed"
-        );
-    } else {
-        debug!(
-            ?command,
-            status = %output.status,
-            stdout,
-            stderr,
-            "adb command failed"
-        );
-    }
-}
-
-fn format_adb_failure(command_args: &[&str], output: &Output) -> String {
-    let stderr = String::from_utf8_lossy(&output.stderr);
-    let stderr = stderr.trim();
-    if stderr.is_empty() {
-        format!(
-            "adb command exited with {}: {command_args:?}",
-            output.status
-        )
-    } else {
-        format!(
-            "adb command exited with {}: {command_args:?}: {stderr}",
-            output.status
-        )
-    }
-}
-
-fn adb_device_available(config: &CastConfig) -> Result<bool> {
-    let output = run_adb_output(config, &["get-state"], true)?;
-    let stdout = String::from_utf8_lossy(&output.stdout);
-    if output.status.success() {
-        return Ok(stdout.trim() == "device");
-    }
-
-    let stderr = String::from_utf8_lossy(&output.stderr);
-    let unavailable = [
-        "no devices/emulators found",
-        "device offline",
-        "device unauthorized",
-        "not found",
-    ]
-    .iter()
-    .any(|message| stderr.contains(message));
-    if unavailable {
-        Ok(false)
-    } else {
-        Err(format!(
-            "adb get-state exited with {}: {}",
-            output.status,
-            stderr.trim()
-        )
-        .into())
-    }
-}
-
-fn adb_command(config: &CastConfig, command_args: &[&str]) -> Command {
-    let mut command = Command::new(&config.adb);
-    if let Some(serial) = &config.serial {
-        command.arg("-s").arg(serial);
-    }
-    command.args(command_args);
-
-    #[cfg(target_os = "windows")]
-    command.creation_flags(0x08000000); // CREATE_NO_WINDOW
-
-    command
 }
 
 pub fn read_u32_be(data: &[u8], offset: usize) -> Option<u32> {
@@ -1609,75 +1469,6 @@ mod tests {
             tracker.poll(now + VIDEO_STALL_TIMEOUT * 2, 1, 1, 0, None),
             None
         );
-    }
-
-    #[test]
-    fn adb_command_applies_serial_before_subcommand() {
-        let mut config = test_cast_config();
-        config.adb = PathBuf::from("custom-adb");
-        config.serial = Some("serial-7".to_string());
-        let command = adb_command(&config, &["wait-for-device"]);
-
-        assert_eq!(command.get_program(), std::ffi::OsStr::new("custom-adb"));
-        assert_eq!(
-            command.get_args().collect::<Vec<_>>(),
-            ["-s", "serial-7", "wait-for-device"]
-                .iter()
-                .map(std::ffi::OsStr::new)
-                .collect::<Vec<_>>()
-        );
-
-        config.serial = None;
-        let command = adb_command(&config, &["get-state"]);
-        assert_eq!(
-            command.get_args().collect::<Vec<_>>(),
-            vec![std::ffi::OsStr::new("get-state")]
-        );
-    }
-
-    #[test]
-    fn required_adb_command_reports_nonzero_status() {
-        let mut config = test_cast_config();
-        config.adb = PathBuf::from("/bin/false");
-
-        let error = run_adb(&config, &["shell"]).expect_err("required adb command must fail");
-        assert!(error.to_string().contains("adb command exited with"));
-    }
-
-    #[cfg(unix)]
-    #[test]
-    fn adb_wait_can_be_cancelled() {
-        use std::os::unix::fs::PermissionsExt;
-
-        let directory = std::env::temp_dir().join(format!("xrsp-adb-{}", Uuid::new_v4()));
-        std::fs::create_dir_all(&directory).expect("create fake adb directory");
-        let adb = directory.join("adb");
-        std::fs::write(&adb, "#!/bin/sh\nwhile true; do sleep 1; done\n").expect("write fake adb");
-        let mut permissions = std::fs::metadata(&adb)
-            .expect("fake adb metadata")
-            .permissions();
-        permissions.set_mode(0o755);
-        std::fs::set_permissions(&adb, permissions).expect("make fake adb executable");
-
-        let mut config = test_cast_config();
-        config.adb = adb;
-        let stop = AtomicBool::new(true);
-        assert!(!wait_for_adb_device(&config, &stop).expect("cancel adb wait"));
-
-        std::fs::remove_dir_all(directory).expect("remove fake adb directory");
-    }
-
-    fn test_cast_config() -> CastConfig {
-        CastConfig {
-            serial: None,
-            fps: 60,
-            width: 1800,
-            height: 1920,
-            audio: true,
-            adaptively_skip_frames: false,
-            port: 4445,
-            adb: PathBuf::from("adb"),
-        }
     }
 
     #[test]

@@ -2,9 +2,9 @@
 //!
 //! Usage: `cargo run -p magic-cast --example http_stream -- <serial> [fps]`
 //!
+//! Requires a running ADB server.
+//!
 //! Play the printed URL with mpv or any other Matroska-capable player. Ctrl+C stops casting.
-
-use std::path::PathBuf;
 
 use magic_cast::{CastingSession, SessionConfig, SessionEvent};
 
@@ -23,9 +23,15 @@ fn main() {
         .and_then(|value| value.parse().ok())
         .unwrap_or(60);
 
+    let runtime = tokio::runtime::Builder::new_current_thread()
+        .enable_all()
+        .build()
+        .expect("create ADB runtime");
+    let device = runtime
+        .block_on(forensic_adb::Host::default().device_or_default(serial.as_ref()))
+        .expect("select ADB device");
     let config = SessionConfig {
-        serial,
-        adb: PathBuf::from("adb"),
+        device,
         fps,
         width: 1800,
         height: 1920,

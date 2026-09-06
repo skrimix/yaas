@@ -5,6 +5,8 @@ edition = "2024"
 
 [dependencies]
 bytes = "1.12"
+forensic-adb = { git = "https://github.com/skrimix/forensic-adb" }
+tokio = { version = "1.43", features = ["rt", "net", "io-util", "time", "macros"] }
 oxideav-mkv = "0.0.9"
 tracing = "0.1"
 uuid = { version = "1.18", features = ["v4"] }

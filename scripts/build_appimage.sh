@@ -39,7 +39,7 @@ echo "==> Generating Rinf bindings..."
 rinf gen
 
 echo "==> Building AppImage with fastforge..."
-fastforge package --platform linux --targets appimage --skip-clean --build-no-pub
+fastforge package --platform linux --targets appimage --skip-clean --flutter-build-args=no-pub
 
 echo "==> Locating built AppImage under dist/..."
 shopt -s globstar nullglob

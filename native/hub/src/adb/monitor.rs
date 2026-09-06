@@ -57,6 +57,12 @@ fn is_package_event(message: &str) -> bool {
 }
 
 fn is_controller_event(message: &str) -> bool {
+    let message = message
+        .strip_prefix('[')
+        .and_then(|message| message.split_once("] "))
+        .and_then(|(_, message)| message.split_once("): "))
+        .map_or(message, |(_, message)| message);
+
     (message.starts_with("Controller ")
         && (message.contains(" battery level changed:") || message.contains(" state change:")))
         || message.starts_with("Pulsar connected devices state change:")
@@ -160,19 +166,39 @@ mod tests {
             "Refreshing input cache",
             "Cache refresh complete",
         ] {
-            let line = format!("1786559500.100  100  200 I SyncBossHAL: {message}");
-            assert_eq!(
-                parse_logcat_line(&line),
-                Some(DeviceMonitorEvent::Query(DeviceRefreshComponents::BATTERY_AND_CONTROLLERS))
-            );
+            for prefix in ["", "[info   ] syncboss_hal_input_controller.c(164): "] {
+                let line = format!("1786559500.100  100  200 I SyncBossHAL: {prefix}{message}");
+                assert_eq!(
+                    parse_logcat_line(&line),
+                    Some(DeviceMonitorEvent::Query(
+                        DeviceRefreshComponents::BATTERY_AND_CONTROLLERS
+                    )),
+                    "{line}"
+                );
+            }
         }
+    }
 
+    #[test]
+    fn parses_controller_wake_event() {
         assert_eq!(
             parse_logcat_line(
-                "1786559500.100  100  200 I SyncBossHAL: Controller telemetry uploaded"
+                "09-07 00:34:16.092   989  6729 I SyncBossHAL: [info   ] \
+                 syncboss_hal_input_controller.c(164): Controller a890c1643879e835 state change: \
+                 asleep 1 -> 0"
             ),
-            None
+            Some(DeviceMonitorEvent::Query(DeviceRefreshComponents::BATTERY_AND_CONTROLLERS))
         );
+    }
+
+    #[test]
+    fn ignores_unrelated_controller_messages() {
+        for prefix in ["", "[info   ] syncboss_hal_input_controller.c(164): "] {
+            let line = format!(
+                "1786559500.100  100  200 I SyncBossHAL: {prefix}Controller telemetry uploaded"
+            );
+            assert_eq!(parse_logcat_line(&line), None);
+        }
     }
 
     #[test]

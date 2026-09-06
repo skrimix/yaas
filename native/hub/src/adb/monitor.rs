@@ -7,10 +7,10 @@ pub(super) const EVENT_BATCH_WINDOW: std::time::Duration = std::time::Duration::
 pub(super) const RECONCILIATION_INTERVAL: std::time::Duration = std::time::Duration::from_secs(90);
 
 /// Logcat shell command streaming the buffers and tags parsed by [`parse_logcat_line`].
-pub(super) const LOGCAT_COMMAND: &str = "logcat -b main,system,events -T 1 -v epoch \
-                                         AppInfoRetrieverService:D \
+pub(super) const LOGCAT_COMMAND: &str = "logcat -b all -T 1 -v epoch AppInfoRetrieverService:D \
                                          GuardianGatekeeperAndSysPropMgr:I SyncBossHAL:I \
-                                         battery_level:I battery_status:I storage_state:I *:S";
+                                         ControllerManagement:D SensorService:D battery_level:I \
+                                         battery_status:I storage_state:I *:S";
 
 const INTERNAL_STORAGE_UUID: &str = "41217664-9172-527a-b3d5-edabb50a7d69";
 
@@ -33,6 +33,14 @@ pub(super) fn parse_logcat_line(line: &str) -> Option<DeviceMonitorEvent> {
         }
         "battery_status" => parse_battery_status_event(message).map(DeviceMonitorEvent::Charging),
         "SyncBossHAL" if is_controller_event(message) => {
+            Some(DeviceMonitorEvent::Query(DeviceRefreshComponents::BATTERY_AND_CONTROLLERS))
+        }
+        "ControllerManagement" if is_controller_management_event(message) => {
+            Some(DeviceMonitorEvent::Query(DeviceRefreshComponents::BATTERY_AND_CONTROLLERS))
+        }
+        "SensorService"
+            if message.starts_with("stateChangeNotifierFunc(): Reporting controller info.") =>
+        {
             Some(DeviceMonitorEvent::Query(DeviceRefreshComponents::BATTERY_AND_CONTROLLERS))
         }
         "GuardianGatekeeperAndSysPropMgr" if message.contains("debug.oculus.guardian_pause") => {
@@ -68,6 +76,12 @@ fn is_controller_event(message: &str) -> bool {
         || message.starts_with("Pulsar connected devices state change:")
         || message.starts_with("Refreshing input cache")
         || message.starts_with("Cache refresh complete")
+}
+
+fn is_controller_management_event(message: &str) -> bool {
+    message.starts_with("processStateChange([PairedControllerInfo ")
+        || message.starts_with("RemoteService::handleDeviceDisconnected - device ")
+        || message.starts_with("RemoteService::recordControllerStatusUpdate: device ")
 }
 
 fn parse_battery_status_event(message: &str) -> Option<Option<bool>> {
@@ -198,6 +212,68 @@ mod tests {
                 "1786559500.100  100  200 I SyncBossHAL: {prefix}Controller telemetry uploaded"
             );
             assert_eq!(parse_logcat_line(&line), None);
+        }
+    }
+
+    #[test]
+    fn parses_controller_disconnect_and_reconnect_logs() {
+        for line in [
+            "09-07 00:51:42.424   989  1070 I SyncBossHAL: [info   ] \
+             syncboss_hal_impl_input.c(1251): Pulsar connected devices state change: 8, host \
+             current time: 9873202ms",
+            "09-07 00:51:42.424   989  1082 I SyncBossHAL: [info   ] pulsar_input_cache.c(893): \
+             Refreshing input cache",
+            "09-07 00:51:42.427   989  1082 I SyncBossHAL: [info   ] pulsar_input_cache.c(909): \
+             Cache refresh complete in 3ms",
+            "09-07 00:51:42.430   989  6728 D SensorService: stateChangeNotifierFunc(): Reporting \
+             controller info. Change token: 22, paired=2 connected=0",
+            "09-07 00:51:42.430  2251  6734 D ControllerManagement: \
+             processStateChange([PairedControllerInfo JEDI a890c1643879e835 disconnected detached \
+             update-required mcnt=0])",
+            "09-07 00:51:42.430  2251  6734 D ControllerManagement: \
+             RemoteService::handleDeviceDisconnected - device a890c1643879e835; Exiting \
+             StreamingMode?: 0",
+            "09-07 00:51:42.431  2251  6734 D ControllerManagement: \
+             RemoteService::recordControllerStatusUpdate: device a890c1643879e835: status: \
+             SEARCHING tracking: ORIENTATION, errors: --",
+            "09-07 00:51:52.060   989  6728 D SensorService: stateChangeNotifierFunc(): Reporting \
+             controller info. Change token: 23, paired=2 connected=1",
+            "09-07 00:51:52.060  2251  6734 D ControllerManagement: \
+             processStateChange([PairedControllerInfo JEDI a890c1643879e835 connected detached \
+             mcnt=0])",
+            "09-07 00:51:52.061  2251  6734 D ControllerManagement: \
+             RemoteService::recordControllerStatusUpdate: device a890c1643879e835: status: \
+             CONNECTED_ACTIVE tracking: NONE, errors: --",
+            "09-07 00:48:11.310   989  6729 I SyncBossHAL: [info   ] \
+             syncboss_hal_input_controller.c(179): Controller a890c1643879e835 battery level \
+             changed: 0% -> 100%",
+            "09-07 00:48:12.820   989  6729 I SyncBossHAL: [info   ] \
+             syncboss_hal_input_controller.c(179): Controller a890c1643879e835 battery level \
+             changed: 100% -> 90%",
+            "09-07 00:51:52.107   989  6729 I SyncBossHAL: [info   ] \
+             syncboss_hal_input_controller.c(179): Controller a890c1643879e835 battery level \
+             changed: 0% -> 90%",
+        ] {
+            assert_eq!(
+                parse_logcat_line(line),
+                Some(DeviceMonitorEvent::Query(DeviceRefreshComponents::BATTERY_AND_CONTROLLERS)),
+                "{line}"
+            );
+        }
+    }
+
+    #[test]
+    fn ignores_controller_queries_and_telemetry() {
+        for line in [
+            "09-07 00:51:52.062   989  6728 D SensorService: Found paired controllers: 2",
+            "09-07 00:51:52.062   989  6728 I SensorService: preparePairedControllerInfo is \
+             adding device with valid 1",
+            "09-07 00:51:13.162   989  6729 I SyncBossHAL: [info   ] \
+             syncboss_hal_input_controller.c(58): a890c1643879e835: IMU 0 missed/60000 expected \
+             (PER 0.00%), 0 max consecutive drops",
+            "1786559500.100  100  200 D ControllerManagement: unrelated message",
+        ] {
+            assert_eq!(parse_logcat_line(line), None, "{line}");
         }
     }
 

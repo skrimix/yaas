@@ -337,10 +337,9 @@ mod tests {
 
     #[test]
     fn archive_child() {
-        use fs4::fs_std::FileExt;
         let Some(path) = std::env::var_os("YAAS_ARCHIVE_TEST_LOCK") else { return };
         let file = std::fs::File::create(&path).unwrap();
-        file.lock_exclusive().unwrap();
+        file.lock().unwrap();
         std::fs::write(Path::new(&path).with_extension("ready"), "ready").unwrap();
         loop {
             std::thread::park();
@@ -349,7 +348,6 @@ mod tests {
 
     #[tokio::test]
     async fn cancellation_waits_for_archive_process_to_exit() {
-        use fs4::fs_std::FileExt;
         use tokio::time::{Duration, timeout};
 
         // Listing captures stdout; extraction discards it. Both must join the child.
@@ -377,7 +375,7 @@ mod tests {
             started.unwrap();
             assert!(error.to_string().contains("cancelled"));
             let file = std::fs::File::options().read(true).write(true).open(lock).unwrap();
-            assert!(file.try_lock_exclusive().unwrap(), "Archive process is still running");
+            assert!(file.try_lock().is_ok(), "Archive process is still running");
         }
     }
 

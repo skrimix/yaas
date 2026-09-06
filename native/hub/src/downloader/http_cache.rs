@@ -2,7 +2,7 @@ use std::{collections::HashMap, error::Error, path::Path};
 
 use anyhow::{Context, Result};
 use fs_err::tokio::{self as fs, File, OpenOptions};
-use fs4::fs_err3_tokio::AsyncFileExt as _;
+use fs4::{AsyncFileExt as _, TryLockError};
 use reqwest::StatusCode;
 use serde::{Deserialize, Serialize};
 use tokio::{
@@ -252,9 +252,10 @@ impl MetaFileLock {
             .open(&lock_path)
             .await?;
         loop {
-            match file.try_lock_exclusive()? {
-                true => break,
-                false => sleep(Duration::from_millis(20)).await,
+            match file.try_lock() {
+                Ok(()) => break,
+                Err(TryLockError::WouldBlock) => sleep(Duration::from_millis(20)).await,
+                Err(TryLockError::Error(error)) => return Err(error.into()),
             }
         }
         Ok(Self(file))
@@ -337,6 +338,22 @@ mod tests {
 
     fn client() -> reqwest::Client {
         reqwest::Client::builder().timeout(Duration::from_secs(10)).build().unwrap()
+    }
+
+    #[tokio::test]
+    async fn metadata_lock_waits_until_the_holder_drops() {
+        let dir = tempdir().unwrap();
+        let holder = MetaFileLock::acquire(dir.path()).await.unwrap();
+        let waiter = MetaFileLock::acquire(dir.path());
+        tokio::pin!(waiter);
+
+        assert!(tokio::time::timeout(Duration::from_millis(60), &mut waiter).await.is_err());
+        drop(holder);
+        let acquired = tokio::time::timeout(Duration::from_secs(1), waiter)
+            .await
+            .expect("metadata lock stayed locked after its holder was dropped")
+            .unwrap();
+        drop(acquired);
     }
 
     #[tokio::test(flavor = "multi_thread")]

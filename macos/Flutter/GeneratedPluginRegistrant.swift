@@ -8,7 +8,7 @@ import Foundation
 import desktop_drop
 import desktop_window
 import dynamic_color
-import file_picker
+import file_picker_darwin
 import media_kit_libs_macos_video
 import media_kit_video
 import package_info_plus
@@ -29,6 +29,6 @@ func RegisterGeneratedPlugins(registry: FlutterPluginRegistry) {
   SqflitePlugin.register(with: registry.registrar(forPlugin: "SqflitePlugin"))
   SystemDateTimeFormatPlugin.register(with: registry.registrar(forPlugin: "SystemDateTimeFormatPlugin"))
   UrlLauncherPlugin.register(with: registry.registrar(forPlugin: "UrlLauncherPlugin"))
-  FVPVideoPlayerPlugin.register(with: registry.registrar(forPlugin: "FVPVideoPlayerPlugin"))
+  VideoPlayerPlugin.register(with: registry.registrar(forPlugin: "VideoPlayerPlugin"))
   WakelockPlusMacosPlugin.register(with: registry.registrar(forPlugin: "WakelockPlusMacosPlugin"))
 }

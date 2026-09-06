@@ -111,7 +111,7 @@ jobs:
         uses: baptiste0928/cargo-install@v3
         with:
           crate: rinf_cli
-          version: "8.10.0"
+          version: "8.10.1"
 
       - name: Resolve locked Flutter dependencies
         run: flutter pub get --enforce-lockfile

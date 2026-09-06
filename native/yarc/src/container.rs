@@ -7,13 +7,11 @@ use std::fmt;
 use std::io::{self, ErrorKind};
 use std::path::{Path, PathBuf};
 
+use aead_stream::{DecryptorBE32, EncryptorBE32, Nonce, StreamBE32};
 use async_compression::tokio::{bufread::ZstdDecoder, write::ZstdEncoder};
 use async_tar::{Archive as TarArchive, Builder as TarBuilder, HeaderMode};
 use blake3::Hasher;
-use chacha20poly1305::{
-    Key, XChaCha20Poly1305,
-    aead::stream::{DecryptorBE32, EncryptorBE32, Nonce, StreamBE32},
-};
+use chacha20poly1305::{Key, XChaCha20Poly1305};
 use tokio::fs;
 use tokio::io::{self as tokio_io, AsyncRead, AsyncReadExt, AsyncWrite, AsyncWriteExt};
 use tokio_stream::StreamExt;
@@ -463,8 +461,8 @@ impl YarcWriter {
         out.write_all(&header_bytes).await?;
 
         let mut encryptor: EncryptorBE32<XChaCha20Poly1305> = EncryptorBE32::new(
-            Key::from_slice(&self.key),
-            XChaChaStreamNonce::from_slice(&nonce_prefix),
+            &Key::from(self.key),
+            &XChaChaStreamNonce::from(nonce_prefix),
         );
 
         let mut yarc_hasher = Hasher::new();
@@ -723,8 +721,8 @@ impl YarcReader {
     ) -> io::Result<(W, YarcHeader)> {
         let chunk_size = header.chunk_size()?;
         let mut decryptor: DecryptorBE32<XChaCha20Poly1305> = DecryptorBE32::new(
-            Key::from_slice(&self.key),
-            XChaChaStreamNonce::from_slice(&header.nonce_prefix()),
+            &Key::from(self.key),
+            &XChaChaStreamNonce::from(header.nonce_prefix()),
         );
         // `+ 16` accounts for the AEAD authentication tag appended to each
         // encrypted chunk.
@@ -1021,6 +1019,31 @@ mod tests {
     use filetime::{FileTime, set_file_mtime};
 
     use super::*;
+
+    #[test]
+    fn stream_ciphertext_matches_known_vector() {
+        let key = Key::from([7; 32]);
+        let nonce = XChaChaStreamNonce::from([9; 19]);
+        let header = b"YARC header";
+        let first_ciphertext =
+            hex::decode("b0759910f19b56490ab001406d2edae049184da9954c0affa8c633").unwrap();
+        let last_ciphertext =
+            hex::decode("9e3457948f5d2f14753beac37012976e94f8150c66ea1ae9d87f").unwrap();
+
+        let mut encryptor = EncryptorBE32::<XChaCha20Poly1305>::new(&key, &nonce);
+        let mut first = b"first chunk".to_vec();
+        encryptor.encrypt_next_in_place(header, &mut first).unwrap();
+        assert_eq!(first, first_ciphertext);
+        let mut last = b"last chunk".to_vec();
+        encryptor.encrypt_last_in_place(header, &mut last).unwrap();
+        assert_eq!(last, last_ciphertext);
+
+        let mut decryptor = DecryptorBE32::<XChaCha20Poly1305>::new(&key, &nonce);
+        decryptor.decrypt_next_in_place(header, &mut first).unwrap();
+        decryptor.decrypt_last_in_place(header, &mut last).unwrap();
+        assert_eq!(first, b"first chunk");
+        assert_eq!(last, b"last chunk");
+    }
 
     #[tokio::test]
     async fn directory_plaintext_hash_is_stable_across_creation_order() -> io::Result<()> {

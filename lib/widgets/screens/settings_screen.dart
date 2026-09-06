@@ -244,11 +244,11 @@ class _SettingsScreenState extends State<SettingsScreen> {
       initialDirectory = currentValue;
     }
 
-    final result = await FilePicker.pickFiles(
+    final result = await FilePicker.pickFile(
       dialogTitle: l10n.selectLabel(label),
       initialDirectory: initialDirectory,
     );
-    return result?.files.single.path;
+    return result?.path;
   }
 
   Future<String?> _pickDirectory(String currentValue, String label) async {

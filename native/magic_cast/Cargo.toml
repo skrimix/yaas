@@ -4,13 +4,13 @@ version = "0.1.0"
 edition = "2024"
 
 [dependencies]
-bytes = "1.12"
+bytes = "1.12.1"
 forensic-adb = { git = "https://github.com/skrimix/forensic-adb" }
-tokio = { version = "1.43", features = ["rt", "net", "io-util", "time", "macros"] }
-oxideav-mkv = "0.0.9"
-tracing = "0.1"
-uuid = { version = "1.18", features = ["v4"] }
+tokio = { version = "1.53.1", features = ["rt", "net", "io-util", "time", "macros"] }
+oxideav-mkv = "0.0.10"
+tracing = "0.1.44"
+uuid = { version = "1.26.0", features = ["v4"] }
 
 [dev-dependencies]
-oxideav-core = "0.1.29"
-tracing-subscriber = { version = "0.3", features = ["env-filter"] }
+oxideav-core = "0.1.35"
+tracing-subscriber = { version = "0.3.23", features = ["env-filter"] }

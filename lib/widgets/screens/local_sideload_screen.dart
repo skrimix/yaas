@@ -63,13 +63,12 @@ class _LocalSideloadScreenState extends State<LocalSideloadScreen> {
         dialogTitle: l10n.selectAppDirectoryTitle,
       );
     } else {
-      final result = await FilePicker.pickFiles(
+      final result = await FilePicker.pickFile(
         dialogTitle: l10n.selectApkFileTitle,
         type: FileType.custom,
         allowedExtensions: ['apk'],
-        allowMultiple: false,
       );
-      path = result?.files.single.path;
+      path = result?.path;
     }
 
     if (path != null) {

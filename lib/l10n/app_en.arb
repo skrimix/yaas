@@ -563,6 +563,8 @@
     "refresh": "Refresh",
     "refreshAppsList": "Refresh apps list",
     "showingSelectedOnly": "Showing selected items only",
+    "homeSerialNumber": "Serial number",
+    "homeFreeSpace": "Free space",
     "deviceTitle": "Device",
     "leftController": "Left Controller",
     "rightController": "Right Controller",

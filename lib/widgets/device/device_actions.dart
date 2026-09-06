@@ -24,93 +24,99 @@ class DeviceActionsCard extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     final l10n = AppLocalizations.of(context);
-    return SizedBox(
-      width: 350,
-      child: Card(
-        child: Padding(
-          padding: const EdgeInsets.all(16.0),
-          child: Column(
-            crossAxisAlignment: CrossAxisAlignment.start,
-            children: [
-              Text(l10n.deviceActions,
-                  style: Theme.of(context).textTheme.titleMedium),
-              const SizedBox(height: 12),
+    return Card(
+      margin: EdgeInsets.zero,
+      elevation: 0,
+      shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(20)),
+      child: Padding(
+        padding: const EdgeInsets.all(24),
+        child: Column(
+          crossAxisAlignment: CrossAxisAlignment.start,
+          children: [
+            Text(l10n.deviceActions,
+                style: Theme.of(context).textTheme.titleMedium),
+            const SizedBox(height: 24),
 
-              // Proximity sensor toggle
-              const _ProximityToggle(),
+            // Proximity sensor toggle
+            const _ProximityToggle(),
 
-              const SizedBox(height: 8),
+            const SizedBox(height: 16),
 
-              // Guardian toggle
-              const _GuardianToggle(),
+            // Guardian toggle
+            const _GuardianToggle(),
 
-              Builder(builder: (context) {
+            Builder(builder: (context) {
+              final device = context.watch<DeviceState>();
+              if (!device.isConnected || device.isWireless) {
+                return const SizedBox.shrink();
+              }
+              return const Padding(
+                padding: EdgeInsets.only(top: 12),
+                child: _StorageConnectionToggle(),
+              );
+            }),
+
+            // Wireless ADB (when not already enabled)
+            Builder(
+              builder: (context) {
                 final device = context.watch<DeviceState>();
-                if (!device.isConnected || device.isWireless) {
+                final adb = context.watch<AdbStateProvider>();
+                if (!device.isConnected ||
+                    device.isWireless ||
+                    // Check that we don't have an active wireless connection for this device already
+                    adb.availableDevices.any((d) =>
+                        d.isWireless &&
+                        d.trueSerial == device.deviceTrueSerial &&
+                        d.state == AdbBriefState.device)) {
                   return const SizedBox.shrink();
                 }
-                return const _StorageConnectionToggle();
-              }),
+                return Row(
+                  children: [
+                    const Icon(Icons.wifi_tethering),
+                    const SizedBox(width: 8),
+                    Expanded(
+                      child: Text(l10n.deviceWirelessAdb,
+                          style: Theme.of(context).textTheme.titleSmall),
+                    ),
+                    AnimatedAdbButton(
+                      icon: Icons.wifi,
+                      tooltip: l10n.deviceEnableWirelessAdb,
+                      commandType: AdbCommandKind.wirelessAdbEnable,
+                      commandKey: 'enable-wireless',
+                      onPressed: () => _send('enable-wireless',
+                          const AdbCommandEnableWirelessAdb()),
+                    ),
+                  ],
+                );
+              },
+            ),
 
-              // Wireless ADB (when not already enabled)
-              Builder(
-                builder: (context) {
-                  final device = context.watch<DeviceState>();
-                  final adb = context.watch<AdbStateProvider>();
-                  if (!device.isConnected ||
-                      device.isWireless ||
-                      // Check that we don't have an active wireless connection for this device already
-                      adb.availableDevices.any((d) =>
-                          d.isWireless &&
-                          d.trueSerial == device.deviceTrueSerial &&
-                          d.state == AdbBriefState.device)) {
-                    return const SizedBox.shrink();
-                  }
-                  return Row(
-                    children: [
-                      const Icon(Icons.wifi_tethering),
-                      const SizedBox(width: 8),
-                      Expanded(
-                        child: Text(l10n.deviceWirelessAdb,
-                            style: Theme.of(context).textTheme.titleSmall),
-                      ),
-                      AnimatedAdbButton(
-                        icon: Icons.wifi,
-                        tooltip: l10n.deviceEnableWirelessAdb,
-                        commandType: AdbCommandKind.wirelessAdbEnable,
-                        commandKey: 'enable-wireless',
-                        onPressed: () => _send('enable-wireless',
-                            const AdbCommandEnableWirelessAdb()),
-                      ),
-                    ],
-                  );
-                },
-              ),
-
-              // Casting
-              Builder(
-                builder: (context) {
-                  final nativeEnabled = context.select<SettingsState, bool>(
-                      (s) => s.settings.experimentalNativeCast);
-                  if (!nativeEnabled && !Platform.isWindows) {
-                    return const SizedBox.shrink();
-                  }
-                  return Column(
-                    children: [
+            // Casting
+            Builder(
+              builder: (context) {
+                final nativeEnabled = context.select<SettingsState, bool>(
+                    (s) => s.settings.experimentalNativeCast);
+                if (!nativeEnabled && !Platform.isWindows) {
+                  return const SizedBox.shrink();
+                }
+                return Column(
+                  children: [
+                    const Padding(
+                      padding: EdgeInsets.symmetric(vertical: 12),
+                      child: Divider(height: 1),
+                    ),
+                    if (nativeEnabled)
+                      const _NativeCastingRow()
+                    else ...[
+                      _CastingRow(onStart: () => _handleCast(context)),
                       const SizedBox(height: 8),
-                      if (nativeEnabled)
-                        const _NativeCastingRow()
-                      else ...[
-                        _CastingRow(onStart: () => _handleCast(context)),
-                        const SizedBox(height: 8),
-                        const _CastingProgress(),
-                      ],
+                      const _CastingProgress(),
                     ],
-                  );
-                },
-              ),
-            ],
-          ),
+                  ],
+                );
+              },
+            ),
+          ],
         ),
       ),
     );

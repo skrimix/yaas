@@ -2102,6 +2102,18 @@ abstract class AppLocalizations {
   /// **'Showing selected items only'**
   String get showingSelectedOnly;
 
+  /// No description provided for @homeSerialNumber.
+  ///
+  /// In en, this message translates to:
+  /// **'Serial number'**
+  String get homeSerialNumber;
+
+  /// No description provided for @homeFreeSpace.
+  ///
+  /// In en, this message translates to:
+  /// **'Free space'**
+  String get homeFreeSpace;
+
   /// No description provided for @deviceTitle.
   ///
   /// In en, this message translates to:

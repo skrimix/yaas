@@ -557,6 +557,8 @@
     "refresh": "Обновить",
     "refreshAppsList": "Обновить список приложений",
     "showingSelectedOnly": "Показаны только выбранные",
+    "homeSerialNumber": "Серийный номер",
+    "homeFreeSpace": "Свободное место",
     "deviceTitle": "Устройство",
     "leftController": "Левый контроллер",
     "rightController": "Правый контроллер",

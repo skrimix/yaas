@@ -1140,6 +1140,12 @@ class AppLocalizationsRu extends AppLocalizations {
   String get showingSelectedOnly => 'Показаны только выбранные';
 
   @override
+  String get homeSerialNumber => 'Серийный номер';
+
+  @override
+  String get homeFreeSpace => 'Свободное место';
+
+  @override
   String get deviceTitle => 'Устройство';
 
   @override

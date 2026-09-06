@@ -1121,6 +1121,12 @@ class AppLocalizationsEn extends AppLocalizations {
   String get showingSelectedOnly => 'Showing selected items only';
 
   @override
+  String get homeSerialNumber => 'Serial number';
+
+  @override
+  String get homeFreeSpace => 'Free space';
+
+  @override
   String get deviceTitle => 'Device';
 
   @override

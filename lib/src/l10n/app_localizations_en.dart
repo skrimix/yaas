@@ -387,6 +387,15 @@ class AppLocalizationsEn extends AppLocalizations {
   String get settingsCleanupKeepAllVersions => 'Keep all versions';
 
   @override
+  String get settingsCleanupTiming => 'Apply cleanup';
+
+  @override
+  String get settingsCleanupAfterInstall => 'After installation';
+
+  @override
+  String get settingsCleanupAfterDownload => 'After download';
+
+  @override
   String get settingsFavorites => 'Favorites';
 
   @override

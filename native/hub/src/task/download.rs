@@ -1,13 +1,15 @@
-use std::{error::Error, path::Path, time::Duration};
+use std::{path::Path, time::Duration};
 
 use anyhow::{Context, Result, anyhow};
 use tokio::sync::mpsc;
 use tokio_util::sync::CancellationToken;
-use tracing::{Instrument, Span, debug, error, info, instrument, warn};
+use tracing::{Instrument, Span, debug, info, instrument, warn};
 
 use super::{InstallStepConfig, ProgressUpdate, TaskManager};
 use crate::{
-    adb::PackageName, downloader::AppDownloadProgress, models::signals::task::TaskStatus,
+    adb::PackageName,
+    downloader::AppDownloadProgress,
+    models::{DownloadCleanupTiming, signals::task::TaskStatus},
     task::acquire_permit_or_cancel,
 };
 
@@ -17,6 +19,7 @@ impl TaskManager {
     #[instrument(level = "debug", skip(self, update_progress, token))]
     async fn run_download_step(
         &self,
+        task_id: u64,
         app_full_name: &str,
         true_package: PackageName,
         step_number: u8,
@@ -187,12 +190,21 @@ impl TaskManager {
         );
         drop(_permit);
 
+        self.cleanup_downloads(
+            task_id,
+            app_full_name,
+            &app_path,
+            DownloadCleanupTiming::AfterDownload,
+        )
+        .await;
+
         Ok(app_path)
     }
 
     #[instrument(skip(self, update_progress, token))]
     pub(super) async fn handle_download_install(
         &self,
+        task_id: u64,
         app_full_name: String,
         true_package: PackageName,
         update_progress: &impl Fn(ProgressUpdate),
@@ -206,7 +218,14 @@ impl TaskManager {
         );
 
         let app_path = self
-            .run_download_step(&app_full_name, true_package, 1, update_progress, token.clone())
+            .run_download_step(
+                task_id,
+                &app_full_name,
+                true_package,
+                1,
+                update_progress,
+                token.clone(),
+            )
             .await?;
 
         if token.is_cancelled() {
@@ -249,14 +268,13 @@ impl TaskManager {
         )
         .await?;
 
-        // Apply downloads cleanup policy
-        if let Err(e) = self.cleanup_downloads_after_install(&app_full_name, &app_path).await {
-            // Non-fatal: log but do not fail the task
-            error!(
-                error = e.as_ref() as &dyn Error,
-                "Failed to apply downloads cleanup policy after install"
-            );
-        }
+        self.cleanup_downloads(
+            task_id,
+            &app_full_name,
+            &app_path,
+            DownloadCleanupTiming::AfterInstall,
+        )
+        .await;
 
         Ok(())
     }
@@ -264,6 +282,7 @@ impl TaskManager {
     #[instrument(skip(self, update_progress, token))]
     pub(super) async fn handle_download(
         &self,
+        task_id: u64,
         app_full_name: String,
         true_package: PackageName,
         update_progress: &impl Fn(ProgressUpdate),
@@ -275,18 +294,9 @@ impl TaskManager {
             "Starting download task"
         );
 
-        self.run_download_step(&app_full_name, true_package, 1, update_progress, token).await?;
+        self.run_download_step(task_id, &app_full_name, true_package, 1, update_progress, token)
+            .await?;
 
         Ok(())
-    }
-
-    #[instrument(skip(self), fields(app_full_name = %app_full_name, app_path = %app_path), err)]
-    async fn cleanup_downloads_after_install(
-        &self,
-        app_full_name: &str,
-        app_path: &str,
-    ) -> Result<()> {
-        let cleanup_policy = self.settings.read().await.cleanup_policy;
-        self.downloads_catalog.apply_cleanup_policy(cleanup_policy, app_full_name, app_path).await
     }
 }

@@ -8,6 +8,7 @@ use std::{
     time::Duration,
 };
 
+use anyhow::{Context, Result};
 use rinf::{DartSignal, RustSignal};
 use tokio::{
     sync::{Mutex, Notify, RwLock, Semaphore},
@@ -19,10 +20,14 @@ use tracing::{debug, error, info, instrument, warn};
 
 use crate::{
     adb::{AdbService, PackageName},
-    downloader::{downloads_catalog::DownloadsCatalog, manager::DownloaderManager},
+    downloader::{
+        downloads_catalog::{DownloadCleanupProtection, DownloadsCatalog},
+        manager::DownloaderManager,
+    },
     models::{
-        Settings,
+        DownloadCleanupTiming, Settings,
         signals::{
+            downloads_local::DownloadsChanged,
             system::Toast,
             task::{Task, TaskCancelRequest, TaskKind, TaskProgress, TaskRequest, TaskStatus},
         },
@@ -55,6 +60,32 @@ impl Default for TaskRegistry {
 }
 
 impl TaskRegistry {
+    async fn cleanup_protection(
+        &self,
+        completed_task_id: u64,
+    ) -> Result<DownloadCleanupProtection> {
+        let mut protected = DownloadCleanupProtection::default();
+        for (id, (task, _)) in &self.tasks {
+            if *id == completed_task_id {
+                continue;
+            }
+            match task {
+                Task::Download(name, _) | Task::DownloadInstall(name, _) => {
+                    protected.release_names.insert(name.clone());
+                }
+                Task::InstallApk(path)
+                | Task::InstallLocalApp(path)
+                | Task::RestoreBackup(path) => match tokio::fs::canonicalize(path).await {
+                    Ok(path) => protected.paths.push(path),
+                    Err(error) if error.kind() == std::io::ErrorKind::NotFound => {}
+                    Err(error) => return Err(error).context("Failed to resolve active task path"),
+                },
+                _ => {}
+            }
+        }
+        Ok(protected)
+    }
+
     fn insert(&mut self, id: u64, task: Task, token: CancellationToken) -> bool {
         if !self.accepting_tasks {
             debug!(task_id = id, "Ignoring task because shutdown has started");
@@ -81,6 +112,42 @@ pub(crate) struct TaskShutdownResult {
 }
 
 impl TaskManager {
+    pub(super) async fn cleanup_downloads(
+        &self,
+        task_id: u64,
+        app_full_name: &str,
+        app_path: &str,
+        completed: DownloadCleanupTiming,
+    ) {
+        let settings = self.settings.read().await;
+        let policy = settings.cleanup_policy;
+        if !policy.applies_at(settings.cleanup_timing, completed) {
+            return;
+        }
+        drop(settings);
+
+        let result = async {
+            // Keep new tasks from starting until cleanup finishes.
+            let registry = self.tasks.lock().await;
+            let protected = registry.cleanup_protection(task_id).await?;
+            let result = self
+                .downloads_catalog
+                .apply_cleanup_policy(policy, app_full_name, app_path, &protected)
+                .await;
+            drop(registry);
+            result
+        }
+        .await;
+        match result {
+            Ok(()) => DownloadsChanged {}.send_signal_to_dart(),
+            Err(error) => error!(
+                error = error.as_ref() as &dyn Error,
+                ?completed,
+                "Failed to apply downloads cleanup policy"
+            ),
+        }
+    }
+
     pub(crate) fn new(
         adb_service: Arc<AdbService>,
         downloader_manager: Arc<DownloaderManager>,
@@ -325,6 +392,7 @@ impl TaskManager {
                 Task::Download(app, package) => {
                     info!(task_id = id, "Executing download task");
                     self.handle_download(
+                        id,
                         app.clone(),
                         PackageName::parse(package.clone())?,
                         &update_progress,
@@ -335,6 +403,7 @@ impl TaskManager {
                 Task::DownloadInstall(app, package) => {
                     info!(task_id = id, "Executing download and install task");
                     self.handle_download_install(
+                        id,
                         app.clone(),
                         PackageName::parse(package.clone())?,
                         &update_progress,
@@ -538,6 +607,40 @@ mod tests {
 
     fn task(name: &str) -> Task {
         Task::Download(name.to_string(), "com.example.app".to_string())
+    }
+
+    #[tokio::test]
+    async fn cleanup_protects_other_tasks_even_after_cancellation_is_requested() {
+        let root = tempfile::tempdir().unwrap();
+        let apk = root.path().join("app.apk");
+        tokio::fs::write(&apk, b"apk").await.unwrap();
+        let mut registry = TaskRegistry::default();
+        registry.insert(1, task("Completed"), CancellationToken::new());
+        registry.insert(2, task("Downloading"), CancellationToken::new());
+        registry.insert(
+            3,
+            Task::DownloadInstall("Installing".into(), "com.example.app".into()),
+            CancellationToken::new(),
+        );
+        registry.insert(
+            4,
+            Task::InstallApk(apk.to_string_lossy().into_owned()),
+            CancellationToken::new(),
+        );
+        registry.insert(
+            5,
+            Task::InstallLocalApp(root.path().to_string_lossy().into_owned()),
+            CancellationToken::new(),
+        );
+        registry.start_shutdown();
+
+        let protected = registry.cleanup_protection(1).await.unwrap();
+        assert_eq!(protected.release_names.len(), 2);
+        assert!(protected.release_names.contains("Downloading"));
+        assert!(protected.release_names.contains("Installing"));
+        assert!(!protected.release_names.contains("Completed"));
+        assert!(protected.paths.contains(&tokio::fs::canonicalize(apk).await.unwrap()));
+        assert!(protected.paths.contains(&tokio::fs::canonicalize(root.path()).await.unwrap()));
     }
 
     #[test]

@@ -19,6 +19,26 @@ use crate::{
     task::DONATE_TMP_DIR,
 };
 
+#[derive(Debug, Default)]
+pub(crate) struct DownloadCleanupProtection {
+    pub(crate) release_names: HashSet<String>,
+    /// Canonical paths to directories or files used by other tasks.
+    pub(crate) paths: Vec<PathBuf>,
+}
+
+impl DownloadCleanupProtection {
+    async fn contains(&self, name: &str, path: &Path) -> Result<bool> {
+        if self.release_names.contains(name) {
+            return Ok(true);
+        }
+        if self.paths.is_empty() {
+            return Ok(false);
+        }
+        let path = fs::canonicalize(path).await?;
+        Ok(self.paths.iter().any(|active| active.starts_with(&path) || path.starts_with(active)))
+    }
+}
+
 #[derive(Debug, Clone)]
 pub(crate) struct DownloadsCatalog {
     root: Arc<tokio::sync::RwLock<PathBuf>>,
@@ -226,17 +246,20 @@ async fn dir_size(dir: &Path) -> Result<u64> {
 }
 
 impl DownloadsCatalog {
-    /// Applies the cleanup policy after an app installation.
+    /// Applies cleanup after a successful download or installation.
+    ///
+    /// Files used by other tasks are kept until a later cleanup.
     ///
     /// Downloads are grouped by their directory name using the `{name} v{version}+{build}`
     /// convention (regex: `(?m)^(.+) v\d+\+.+$`). Entries that do not match this pattern are
     /// left untouched and a warning is logged.
-    #[instrument(level = "debug", skip(self), fields(policy = ?policy, installed = %installed_full_name), err)]
+    #[instrument(level = "debug", skip(self), fields(policy = ?policy, app = %app_full_name), err)]
     pub(crate) async fn apply_cleanup_policy(
         &self,
         policy: DownloadCleanupPolicy,
-        installed_full_name: &str,
-        installed_path: &str,
+        app_full_name: &str,
+        app_path: &str,
+        protected: &DownloadCleanupProtection,
     ) -> Result<()> {
         use DownloadCleanupPolicy as Policy;
         // Match versioned download directory names: `{name} v{version}+{build}`
@@ -249,9 +272,14 @@ impl DownloadsCatalog {
             }
             Policy::DeleteAfterInstall => {
                 info!("Cleanup policy: delete after install, removing downloaded directory");
-                let path = Path::new(installed_path);
+                let path = Path::new(app_path);
                 if !path.exists() {
                     debug!(missing = %path.display(), "Downloaded directory no longer exists");
+                    return Ok(());
+                }
+
+                if protected.contains(app_full_name, path).await? {
+                    debug!(path = %path.display(), "Skipping download used by another task");
                     return Ok(());
                 }
 
@@ -269,11 +297,10 @@ impl DownloadsCatalog {
                     _ => unreachable!(),
                 };
 
-                let Some(captures) = re.captures(installed_full_name) else {
+                let Some(captures) = re.captures(app_full_name) else {
                     warn!(
-                        installed = installed_full_name,
-                        "Installed release name does not follow `{{name}} vX+Y` convention, \
-                         skipping cleanup"
+                        app = app_full_name,
+                        "Release name does not follow `{{name}} vX+Y` convention, skipping cleanup"
                     );
                     return Ok(());
                 };
@@ -281,7 +308,7 @@ impl DownloadsCatalog {
 
                 if base_name.is_empty() {
                     warn!(
-                        installed = installed_full_name,
+                        app = app_full_name,
                         "Unable to determine base name for cleanup, skipping"
                     );
                     return Ok(());
@@ -308,12 +335,12 @@ impl DownloadsCatalog {
                 matching.sort_by_key(|b| std::cmp::Reverse(b.timestamp));
 
                 let mut keep: Vec<String> = Vec::with_capacity(keep_total as usize);
-                keep.push(installed_full_name.to_string());
+                keep.push(app_full_name.to_string());
                 for entry in &matching {
                     if keep.len() >= keep_total as usize {
                         break;
                     }
-                    if entry.name != installed_full_name {
+                    if entry.name != app_full_name {
                         keep.push(entry.name.clone());
                     }
                 }
@@ -335,6 +362,11 @@ impl DownloadsCatalog {
                     let path = Path::new(&entry.path);
                     if !path.exists() {
                         debug!(missing = %path.display(), "Skipping cleanup for missing download directory");
+                        continue;
+                    }
+
+                    if protected.contains(&entry.name, path).await? {
+                        debug!(path = %path.display(), "Skipping download used by another task");
                         continue;
                     }
 
@@ -400,5 +432,131 @@ impl DownloadsCatalog {
             }
         }
         Ok((removed, skipped))
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use tempfile::TempDir;
+    use tokio::sync::RwLock;
+
+    use super::*;
+
+    fn catalog(root: &TempDir) -> DownloadsCatalog {
+        DownloadsCatalog { root: Arc::new(RwLock::new(root.path().to_path_buf())) }
+    }
+
+    async fn release(root: &TempDir, name: &str, day: u8) -> PathBuf {
+        let path = root.path().join(name);
+        fs::create_dir_all(&path).await.unwrap();
+        fs::write(
+            path.join("metadata.json"),
+            format!(r#"{{"downloaded_at":"2026-01-{day:02}T00:00:00Z"}}"#),
+        )
+        .await
+        .unwrap();
+        path
+    }
+
+    #[tokio::test]
+    async fn cleanup_keeps_current_release_and_most_recent_other_version() {
+        for (policy, keep_recent) in [
+            (DownloadCleanupPolicy::KeepOneVersion, false),
+            (DownloadCleanupPolicy::KeepTwoVersions, true),
+        ] {
+            let root = TempDir::new().unwrap();
+            let current = release(&root, "App v1+build", 1).await;
+            let old = release(&root, "App v2+build", 2).await;
+            let recent = release(&root, "App v3+build", 3).await;
+            let unrelated = release(&root, "Other v1+build", 1).await;
+            let unversioned = release(&root, "App custom", 1).await;
+            catalog(&root)
+                .apply_cleanup_policy(
+                    policy,
+                    "App v1+build",
+                    current.to_str().unwrap(),
+                    &DownloadCleanupProtection::default(),
+                )
+                .await
+                .unwrap();
+            assert!(current.exists());
+            assert!(!old.exists());
+            assert_eq!(recent.exists(), keep_recent);
+            assert!(unrelated.exists());
+            assert!(unversioned.exists());
+        }
+    }
+
+    #[tokio::test]
+    async fn cleanup_preserves_active_downloads_and_install_files() {
+        let root = TempDir::new().unwrap();
+        let current = release(&root, "App v4+build", 4).await;
+        let downloading = release(&root, "App v1+build", 1).await;
+        let installing = release(&root, "App v2+build", 2).await;
+        let unused = release(&root, "App v3+build", 3).await;
+        let apk = installing.join("app.apk");
+        fs::write(&apk, b"apk").await.unwrap();
+        let protected = DownloadCleanupProtection {
+            release_names: HashSet::from(["App v1+build".to_string()]),
+            paths: vec![fs::canonicalize(apk).await.unwrap()],
+        };
+        let catalog = catalog(&root);
+        catalog
+            .apply_cleanup_policy(
+                DownloadCleanupPolicy::KeepOneVersion,
+                "App v4+build",
+                current.to_str().unwrap(),
+                &protected,
+            )
+            .await
+            .unwrap();
+        assert!(current.exists());
+        assert!(downloading.exists());
+        assert!(installing.exists());
+        assert!(!unused.exists());
+
+        catalog
+            .apply_cleanup_policy(
+                DownloadCleanupPolicy::KeepOneVersion,
+                "App v4+build",
+                current.to_str().unwrap(),
+                &DownloadCleanupProtection::default(),
+            )
+            .await
+            .unwrap();
+        assert!(!downloading.exists());
+        assert!(!installing.exists());
+        assert!(current.exists());
+    }
+
+    #[tokio::test]
+    async fn delete_after_install_waits_for_other_tasks_using_the_release() {
+        let root = TempDir::new().unwrap();
+        let current = release(&root, "App v1+build", 1).await;
+        let protected = DownloadCleanupProtection {
+            release_names: HashSet::new(),
+            paths: vec![fs::canonicalize(&current).await.unwrap()],
+        };
+        let catalog = catalog(&root);
+        catalog
+            .apply_cleanup_policy(
+                DownloadCleanupPolicy::DeleteAfterInstall,
+                "App v1+build",
+                current.to_str().unwrap(),
+                &protected,
+            )
+            .await
+            .unwrap();
+        assert!(current.exists());
+        catalog
+            .apply_cleanup_policy(
+                DownloadCleanupPolicy::DeleteAfterInstall,
+                "App v1+build",
+                current.to_str().unwrap(),
+                &DownloadCleanupProtection::default(),
+            )
+            .await
+            .unwrap();
+        assert!(!current.exists());
     }
 }

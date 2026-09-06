@@ -8,6 +8,13 @@ import 'package:yaas/widgets/common/setting_row.dart';
 import 'package:yaas/widgets/screens/settings_screen.dart';
 
 class _SettingsState extends SettingsState {
+  Settings? savedSettings;
+
+  @override
+  void save(Settings settings) {
+    savedSettings = settings;
+  }
+
   @override
   Settings get settings => super.settings.copyWith(
         seedColorKey: '__custom__FF5733',
@@ -106,6 +113,71 @@ void main() {
         });
       }
     }
+  }
+
+  for (final locale in ['en', 'ru']) {
+    testWidgets('$locale cleanup timing follows retention policy and saves',
+        (tester) async {
+      await _pumpSettings(tester, locale: locale, width: 480, textScale: 1.5);
+      final context = tester.element(find.byType(SettingsScreen));
+      final l10n = AppLocalizations.of(context);
+      final state =
+          Provider.of<SettingsState>(context, listen: false) as _SettingsState;
+      final policy =
+          find.byType(DropdownButtonFormField<DownloadCleanupPolicy>);
+      final timing =
+          find.byType(DropdownButtonFormField<DownloadCleanupTiming>);
+
+      Future<void> selectPolicy(String label) async {
+        await tester.ensureVisible(policy);
+        await tester.tap(policy);
+        await tester.pumpAndSettle();
+        await tester.tap(find.text(label).last);
+        await tester.pumpAndSettle();
+      }
+
+      expect(timing, findsNothing);
+      await selectPolicy(l10n.settingsCleanupKeepOneVersion);
+      expect(timing, findsOneWidget);
+      expect(tester.state<FormFieldState<DownloadCleanupTiming>>(timing).value,
+          DownloadCleanupTiming.afterInstall);
+      await tester.ensureVisible(timing);
+      await tester.tap(timing);
+      await tester.pumpAndSettle();
+      await tester.tap(find.text(l10n.settingsCleanupAfterDownload).last);
+      await tester.pumpAndSettle();
+      await selectPolicy(l10n.settingsCleanupKeepTwoVersions);
+      expect(tester.state<FormFieldState<DownloadCleanupTiming>>(timing).value,
+          DownloadCleanupTiming.afterDownload);
+
+      await selectPolicy(l10n.settingsCleanupKeepAllVersions);
+      expect(timing, findsNothing);
+      await selectPolicy(l10n.settingsCleanupDeleteAfterInstall);
+      expect(timing, findsNothing);
+      await selectPolicy(l10n.settingsCleanupKeepOneVersion);
+      expect(tester.state<FormFieldState<DownloadCleanupTiming>>(timing).value,
+          DownloadCleanupTiming.afterDownload);
+
+      await tester.tap(find.byTooltip(l10n.settingsRevertChangesTooltip));
+      await tester.pumpAndSettle();
+      expect(timing, findsNothing);
+      await selectPolicy(l10n.settingsCleanupKeepTwoVersions);
+      expect(tester.state<FormFieldState<DownloadCleanupTiming>>(timing).value,
+          DownloadCleanupTiming.afterInstall);
+      await tester.ensureVisible(timing);
+      await tester.tap(timing);
+      await tester.pumpAndSettle();
+      await tester.tap(find.text(l10n.settingsCleanupAfterDownload).last);
+      await tester.pumpAndSettle();
+      await tester
+          .tap(find.widgetWithText(FilledButton, l10n.settingsSaveChanges));
+      await tester.pumpAndSettle();
+      expect(state.savedSettings?.cleanupPolicy,
+          DownloadCleanupPolicy.keepTwoVersions);
+      expect(state.savedSettings?.cleanupTiming,
+          DownloadCleanupTiming.afterDownload);
+      expect(tester.takeException(), isNull);
+    });
   }
 
   testWidgets('revert restores dropdowns, text fields, and switches',

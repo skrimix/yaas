@@ -800,6 +800,24 @@ abstract class AppLocalizations {
   /// **'Keep all versions'**
   String get settingsCleanupKeepAllVersions;
 
+  /// No description provided for @settingsCleanupTiming.
+  ///
+  /// In en, this message translates to:
+  /// **'Apply cleanup'**
+  String get settingsCleanupTiming;
+
+  /// No description provided for @settingsCleanupAfterInstall.
+  ///
+  /// In en, this message translates to:
+  /// **'After installation'**
+  String get settingsCleanupAfterInstall;
+
+  /// No description provided for @settingsCleanupAfterDownload.
+  ///
+  /// In en, this message translates to:
+  /// **'After download'**
+  String get settingsCleanupAfterDownload;
+
   /// No description provided for @settingsFavorites.
   ///
   /// In en, this message translates to:

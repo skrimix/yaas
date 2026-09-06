@@ -14,6 +14,7 @@ class SettingsState extends ChangeNotifier {
     backupsLocation: '',
     bandwidthLimit: '',
     cleanupPolicy: DownloadCleanupPolicy.deleteAfterInstall,
+    cleanupTiming: DownloadCleanupTiming.afterInstall,
     downloadMode: DownloadMode.staged,
     writeLegacyReleaseJson: false,
     localeCode: 'system',

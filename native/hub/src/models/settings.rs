@@ -51,6 +51,27 @@ pub(crate) enum DownloadCleanupPolicy {
     KeepAllVersions,
 }
 
+impl DownloadCleanupPolicy {
+    pub(crate) fn applies_at(
+        self,
+        timing: DownloadCleanupTiming,
+        completed: DownloadCleanupTiming,
+    ) -> bool {
+        match self {
+            Self::DeleteAfterInstall => completed == DownloadCleanupTiming::AfterInstall,
+            Self::KeepOneVersion | Self::KeepTwoVersions => timing == completed,
+            Self::KeepAllVersions => false,
+        }
+    }
+}
+
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize, SignalPiece, Default)]
+pub(crate) enum DownloadCleanupTiming {
+    #[default]
+    AfterInstall,
+    AfterDownload,
+}
+
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize, SignalPiece, Default)]
 pub(crate) enum DownloadMode {
     Streamed,
@@ -70,6 +91,7 @@ pub(crate) struct Settings {
     backups_location: String,
     pub bandwidth_limit: String,
     pub cleanup_policy: DownloadCleanupPolicy,
+    pub cleanup_timing: DownloadCleanupTiming,
     pub download_mode: DownloadMode,
     /// Also write legacy release.json metadata alongside download.json
     pub write_legacy_release_json: bool,
@@ -116,6 +138,7 @@ impl Default for Settings {
                 .to_string(),
             bandwidth_limit: String::new(),
             cleanup_policy: DownloadCleanupPolicy::default(),
+            cleanup_timing: DownloadCleanupTiming::default(),
             download_mode: DownloadMode::default(),
             write_legacy_release_json: false,
             locale_code: "system".to_string(),
@@ -202,5 +225,41 @@ impl Settings {
 
     pub(crate) fn backups_location(&self) -> PathBuf {
         PathBuf::from(&self.backups_location)
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::{DownloadCleanupPolicy as Policy, DownloadCleanupTiming as Timing, Settings};
+
+    #[test]
+    fn cleanup_timing_defaults_for_existing_settings() {
+        let settings: Settings =
+            serde_json::from_str(r#"{"cleanup_policy":"KeepTwoVersions"}"#).unwrap();
+        assert_eq!(settings.cleanup_policy, Policy::KeepTwoVersions);
+        assert_eq!(settings.cleanup_timing, Timing::AfterInstall);
+    }
+
+    #[test]
+    fn cleanup_timing_round_trips() {
+        let settings = Settings { cleanup_timing: Timing::AfterDownload, ..Settings::default() };
+        let json = serde_json::to_string(&settings).unwrap();
+        assert_eq!(serde_json::from_str::<Settings>(&json).unwrap(), settings);
+    }
+
+    #[test]
+    fn cleanup_only_runs_at_the_selected_stage() {
+        for timing in [Timing::AfterInstall, Timing::AfterDownload] {
+            for completed in [Timing::AfterInstall, Timing::AfterDownload] {
+                assert_eq!(
+                    Policy::DeleteAfterInstall.applies_at(timing, completed),
+                    completed == Timing::AfterInstall
+                );
+                assert!(!Policy::KeepAllVersions.applies_at(timing, completed));
+                for policy in [Policy::KeepOneVersion, Policy::KeepTwoVersions] {
+                    assert_eq!(policy.applies_at(timing, completed), timing == completed);
+                }
+            }
+        }
     }
 }

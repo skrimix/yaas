@@ -699,6 +699,32 @@ class _SettingsScreenState extends State<SettingsScreen> {
                 }
               },
             ),
+            if (_currentFormSettings.cleanupPolicy ==
+                    DownloadCleanupPolicy.keepOneVersion ||
+                _currentFormSettings.cleanupPolicy ==
+                    DownloadCleanupPolicy.keepTwoVersions)
+              _buildDropdownSetting<DownloadCleanupTiming>(
+                label: l10n.settingsCleanupTiming,
+                value: _currentFormSettings.cleanupTiming,
+                items: DownloadCleanupTiming.values.map((timing) {
+                  return DropdownMenuItem(
+                    value: timing,
+                    child: Text(switch (timing) {
+                      DownloadCleanupTiming.afterInstall =>
+                        l10n.settingsCleanupAfterInstall,
+                      DownloadCleanupTiming.afterDownload =>
+                        l10n.settingsCleanupAfterDownload,
+                    }),
+                  );
+                }).toList(),
+                onChanged: (value) {
+                  if (value != null) {
+                    setState(() => _currentFormSettings =
+                        _currentFormSettings.copyWith(cleanupTiming: value));
+                    _checkForChanges();
+                  }
+                },
+              ),
             if (settingsState.downloaderSupportsDownloadModeSelection)
               _buildDownloadModeSetting(l10n),
             _buildSwitchSetting(

@@ -392,6 +392,15 @@ class AppLocalizationsRu extends AppLocalizations {
   String get settingsCleanupKeepAllVersions => 'Хранить все версии';
 
   @override
+  String get settingsCleanupTiming => 'Выполнять очистку';
+
+  @override
+  String get settingsCleanupAfterInstall => 'После установки';
+
+  @override
+  String get settingsCleanupAfterDownload => 'После загрузки';
+
+  @override
   String get settingsFavorites => 'Избранное';
 
   @override

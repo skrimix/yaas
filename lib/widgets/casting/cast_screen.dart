@@ -22,6 +22,8 @@ class CastScreen extends StatefulWidget {
       MaterialPageRoute<void>(
         builder: (_) => const CastScreen(),
         fullscreenDialog: true,
+        // Linux cannot snapshot the player's external texture reliably.
+        allowSnapshotting: false,
       ),
     );
   }

@@ -1357,6 +1357,7 @@ dependencies = [
  "fs-err",
  "fs4",
  "futures",
+ "git2",
  "humansize",
  "lazy-regex",
  "log",

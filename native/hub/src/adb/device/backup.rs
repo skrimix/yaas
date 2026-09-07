@@ -3,7 +3,10 @@ use std::path::{Path, PathBuf};
 use anyhow::{Context, Result, anyhow, bail, ensure};
 use forensic_adb::UnixPath;
 use time::{OffsetDateTime, macros::format_description};
-use tokio::fs::{self, File};
+use tokio::{
+    fs::{self, File},
+    sync::{Mutex, MutexGuard},
+};
 use tokio_util::sync::CancellationToken;
 use tracing::{debug, info, instrument, warn};
 
@@ -14,6 +17,17 @@ use crate::{
         dir_has_any_files, first_subdirectory, remove_child_dir_if_exists, single_subdirectory,
     },
 };
+
+// All backups share /sdcard/backup_tmp on the device.
+static BACKUP_MUTEX: Mutex<()> = Mutex::const_new(());
+
+async fn lock_backup_workspace(token: &CancellationToken) -> Result<MutexGuard<'static, ()>> {
+    tokio::select! {
+        biased;
+        _ = token.cancelled() => bail!("Backup cancelled while waiting to start"),
+        guard = BACKUP_MUTEX.lock() => Ok(guard),
+    }
+}
 
 /// Options to control backup behavior
 #[derive(Debug, Clone, Default)]
@@ -42,6 +56,7 @@ impl AdbDevice {
         options: &BackupOptions,
         token: CancellationToken,
     ) -> Result<Option<PathBuf>> {
+        let _guard = lock_backup_workspace(&token).await?;
         ensure!(backups_location.is_dir(), "Backups location must be a directory");
         ensure!(
             !options.require_private_data || options.backup_data,
@@ -364,5 +379,33 @@ where
             let _ = fs::remove_dir_all(backup_path).await;
             Err(anyhow!("Backup cancelled during: {op_name}"))
         }
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[tokio::test]
+    async fn cancelled_backup_does_not_acquire_the_workspace() {
+        let token = CancellationToken::new();
+        token.cancel();
+        assert!(lock_backup_workspace(&token).await.is_err());
+    }
+
+    #[tokio::test]
+    async fn waiting_backup_can_be_cancelled_without_releasing_the_workspace() {
+        let _guard = lock_backup_workspace(&CancellationToken::new()).await.unwrap();
+        let token = CancellationToken::new();
+        let waiting_token = token.clone();
+        let waiting =
+            tokio::spawn(async move { lock_backup_workspace(&waiting_token).await.map(|_| ()) });
+        token.cancel();
+        let result = tokio::time::timeout(std::time::Duration::from_secs(1), waiting)
+            .await
+            .unwrap()
+            .unwrap();
+        assert!(result.is_err());
+        assert!(BACKUP_MUTEX.try_lock().is_err());
     }
 }

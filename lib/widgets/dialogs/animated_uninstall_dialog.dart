@@ -1,15 +1,22 @@
 import 'dart:async';
 
 import 'package:flutter/material.dart';
+import 'package:provider/provider.dart';
+import 'package:rinf/rinf.dart';
+import '../../providers/settings_state.dart';
 import '../../src/bindings/bindings.dart';
 import '../../src/l10n/app_localizations.dart';
 
 class AnimatedUninstallDialog extends StatefulWidget {
   final InstalledPackage app;
+  final Stream<RustSignalPack<AdbCommandCompletedEvent>>? completionEvents;
+  final ValueChanged<AdbRequest>? requestSender;
 
   const AnimatedUninstallDialog({
     super.key,
     required this.app,
+    this.completionEvents,
+    this.requestSender,
   });
 
   @override
@@ -24,8 +31,11 @@ class _AnimatedUninstallDialogState extends State<AnimatedUninstallDialog>
   bool _isUninstalling = false;
   bool _showSuccess = false;
   bool _showCloseButton = false;
+  bool _skipBackup = false;
+  bool _backingUp = false;
 
   Timer? _closeButtonTimer;
+  StreamSubscription<RustSignalPack<AdbCommandCompletedEvent>>? _subscription;
 
   @override
   void initState() {
@@ -36,10 +46,13 @@ class _AnimatedUninstallDialogState extends State<AnimatedUninstallDialog>
       vsync: this,
     );
 
-    AdbCommandCompletedEvent.rustSignalStream.listen((event) {
+    _subscription =
+        (widget.completionEvents ?? AdbCommandCompletedEvent.rustSignalStream)
+            .listen((event) {
       final signal = event.message;
       if (signal.commandType == AdbCommandKind.uninstallPackage &&
-          signal.commandKey == widget.app.packageName) {
+          signal.commandKey == widget.app.packageName &&
+          _isUninstalling) {
         _handleUninstallCompleted(signal.success);
       }
     });
@@ -48,6 +61,7 @@ class _AnimatedUninstallDialogState extends State<AnimatedUninstallDialog>
   @override
   void dispose() {
     _closeButtonTimer?.cancel();
+    _subscription?.cancel();
     _controller.dispose();
     super.dispose();
   }
@@ -55,13 +69,12 @@ class _AnimatedUninstallDialogState extends State<AnimatedUninstallDialog>
   void _handleUninstallCompleted(bool success) {
     if (!mounted) return;
 
-    if (success) {
-      _closeButtonTimer?.cancel();
-    }
+    _closeButtonTimer?.cancel();
 
     setState(() {
       _isUninstalling = false;
       _showSuccess = success;
+      _showCloseButton = false;
     });
 
     if (success) {
@@ -79,6 +92,9 @@ class _AnimatedUninstallDialogState extends State<AnimatedUninstallDialog>
     if (_isUninstalling || _showSuccess) return;
 
     setState(() {
+      _backingUp =
+          context.read<SettingsState>().settings.autoBackupOnUninstall &&
+              !_skipBackup;
       _isUninstalling = true;
       _showCloseButton = false;
     });
@@ -91,25 +107,32 @@ class _AnimatedUninstallDialogState extends State<AnimatedUninstallDialog>
       });
     });
 
-    AdbRequest(
-            command: AdbCommandUninstallPackage(value: widget.app.packageName),
-            commandKey: widget.app.packageName)
-        .sendSignalToRust();
-
-    // Fallback: stop processing after 30 seconds
-    Future.delayed(const Duration(seconds: 30), () {
-      if (_isUninstalling && mounted) {
-        setState(() {
-          _isUninstalling = false;
-        });
-      }
-    });
+    final request = AdbRequest(
+      command: AdbCommandUninstallPackage(
+        packageName: widget.app.packageName,
+        skipBackup: _skipBackup,
+      ),
+      commandKey: widget.app.packageName,
+    );
+    final sender = widget.requestSender;
+    if (sender == null) {
+      request.sendSignalToRust();
+    } else {
+      sender(request);
+    }
   }
 
   @override
   Widget build(BuildContext context) {
     final l10n = AppLocalizations.of(context);
+    final autoBackup =
+        context.watch<SettingsState>().settings.autoBackupOnUninstall;
+    final backingUp = _isUninstalling || _showSuccess
+        ? _backingUp
+        : autoBackup && !_skipBackup;
     return AlertDialog(
+      constraints: const BoxConstraints.tightFor(width: 400),
+      scrollable: true,
       title: Row(
         children: [
           Expanded(child: Text(l10n.uninstallAppTitle)),
@@ -121,7 +144,32 @@ class _AnimatedUninstallDialogState extends State<AnimatedUninstallDialog>
             ),
         ],
       ),
-      content: Text(l10n.uninstallConfirmMessage(widget.app.label)),
+      content: Column(
+        mainAxisSize: MainAxisSize.min,
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          IndexedStack(
+            index: backingUp ? 1 : 0,
+            children: [
+              Text(l10n.uninstallConfirmMessage(widget.app.label)),
+              Text(l10n.uninstallWithBackupConfirmMessage(widget.app.label)),
+            ],
+          ),
+          if (autoBackup) ...[
+            const SizedBox(height: 12),
+            CheckboxListTile(
+              value: _skipBackup,
+              onChanged: _isUninstalling || _showSuccess
+                  ? null
+                  : (value) => setState(() => _skipBackup = value ?? false),
+              title: Text(l10n.uninstallSkipBackup),
+              controlAffinity: ListTileControlAffinity.leading,
+              contentPadding: EdgeInsets.zero,
+              dense: true,
+            ),
+          ],
+        ],
+      ),
       actions: [
         TextButton(
           onPressed: _isUninstalling ? null : () => Navigator.of(context).pop(),
@@ -156,7 +204,9 @@ class _AnimatedUninstallDialogState extends State<AnimatedUninstallDialog>
           label: Text(_showSuccess
               ? l10n.uninstalledDone
               : _isUninstalling
-                  ? l10n.uninstalling
+                  ? (backingUp
+                      ? l10n.backingUpAndUninstalling
+                      : l10n.uninstalling)
                   : l10n.uninstall),
         ),
       ],

@@ -126,6 +126,14 @@ class AppLocalizationsEn extends AppLocalizations {
       'Automatically backup data, reinstall, and restore when encountering version conflicts (downgrade or incompatible update). Requires the app to be debuggable.';
 
   @override
+  String get settingsAutoBackupOnUninstall =>
+      'Back up app data before uninstall';
+
+  @override
+  String get settingsAutoBackupOnUninstallHelp =>
+      'Back up available app data before uninstalling. Private data is copied only when accessible. Backup errors stop the uninstall.';
+
+  @override
   String get settingsSectionDownloader => 'Downloader';
 
   @override
@@ -1569,11 +1577,22 @@ class AppLocalizationsEn extends AppLocalizations {
 
   @override
   String uninstallConfirmMessage(String app) {
-    return 'Are you sure you want to uninstall \"$app\"?\n\nThis will permanently delete the app and all its data.';
+    return 'Uninstall \"$app\"?\n\nThe app and its data will be permanently deleted.';
   }
 
   @override
   String get uninstalledDone => 'Uninstalled!';
+
+  @override
+  String uninstallWithBackupConfirmMessage(String app) {
+    return 'Uninstall \"$app\"?\n\nWe\'ll try to back up app data first.';
+  }
+
+  @override
+  String get uninstallSkipBackup => 'Skip backup';
+
+  @override
+  String get backingUpAndUninstalling => 'Backing up and uninstalling...';
 
   @override
   String get uninstalling => 'Uninstalling...';

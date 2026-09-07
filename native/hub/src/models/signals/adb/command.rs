@@ -5,7 +5,10 @@ use serde::{Deserialize, Serialize};
 pub(crate) enum AdbCommand {
     LaunchApp(String),
     ForceStopApp(String),
-    UninstallPackage(String),
+    UninstallPackage {
+        package_name: String,
+        skip_backup: bool,
+    },
     RefreshDevice,
     Reboot(RebootMode),
     /// Set proximity sensor state.

@@ -320,6 +320,18 @@ abstract class AppLocalizations {
   /// **'Automatically backup data, reinstall, and restore when encountering version conflicts (downgrade or incompatible update). Requires the app to be debuggable.'**
   String get settingsAutoReinstallOnConflictHelp;
 
+  /// No description provided for @settingsAutoBackupOnUninstall.
+  ///
+  /// In en, this message translates to:
+  /// **'Back up app data before uninstall'**
+  String get settingsAutoBackupOnUninstall;
+
+  /// No description provided for @settingsAutoBackupOnUninstallHelp.
+  ///
+  /// In en, this message translates to:
+  /// **'Back up available app data before uninstalling. Private data is copied only when accessible. Backup errors stop the uninstall.'**
+  String get settingsAutoBackupOnUninstallHelp;
+
   /// No description provided for @settingsSectionDownloader.
   ///
   /// In en, this message translates to:
@@ -2945,7 +2957,7 @@ abstract class AppLocalizations {
   /// No description provided for @uninstallConfirmMessage.
   ///
   /// In en, this message translates to:
-  /// **'Are you sure you want to uninstall \"{app}\"?\n\nThis will permanently delete the app and all its data.'**
+  /// **'Uninstall \"{app}\"?\n\nThe app and its data will be permanently deleted.'**
   String uninstallConfirmMessage(String app);
 
   /// No description provided for @uninstalledDone.
@@ -2953,6 +2965,24 @@ abstract class AppLocalizations {
   /// In en, this message translates to:
   /// **'Uninstalled!'**
   String get uninstalledDone;
+
+  /// No description provided for @uninstallWithBackupConfirmMessage.
+  ///
+  /// In en, this message translates to:
+  /// **'Uninstall \"{app}\"?\n\nWe\'ll try to back up app data first.'**
+  String uninstallWithBackupConfirmMessage(String app);
+
+  /// No description provided for @uninstallSkipBackup.
+  ///
+  /// In en, this message translates to:
+  /// **'Skip backup'**
+  String get uninstallSkipBackup;
+
+  /// No description provided for @backingUpAndUninstalling.
+  ///
+  /// In en, this message translates to:
+  /// **'Backing up and uninstalling...'**
+  String get backingUpAndUninstalling;
 
   /// No description provided for @uninstalling.
   ///

@@ -127,6 +127,14 @@ class AppLocalizationsRu extends AppLocalizations {
       'Автоматически создавать резервную копию, переустанавливать и восстанавливать при конфликте версий (откат или несовместимое обновление). Требуется отладочная версия приложения.';
 
   @override
+  String get settingsAutoBackupOnUninstall =>
+      'Копировать данные приложения перед удалением';
+
+  @override
+  String get settingsAutoBackupOnUninstallHelp =>
+      'Создавать резервную копию доступных данных перед удалением приложения. Внутренние данные копируются только если к ним есть доступ. При ошибке копирования удаление отменяется.';
+
+  @override
   String get settingsSectionDownloader => 'Загрузчик';
 
   @override
@@ -1591,11 +1599,22 @@ class AppLocalizationsRu extends AppLocalizations {
 
   @override
   String uninstallConfirmMessage(String app) {
-    return 'Удалить \"$app\"?\n\nЭто действие удалит приложение и все данные.';
+    return 'Удалить \"$app\"?\n\nПриложение и его данные будут удалены.';
   }
 
   @override
   String get uninstalledDone => 'Удалено!';
+
+  @override
+  String uninstallWithBackupConfirmMessage(String app) {
+    return 'Удалить \"$app\"?\n\nСначала попробуем создать резервную копию данных приложения.';
+  }
+
+  @override
+  String get uninstallSkipBackup => 'Пропустить резервное копирование';
+
+  @override
+  String get backingUpAndUninstalling => 'Копирование и удаление...';
 
   @override
   String get uninstalling => 'Удаление...';

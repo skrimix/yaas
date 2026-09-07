@@ -610,6 +610,18 @@ class _SettingsScreenState extends State<SettingsScreen> {
               });
             },
           ),
+          _buildSwitchSetting(
+            label: l10n.settingsAutoBackupOnUninstall,
+            description: l10n.settingsAutoBackupOnUninstallHelp,
+            value: _currentFormSettings.autoBackupOnUninstall,
+            onChanged: (v) {
+              setState(() {
+                _currentFormSettings =
+                    _currentFormSettings.copyWith(autoBackupOnUninstall: v);
+                _checkForChanges();
+              });
+            },
+          ),
           _buildDropdownSetting<ConnectionKind>(
             label: l10n.settingsPreferredConnection,
             value: _currentFormSettings.preferredConnectionType,

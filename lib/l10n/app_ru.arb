@@ -44,6 +44,8 @@
     "settingsMdnsAutoConnectHelp": "Обнаруживать устройства через mDNS в локальной сети и автоматически выполнять 'adb connect'. Изменение вступит в силу после перезапуска.",
     "settingsAutoReinstallOnConflict": "Автопереустановка при конфликте версий",
     "settingsAutoReinstallOnConflictHelp": "Автоматически создавать резервную копию, переустанавливать и восстанавливать при конфликте версий (откат или несовместимое обновление). Требуется отладочная версия приложения.",
+    "settingsAutoBackupOnUninstall": "Копировать данные приложения перед удалением",
+    "settingsAutoBackupOnUninstallHelp": "Создавать резервную копию доступных данных перед удалением приложения. Внутренние данные копируются только если к ним есть доступ. При ошибке копирования удаление отменяется.",
   "settingsSectionDownloader": "Загрузчик",
   "preparingDownloader": "Подготовка загрузчика...",
   "downloadingRcloneFiles": "Загрузка файлов rclone",
@@ -748,7 +750,7 @@
         }
     },
     "uninstallAppTitle": "Удалить приложение",
-    "uninstallConfirmMessage": "Удалить \"{app}\"?\n\nЭто действие удалит приложение и все данные.",
+    "uninstallConfirmMessage": "Удалить \"{app}\"?\n\nПриложение и его данные будут удалены.",
     "@uninstallConfirmMessage": {
         "placeholders": {
             "app": {
@@ -757,6 +759,16 @@
         }
     },
     "uninstalledDone": "Удалено!",
+    "uninstallWithBackupConfirmMessage": "Удалить \"{app}\"?\n\nСначала попробуем создать резервную копию данных приложения.",
+    "@uninstallWithBackupConfirmMessage": {
+        "placeholders": {
+            "app": {
+                "type": "String"
+            }
+        }
+    },
+    "uninstallSkipBackup": "Пропустить резервное копирование",
+    "backingUpAndUninstalling": "Копирование и удаление...",
     "uninstalling": "Удаление...",
     "clearLogsTitle": "Очистить логи",
     "clearLogsMessage": "Это действие очистит текущие логи. Его нельзя отменить.",

@@ -27,6 +27,7 @@ class SettingsState extends ChangeNotifier {
     mdnsAutoConnect: true,
     popularityRange: PopularityRange.day7,
     autoReinstallOnConflict: true,
+    autoBackupOnUninstall: true,
     experimentalNativeCast: false,
   );
 

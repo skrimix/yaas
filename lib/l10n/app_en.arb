@@ -44,6 +44,8 @@
     "settingsMdnsAutoConnectHelp": "Discover devices via mDNS on the local network and attempt 'adb connect' automatically. Takes effect after restart.",
     "settingsAutoReinstallOnConflict": "Auto reinstall on incompatible update",
     "settingsAutoReinstallOnConflictHelp": "Automatically backup data, reinstall, and restore when encountering version conflicts (downgrade or incompatible update). Requires the app to be debuggable.",
+    "settingsAutoBackupOnUninstall": "Back up app data before uninstall",
+    "settingsAutoBackupOnUninstallHelp": "Back up available app data before uninstalling. Private data is copied only when accessible. Backup errors stop the uninstall.",
   "settingsSectionDownloader": "Downloader",
   "preparingDownloader": "Preparing downloader...",
   "downloadingRcloneFiles": "Downloading rclone files",
@@ -754,7 +756,7 @@
         }
     },
     "uninstallAppTitle": "Uninstall App",
-    "uninstallConfirmMessage": "Are you sure you want to uninstall \"{app}\"?\n\nThis will permanently delete the app and all its data.",
+    "uninstallConfirmMessage": "Uninstall \"{app}\"?\n\nThe app and its data will be permanently deleted.",
     "@uninstallConfirmMessage": {
         "placeholders": {
             "app": {
@@ -763,6 +765,16 @@
         }
     },
     "uninstalledDone": "Uninstalled!",
+    "uninstallWithBackupConfirmMessage": "Uninstall \"{app}\"?\n\nWe'll try to back up app data first.",
+    "@uninstallWithBackupConfirmMessage": {
+        "placeholders": {
+            "app": {
+                "type": "String"
+            }
+        }
+    },
+    "uninstallSkipBackup": "Skip backup",
+    "backingUpAndUninstalling": "Backing up and uninstalling...",
     "uninstalling": "Uninstalling...",
     "clearLogsTitle": "Clear Logs",
     "clearLogsMessage": "This will clear all current session logs. This action cannot be undone.",

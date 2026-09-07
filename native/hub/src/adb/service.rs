@@ -2,6 +2,7 @@ use std::{
     collections::HashMap,
     error::Error,
     fmt,
+    future::Future,
     net::SocketAddr,
     path::{Path, PathBuf},
     sync::Arc,
@@ -43,6 +44,7 @@ use crate::{
                 dump::BatteryDumpResponse,
                 state::AdbState,
             },
+            backups::BackupsChanged,
             system::Toast,
         },
     },
@@ -144,6 +146,37 @@ fn coalesce_queued_queries(
     }
 }
 
+#[derive(Debug, Clone)]
+struct UninstallBackupSettings {
+    enabled: bool,
+    location: PathBuf,
+}
+
+impl From<&Settings> for UninstallBackupSettings {
+    fn from(settings: &Settings) -> Self {
+        Self { enabled: settings.auto_backup_on_uninstall, location: settings.backups_location() }
+    }
+}
+
+async fn uninstall_with_backup(
+    backup_enabled: bool,
+    skip_backup: bool,
+    token: &CancellationToken,
+    backup: impl Future<Output = Result<Option<PathBuf>>>,
+    uninstall: impl Future<Output = Result<()>>,
+    notify_backup: impl FnOnce(),
+) -> Result<()> {
+    ensure!(!token.is_cancelled(), "Uninstall cancelled");
+    if backup_enabled && !skip_backup {
+        let created = backup.await.context("Failed to back up app data before uninstall")?;
+        if created.is_some() {
+            notify_backup();
+        }
+    }
+    ensure!(!token.is_cancelled(), "Uninstall cancelled");
+    uninstall.await
+}
+
 /// Handles ADB state, device connections and commands
 #[derive(Debug)]
 pub(crate) struct AdbService {
@@ -171,6 +204,7 @@ pub(crate) struct AdbService {
     mdns_auto_connect: bool,
     /// Preferred connection type (USB or Wireless) for auto-connect
     preferred_connection_type: RwLock<ConnectionKind>,
+    uninstall_backup: RwLock<UninstallBackupSettings>,
     /// App data directory used by auxiliary tools.
     #[cfg_attr(not(target_os = "windows"), allow(dead_code))]
     app_dir: PathBuf,
@@ -189,6 +223,7 @@ impl AdbService {
     ) -> Arc<Self> {
         let first_settings =
             settings_stream.next().await.expect("Settings stream closed on adb init");
+        let uninstall_backup = UninstallBackupSettings::from(&first_settings);
         let adb_path = first_settings.adb_path;
         let adb_path = if adb_path.is_empty() { None } else { Some(adb_path) };
         let (device_update_sender, device_update_receiver) = mpsc::channel(32);
@@ -212,6 +247,7 @@ impl AdbService {
             device_data_cache: RwLock::new(HashMap::new()),
             mdns_auto_connect: first_settings.mdns_auto_connect,
             preferred_connection_type: RwLock::new(first_settings.preferred_connection_type),
+            uninstall_backup: RwLock::new(uninstall_backup),
             app_dir,
         });
         tokio::spawn(
@@ -257,6 +293,8 @@ impl AdbService {
                     while let Some(settings) = settings_stream.next().await {
                         debug!("AdbService received settings update");
                         debug!(?settings, "New settings");
+                        *handle.uninstall_backup.write().await =
+                            UninstallBackupSettings::from(&settings);
                         let new_adb_path = settings.adb_path.clone();
                         let new_adb_path =
                             if new_adb_path.is_empty() { None } else { Some(new_adb_path) };
@@ -648,10 +686,14 @@ impl AdbService {
                 }
             }
 
-            AdbCommand::UninstallPackage(package_name) => {
-                let device = self.current_device().await?;
-                let package = PackageName::parse(&package_name)?;
-                let result = self.uninstall_package(&device, &package).await;
+            AdbCommand::UninstallPackage { package_name, skip_backup } => {
+                let result = async {
+                    let device = self.current_device().await?;
+                    let package = PackageName::parse(&package_name)?;
+                    let token = self.cancel_token.read().await.clone();
+                    self.uninstall_package(&device, &package, skip_backup, token).await
+                }
+                .await;
                 AdbCommandCompletedEvent {
                     command_type: AdbCommandKind::UninstallPackage,
                     command_key: key.clone(),
@@ -662,9 +704,9 @@ impl AdbService {
                 match result {
                     Ok(_) => Ok(()),
                     Err(e) => {
-                        let error_msg = format!("Failed to uninstall {package}: {e:#}");
+                        let error_msg = format!("Failed to uninstall {package_name}: {e:#}");
                         send_toast("Uninstall Failed".to_string(), error_msg, true, None);
-                        Err(e.context(format!("Failed to uninstall {package}")))
+                        Err(e.context(format!("Failed to uninstall {package_name}")))
                     }
                 }
             }
@@ -1772,14 +1814,37 @@ impl AdbService {
         result
     }
 
-    /// Uninstalls a package from the currently connected device
-    #[instrument(level = "debug", skip(self))]
+    /// Backs up available data if enabled, then uninstalls the package.
+    #[instrument(level = "debug", skip(self, token))]
     pub(crate) async fn uninstall_package(
         &self,
         device: &AdbDevice,
         package: &PackageName,
+        skip_backup: bool,
+        token: CancellationToken,
     ) -> Result<()> {
-        let result = device.uninstall_package(package).await;
+        let settings = self.uninstall_backup.read().await.clone();
+        let options = BackupOptions {
+            name_append: Some("uninstall".to_string()),
+            backup_data: true,
+            ..BackupOptions::default()
+        };
+        let result = uninstall_with_backup(
+            settings.enabled,
+            skip_backup,
+            &token,
+            Box::pin(self.backup_app(
+                device,
+                package,
+                None,
+                &settings.location,
+                &options,
+                token.clone(),
+            )),
+            device.uninstall_package(package),
+            || BackupsChanged {}.send_signal_to_dart(),
+        )
+        .await;
         if let Err(e) = self.refresh_device_for(device, DeviceRefreshComponents::PACKAGES).await {
             warn!(error = e.as_ref() as &dyn Error, "Failed to refresh device after uninstall");
         }
@@ -2135,7 +2200,143 @@ fn display_target(addr: SocketAddr) -> String {
 
 #[cfg(test)]
 mod tests {
+    use std::cell::{Cell, RefCell};
+
     use super::*;
+
+    #[tokio::test]
+    async fn uninstall_backs_up_only_when_enabled_and_not_skipped() {
+        for enabled in [false, true] {
+            for skip in [false, true] {
+                let events = RefCell::new(Vec::new());
+                uninstall_with_backup(
+                    enabled,
+                    skip,
+                    &CancellationToken::new(),
+                    async {
+                        events.borrow_mut().push("backup");
+                        Ok(Some(PathBuf::from("backup")))
+                    },
+                    async {
+                        events.borrow_mut().push("uninstall");
+                        Ok(())
+                    },
+                    || events.borrow_mut().push("notify"),
+                )
+                .await
+                .unwrap();
+                let expected = if enabled && !skip {
+                    vec!["backup", "notify", "uninstall"]
+                } else {
+                    vec!["uninstall"]
+                };
+                assert_eq!(*events.borrow(), expected);
+            }
+        }
+    }
+
+    #[tokio::test]
+    async fn empty_backup_allows_uninstall_without_notifying_catalog() {
+        let uninstalled = Cell::new(false);
+        uninstall_with_backup(
+            true,
+            false,
+            &CancellationToken::new(),
+            async { Ok(None) },
+            async {
+                uninstalled.set(true);
+                Ok(())
+            },
+            || panic!("An empty backup must not notify the catalog"),
+        )
+        .await
+        .unwrap();
+        assert!(uninstalled.get());
+    }
+
+    #[tokio::test]
+    async fn failed_backup_prevents_uninstall() {
+        let result = uninstall_with_backup(
+            true,
+            false,
+            &CancellationToken::new(),
+            async { bail!("Disk full") },
+            async { panic!("Must not uninstall after a backup error") },
+            || panic!("Must not announce a failed backup"),
+        )
+        .await;
+        let error = format!("{:#}", result.unwrap_err());
+        assert!(error.contains("before uninstall"));
+        assert!(error.contains("Disk full"));
+    }
+
+    #[tokio::test]
+    async fn failed_uninstall_keeps_the_announced_backup() {
+        let dir = tempfile::tempdir().unwrap();
+        let marker = dir.path().join(".backup");
+        let notified = Cell::new(false);
+        let result = uninstall_with_backup(
+            true,
+            false,
+            &CancellationToken::new(),
+            async {
+                tokio::fs::write(&marker, []).await?;
+                Ok(Some(dir.path().to_path_buf()))
+            },
+            async {
+                assert!(notified.get());
+                bail!("Uninstall failed")
+            },
+            || notified.set(true),
+        )
+        .await;
+        assert!(result.is_err());
+        assert!(marker.exists());
+    }
+
+    #[tokio::test]
+    async fn cancellation_before_or_during_backup_prevents_uninstall() {
+        for cancel_before in [false, true] {
+            let token = CancellationToken::new();
+            if cancel_before {
+                token.cancel();
+            }
+            let result = uninstall_with_backup(
+                true,
+                false,
+                &token,
+                async {
+                    assert!(!cancel_before, "Must not start a cancelled backup");
+                    token.cancel();
+                    Ok(None)
+                },
+                async { panic!("Must not uninstall after cancellation") },
+                || panic!("No backup was created"),
+            )
+            .await;
+            assert!(result.unwrap_err().to_string().contains("cancelled"));
+        }
+    }
+
+    #[tokio::test]
+    async fn cancellation_after_backup_keeps_the_backup_without_uninstalling() {
+        let token = CancellationToken::new();
+        let notified = Cell::new(false);
+        let result = uninstall_with_backup(
+            true,
+            false,
+            &token,
+            async {
+                token.cancel();
+                Ok(Some(PathBuf::from("backup")))
+            },
+            async { panic!("Must not uninstall after cancellation") },
+            || notified.set(true),
+        )
+        .await;
+        assert!(result.is_err());
+        assert!(notified.get());
+    }
 
     fn target(serial: &str) -> DeviceUpdateTarget {
         DeviceUpdateTarget { serial: serial.to_string(), transport_id: "1".to_string() }

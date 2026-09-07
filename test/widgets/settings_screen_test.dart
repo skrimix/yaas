@@ -78,6 +78,40 @@ Future<void> _pumpSettings(
 
 void main() {
   for (final locale in ['en', 'ru']) {
+    testWidgets('$locale uninstall backup setting saves and reverts',
+        (tester) async {
+      await _pumpSettings(tester, locale: locale, width: 480, textScale: 1.5);
+      final context = tester.element(find.byType(SettingsScreen));
+      final l10n = AppLocalizations.of(context);
+      final state = context.read<SettingsState>() as _SettingsState;
+      final row = find.ancestor(
+        of: find.text(l10n.settingsAutoBackupOnUninstall),
+        matching: find.byType(SettingRow),
+      );
+      final toggle = find.descendant(of: row, matching: find.byType(Switch));
+
+      await tester.ensureVisible(toggle);
+      await tester.pumpAndSettle();
+      expect(tester.widget<Switch>(toggle).value, isTrue);
+      await tester.tap(toggle);
+      await tester.pumpAndSettle();
+      expect(tester.widget<Switch>(toggle).value, isFalse);
+      await tester.tap(find.byTooltip(l10n.settingsRevertChangesTooltip));
+      await tester.pumpAndSettle();
+      expect(tester.widget<Switch>(toggle).value, isTrue);
+
+      await tester.ensureVisible(toggle);
+      await tester.tap(toggle);
+      await tester.pumpAndSettle();
+      await tester
+          .tap(find.widgetWithText(FilledButton, l10n.settingsSaveChanges));
+      await tester.pumpAndSettle();
+      expect(state.savedSettings?.autoBackupOnUninstall, isFalse);
+      expect(tester.takeException(), isNull);
+    });
+  }
+
+  for (final locale in ['en', 'ru']) {
     for (final width in [480.0, 960.0]) {
       for (final textScale in [1.0, 1.5]) {
         testWidgets('$locale settings fit at $width with $textScale text',

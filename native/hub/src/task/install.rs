@@ -265,10 +265,12 @@ impl TaskManager {
                 log_context: "uninstall",
             },
             update_progress,
-            token,
+            token.clone(),
             move || {
                 let package_name = package.clone();
-                async move { adb_service.uninstall_package(&device, &package_name).await }
+                async move {
+                    adb_service.uninstall_package(&device, &package_name, false, token).await
+                }
             },
         )
         .await

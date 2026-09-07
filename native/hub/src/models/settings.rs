@@ -113,6 +113,8 @@ pub(crate) struct Settings {
     popularity_range: PopularityRange,
     /// Auto reinstall app on incompatible update or downgrade (requires debuggable app for data backup)
     pub auto_reinstall_on_conflict: bool,
+    /// Back up available app data before explicit uninstalls.
+    pub auto_backup_on_uninstall: bool,
     /// Enable the experimental native casting feature
     pub experimental_native_cast: bool,
 }
@@ -151,6 +153,7 @@ impl Default for Settings {
             mdns_auto_connect: true,
             popularity_range: PopularityRange::default(),
             auto_reinstall_on_conflict: true,
+            auto_backup_on_uninstall: true,
             experimental_native_cast: false,
         }
     }
@@ -231,6 +234,21 @@ impl Settings {
 #[cfg(test)]
 mod tests {
     use super::{DownloadCleanupPolicy as Policy, DownloadCleanupTiming as Timing, Settings};
+
+    #[test]
+    fn uninstall_backup_defaults_for_existing_settings() {
+        let settings: Settings = serde_json::from_str("{}").unwrap();
+        assert!(settings.auto_backup_on_uninstall);
+    }
+
+    #[test]
+    fn uninstall_backup_can_be_disabled_and_round_trips() {
+        let settings: Settings =
+            serde_json::from_str(r#"{"auto_backup_on_uninstall":false}"#).unwrap();
+        assert!(!settings.auto_backup_on_uninstall);
+        let json = serde_json::to_string(&settings).unwrap();
+        assert_eq!(serde_json::from_str::<Settings>(&json).unwrap(), settings);
+    }
 
     #[test]
     fn cleanup_timing_defaults_for_existing_settings() {

@@ -1,9 +1,10 @@
 use std::{
     fs,
+    io::Write,
     path::{Path, PathBuf},
 };
 
-use anyhow::{Context, Result};
+use anyhow::{Context, Result, ensure};
 use rinf::SignalPiece;
 use serde::{Deserialize, Serialize};
 use tracing::warn;
@@ -129,13 +130,13 @@ impl Default for Settings {
             adb_path: "adb".to_string(),
             preferred_connection_type: ConnectionKind::default(),
             downloads_location: dirs::download_dir()
-                .expect("Failed to get download directory")
-                .join("YAAS")
+                .map(|dir| dir.join("YAAS"))
+                .unwrap_or_else(|| crate::resolve_app_dir(false).join("downloads"))
                 .to_string_lossy()
                 .to_string(),
             backups_location: dirs::document_dir()
-                .expect("Failed to get document directory")
-                .join("YAAS_backups")
+                .map(|dir| dir.join("YAAS_backups"))
+                .unwrap_or_else(|| crate::resolve_app_dir(false).join("backups"))
                 .to_string_lossy()
                 .to_string(),
             bandwidth_limit: String::new(),
@@ -178,39 +179,41 @@ impl Settings {
         let mut settings: Settings =
             serde_json::from_str(&file_content).context("Failed to parse settings file")?;
 
-        // TODO: Validate settings
-        let defaults = Settings::new(portable_mode);
-
-        let downloads_path = Path::new(&settings.downloads_location);
-        let backups_path = Path::new(&settings.backups_location);
-        let default_downloads_path = Path::new(&defaults.downloads_location);
-        let default_backups_path = Path::new(&defaults.backups_location);
-
-        // If paths came from defaults, ensure those directories exist.
-        if downloads_path == default_downloads_path {
-            let _ = fs::create_dir_all(downloads_path);
+        let original = settings.clone();
+        let app_dir = settings_file.parent().context("Failed to get settings directory")?;
+        if let Err(error) = settings.prepare_directories(app_dir, portable_mode) {
+            warn!(error = %format!("{error:#}"), "Failed to prepare settings directories");
         }
-        if backups_path == default_backups_path {
-            let _ = fs::create_dir_all(backups_path);
-        }
-
-        // Check that effective paths exist; if not, fall back to defaults.
-        if !downloads_path.exists() {
-            warn!(
-                path = %downloads_path.display(),
-                "Downloads directory does not exist, resetting to default"
-            );
-            settings.downloads_location = defaults.downloads_location;
-        }
-        if !backups_path.exists() {
-            warn!(
-                path = %backups_path.display(),
-                "Backups directory does not exist, resetting to default"
-            );
-            settings.backups_location = defaults.backups_location;
+        if settings != original
+            && let Err(error) = settings.save_to_file(settings_file)
+        {
+            warn!(error = %format!("{error:#}"), "Failed to save updated settings paths");
         }
 
         Ok(settings)
+    }
+
+    pub(crate) fn prepare_directories(
+        &mut self,
+        app_dir: &Path,
+        portable_mode: bool,
+    ) -> Result<()> {
+        let defaults = Self::new(portable_mode);
+        let downloads_fallback = app_dir.join("downloads");
+        let backups_fallback = app_dir.join("backups");
+        prepare_directory(
+            &mut self.downloads_location,
+            &defaults.downloads_location,
+            (!portable_mode).then_some(downloads_fallback.as_path()),
+        )
+        .context("Failed to prepare downloads directory")?;
+        prepare_directory(
+            &mut self.backups_location,
+            &defaults.backups_location,
+            (!portable_mode).then_some(backups_fallback.as_path()),
+        )
+        .context("Failed to prepare backups directory")?;
+        Ok(())
     }
 
     pub(crate) fn save_to_file(&self, settings_file: &Path) -> Result<()> {
@@ -231,9 +234,205 @@ impl Settings {
     }
 }
 
+fn prepare_directory(location: &mut String, default: &str, fallback: Option<&Path>) -> Result<()> {
+    let path = Path::new(location);
+    if path != Path::new(default) && Some(path) != fallback {
+        if path.is_dir() {
+            return Ok(());
+        }
+        warn!(path = %path.display(), "Configured directory is unavailable, using default");
+        *location = default.to_string();
+    }
+
+    let path = Path::new(location);
+    if let Err(error) = ensure_writable_directory(path) {
+        let Some(fallback) = fallback.filter(|fallback| *fallback != path) else {
+            return Err(error);
+        };
+        warn!(
+            path = %path.display(),
+            fallback = %fallback.display(),
+            error = %format!("{error:#}"),
+            "Default directory is unavailable, using app data"
+        );
+        ensure_writable_directory(fallback)?;
+        *location = fallback.to_string_lossy().into_owned();
+    }
+    Ok(())
+}
+
+fn ensure_writable_directory(path: &Path) -> Result<()> {
+    if path.is_absolute() {
+        let parent = path.parent().context("Failed to get directory parent")?;
+        ensure!(parent.is_dir(), "Directory parent ({}) is unavailable", parent.display());
+    }
+    fs::create_dir_all(path)
+        .with_context(|| format!("Failed to create directory {}", path.display()))?;
+    // Existing directories can still deny writes, for example with controlled folder access.
+    let mut probe = tempfile::Builder::new()
+        .prefix(".yaas-write-test-")
+        .tempfile_in(path)
+        .with_context(|| format!("Failed to create a file in {}", path.display()))?;
+    probe.write_all(b"YAAS").with_context(|| format!("Failed to write in {}", path.display()))?;
+    probe.close().with_context(|| format!("Failed to remove test file in {}", path.display()))?;
+    Ok(())
+}
+
 #[cfg(test)]
 mod tests {
-    use super::{DownloadCleanupPolicy as Policy, DownloadCleanupTiming as Timing, Settings};
+    use std::{fs, path::Path};
+
+    use super::{
+        DownloadCleanupPolicy as Policy, DownloadCleanupTiming as Timing, Settings,
+        prepare_directory,
+    };
+
+    #[test]
+    fn writable_default_directory_is_kept() {
+        let dir = tempfile::tempdir().unwrap();
+        let preferred = dir.path().join("preferred");
+        let fallback = dir.path().join("fallback");
+        let default = preferred.to_string_lossy().into_owned();
+        let mut location = default.clone();
+
+        prepare_directory(&mut location, &default, Some(&fallback)).unwrap();
+
+        assert_eq!(Path::new(&location), preferred);
+        assert_eq!(fs::read_dir(&preferred).unwrap().count(), 0);
+        assert!(!fallback.exists());
+    }
+
+    #[test]
+    fn unavailable_default_directory_falls_back_to_app_data() {
+        let dir = tempfile::tempdir().unwrap();
+        let blocked = dir.path().join("blocked");
+        fs::write(&blocked, "existing file").unwrap();
+        let fallback = dir.path().join("fallback");
+
+        for preferred in [blocked.clone(), blocked.join("YAAS"), dir.path().join("missing/YAAS")] {
+            let default = preferred.to_string_lossy().into_owned();
+            let mut location = default.clone();
+
+            prepare_directory(&mut location, &default, Some(&fallback)).unwrap();
+
+            assert_eq!(Path::new(&location), fallback);
+            assert_eq!(fs::read_dir(&fallback).unwrap().count(), 0);
+        }
+        assert_eq!(fs::read_to_string(&blocked).unwrap(), "existing file");
+        assert!(!dir.path().join("missing").exists());
+    }
+
+    #[cfg(unix)]
+    #[test]
+    fn existing_unwritable_default_directory_falls_back_to_app_data() {
+        use std::os::unix::fs::PermissionsExt;
+
+        let dir = tempfile::tempdir().unwrap();
+        let preferred = dir.path().join("protected");
+        fs::create_dir(&preferred).unwrap();
+        let permissions = fs::metadata(&preferred).unwrap().permissions();
+        fs::set_permissions(&preferred, fs::Permissions::from_mode(0o555)).unwrap();
+        let fallback = dir.path().join("fallback");
+        let default = preferred.to_string_lossy().into_owned();
+        let mut location = default.clone();
+
+        // Privileged users may still be able to write to read-only directories.
+        if tempfile::tempfile_in(&preferred).is_ok() {
+            fs::set_permissions(&preferred, permissions).unwrap();
+            return;
+        }
+        let result = prepare_directory(&mut location, &default, Some(&fallback));
+        fs::set_permissions(&preferred, permissions).unwrap();
+
+        result.unwrap();
+        assert_eq!(Path::new(&location), fallback);
+        assert_eq!(fs::read_dir(&fallback).unwrap().count(), 0);
+    }
+
+    #[test]
+    fn existing_custom_directory_is_kept() {
+        let dir = tempfile::tempdir().unwrap();
+        let custom = dir.path().join("custom");
+        fs::create_dir(&custom).unwrap();
+        let preferred = dir.path().join("preferred");
+        let fallback = dir.path().join("fallback");
+        let mut location = custom.to_string_lossy().into_owned();
+
+        prepare_directory(&mut location, &preferred.to_string_lossy(), Some(&fallback)).unwrap();
+
+        assert_eq!(Path::new(&location), custom);
+        assert!(!preferred.exists());
+        assert!(!fallback.exists());
+    }
+
+    #[test]
+    fn directory_errors_are_returned_when_fallback_is_unavailable() {
+        let dir = tempfile::tempdir().unwrap();
+        let preferred = dir.path().join("preferred");
+        let fallback = dir.path().join("fallback");
+        fs::write(&preferred, "blocked").unwrap();
+        fs::write(&fallback, "blocked").unwrap();
+        let default = preferred.to_string_lossy().into_owned();
+
+        for fallback in [None, Some(fallback.as_path())] {
+            let mut location = default.clone();
+            assert!(prepare_directory(&mut location, &default, fallback).is_err());
+            assert_eq!(location, default);
+        }
+    }
+
+    #[test]
+    fn missing_custom_directory_uses_a_writable_default() {
+        let dir = tempfile::tempdir().unwrap();
+        let preferred = dir.path().join("preferred");
+        let fallback = dir.path().join("fallback");
+        let mut location = dir.path().join("missing").to_string_lossy().into_owned();
+
+        prepare_directory(&mut location, &preferred.to_string_lossy(), Some(&fallback)).unwrap();
+
+        assert_eq!(Path::new(&location), preferred);
+        assert!(preferred.is_dir());
+    }
+
+    #[test]
+    fn saved_fallback_directories_are_recreated_on_load() {
+        let dir = tempfile::tempdir().unwrap();
+        let settings_file = dir.path().join("settings.json");
+        let settings = Settings {
+            downloads_location: dir.path().join("downloads").to_string_lossy().into_owned(),
+            backups_location: dir.path().join("backups").to_string_lossy().into_owned(),
+            bandwidth_limit: "12M".into(),
+            ..Settings::new(false)
+        };
+        settings.save_to_file(&settings_file).unwrap();
+
+        let loaded = Settings::load_from_file(&settings_file, false).unwrap();
+
+        assert_eq!(loaded, settings);
+        assert!(loaded.downloads_location().is_dir());
+        assert!(loaded.backups_location().is_dir());
+        assert_eq!(Settings::load_from_file(&settings_file, false).unwrap(), settings);
+    }
+
+    #[test]
+    fn directory_errors_do_not_discard_saved_settings() {
+        let dir = tempfile::tempdir().unwrap();
+        let settings_file = dir.path().join("settings.json");
+        let downloads = dir.path().join("downloads");
+        fs::write(&downloads, "blocked").unwrap();
+        let settings = Settings {
+            downloads_location: downloads.to_string_lossy().into_owned(),
+            backups_location: dir.path().join("backups").to_string_lossy().into_owned(),
+            bandwidth_limit: "12M".into(),
+            ..Settings::new(false)
+        };
+        settings.save_to_file(&settings_file).unwrap();
+
+        assert_eq!(Settings::load_from_file(&settings_file, false).unwrap(), settings);
+        let saved: Settings =
+            serde_json::from_str(&fs::read_to_string(&settings_file).unwrap()).unwrap();
+        assert_eq!(saved, settings);
+    }
 
     #[test]
     fn uninstall_backup_defaults_for_existing_settings() {

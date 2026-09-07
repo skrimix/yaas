@@ -1,7 +1,7 @@
 use std::{
     error::Error,
     fs,
-    path::{Path, PathBuf},
+    path::PathBuf,
     sync::{Arc, Mutex},
 };
 
@@ -39,7 +39,7 @@ impl SettingsHandler {
                 warn!(error = e.as_ref() as &dyn Error, "Failed to load settings, using defaults.");
                 handler
                     .load_default_settings(None, portable_mode)
-                    .expect("Failed to load default settings")
+                    .context("Failed to load default settings")?
             }
         };
 
@@ -254,35 +254,9 @@ impl SettingsHandler {
             settings.installation_id = installation_id
         }
 
-        // Create default directories if they don't exist (and parents do)
-        let downloads_location = settings.downloads_location();
-        let backups_location = settings.backups_location();
-        debug!(path = %downloads_location.display(), "Ensuring downloads directory exists");
-        let downloads_parent = Path::new(&downloads_location)
-            .parent()
-            .context("Failed to get downloads directory parent")?;
-        debug!(path = %backups_location.display(), "Ensuring backups directory exists");
-        let backups_parent = Path::new(&backups_location)
-            .parent()
-            .context("Failed to get backups directory parent")?;
-        if downloads_location.is_absolute() {
-            ensure!(
-                downloads_parent.exists(),
-                format!(
-                    "Downloads directory parent ({}) does not exist",
-                    downloads_parent.display()
-                )
-            );
-        }
-        if backups_location.is_absolute() {
-            ensure!(
-                backups_parent.exists(),
-                format!("Backups directory parent ({}) does not exist", backups_parent.display())
-            );
-        }
-        // TODO: portable mode as fallback?
-        fs::create_dir_all(&downloads_location).context("Failed to create downloads directory")?;
-        fs::create_dir_all(&backups_location).context("Failed to create backups directory")?;
+        let app_dir =
+            self.settings_file_path.parent().context("Failed to get settings directory")?;
+        settings.prepare_directories(app_dir, portable_mode)?;
 
         self.save_settings(&settings)?;
         info!("Default settings loaded and saved");

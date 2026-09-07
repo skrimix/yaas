@@ -30,6 +30,8 @@ Key architectural components:
 - `just gen`: Regenerate Rinf bindings (Dart/Rust FFI stubs).
 - `just test` | `just test-all`: Run Rust unit tests (`cargo test`). `test-all` includes ignored tests.
 - `flutter analyze`: Static analysis; keep output clean.
+- `just screenshots`: Refresh the six documentation screenshots in `screenshots/`.
+- `just screenshots build/screenshots`: Render UI previews with fixed sample data. See `tool/screenshots/README.md` for setup and adding scenes.
 - `just format` | `just format-dart` | `just format-rust`: Auto-format code.
 - `cargo clippy`: Lint Rust code.
 

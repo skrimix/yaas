@@ -1,0 +1,30 @@
+<svg xmlns="http://www.w3.org/2000/svg" width="1266" height="740" viewBox="0 0 1266 740">
+  <!-- The application content occupies x=1, y=28, width=1264, height=711. -->
+  <path d="M4 0H1262Q1266 0 1266 4V28H0V4Q0 0 4 0Z" fill="#181825"/>
+  <rect x="0.5" y="0.5" width="1265" height="739" rx="3.5" fill="none" stroke="#363545"/>
+  <!--
+    Breeze icons copyright KDE and licenced under the GNU LGPL version 3 or later.
+    https://develop.kde.org/frameworks/breeze-icons/
+    Recolored to match the title bar.
+    License texts are in licenses/.
+  -->
+  <g fill="#cdd6f4">
+    <!-- window-pin.svg -->
+    <g transform="translate(30 6)">
+      <path d="M11 2L5.854 7.146l-1.5-1.5-.708.708L6.293 9l-3.647 3.646.708.708L7 9.707l2.646 2.647.708-.708-1.5-1.5L14 5z"/>
+    </g>
+    <!-- window-minimize.svg -->
+    <g transform="translate(1196 6)">
+      <path d="M8 11.707l-6-6L2.707 5 8 10.293 13.293 5l.707.707-6 6z"/>
+    </g>
+    <!-- window-maximize.svg -->
+    <g transform="translate(1220 6)">
+      <path d="M8 4.293l-6 6 .707.707L8 5.707 13.293 11l.707-.707-6-6z"/>
+    </g>
+    <!-- window-close.svg -->
+    <g transform="translate(1244 6)">
+      <path d="m4 4 8 8m-8 0 8-8"/>
+      <path d="M 4,3.1523438 3.1523438,4 7.1523437,8 3.1523438,12 4,12.847656 8,8.8476563 12,12.847656 12.847656,12 8.8476563,8 12.847656,4 12,3.1523438 8,7.1523437 Z"/>
+    </g>
+  </g>
+</svg>

@@ -47,3 +47,7 @@ In portable mode, application data is stored alongside the app in `_portable_dat
 ## License
 
 This project is licensed under the MIT License. See `LICENSE` for details.
+
+The screenshots use [Breeze icons](https://develop.kde.org/frameworks/breeze-icons/)
+for window controls. The icons are copyright KDE and licensed under the GNU LGPL
+version 3 or later.

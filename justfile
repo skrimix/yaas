@@ -38,6 +38,10 @@ test:
 test-all:
     cargo test -- --include-ignored
 
+# Refresh documentation screenshots, or pass a directory for previews
+screenshots output="screenshots":
+    dart run tool/screenshots.dart "{{output}}"
+
 # Format Rust code
 format-rust:
     cargo +nightly fmt

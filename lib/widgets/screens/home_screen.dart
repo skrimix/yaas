@@ -284,75 +284,66 @@ class _BatteryCard extends StatelessWidget {
             ? scheme.error
             : scheme.primary;
     final batteryText = value == null ? '—' : '$value%';
-    return Tooltip(
-      message: [
-        title,
-        if (status != null) '${l10n.statusLabel}: $status',
-        '${l10n.batteryLabel}: $batteryText'
-            '${isCharging ? ' (${l10n.chargingLabel})' : ''}',
-      ].join('\n'),
-      child: Card(
-        margin: EdgeInsets.zero,
-        elevation: 0,
-        shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(20)),
-        child: Padding(
-          padding: const EdgeInsets.all(20),
-          child: Column(
-            crossAxisAlignment: CrossAxisAlignment.start,
-            children: [
-              Row(
-                children: [
-                  SvgPicture.asset(
-                    'assets/svg/$asset.svg',
-                    width: 22,
-                    height: 22,
-                    colorFilter: ColorFilter.mode(
-                        scheme.onSurfaceVariant, BlendMode.srcIn),
-                  ),
-                  const SizedBox(width: 10),
-                  Expanded(
-                      child: Text(title, style: theme.textTheme.labelLarge)),
-                ],
-              ),
-              const SizedBox(height: 20),
-              Row(
-                children: [
-                  Flexible(
-                    child: Text(batteryText,
-                        style: theme.textTheme.headlineMedium?.copyWith(
-                          color: isActive ? scheme.onSurface : scheme.outline,
-                        )),
-                  ),
-                  if (isCharging) ...[
-                    const SizedBox(width: 4),
-                    Icon(Icons.bolt,
-                        key: const ValueKey('headset-charging-badge'),
-                        size: 20,
-                        color: scheme.primary),
-                  ],
-                ],
-              ),
-              const SizedBox(height: 4),
-              Text(
-                isCharging ? l10n.chargingLabel : status ?? l10n.batteryLabel,
-                style: theme.textTheme.bodySmall?.copyWith(
-                  color: scheme.onSurfaceVariant,
+    return Card(
+      margin: EdgeInsets.zero,
+      elevation: 0,
+      shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(20)),
+      child: Padding(
+        padding: const EdgeInsets.all(20),
+        child: Column(
+          crossAxisAlignment: CrossAxisAlignment.start,
+          children: [
+            Row(
+              children: [
+                SvgPicture.asset(
+                  'assets/svg/$asset.svg',
+                  width: 22,
+                  height: 22,
+                  colorFilter: ColorFilter.mode(
+                      scheme.onSurfaceVariant, BlendMode.srcIn),
                 ),
+                const SizedBox(width: 10),
+                Expanded(child: Text(title, style: theme.textTheme.labelLarge)),
+              ],
+            ),
+            const SizedBox(height: 20),
+            Row(
+              children: [
+                Flexible(
+                  child: Text(batteryText,
+                      style: theme.textTheme.headlineMedium?.copyWith(
+                        color: isActive ? scheme.onSurface : scheme.outline,
+                      )),
+                ),
+                if (isCharging) ...[
+                  const SizedBox(width: 4),
+                  Icon(Icons.bolt,
+                      key: const ValueKey('headset-charging-badge'),
+                      size: 20,
+                      color: scheme.primary),
+                ],
+              ],
+            ),
+            const SizedBox(height: 4),
+            Text(
+              isCharging ? l10n.chargingLabel : status ?? l10n.batteryLabel,
+              style: theme.textTheme.bodySmall?.copyWith(
+                color: scheme.onSurfaceVariant,
               ),
-              const SizedBox(height: 16),
-              if (value != null)
-                LinearProgressIndicator(
-                  value: value / 100,
-                  semanticsLabel: '$title: ${l10n.batteryLabel}',
-                  minHeight: 5,
-                  borderRadius: BorderRadius.circular(3),
-                  color: color,
-                  backgroundColor: scheme.surfaceContainerHighest,
-                )
-              else
-                const SizedBox(height: 5),
-            ],
-          ),
+            ),
+            const SizedBox(height: 16),
+            if (value != null)
+              LinearProgressIndicator(
+                value: value / 100,
+                semanticsLabel: '$title: ${l10n.batteryLabel}',
+                minHeight: 5,
+                borderRadius: BorderRadius.circular(3),
+                color: color,
+                backgroundColor: scheme.surfaceContainerHighest,
+              )
+            else
+              const SizedBox(height: 5),
+          ],
         ),
       ),
     );
@@ -417,8 +408,7 @@ class _StorageOverview extends StatelessWidget {
             const SizedBox(height: 10),
             Text(
               total > 0
-                  ? l10n.storageTooltip(
-                      _formatSize(available), _formatSize(total))
+                  ? '${l10n.detailsTotal} ${_formatSize(total)}'
                   : l10n.deviceStorageStatusUnknown,
               style: theme.textTheme.bodySmall?.copyWith(
                 color: theme.colorScheme.onSurfaceVariant,

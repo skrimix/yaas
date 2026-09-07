@@ -586,13 +586,13 @@ impl AdbDevice {
     #[instrument(level = "debug", skip(self), err)]
     async fn query_usb_state(&self) -> Result<(Option<bool>, Option<String>)> {
         let functions = self
-            .shell_checked("svc usb getFunctions")
+            .shell_checked("svc usb getFunctions 2>&1")
             .await
             .context("Failed to query USB functions")?;
         let storage_connected = Some(functions.split(',').any(|function| function.trim() == "mtp"));
         let speed = if !self.is_wireless {
             let output = self
-                .shell_checked("svc usb getUsbSpeed")
+                .shell_checked("svc usb getUsbSpeed 2>&1")
                 .await
                 .context("Failed to query USB speed")?;
             format_usb_speed(&output)

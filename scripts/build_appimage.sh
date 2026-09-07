@@ -62,8 +62,22 @@ chmod +x "$app"
 "$SCRIPT_DIR/bundle_7zip.sh" squashfs-root/usr/bin
 "$SCRIPT_DIR/bundle_adb.sh" squashfs-root/usr/bin
 
-sed -i '/^exec/i export PATH="$PWD/usr/bin:$PATH"' squashfs-root/AppRun
-sed -i '/^exec /{/\"\$@\"/!s/$/ "$@"/}' squashfs-root/AppRun
+# Dart opens libmpv.so, while the video plugin links the versioned library.
+# Both names must load the same bundled copy.
+mpv_libraries=(squashfs-root/usr/lib/libmpv.so.*)
+if (( ${#mpv_libraries[@]} != 1 )); then
+  echo "Expected one bundled libmpv library, found ${#mpv_libraries[@]}" >&2
+  exit 1
+fi
+ln -sfn "$(basename "${mpv_libraries[0]}")" squashfs-root/usr/lib/libmpv.so
+
+# ALSA needs an absolute library path when it reopens itself for config hooks.
+# AppRun expands these variables at launch.
+# shellcheck disable=SC2016
+sed -i \
+  -e 's|^export LD_LIBRARY_PATH=.*|export LD_LIBRARY_PATH="$PWD/usr/lib"|' \
+  -e '/^exec/i export PATH="$PWD/usr/bin:$PATH"' \
+  -e '/^exec /{/\"\$@\"/!s/$/ "$@"/}' squashfs-root/AppRun
 cat squashfs-root/AppRun
 
 appimagetool --no-appstream squashfs-root "$app"

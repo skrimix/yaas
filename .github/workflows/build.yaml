@@ -203,6 +203,12 @@ jobs:
             flutter build -v ${{ matrix.target }} --release --no-pub
           fi
 
+      - name: Bundle Rust debug symbols (Windows)
+        if: matrix.target == 'windows'
+        shell: bash
+        run: |
+          cp build/windows/x64/plugins/rinf/Release/hub.pdb "${{ matrix.build-path }}"
+
       - name: Setup 7-Zip (Windows)
         if: matrix.target == 'windows'
         uses: milliewalky/setup-7-zip@v2

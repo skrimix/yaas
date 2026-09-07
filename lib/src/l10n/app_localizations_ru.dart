@@ -94,7 +94,7 @@ class AppLocalizationsRu extends AppLocalizations {
   String get settingsDownloadsLocation => 'Папка загрузок';
 
   @override
-  String get settingsBackupsLocation => 'Папка резервных копий';
+  String get settingsBackupsLocation => 'Папка бэкапов';
 
   @override
   String get settingsSectionAdb => 'ADB';
@@ -124,15 +124,15 @@ class AppLocalizationsRu extends AppLocalizations {
 
   @override
   String get settingsAutoReinstallOnConflictHelp =>
-      'Автоматически создавать резервную копию, переустанавливать и восстанавливать при конфликте версий (откат или несовместимое обновление). Требуется отладочная версия приложения.';
+      'Автоматически создавать бэкап, переустанавливать и восстанавливать при конфликте версий (откат или несовместимое обновление). Требуется отладочная версия приложения.';
 
   @override
   String get settingsAutoBackupOnUninstall =>
-      'Копировать данные приложения перед удалением';
+      'Создавать бэкап данных приложения перед удалением';
 
   @override
   String get settingsAutoBackupOnUninstallHelp =>
-      'Создавать резервную копию доступных данных перед удалением приложения. Внутренние данные копируются только если к ним есть доступ. При ошибке копирования удаление отменяется.';
+      'Создавать бэкап доступных данных перед удалением приложения. Внутренние данные копируются только если к ним есть доступ. При ошибке создания бэкапа удаление отменяется.';
 
   @override
   String get settingsSectionDownloader => 'Загрузчик';
@@ -642,7 +642,7 @@ class AppLocalizationsRu extends AppLocalizations {
 
   @override
   String get connectDeviceToRestore =>
-      'Подключите устройство, чтобы восстанавливать резервные копии';
+      'Подключите устройство, чтобы восстанавливать бэкапы';
 
   @override
   String get batteryDumpCopied =>
@@ -976,10 +976,10 @@ class AppLocalizationsRu extends AppLocalizations {
   String get forceStop => 'Принудительно остановить';
 
   @override
-  String get backupApp => 'Резервное копирование';
+  String get backupApp => 'Создать бэкап';
 
   @override
-  String get backup => 'Резервная копия';
+  String get backup => 'Бэкап';
 
   @override
   String get uninstall => 'Удалить';
@@ -1290,10 +1290,10 @@ class AppLocalizationsRu extends AppLocalizations {
   String get noTrailer => 'Трейлер не доступен';
 
   @override
-  String get backupsTitle => 'Резервные копии';
+  String get backupsTitle => 'Бэкапы';
 
   @override
-  String get openBackupsFolder => 'Открыть папку резервных копий';
+  String get openBackupsFolder => 'Открыть папку бэкапов';
 
   @override
   String get openDownloadsFolder => 'Открыть папку загрузок';
@@ -1328,7 +1328,7 @@ class AppLocalizationsRu extends AppLocalizations {
   String get downloadDeletedTitle => 'Загрузка удалена';
 
   @override
-  String get noBackupsFound => 'Резервные копии не найдены.';
+  String get noBackupsFound => 'Бэкапы не найдены.';
 
   @override
   String get noDownloadsFound => 'Загрузки не найдены.';
@@ -1366,7 +1366,7 @@ class AppLocalizationsRu extends AppLocalizations {
   String get noPartsDetected => 'Компоненты не обнаружены';
 
   @override
-  String get deleteBackupTitle => 'Удалить резервную копию';
+  String get deleteBackupTitle => 'Удалить бэкап';
 
   @override
   String deleteBackupConfirm(String name) {
@@ -1374,7 +1374,7 @@ class AppLocalizationsRu extends AppLocalizations {
   }
 
   @override
-  String get backupDeletedTitle => 'Резервная копия удалена';
+  String get backupDeletedTitle => 'Бэкап удалён';
 
   @override
   String get fatalErrorTitle => 'Критическая ошибка';
@@ -1487,10 +1487,10 @@ class AppLocalizationsRu extends AppLocalizations {
   String get taskKindUninstall => 'Удалить';
 
   @override
-  String get taskKindBackupApp => 'Резервное копирование';
+  String get taskKindBackupApp => 'Создание бэкапа';
 
   @override
-  String get taskKindRestoreBackup => 'Восстановление из копии';
+  String get taskKindRestoreBackup => 'Восстановление из бэкапа';
 
   @override
   String get taskKindDonateApp => 'Пожертвование';
@@ -1514,10 +1514,10 @@ class AppLocalizationsRu extends AppLocalizations {
   String get taskUnknown => 'Неизвестно';
 
   @override
-  String get backupOptionsTitle => 'Параметры резервного копирования';
+  String get backupOptionsTitle => 'Параметры бэкапа';
 
   @override
-  String get backupSelectParts => 'Выберите части для копирования:';
+  String get backupSelectParts => 'Выберите части для бэкапа:';
 
   @override
   String get backupAppData => 'Данные приложения';
@@ -1535,7 +1535,7 @@ class AppLocalizationsRu extends AppLocalizations {
   String get backupNameSuffixHint => 'например: перед обновлением';
 
   @override
-  String get startBackup => 'Начать копирование';
+  String get startBackup => 'Создать бэкап';
 
   @override
   String get logsSearchTooltip =>
@@ -1607,14 +1607,14 @@ class AppLocalizationsRu extends AppLocalizations {
 
   @override
   String uninstallWithBackupConfirmMessage(String app) {
-    return 'Удалить \"$app\"?\n\nСначала попробуем создать резервную копию данных приложения.';
+    return 'Удалить \"$app\"?\n\nСначала попробуем создать бэкап данных приложения.';
   }
 
   @override
-  String get uninstallSkipBackup => 'Пропустить резервное копирование';
+  String get uninstallSkipBackup => 'Пропустить создание бэкапа';
 
   @override
-  String get backingUpAndUninstalling => 'Копирование и удаление...';
+  String get backingUpAndUninstalling => 'Создание бэкапа и удаление...';
 
   @override
   String get uninstalling => 'Удаление...';

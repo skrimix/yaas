@@ -22,8 +22,75 @@ concurrency:
   cancel-in-progress: true
 
 jobs:
+  prepare:
+    name: Prepare Flutter project files
+    runs-on: macos-latest
+    permissions:
+      contents: write
+    outputs:
+      sha: ${{ steps.commit.outputs.sha }}
+    steps:
+      - name: Normalize Git
+        run: |
+          git config --global core.autocrlf false
+          git config --global core.filemode false
+
+      - name: Checkout source commit
+        uses: actions/checkout@v4
+        with:
+          ref: ${{ github.sha }}
+          submodules: true
+
+      - name: Setup Flutter SDK
+        uses: subosito/flutter-action@v2
+        with:
+          flutter-version: "3.47.0"
+          cache: true
+
+      - name: Generate and migrate Flutter files without compiling
+        run: |
+          flutter config --enable-linux-desktop --enable-windows-desktop --enable-macos-desktop
+          flutter pub get --enforce-lockfile
+          flutter gen-l10n
+          flutter build macos --config-only --release --no-pub
+
+      - name: Commit Flutter file updates before building
+        id: commit
+        env:
+          CAN_PUSH: ${{ github.ref == 'refs/heads/master' && (github.event_name == 'push' || github.event_name == 'workflow_dispatch') }}
+        run: |
+          git add -- \
+            linux/flutter/generated_plugin_registrant.cc \
+            linux/flutter/generated_plugin_registrant.h \
+            linux/flutter/generated_plugins.cmake \
+            windows/flutter/generated_plugin_registrant.cc \
+            windows/flutter/generated_plugin_registrant.h \
+            windows/flutter/generated_plugins.cmake \
+            macos/Flutter/GeneratedPluginRegistrant.swift \
+            macos/Podfile \
+            macos/Podfile.lock \
+            macos/Runner.xcodeproj/project.pbxproj \
+            macos/Runner.xcodeproj/xcshareddata/xcschemes/Runner.xcscheme \
+            'lib/src/l10n/app_localizations*.dart'
+          # Only generated code and known Flutter project migrations are staged.
+          git diff --exit-code
+
+          if ! git diff --cached --quiet; then
+            if [[ "$CAN_PUSH" != "true" ]]; then
+              echo "::error::Commit the Flutter file updates before building this ref."
+              git diff --cached --exit-code
+            fi
+            git config user.name "github-actions[bot]"
+            git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
+            git commit -m "Update Flutter project files"
+            # A normal push rejects updates if master has advanced.
+            git push origin HEAD:refs/heads/master
+          fi
+          echo "sha=$(git rev-parse HEAD)" >> "$GITHUB_OUTPUT"
+
   build:
     name: ${{ matrix.target }}
+    needs: prepare
     runs-on: ${{ matrix.runner }}-latest
     strategy:
       fail-fast: false
@@ -50,6 +117,7 @@ jobs:
       - name: Checkout repository
         uses: actions/checkout@v4
         with:
+          ref: ${{ needs.prepare.outputs.sha }}
           fetch-depth: 0
           clean: true
           submodules: true
@@ -120,6 +188,12 @@ jobs:
         shell: bash
         run: rinf gen
 
+      - name: Prepare platform configuration without compiling
+        run: flutter build ${{ matrix.target }} --config-only --release --no-pub
+
+      - name: Check that tracked files are unchanged before building
+        run: git diff --exit-code HEAD
+
       - name: Build the app
         shell: bash
         run: |
@@ -167,9 +241,8 @@ jobs:
           cd build/macos/Build/Products/Release
           zip -yr YAAS-macos.zip *.app
 
-      - name: Check that tracked files are unchanged
-        shell: bash
-        run: git diff --exit-code
+      - name: Check that tracked files are unchanged after building
+        run: git diff --exit-code HEAD
 
       - name: Upload Artifact
         uses: actions/upload-artifact@v4
@@ -180,7 +253,7 @@ jobs:
 
   publish:
     name: Publish Nightly
-    needs: build
+    needs: [prepare, build]
     runs-on: ubuntu-latest
     if: ${{ (github.event_name == 'push' && github.ref == 'refs/heads/master') || github.event_name == 'workflow_dispatch' }}
     permissions:
@@ -193,6 +266,7 @@ jobs:
       - name: Checkout repository
         uses: actions/checkout@v4
         with:
+          ref: ${{ needs.prepare.outputs.sha }}
           fetch-depth: 0
 
       - name: Download build artifacts
@@ -237,7 +311,7 @@ jobs:
         run: |
           git config user.name "github-actions"
           git config user.email "github-actions@github.com"
-          git tag -f nightly ${{ github.sha }}
+          git tag -f nightly ${{ needs.prepare.outputs.sha }}
           git push -f origin nightly
 
       - name: Update CI Nightly pre-release
@@ -250,7 +324,7 @@ jobs:
           removeArtifacts: true
           replacesArtifacts: true
           body: |
-            Nightly build for ${{ github.sha }}
+            Nightly build for ${{ needs.prepare.outputs.sha }}
             Published at ${{ env.PUBLISH_DATE }}
             Trigger: ${{ github.event_name }}
           artifacts: "release/*"

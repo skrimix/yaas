@@ -85,6 +85,7 @@
     }
   },
   "downloaderSourceNoSelection": "No active source selected",
+  "downloaderSourceInvalid": "Invalid source",
   "downloaderConfigTemplateVrgRus": "VR Games RUS",
   "downloaderConfigTemplateVrgRusHint": "CIS countries only",
   "downloaderConfigTemplateNif": "NIF",

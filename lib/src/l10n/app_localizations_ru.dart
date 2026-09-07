@@ -194,6 +194,9 @@ class AppLocalizationsRu extends AppLocalizations {
   String get downloaderSourceNoSelection => 'Активный источник не выбран';
 
   @override
+  String get downloaderSourceInvalid => 'Некорректный источник';
+
+  @override
   String get downloaderConfigTemplateVrgRus => 'VR Games RUS';
 
   @override

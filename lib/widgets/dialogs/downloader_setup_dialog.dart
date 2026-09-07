@@ -180,11 +180,14 @@ class _DownloaderSetupDialogState extends State<DownloaderSetupDialog> {
     String? selectedId,
     bool enabled,
   ) {
-    final selected = source.id == selectedId;
+    final error = source.error;
+    final valid = error == null;
+    final selected = valid && source.id == selectedId;
     final theme = Theme.of(context);
     final colorScheme = theme.colorScheme;
     final isRemoving = _removingSourceId == source.id;
-    final showRemoveAction = isRemoving || _hoveredSourceId == source.id;
+    final showRemoveAction =
+        !valid || isRemoving || _hoveredSourceId == source.id;
 
     return MouseRegion(
       onEnter: (_) {
@@ -208,7 +211,7 @@ class _DownloaderSetupDialogState extends State<DownloaderSetupDialog> {
         borderRadius: BorderRadius.circular(12),
         child: InkWell(
           borderRadius: BorderRadius.circular(12),
-          onTap: enabled && !selected
+          onTap: enabled && valid && !selected
               ? () {
                   context
                       .read<SettingsState>()
@@ -223,7 +226,13 @@ class _DownloaderSetupDialogState extends State<DownloaderSetupDialog> {
               children: [
                 Padding(
                   padding: const EdgeInsets.only(top: 2),
-                  child: Radio<String>(value: source.id),
+                  child: valid
+                      ? Radio<String>(value: source.id, enabled: enabled)
+                      : SizedBox.square(
+                          dimension: 48,
+                          child: Icon(Icons.warning_amber_rounded,
+                              color: colorScheme.error),
+                        ),
                 ),
                 const SizedBox(width: 8),
                 Expanded(
@@ -248,6 +257,24 @@ class _DownloaderSetupDialogState extends State<DownloaderSetupDialog> {
                           text: source.description,
                           style: theme.textTheme.bodySmall?.copyWith(
                             color: colorScheme.onSurfaceVariant,
+                          ),
+                        ),
+                      ],
+                      if (error != null) ...[
+                        const SizedBox(height: 6),
+                        Text(
+                          AppLocalizations.of(context).downloaderSourceInvalid,
+                          style: theme.textTheme.bodySmall?.copyWith(
+                            color: colorScheme.error,
+                            fontWeight: FontWeight.w600,
+                          ),
+                        ),
+                        const SizedBox(height: 2),
+                        buildCopyableText(
+                          context,
+                          error,
+                          style: theme.textTheme.bodySmall?.copyWith(
+                            color: colorScheme.error,
                           ),
                         ),
                       ],

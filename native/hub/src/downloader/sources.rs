@@ -20,25 +20,14 @@ const MANAGED_CONFIGS_DIR: &str = "downloader_configs";
 #[derive(Debug, Clone, Default)]
 pub(crate) struct SourceSnapshot {
     pub(crate) configs: Vec<DownloaderConfig>,
+    pub(crate) installed_configs: Vec<InstalledDownloaderConfig>,
     pub(crate) active_config_id: Option<String>,
-    pub(crate) warnings: Vec<String>,
 }
 
 impl SourceSnapshot {
     pub(crate) fn active_config(&self) -> Option<DownloaderConfig> {
         let active_config_id = self.active_config_id.as_deref()?;
         self.configs.iter().find(|cfg| cfg.id == active_config_id).cloned()
-    }
-
-    pub(crate) fn installed_configs(&self) -> Vec<InstalledDownloaderConfig> {
-        self.configs
-            .iter()
-            .map(|cfg| InstalledDownloaderConfig {
-                id: cfg.id.clone(),
-                display_name: cfg.effective_display_name(),
-                description: cfg.effective_description(),
-            })
-            .collect()
     }
 }
 
@@ -80,7 +69,11 @@ impl SourceStore {
             current_active_config_id(&self.settings_handler),
         );
 
-        Ok(SourceSnapshot { configs: loaded.configs, active_config_id, warnings: loaded.warnings })
+        Ok(SourceSnapshot {
+            configs: loaded.configs,
+            installed_configs: loaded.installed_configs,
+            active_config_id,
+        })
     }
 
     pub(crate) fn persist_active_config(&self, sources: &SourceSnapshot) -> Result<()> {
@@ -106,6 +99,13 @@ impl SourceStore {
 
     pub(crate) fn remove(&self, config_id: &str) -> Result<()> {
         ensure!(!config_id.is_empty(), "Downloader config ID must not be empty");
+        ensure!(
+            !config_id.contains('/')
+                && !config_id.contains('\\')
+                && config_id != "."
+                && config_id != "..",
+            "Downloader config ID must be a safe file name"
+        );
 
         let path = managed_config_path(&self.app_dir, config_id);
         ensure!(path.exists(), "Downloader config is not installed: {config_id}");
@@ -216,7 +216,7 @@ impl Drop for CacheLease {
 
 struct ReadConfigs {
     configs: Vec<DownloaderConfig>,
-    warnings: Vec<String>,
+    installed_configs: Vec<InstalledDownloaderConfig>,
 }
 
 pub(crate) fn managed_configs_dir(app_dir: &Path) -> PathBuf {
@@ -273,11 +273,11 @@ fn is_http_url(value: &str) -> bool {
 fn read_configs(app_dir: &Path) -> Result<ReadConfigs> {
     let dir = managed_configs_dir(app_dir);
     if !dir.exists() {
-        return Ok(ReadConfigs { configs: Vec::new(), warnings: Vec::new() });
+        return Ok(ReadConfigs { configs: Vec::new(), installed_configs: Vec::new() });
     }
 
     let mut configs = Vec::new();
-    let mut ignored = Vec::new();
+    let mut installed_configs = Vec::new();
 
     for entry in fs::read_dir(&dir).with_context(|| format!("Failed to read {}", dir.display()))? {
         let entry = entry.with_context(|| format!("Failed to read entry in {}", dir.display()))?;
@@ -285,36 +285,58 @@ fn read_configs(app_dir: &Path) -> Result<ReadConfigs> {
         if path.extension().and_then(|value| value.to_str()) != Some("json") {
             continue;
         }
+        if entry.file_type()?.is_dir() {
+            continue;
+        }
+        let id = path.file_stem().unwrap_or_default().to_string_lossy().into_owned();
 
         match DownloaderConfig::load_from_path(&path).and_then(|cfg| {
             cfg.validate_managed_remote(None)?;
+            ensure!(cfg.id == id, "Downloader config ID does not match its file name: {}", cfg.id);
             Ok(cfg)
         }) {
-            Ok(cfg) => configs.push(cfg),
+            Ok(cfg) => {
+                installed_configs.push(InstalledDownloaderConfig {
+                    id: cfg.id.clone(),
+                    display_name: cfg.effective_display_name(),
+                    description: cfg.effective_description(),
+                    error: None,
+                });
+                configs.push(cfg);
+            }
             Err(e) => {
                 warn!(
                     error = e.as_ref() as &dyn Error,
                     path = %path.display(),
-                    "Ignoring invalid managed downloader config"
+                    "Invalid managed downloader config"
                 );
-                ignored.push(format!(
-                    "{}: {:#}",
-                    path.file_name().and_then(|value| value.to_str()).unwrap_or("unknown"),
-                    e
-                ));
+                let metadata = fs::read(&path)
+                    .ok()
+                    .and_then(|content| serde_json::from_slice::<serde_json::Value>(&content).ok());
+                let display_name = metadata
+                    .as_ref()
+                    .and_then(|value| value.get("display_name"))
+                    .and_then(|value| value.as_str())
+                    .map(str::trim)
+                    .filter(|value| !value.is_empty())
+                    .map(str::to_owned)
+                    .unwrap_or_else(|| {
+                        path.file_name().unwrap_or_default().to_string_lossy().into_owned()
+                    });
+                installed_configs.push(InstalledDownloaderConfig {
+                    id,
+                    display_name,
+                    description: String::new(),
+                    error: Some(format!("{e:#}")),
+                });
             }
         }
     }
 
     configs.sort_by(|left, right| left.id.cmp(&right.id));
+    installed_configs.sort_by(|left, right| left.id.cmp(&right.id));
 
-    let warnings = if ignored.is_empty() {
-        Vec::new()
-    } else {
-        vec![format!("Ignored invalid downloader sources: {}", ignored.join("; "))]
-    };
-
-    Ok(ReadConfigs { configs, warnings })
+    Ok(ReadConfigs { configs, installed_configs })
 }
 
 async fn cache_config_from_url(
@@ -571,6 +593,93 @@ mod tests {
         )
         .unwrap_err();
         assert!(format!("{:#}", err).contains("Downloader config ID already installed"));
+    }
+
+    #[tokio::test]
+    async fn invalid_sources_can_be_removed_and_reinstalled() {
+        for (id, content, name, error) in [
+            ("broken", "{ invalid json".to_string(), "broken.json", "Failed to parse"),
+            (
+                "missing-id",
+                r#"{"display_name": "Missing ID"}"#.to_string(),
+                "Missing ID",
+                "missing field",
+            ),
+            (
+                "invalid",
+                legacy_config_json_without_update_url("invalid"),
+                "invalid.json",
+                "config_update_url is required",
+            ),
+            (
+                "stored",
+                managed_config_json("healthy", "https://example.com/healthy.json"),
+                "Display healthy",
+                "ID does not match its file name",
+            ),
+        ] {
+            let dir = tempdir().unwrap();
+            let app_dir = dir.path().to_path_buf();
+            let settings = SettingsHandler::new(app_dir.clone(), true).unwrap();
+            let sources = SourceStore::new(app_dir.clone(), settings.clone());
+            fs::create_dir_all(managed_configs_dir(&app_dir)).unwrap();
+            let healthy = managed_config_path(&app_dir, "healthy");
+            fs::write(&healthy, managed_config_json("healthy", "https://example.com/healthy.json"))
+                .unwrap();
+            let invalid = managed_config_path(&app_dir, id);
+            fs::write(&invalid, content).unwrap();
+            save_active_config_id(&settings, Some(id)).unwrap();
+
+            let snapshot = sources.load().unwrap();
+            assert_eq!(snapshot.configs.len(), 1);
+            assert_eq!(snapshot.active_config_id.as_deref(), Some("healthy"));
+            assert!(sources.inactive_configs(&snapshot).is_empty());
+            assert_eq!(snapshot.installed_configs.len(), 2);
+            let entry = snapshot.installed_configs.iter().find(|cfg| cfg.id == id).unwrap();
+            assert_eq!(entry.display_name, name);
+            assert!(entry.error.as_deref().unwrap().contains(error));
+            assert!(sources.select_active(id).is_err());
+
+            let src = app_dir.join("replacement.json");
+            fs::write(&src, managed_config_json(id, "https://example.com/config.json")).unwrap();
+            assert!(write_managed_config(&app_dir, &src, None, None, true).is_err());
+
+            sources.remove(&entry.id).unwrap();
+            assert!(!invalid.exists());
+            assert!(healthy.exists());
+            let remaining = sources.load().unwrap();
+            assert_eq!(remaining.installed_configs.len(), 1);
+            assert!(remaining.installed_configs[0].error.is_none());
+
+            write_managed_config(&app_dir, &src, None, None, true).unwrap();
+            let reinstalled = sources.load().unwrap();
+            assert_eq!(reinstalled.configs.len(), 2);
+            assert!(reinstalled.installed_configs.iter().all(|cfg| cfg.error.is_none()));
+            sources.select_active(id).unwrap();
+            assert_eq!(sources.load().unwrap().active_config_id.as_deref(), Some(id));
+        }
+    }
+
+    #[tokio::test]
+    async fn removing_only_invalid_source_leaves_no_sources() {
+        let dir = tempdir().unwrap();
+        let app_dir = dir.path().to_path_buf();
+        let settings = SettingsHandler::new(app_dir.clone(), true).unwrap();
+        let sources = SourceStore::new(app_dir.clone(), settings.clone());
+        fs::create_dir_all(managed_configs_dir(&app_dir)).unwrap();
+        fs::write(managed_config_path(&app_dir, "broken"), "invalid json").unwrap();
+        save_active_config_id(&settings, Some("broken")).unwrap();
+
+        let snapshot = sources.load().unwrap();
+        assert_eq!(snapshot.installed_configs.len(), 1);
+        assert!(snapshot.active_config().is_none());
+        sources.persist_active_config(&snapshot).unwrap();
+        assert!(current_active_config_id(&settings).is_empty());
+
+        sources.remove("broken").unwrap();
+        let snapshot = sources.load().unwrap();
+        assert!(snapshot.installed_configs.is_empty());
+        assert!(snapshot.active_config().is_none());
     }
 
     #[tokio::test(flavor = "multi_thread")]

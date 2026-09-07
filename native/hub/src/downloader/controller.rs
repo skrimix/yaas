@@ -426,7 +426,7 @@ impl DownloaderController {
         );
 
         self.spawn_request_handler(|controller, req: RemoveDownloaderSourceRequest| async move {
-            let config_id = req.config_id.trim().to_string();
+            let config_id = req.config_id;
             debug!(config_id = %config_id, "Received RemoveDownloaderSourceRequest");
             controller.remove_source(config_id).await;
         });
@@ -507,13 +507,11 @@ impl DownloaderAvailabilityReporter {
 }
 
 fn send_sources_changed(sources: &SourceSnapshot, refreshing: bool, extra_warnings: &[String]) {
-    let mut warnings = sources.warnings.clone();
-    warnings.extend(extra_warnings.iter().cloned());
     DownloaderSourcesChanged {
-        configs: sources.installed_configs(),
+        configs: sources.installed_configs.clone(),
         active_config_id: sources.active_config_id.clone(),
         refreshing,
-        error: warnings_to_message(&warnings),
+        error: warnings_to_message(extra_warnings),
     }
     .send_signal_to_dart();
 }

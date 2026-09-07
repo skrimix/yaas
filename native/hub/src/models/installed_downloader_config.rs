@@ -6,4 +6,5 @@ pub(crate) struct InstalledDownloaderConfig {
     pub id: String,
     pub display_name: String,
     pub description: String,
+    pub error: Option<String>,
 }

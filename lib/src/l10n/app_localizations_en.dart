@@ -192,6 +192,9 @@ class AppLocalizationsEn extends AppLocalizations {
   String get downloaderSourceNoSelection => 'No active source selected';
 
   @override
+  String get downloaderSourceInvalid => 'Invalid source';
+
+  @override
   String get downloaderConfigTemplateVrgRus => 'VR Games RUS';
 
   @override

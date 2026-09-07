@@ -434,6 +434,12 @@ abstract class AppLocalizations {
   /// **'No active source selected'**
   String get downloaderSourceNoSelection;
 
+  /// No description provided for @downloaderSourceInvalid.
+  ///
+  /// In en, this message translates to:
+  /// **'Invalid source'**
+  String get downloaderSourceInvalid;
+
   /// No description provided for @downloaderConfigTemplateVrgRus.
   ///
   /// In en, this message translates to:

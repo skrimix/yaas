@@ -860,12 +860,14 @@ impl AdbDevice {
 
     #[instrument(level = "debug", skip(self), ret, err)]
     async fn ip_from_route(&self) -> Result<Option<Ipv4Addr>> {
-        let output = self
-            .shell_checked("ip route | grep wlan0")
-            .await
-            .context("'ip route' command failed")?;
+        let output = self.shell_checked("ip route").await.context("'ip route' command failed")?;
+        let line = output.lines().find(|l| l.contains("wlan0"));
 
-        let caps = match regex!(r"src ((?:\d{1,3}\.){3}\d{1,3})").captures(&output) {
+        if line.is_none() {
+            return Ok(None);
+        }
+
+        let caps = match regex!(r"src ((?:\d{1,3}\.){3}\d{1,3})").captures(line.unwrap()) {
             Some(caps) => caps,
             None => return Ok(None),
         };

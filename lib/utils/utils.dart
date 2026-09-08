@@ -13,10 +13,8 @@ void copyToClipboard(BuildContext context, String text,
   toastification.show(
     type: ToastificationType.success,
     style: ToastificationStyle.flat,
-    title: title != null
-        ? Text(title)
-        : Text(AppLocalizations.of(context).copiedToClipboard),
-    description: description != null ? Text(description) : null,
+    title: ToastText(title ?? AppLocalizations.of(context).copiedToClipboard),
+    description: description != null ? ToastText(description) : null,
     autoCloseDuration: autoCloseDuration ?? const Duration(seconds: 2),
     backgroundColor: Theme.of(context).colorScheme.surfaceContainer,
     borderSide: BorderSide.none,
@@ -29,6 +27,7 @@ Widget buildCopyableText(
   String text, {
   bool showTooltip = true,
   bool showIconOnHover = false,
+  bool showCopyToast = true,
   String? copyText,
   String? tooltipMessage,
   TextStyle? style,
@@ -38,7 +37,13 @@ Widget buildCopyableText(
   final value = copyText ?? text;
   final child = _CopyableTextAction(
     showIconOnHover: showIconOnHover,
-    onTap: () => copyToClipboard(context, value, description: value),
+    onTap: () {
+      if (showCopyToast) {
+        copyToClipboard(context, value, description: value);
+      } else {
+        Clipboard.setData(ClipboardData(text: value));
+      }
+    },
     child: Text(
       text,
       style: style,
@@ -54,6 +59,27 @@ Widget buildCopyableText(
     waitDuration: const Duration(milliseconds: 300),
     child: child,
   );
+}
+
+/// Toast text with a full-text tooltip and click-to-copy support.
+class ToastText extends StatelessWidget {
+  const ToastText(this.text, {super.key});
+
+  final String text;
+
+  @override
+  Widget build(BuildContext context) {
+    final textStyle = DefaultTextStyle.of(context);
+    return buildCopyableText(
+      context,
+      text,
+      showIconOnHover: true,
+      showCopyToast: false,
+      tooltipMessage: '$text\n\n${AppLocalizations.of(context).clickToCopy}',
+      maxLines: textStyle.maxLines,
+      overflow: textStyle.overflow,
+    );
+  }
 }
 
 class _CopyableTextAction extends StatefulWidget {

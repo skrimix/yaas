@@ -115,8 +115,8 @@ class StatusBar extends StatelessWidget {
               toastification.show(
                 type: ToastificationType.error,
                 style: ToastificationStyle.flat,
-                title: Text(l10n.commonError),
-                description: Text(l10n.batteryDumpFailed),
+                title: ToastText(l10n.commonError),
+                description: ToastText(l10n.batteryDumpFailed),
                 autoCloseDuration: const Duration(seconds: 3),
                 backgroundColor: Theme.of(context).colorScheme.surfaceContainer,
                 borderSide: BorderSide.none,

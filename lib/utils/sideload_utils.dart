@@ -59,8 +59,8 @@ class SideloadUtils {
     toastification.show(
       type: ToastificationType.error,
       style: ToastificationStyle.flat,
-      title: Text(AppLocalizations.of(context).commonError),
-      description: Text(message),
+      title: ToastText(AppLocalizations.of(context).commonError),
+      description: ToastText(message),
       autoCloseDuration: const Duration(seconds: 10),
       backgroundColor: Theme.of(context).colorScheme.surfaceContainer,
       borderSide: BorderSide.none,
@@ -73,8 +73,8 @@ class SideloadUtils {
     toastification.show(
       type: ToastificationType.info,
       style: ToastificationStyle.flat,
-      title: Text(title),
-      description: Text(description),
+      title: ToastText(title),
+      description: ToastText(description),
       autoCloseDuration: const Duration(seconds: 3),
       backgroundColor: Theme.of(context).colorScheme.surfaceContainer,
       borderSide: BorderSide.none,

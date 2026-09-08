@@ -13,6 +13,7 @@ import '../../providers/casting_state.dart';
 import '../../providers/device_state.dart';
 import '../../providers/settings_state.dart';
 import 'package:provider/provider.dart';
+import '../../utils/utils.dart';
 
 class DeviceActionsCard extends StatelessWidget {
   const DeviceActionsCard({super.key});
@@ -226,8 +227,8 @@ class _StorageConnectionToggleState extends State<_StorageConnectionToggle> {
     toastification.show(
       type: success ? ToastificationType.success : ToastificationType.error,
       style: ToastificationStyle.flat,
-      title: Text(success ? l10n.commonSuccess : l10n.commonError),
-      description: Text(description),
+      title: ToastText(success ? l10n.commonSuccess : l10n.commonError),
+      description: ToastText(description),
       autoCloseDuration: const Duration(seconds: 4),
       backgroundColor: Theme.of(context).colorScheme.surfaceContainer,
       borderSide: BorderSide.none,

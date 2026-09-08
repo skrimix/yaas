@@ -26,6 +26,7 @@ import 'providers/log_state.dart';
 import 'providers/app_state.dart';
 import 'navigation.dart';
 import 'widgets/common/status_bar.dart';
+import 'utils/utils.dart';
 import 'widgets/dialogs/active_tasks_close_dialog.dart';
 
 void main() async {
@@ -61,8 +62,8 @@ void main() async {
     final toast = message.message;
     toastification.show(
       type: toast.error ? ToastificationType.error : ToastificationType.success,
-      title: Text(toast.title),
-      description: Text(toast.description),
+      title: ToastText(toast.title),
+      description: ToastText(toast.description),
       autoCloseDuration: Duration(milliseconds: toast.duration ?? 3000),
       style: ToastificationStyle.flat,
       backgroundColor: null,

@@ -1949,38 +1949,62 @@ abstract class AppLocalizations {
   /// No description provided for @sortNameAsc.
   ///
   /// In en, this message translates to:
-  /// **'Name (A to Z)'**
+  /// **'Name A → Z'**
   String get sortNameAsc;
 
   /// No description provided for @sortNameDesc.
   ///
   /// In en, this message translates to:
-  /// **'Name (Z to A)'**
+  /// **'Name Z → A'**
   String get sortNameDesc;
 
   /// No description provided for @sortDateOldest.
   ///
   /// In en, this message translates to:
-  /// **'Date (Oldest first)'**
+  /// **'Oldest first'**
   String get sortDateOldest;
 
   /// No description provided for @sortDateNewest.
   ///
   /// In en, this message translates to:
-  /// **'Date (Newest first)'**
+  /// **'Newest first'**
   String get sortDateNewest;
 
   /// No description provided for @sortSizeSmallest.
   ///
   /// In en, this message translates to:
-  /// **'Size (Smallest first)'**
+  /// **'Size ↑'**
   String get sortSizeSmallest;
 
   /// No description provided for @sortSizeLargest.
   ///
   /// In en, this message translates to:
-  /// **'Size (Largest first)'**
+  /// **'Size ↓'**
   String get sortSizeLargest;
+
+  /// No description provided for @sortNameAscDescription.
+  ///
+  /// In en, this message translates to:
+  /// **'Name, A to Z'**
+  String get sortNameAscDescription;
+
+  /// No description provided for @sortNameDescDescription.
+  ///
+  /// In en, this message translates to:
+  /// **'Name, Z to A'**
+  String get sortNameDescDescription;
+
+  /// No description provided for @sortSizeSmallestDescription.
+  ///
+  /// In en, this message translates to:
+  /// **'Size, smallest first'**
+  String get sortSizeSmallestDescription;
+
+  /// No description provided for @sortSizeLargestDescription.
+  ///
+  /// In en, this message translates to:
+  /// **'Size, largest first'**
+  String get sortSizeLargestDescription;
 
   /// No description provided for @sortUpdateAvailableFirst.
   ///
@@ -3204,13 +3228,13 @@ abstract class AppLocalizations {
   /// No description provided for @sortPopularityMost.
   ///
   /// In en, this message translates to:
-  /// **'Popularity (Most popular)'**
+  /// **'Most popular'**
   String get sortPopularityMost;
 
   /// No description provided for @sortPopularityLeast.
   ///
   /// In en, this message translates to:
-  /// **'Popularity (Least popular)'**
+  /// **'Least popular'**
   String get sortPopularityLeast;
 
   /// No description provided for @lowSpaceWarningTitle.

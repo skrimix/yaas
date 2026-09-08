@@ -1041,22 +1041,34 @@ class AppLocalizationsEn extends AppLocalizations {
   String get sortBy => 'Sort by';
 
   @override
-  String get sortNameAsc => 'Name (A to Z)';
+  String get sortNameAsc => 'Name A → Z';
 
   @override
-  String get sortNameDesc => 'Name (Z to A)';
+  String get sortNameDesc => 'Name Z → A';
 
   @override
-  String get sortDateOldest => 'Date (Oldest first)';
+  String get sortDateOldest => 'Oldest first';
 
   @override
-  String get sortDateNewest => 'Date (Newest first)';
+  String get sortDateNewest => 'Newest first';
 
   @override
-  String get sortSizeSmallest => 'Size (Smallest first)';
+  String get sortSizeSmallest => 'Size ↑';
 
   @override
-  String get sortSizeLargest => 'Size (Largest first)';
+  String get sortSizeLargest => 'Size ↓';
+
+  @override
+  String get sortNameAscDescription => 'Name, A to Z';
+
+  @override
+  String get sortNameDescDescription => 'Name, Z to A';
+
+  @override
+  String get sortSizeSmallestDescription => 'Size, smallest first';
+
+  @override
+  String get sortSizeLargestDescription => 'Size, largest first';
 
   @override
   String get sortUpdateAvailableFirst =>
@@ -1713,10 +1725,10 @@ class AppLocalizationsEn extends AppLocalizations {
   }
 
   @override
-  String get sortPopularityMost => 'Popularity (Most popular)';
+  String get sortPopularityMost => 'Most popular';
 
   @override
-  String get sortPopularityLeast => 'Popularity (Least popular)';
+  String get sortPopularityLeast => 'Least popular';
 
   @override
   String get lowSpaceWarningTitle => 'Low Storage Space';

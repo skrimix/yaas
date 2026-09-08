@@ -527,12 +527,16 @@
         }
     },
     "sortBy": "Sort by",
-    "sortNameAsc": "Name (A to Z)",
-    "sortNameDesc": "Name (Z to A)",
-    "sortDateOldest": "Date (Oldest first)",
-    "sortDateNewest": "Date (Newest first)",
-    "sortSizeSmallest": "Size (Smallest first)",
-    "sortSizeLargest": "Size (Largest first)",
+    "sortNameAsc": "Name A → Z",
+    "sortNameDesc": "Name Z → A",
+    "sortDateOldest": "Oldest first",
+    "sortDateNewest": "Newest first",
+    "sortSizeSmallest": "Size ↑",
+    "sortSizeLargest": "Size ↓",
+    "sortNameAscDescription": "Name, A to Z",
+    "sortNameDescDescription": "Name, Z to A",
+    "sortSizeSmallestDescription": "Size, smallest first",
+    "sortSizeLargestDescription": "Size, largest first",
     "sortUpdateAvailableFirst": "Update availability (Available first)",
     "sortUpdateUnavailableFirst": "Update availability (Unavailable first)",
     "sortRelevance": "Relevance",
@@ -830,8 +834,8 @@
             "percent": {"type": "int"}
         }
     },
-    "sortPopularityMost": "Popularity (Most popular)",
-    "sortPopularityLeast": "Popularity (Least popular)",
+    "sortPopularityMost": "Most popular",
+    "sortPopularityLeast": "Least popular",
     "lowSpaceWarningTitle": "Low Storage Space",
     "lowSpaceWarningMessage": "This installation may leave less than {threshold} of free space on the device (<={remaining}). Do you want to continue?",
     "@lowSpaceWarningMessage": {

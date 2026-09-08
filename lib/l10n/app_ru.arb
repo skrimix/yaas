@@ -521,12 +521,16 @@
         }
     },
     "sortBy": "Сортировать по",
-    "sortNameAsc": "Имя (A → Z)",
-    "sortNameDesc": "Имя (Z → A)",
-    "sortDateOldest": "Дата (сначала старые)",
-    "sortDateNewest": "Дата (сначала новые)",
-    "sortSizeSmallest": "Размер (сначала меньшие)",
-    "sortSizeLargest": "Размер (сначала большие)",
+    "sortNameAsc": "Имя A → Z",
+    "sortNameDesc": "Имя Z → A",
+    "sortDateOldest": "Сначала старые",
+    "sortDateNewest": "Сначала новые",
+    "sortSizeSmallest": "Размер ↑",
+    "sortSizeLargest": "Размер ↓",
+    "sortNameAscDescription": "Имя, от A до Z",
+    "sortNameDescDescription": "Имя, от Z до A",
+    "sortSizeSmallestDescription": "Размер, сначала меньшие",
+    "sortSizeLargestDescription": "Размер, сначала большие",
     "sortUpdateAvailableFirst": "Обновления (сначала доступные)",
     "sortUpdateUnavailableFirst": "Обновления (сначала недоступные)",
     "sortRelevance": "Релевантность",
@@ -824,8 +828,8 @@
             "percent": {"type": "int"}
         }
     },
-    "sortPopularityMost": "Популярность (от большей)",
-    "sortPopularityLeast": "Популярность (от меньшей)",
+    "sortPopularityMost": "Самые популярные",
+    "sortPopularityLeast": "Наименее популярные",
     "lowSpaceWarningTitle": "Мало места на устройстве",
     "lowSpaceWarningMessage": "После установки на устройстве может остаться менее {threshold} свободного места (<={remaining}). Продолжить?",
     "@lowSpaceWarningMessage": {

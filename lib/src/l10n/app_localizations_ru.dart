@@ -1062,22 +1062,34 @@ class AppLocalizationsRu extends AppLocalizations {
   String get sortBy => 'Сортировать по';
 
   @override
-  String get sortNameAsc => 'Имя (A → Z)';
+  String get sortNameAsc => 'Имя A → Z';
 
   @override
-  String get sortNameDesc => 'Имя (Z → A)';
+  String get sortNameDesc => 'Имя Z → A';
 
   @override
-  String get sortDateOldest => 'Дата (сначала старые)';
+  String get sortDateOldest => 'Сначала старые';
 
   @override
-  String get sortDateNewest => 'Дата (сначала новые)';
+  String get sortDateNewest => 'Сначала новые';
 
   @override
-  String get sortSizeSmallest => 'Размер (сначала меньшие)';
+  String get sortSizeSmallest => 'Размер ↑';
 
   @override
-  String get sortSizeLargest => 'Размер (сначала большие)';
+  String get sortSizeLargest => 'Размер ↓';
+
+  @override
+  String get sortNameAscDescription => 'Имя, от A до Z';
+
+  @override
+  String get sortNameDescDescription => 'Имя, от Z до A';
+
+  @override
+  String get sortSizeSmallestDescription => 'Размер, сначала меньшие';
+
+  @override
+  String get sortSizeLargestDescription => 'Размер, сначала большие';
 
   @override
   String get sortUpdateAvailableFirst => 'Обновления (сначала доступные)';
@@ -1736,10 +1748,10 @@ class AppLocalizationsRu extends AppLocalizations {
   }
 
   @override
-  String get sortPopularityMost => 'Популярность (от большей)';
+  String get sortPopularityMost => 'Самые популярные';
 
   @override
-  String get sortPopularityLeast => 'Популярность (от меньшей)';
+  String get sortPopularityLeast => 'Наименее популярные';
 
   @override
   String get lowSpaceWarningTitle => 'Мало места на устройстве';

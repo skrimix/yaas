@@ -453,18 +453,29 @@ class _DownloadAppsScreenState extends State<DownloadAppsScreen> {
     }
 
     PopupMenuItem<(String, bool)> buildItem(
-        String key, bool ascending, String label) {
+      String key,
+      bool ascending,
+      String label, {
+      String? description,
+    }) {
+      final child = Row(
+        children: [
+          Icon(isSelected(key, ascending)
+              ? Icons.radio_button_checked
+              : Icons.radio_button_unchecked),
+          const SizedBox(width: 8),
+          Text(label, semanticsLabel: description),
+        ],
+      );
       return PopupMenuItem(
         value: (key, ascending),
-        child: Row(
-          children: [
-            Icon(isSelected(key, ascending)
-                ? Icons.radio_button_checked
-                : Icons.radio_button_unchecked),
-            const SizedBox(width: 8),
-            Text(label),
-          ],
-        ),
+        child: description == null
+            ? child
+            : Tooltip(
+                message: description,
+                excludeFromSemantics: true,
+                child: child,
+              ),
       );
     }
 
@@ -478,12 +489,16 @@ class _DownloadAppsScreenState extends State<DownloadAppsScreen> {
           child: Text(l10n.sortBy),
         ),
         if (isSearchMode) buildItem('relevance', true, l10n.sortRelevance),
-        buildItem('name', true, l10n.sortNameAsc),
-        buildItem('name', false, l10n.sortNameDesc),
+        buildItem('name', true, l10n.sortNameAsc,
+            description: l10n.sortNameAscDescription),
+        buildItem('name', false, l10n.sortNameDesc,
+            description: l10n.sortNameDescDescription),
         buildItem('date', true, l10n.sortDateOldest),
         buildItem('date', false, l10n.sortDateNewest),
-        buildItem('size', true, l10n.sortSizeSmallest),
-        buildItem('size', false, l10n.sortSizeLargest),
+        buildItem('size', true, l10n.sortSizeSmallest,
+            description: l10n.sortSizeSmallestDescription),
+        buildItem('size', false, l10n.sortSizeLargest,
+            description: l10n.sortSizeLargestDescription),
         buildItem('popularity', false, l10n.sortPopularityMost),
         buildItem('popularity', true, l10n.sortPopularityLeast),
       ],

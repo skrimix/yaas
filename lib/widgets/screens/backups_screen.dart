@@ -3,7 +3,7 @@ import 'dart:io';
 import 'package:flutter/material.dart';
 
 import '../../src/bindings/bindings.dart';
-import 'package:proper_filesize/proper_filesize.dart' as filesize;
+import 'package:intl/intl.dart';
 import 'package:provider/provider.dart';
 import '../../utils/sideload_utils.dart';
 import '../../src/l10n/app_localizations.dart';
@@ -158,83 +158,145 @@ class _BackupTile extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     final l10n = AppLocalizations.of(context);
-    final subtitle = _buildSubtitle(context, entry, l10n);
-    return Card(
-      margin: _cardMargin,
-      child: ListTile(
-        leading: const Icon(Icons.archive_outlined),
-        title: Text(entry.name),
-        subtitle: Text(subtitle),
-        contentPadding: _cardPadding,
-        trailing: SizedBox(
-          height: 40,
-          child: Row(
-            mainAxisSize: MainAxisSize.min,
-            crossAxisAlignment: CrossAxisAlignment.center,
-            children: [
-              IconButton(
-                tooltip: l10n.delete,
-                icon: const Icon(Icons.delete_outline),
-                onPressed: onDelete,
-              ),
-              const SizedBox(width: 8),
-              IconButton(
-                tooltip: l10n.openFolderTooltip,
-                icon: const Icon(Icons.folder_open),
-                onPressed: onOpenFolder,
-              ),
-              const SizedBox(width: 8),
-              Consumer<DeviceState>(
-                builder: (context, deviceState, _) {
-                  if (!deviceState.isConnected) {
-                    return Tooltip(
-                      message: l10n.connectDeviceToRestore,
-                      child: FilledButton.icon(
-                        onPressed: null,
-                        icon: const Icon(Icons.restore),
-                        label: Text(l10n.restore),
-                      ),
-                    );
-                  }
-                  return FilledButton.icon(
-                    onPressed: onRestore,
-                    icon: const Icon(Icons.restore),
-                    label: Text(l10n.restore),
-                  );
-                },
-              ),
-            ],
-          ),
-        ),
-      ),
-    );
-  }
-
-  String _buildSubtitle(
-      BuildContext context, BackupEntry entry, AppLocalizations l10n) {
-    final tsMillis = entry.timestamp.toInt();
-    final dt = tsMillis == 0
+    final theme = Theme.of(context);
+    final locale = Localizations.localeOf(context).toString();
+    final timestamp = entry.timestamp.toInt();
+    final date = timestamp == 0
         ? null
-        : DateTime.fromMillisecondsSinceEpoch(tsMillis, isUtc: true).toLocal();
-    final tsStr = dt == null ? l10n.unknownTime : formatDateTime(context, dt);
-
-    final sizeStr =
-        filesize.FileSize.fromBytes(entry.totalSize.toInt()).toString(
-      unit: filesize.Unit.auto(
-        size: entry.totalSize.toInt(),
-        baseType: filesize.BaseType.metric,
-      ),
-      decimals: 2,
-    );
-
+        : DateTime.fromMillisecondsSinceEpoch(timestamp, isUtc: true).toLocal();
+    final dateLabel = date == null
+        ? l10n.unknownTime
+        : DateFormat.yMMMd(locale).add_Hm().format(date);
+    final fullDate = date == null
+        ? l10n.unknownTime
+        : formatDateTime(context, date) ??
+            DateFormat.yMMMd(locale).add_Hm().format(date);
+    final sizeLabel = formatSize(entry.totalSize.toInt(), 2);
     final parts = <String>[];
     if (entry.hasApk) parts.add(l10n.partAPK);
     if (entry.hasPrivateData) parts.add(l10n.partPrivate);
     if (entry.hasSharedData) parts.add(l10n.partShared);
     if (entry.hasObb) parts.add(l10n.partOBB);
-    final partsStr = parts.isEmpty ? l10n.noPartsDetected : parts.join(', ');
+    final metadata = parts.isEmpty ? l10n.noPartsDetected : parts.join(', ');
+    final metadataStyle = theme.textTheme.bodyMedium?.copyWith(
+      color: theme.colorScheme.onSurfaceVariant,
+    );
+    final dateText = Tooltip(
+      message: fullDate,
+      child: Text(dateLabel, style: metadataStyle),
+    );
+    final sizeText = Text(
+      sizeLabel,
+      textAlign: TextAlign.end,
+      style: metadataStyle?.copyWith(
+        fontFeatures: const [FontFeature.tabularFigures()],
+      ),
+    );
+    final textScale = MediaQuery.textScalerOf(context).scale(14) / 14;
 
-    return '$tsStr • $partsStr • $sizeStr';
+    return Card(
+      margin: _cardMargin,
+      child: LayoutBuilder(
+        builder: (context, constraints) {
+          final showColumns = constraints.maxWidth >= 1000 * textScale;
+          return Padding(
+            padding: _cardPadding,
+            child: ConstrainedBox(
+              constraints: const BoxConstraints(minHeight: 64),
+              child: Row(
+                children: [
+                  const Icon(Icons.archive_outlined),
+                  const SizedBox(width: 16),
+                  Expanded(
+                    child: Column(
+                      mainAxisSize: MainAxisSize.min,
+                      crossAxisAlignment: CrossAxisAlignment.start,
+                      children: [
+                        Tooltip(
+                          message: entry.name,
+                          child: Text(
+                            entry.name,
+                            maxLines: 1,
+                            overflow: TextOverflow.ellipsis,
+                            style: theme.textTheme.titleMedium,
+                          ),
+                        ),
+                        if (metadata.isNotEmpty)
+                          Tooltip(
+                            message: metadata,
+                            child: Text(
+                              metadata,
+                              maxLines: 1,
+                              overflow: TextOverflow.ellipsis,
+                              style: metadataStyle,
+                            ),
+                          ),
+                        if (!showColumns)
+                          Padding(
+                            padding: const EdgeInsets.only(top: 4),
+                            child: Wrap(
+                              spacing: 16,
+                              runSpacing: 4,
+                              children: [dateText, sizeText],
+                            ),
+                          ),
+                      ],
+                    ),
+                  ),
+                  const SizedBox(width: 24),
+                  if (showColumns) ...[
+                    SizedBox(width: 210 * textScale, child: dateText),
+                    const SizedBox(width: 16),
+                    SizedBox(width: 88 * textScale, child: sizeText),
+                    const SizedBox(width: 24),
+                  ],
+                  _buildActions(context, l10n),
+                ],
+              ),
+            ),
+          );
+        },
+      ),
+    );
+  }
+
+  Widget _buildActions(BuildContext context, AppLocalizations l10n) {
+    return Row(
+      mainAxisSize: MainAxisSize.min,
+      children: [
+        IconButton(
+          tooltip: l10n.delete,
+          icon: const Icon(Icons.delete_outline),
+          onPressed: onDelete,
+        ),
+        const SizedBox(width: 8),
+        IconButton(
+          tooltip: l10n.openFolderTooltip,
+          icon: const Icon(Icons.folder_open),
+          onPressed: onOpenFolder,
+        ),
+        const SizedBox(width: 8),
+        Consumer<DeviceState>(
+          builder: (context, deviceState, _) {
+            if (!deviceState.isConnected) {
+              return Tooltip(
+                message: l10n.connectDeviceToRestore,
+                child: FilledButton.icon(
+                  onPressed: null,
+                  icon: const Icon(Icons.restore),
+                  label: Text(l10n.restore),
+                ),
+              );
+            }
+            return FilledButton.icon(
+              onPressed: onRestore,
+              icon: const Icon(Icons.restore),
+              label: Text(l10n.restore),
+            );
+          },
+        ),
+      ],
+    );
   }
 }
 

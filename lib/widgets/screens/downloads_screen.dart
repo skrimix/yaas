@@ -1,7 +1,7 @@
 import 'dart:io';
 
 import 'package:flutter/material.dart';
-import 'package:proper_filesize/proper_filesize.dart' as filesize;
+import 'package:intl/intl.dart';
 import 'package:provider/provider.dart';
 import '../../utils/sideload_utils.dart';
 import '../../src/bindings/bindings.dart';
@@ -400,90 +400,159 @@ class _DownloadTile extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     final l10n = AppLocalizations.of(context);
-    final subtitle = _buildSubtitle(context, entry, l10n);
+    final theme = Theme.of(context);
+    final locale = Localizations.localeOf(context).toString();
+    final timestamp = entry.timestamp.toInt();
+    final date = timestamp == 0
+        ? null
+        : DateTime.fromMillisecondsSinceEpoch(timestamp, isUtc: true).toLocal();
+    final dateLabel =
+        date == null ? l10n.unknownTime : DateFormat.yMMMd(locale).format(date);
+    final fullDate = date == null
+        ? l10n.unknownTime
+        : formatDateTime(context, date) ??
+            DateFormat.yMMMd(locale).add_Hm().format(date);
+    final sizeLabel = formatSize(entry.totalSize.toInt(), 2);
+    final package = entry.packageName ?? '';
+    final version = entry.versionCode;
+    final metadata = package.isEmpty
+        ? ''
+        : version == null
+            ? package
+            : '$package • v$version';
+    final metadataStyle = theme.textTheme.bodyMedium?.copyWith(
+      color: theme.colorScheme.onSurfaceVariant,
+    );
+    final dateText = Tooltip(
+      message: fullDate,
+      child: Text(dateLabel, style: metadataStyle),
+    );
+    final sizeText = Text(
+      sizeLabel,
+      textAlign: TextAlign.end,
+      style: metadataStyle?.copyWith(
+        fontFeatures: const [FontFeature.tabularFigures()],
+      ),
+    );
+    final textScale = MediaQuery.textScalerOf(context).scale(14) / 14;
+
     return Card(
       margin: _cardMargin,
-      child: ListTile(
-        title: Text(entry.name),
-        subtitle: Text(subtitle),
-        contentPadding: _cardPadding,
-        trailing: SizedBox(
-          height: 40,
-          child: Row(
-            mainAxisSize: MainAxisSize.min,
-            crossAxisAlignment: CrossAxisAlignment.center,
-            children: [
-              _InstalledDownloadBadge(entry: entry),
-              const SizedBox(width: 8),
-              _DownloadedNewerBadge(
-                entry: entry,
-                newestDownloadedForPackage: newestDownloadedForPackage,
+      child: LayoutBuilder(
+        builder: (context, constraints) {
+          final showColumns = constraints.maxWidth >= 1000 * textScale;
+          return Padding(
+            padding: _cardPadding,
+            child: ConstrainedBox(
+              constraints: const BoxConstraints(minHeight: 64),
+              child: Row(
+                children: [
+                  Expanded(
+                    child: Column(
+                      mainAxisSize: MainAxisSize.min,
+                      crossAxisAlignment: CrossAxisAlignment.start,
+                      children: [
+                        Tooltip(
+                          message: entry.name,
+                          child: Text(
+                            entry.name,
+                            maxLines: 1,
+                            overflow: TextOverflow.ellipsis,
+                            style: theme.textTheme.titleMedium,
+                          ),
+                        ),
+                        if (metadata.isNotEmpty)
+                          Tooltip(
+                            message: metadata,
+                            child: Text(
+                              metadata,
+                              maxLines: 1,
+                              overflow: TextOverflow.ellipsis,
+                              style: metadataStyle,
+                            ),
+                          ),
+                        if (!showColumns)
+                          Padding(
+                            padding: const EdgeInsets.only(top: 4),
+                            child: Wrap(
+                              spacing: 16,
+                              runSpacing: 4,
+                              children: [dateText, sizeText],
+                            ),
+                          ),
+                      ],
+                    ),
+                  ),
+                  const SizedBox(width: 24),
+                  if (showColumns) ...[
+                    SizedBox(width: 140 * textScale, child: dateText),
+                    const SizedBox(width: 16),
+                    SizedBox(width: 88 * textScale, child: sizeText),
+                    const SizedBox(width: 24),
+                  ],
+                  SizedBox(
+                    width: 160 * textScale,
+                    child: Column(
+                      mainAxisSize: MainAxisSize.min,
+                      crossAxisAlignment: CrossAxisAlignment.end,
+                      children: [
+                        _InstalledDownloadBadge(entry: entry),
+                        _DownloadedNewerBadge(
+                          entry: entry,
+                          newestDownloadedForPackage:
+                              newestDownloadedForPackage,
+                        ),
+                      ],
+                    ),
+                  ),
+                  const SizedBox(width: 16),
+                  _buildActions(context, l10n),
+                ],
               ),
-              const SizedBox(width: 8),
-              IconButton(
-                tooltip: l10n.delete,
-                icon: const Icon(Icons.delete_outline),
-                onPressed: onDelete,
-              ),
-              const SizedBox(width: 8),
-              IconButton(
-                tooltip: l10n.openFolderTooltip,
-                icon: const Icon(Icons.folder_open),
-                onPressed: onOpenFolder,
-              ),
-              const SizedBox(width: 8),
-              Consumer<DeviceState>(
-                builder: (context, deviceState, _) {
-                  if (!deviceState.isConnected) {
-                    return Tooltip(
-                      message: l10n.connectDeviceToInstall,
-                      child: FilledButton.icon(
-                        onPressed: null,
-                        icon: const Icon(Icons.install_mobile),
-                        label: Text(l10n.install),
-                      ),
-                    );
-                  }
-                  return FilledButton.icon(
-                    onPressed: onInstall,
-                    icon: const Icon(Icons.install_mobile),
-                    label: Text(l10n.install),
-                  );
-                },
-              ),
-            ],
-          ),
-        ),
+            ),
+          );
+        },
       ),
     );
   }
 
-  String _buildSubtitle(
-      BuildContext context, DownloadEntry entry, AppLocalizations l10n) {
-    final tsMillis = entry.timestamp.toInt();
-    final dt = tsMillis == 0
-        ? null
-        : DateTime.fromMillisecondsSinceEpoch(tsMillis, isUtc: true).toLocal();
-    final tsStr = dt == null ? l10n.unknownTime : formatDateTime(context, dt);
-
-    final sizeStr =
-        filesize.FileSize.fromBytes(entry.totalSize.toInt()).toString(
-      unit: filesize.Unit.auto(
-        size: entry.totalSize.toInt(),
-        baseType: filesize.BaseType.metric,
-      ),
-      decimals: 2,
+  Widget _buildActions(BuildContext context, AppLocalizations l10n) {
+    return Row(
+      mainAxisSize: MainAxisSize.min,
+      children: [
+        IconButton(
+          tooltip: l10n.delete,
+          icon: const Icon(Icons.delete_outline),
+          onPressed: onDelete,
+        ),
+        const SizedBox(width: 8),
+        IconButton(
+          tooltip: l10n.openFolderTooltip,
+          icon: const Icon(Icons.folder_open),
+          onPressed: onOpenFolder,
+        ),
+        const SizedBox(width: 8),
+        Consumer<DeviceState>(
+          builder: (context, deviceState, _) {
+            if (!deviceState.isConnected) {
+              return Tooltip(
+                message: l10n.connectDeviceToInstall,
+                child: FilledButton.icon(
+                  onPressed: null,
+                  icon: const Icon(Icons.install_mobile),
+                  label: Text(l10n.install),
+                ),
+              );
+            }
+            return FilledButton.icon(
+              onPressed: onInstall,
+              icon: const Icon(Icons.install_mobile),
+              label: Text(l10n.install),
+            );
+          },
+        ),
+      ],
     );
-
-    final pkg = entry.packageName ?? '';
-    final ver = entry.versionCode?.toString() ?? '';
-    final meta = pkg.isEmpty
-        ? ''
-        : ver.isEmpty
-            ? pkg
-            : '$pkg • v$ver';
-
-    return meta.isEmpty ? '$tsStr • $sizeStr' : '$meta • $tsStr • $sizeStr';
   }
 }
 

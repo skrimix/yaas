@@ -180,6 +180,8 @@ class _AnimatedRefreshButtonState extends State<AnimatedRefreshButton>
                     ? RotationTransition(
                         key: const Key('spinning'),
                         turns: _rotation,
+                        // Keep the small icon's glyph steadier while rotating.
+                        filterQuality: FilterQuality.medium,
                         child: Icon(
                           Icons.refresh,
                           size: widget.iconSize,

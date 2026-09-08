@@ -2,13 +2,20 @@ use std::{
     collections::BTreeMap,
     iter,
     path::PathBuf,
-    sync::atomic::{AtomicU64, Ordering},
+    sync::{
+        Arc,
+        atomic::{AtomicU64, Ordering},
+    },
     time::{Duration, SystemTime, UNIX_EPOCH},
 };
 
 use rinf::{DartSignal, RustSignal};
 use tokio::{
-    sync::mpsc::{self, Receiver, Sender},
+    sync::{
+        Mutex,
+        mpsc::{self, Receiver, Sender},
+    },
+    task::JoinHandle,
     time,
 };
 use tracing::{Event, Subscriber};
@@ -49,8 +56,9 @@ impl SignalLayer {
     }
 
     /// Start the background task that batches and sends log entries to Flutter
-    pub(crate) fn start_forwarder(mut receiver: Receiver<LogEntry>) {
+    pub(crate) fn start_forwarder(receiver: Arc<Mutex<Receiver<LogEntry>>>) -> JoinHandle<()> {
         tokio::spawn(async move {
+            let mut receiver = receiver.lock().await;
             let mut buffer = Vec::new();
             let mut interval = time::interval(Duration::from_millis(100));
 
@@ -67,7 +75,8 @@ impl SignalLayer {
                                 }
                             }
                             None => {
-                                panic!("Log entry channel closed unexpectedly");
+                                Self::flush_buffer(&mut buffer).await;
+                                break;
                             }
                         }
                     }
@@ -80,7 +89,7 @@ impl SignalLayer {
                     }
                 }
             }
-        });
+        })
     }
 
     pub(crate) fn start_request_handler(logs_dir: PathBuf) {
@@ -328,5 +337,50 @@ impl tracing::field::Visit for FieldVisitor {
         } else {
             self.fields.insert(field.name().to_string(), value.to_string());
         }
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use tracing_subscriber::layer::SubscriberExt;
+
+    use super::*;
+
+    #[test]
+    fn logs_survive_runtime_restart() {
+        let (layer, receiver) = SignalLayer::new();
+        let receiver = Arc::new(Mutex::new(receiver));
+        let subscriber = tracing::Dispatch::new(tracing_subscriber::registry().with(layer));
+
+        for _ in 0..3 {
+            let runtime =
+                tokio::runtime::Builder::new_current_thread().enable_all().build().unwrap();
+            tracing::dispatcher::with_default(&subscriber, || {
+                tracing::info!("Runtime started");
+            });
+            runtime.block_on(async {
+                let entry = time::timeout(Duration::from_secs(1), async {
+                    receiver.lock().await.recv().await.unwrap()
+                })
+                .await
+                .unwrap();
+                assert_eq!(entry.message, "Runtime started");
+
+                SignalLayer::start_forwarder(receiver.clone());
+                tokio::task::yield_now().await;
+                assert!(receiver.try_lock().is_err());
+            });
+            drop(runtime);
+            assert!(receiver.try_lock().is_ok());
+        }
+    }
+
+    #[tokio::test]
+    async fn forwarder_stops_when_channel_closes() {
+        let (layer, receiver) = SignalLayer::new();
+        let forwarder = SignalLayer::start_forwarder(Arc::new(Mutex::new(receiver)));
+        drop(layer);
+
+        time::timeout(Duration::from_secs(1), forwarder).await.unwrap().unwrap();
     }
 }

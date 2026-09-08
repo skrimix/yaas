@@ -4,7 +4,7 @@
 use std::{
     panic::catch_unwind,
     path::{Path, PathBuf},
-    sync::{Arc, OnceLock},
+    sync::{Arc, Mutex},
     time::{Duration, Instant},
 };
 
@@ -12,8 +12,9 @@ use adb::AdbService;
 use anyhow::{Context, Result};
 use logging::SignalLayer;
 use mimalloc::MiMalloc;
-use models::signals::system::{
-    AppShutdownReady, AppShutdownRequest, AppVersionInfo, MediaConfigChanged, RustPanic,
+use models::signals::{
+    logging::LogEntry,
+    system::{AppShutdownReady, AppShutdownRequest, AppVersionInfo, MediaConfigChanged, RustPanic},
 };
 use rinf::{DartSignal, RustSignal};
 use settings::SettingsHandler;
@@ -40,8 +41,12 @@ use crate::{
 #[global_allocator]
 static GLOBAL: MiMalloc = MiMalloc;
 
-// Keep logging guard alive for the whole process lifetime
-static LOG_GUARD: OnceLock<WorkerGuard> = OnceLock::new();
+static LOGGING: Mutex<Option<Logging>> = Mutex::new(None);
+
+struct Logging {
+    _guard: WorkerGuard,
+    receiver: Arc<tokio::sync::Mutex<tokio::sync::mpsc::Receiver<LogEntry>>>,
+}
 
 rinf::write_interface!();
 
@@ -246,6 +251,13 @@ async fn init_in_dir(
 }
 
 fn setup_logging(app_dir: &Path) -> Result<()> {
+    let mut logging = LOGGING.lock().unwrap();
+    // Flutter restart replaces the runtime but keeps the global subscriber alive.
+    if let Some(logging) = logging.as_ref() {
+        SignalLayer::start_forwarder(logging.receiver.clone());
+        return Ok(());
+    }
+
     let logs_dir = app_dir.join("logs");
     let log_prefix = logs_dir.join("yaas_native");
 
@@ -262,7 +274,6 @@ fn setup_logging(app_dir: &Path) -> Result<()> {
 
     // Real-time logging to Flutter
     let (signal_layer, log_receiver) = SignalLayer::new();
-    SignalLayer::start_forwarder(log_receiver);
 
     let subscriber = tracing_subscriber::registry()
         .with(signal_layer)
@@ -278,7 +289,9 @@ fn setup_logging(app_dir: &Path) -> Result<()> {
     tracing::subscriber::set_global_default(subscriber)
         .context("Failed to set global subscriber")?;
 
-    let _ = LOG_GUARD.set(guard);
+    let receiver = Arc::new(tokio::sync::Mutex::new(log_receiver));
+    SignalLayer::start_forwarder(receiver.clone());
+    *logging = Some(Logging { _guard: guard, receiver });
     Ok(())
 }
 

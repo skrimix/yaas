@@ -765,7 +765,7 @@ pub fn h264_dimensions_from_avcc(config_record: &[u8]) -> Option<(u32, u32)> {
 pub fn pcm_s16be_to_s16le(data: &[u8]) -> Vec<u8> {
     let even_len = data.len() & !1;
     let mut output = Vec::with_capacity(even_len);
-    for chunk in data[..even_len].chunks_exact(2) {
+    for chunk in data[..even_len].as_chunks::<2>().0 {
         output.push(chunk[1]);
         output.push(chunk[0]);
     }

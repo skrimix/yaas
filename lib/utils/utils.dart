@@ -28,30 +28,86 @@ Widget buildCopyableText(
   BuildContext context,
   String text, {
   bool showTooltip = true,
+  bool showIconOnHover = false,
+  String? copyText,
+  String? tooltipMessage,
   TextStyle? style,
   int? maxLines,
   TextOverflow? overflow,
 }) {
-  final child = MouseRegion(
-    cursor: SystemMouseCursors.click,
-    child: GestureDetector(
-      onTap: () => copyToClipboard(context, text, description: text),
-      child: Text(
-        text,
-        style: style,
-        maxLines: maxLines,
-        overflow: overflow,
-      ),
+  final value = copyText ?? text;
+  final child = _CopyableTextAction(
+    showIconOnHover: showIconOnHover,
+    onTap: () => copyToClipboard(context, value, description: value),
+    child: Text(
+      text,
+      style: style,
+      maxLines: maxLines,
+      overflow: overflow,
     ),
   );
 
   if (!showTooltip) return child;
 
   return Tooltip(
-    message: AppLocalizations.of(context).clickToCopy,
+    message: tooltipMessage ?? AppLocalizations.of(context).clickToCopy,
     waitDuration: const Duration(milliseconds: 300),
     child: child,
   );
+}
+
+class _CopyableTextAction extends StatefulWidget {
+  const _CopyableTextAction({
+    required this.showIconOnHover,
+    required this.onTap,
+    required this.child,
+  });
+
+  final bool showIconOnHover;
+  final VoidCallback onTap;
+  final Widget child;
+
+  @override
+  State<_CopyableTextAction> createState() => _CopyableTextActionState();
+}
+
+class _CopyableTextActionState extends State<_CopyableTextAction> {
+  bool _hovered = false;
+  bool _focused = false;
+
+  @override
+  Widget build(BuildContext context) {
+    final colors = Theme.of(context).colorScheme;
+    return Material(
+      type: MaterialType.transparency,
+      textStyle: DefaultTextStyle.of(context).style,
+      child: InkWell(
+        borderRadius: BorderRadius.circular(4),
+        hoverColor: colors.onSurface.withValues(alpha: 0.06),
+        focusColor: colors.onSurface.withValues(alpha: 0.1),
+        onHover: (hovered) => setState(() => _hovered = hovered),
+        onFocusChange: (focused) => setState(() => _focused = focused),
+        onTap: widget.onTap,
+        child: Padding(
+          padding: const EdgeInsets.symmetric(horizontal: 4, vertical: 2),
+          child: Row(
+            mainAxisSize: MainAxisSize.min,
+            children: [
+              Flexible(child: widget.child),
+              const SizedBox(width: 6),
+              AnimatedOpacity(
+                opacity:
+                    !widget.showIconOnHover || _hovered || _focused ? 1 : 0,
+                duration: const Duration(milliseconds: 120),
+                child:
+                    Icon(Icons.copy, size: 14, color: colors.onSurfaceVariant),
+              ),
+            ],
+          ),
+        ),
+      ),
+    );
+  }
 }
 
 String? formatDateTime(BuildContext context, DateTime dateTime) {

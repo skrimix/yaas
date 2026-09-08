@@ -209,20 +209,14 @@ class _TaskListDialogState extends State<TaskListDialog>
               Expanded(
                 child: Align(
                   alignment: Alignment.centerLeft,
-                  child: Tooltip(
-                    message: task.message,
-                    waitDuration: const Duration(milliseconds: 500),
-                    child: InkWell(
-                      onTap: () => copyToClipboard(
-                        context,
-                        task.message,
-                        description: task.message,
-                      ),
-                      child: Text(
-                        task.message,
-                        overflow: TextOverflow.ellipsis,
-                      ),
-                    ),
+                  child: buildCopyableText(
+                    context,
+                    task.message,
+                    showIconOnHover: true,
+                    tooltipMessage:
+                        '${task.message}\n${AppLocalizations.of(context).clickToCopy}',
+                    maxLines: 1,
+                    overflow: TextOverflow.ellipsis,
                   ),
                 ),
               ),

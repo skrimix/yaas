@@ -373,6 +373,8 @@
     "usbSpeedLabel": "Скорость USB",
     "copiedToClipboard": "Скопировано в буфер обмена",
     "clickToCopy": "Нажмите, чтобы скопировать",
+    "clickToCopyFullSha": "Нажмите, чтобы скопировать полный SHA",
+    "clickToCopyBatteryDetails": "Нажмите, чтобы скопировать сведения о батарее",
     "detailsPackageName": "Имя пакета:",
     "detailsVersion": "Версия:",
     "detailsVersionCode": "Код версии:",

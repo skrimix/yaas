@@ -1490,6 +1490,18 @@ abstract class AppLocalizations {
   /// **'Click to copy'**
   String get clickToCopy;
 
+  /// No description provided for @clickToCopyFullSha.
+  ///
+  /// In en, this message translates to:
+  /// **'Click to copy full SHA'**
+  String get clickToCopyFullSha;
+
+  /// No description provided for @clickToCopyBatteryDetails.
+  ///
+  /// In en, this message translates to:
+  /// **'Click to copy battery details'**
+  String get clickToCopyBatteryDetails;
+
   /// No description provided for @detailsPackageName.
   ///
   /// In en, this message translates to:

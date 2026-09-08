@@ -27,6 +27,8 @@ class _AboutScreenState extends State<AboutScreen> {
     final l10n = AppLocalizations.of(context);
     final appState = context.watch<AppState>();
     final core = appState.coreVersionInfo;
+    final commitHash = core?.gitCommitHash ?? core?.gitCommitHashShort ?? '';
+    final dirtySuffix = core?.gitDirty == true ? ' (dirty)' : '';
 
     return Padding(
       padding: const EdgeInsets.all(16.0),
@@ -73,39 +75,21 @@ class _AboutScreenState extends State<AboutScreen> {
                 // ),
                 // const SizedBox(width: 8),
                 const Text('• commit '),
-                Tooltip(
-                  message: 'Copy full SHA',
-                  child: GestureDetector(
-                    onTap: () {
-                      final full = (core.gitCommitHash ??
-                              core.gitCommitHashShort ??
-                              '') +
-                          (core.gitDirty ? ' (dirty)' : '');
-                      if (full.isEmpty) return;
-                      copyToClipboard(
-                        context,
-                        full,
-                        description: full,
-                      );
-                    },
-                    child: DecoratedBox(
-                      decoration: BoxDecoration(
-                        color: Theme.of(context)
-                            .colorScheme
-                            .surfaceContainerHighest,
-                        borderRadius: BorderRadius.circular(4),
-                      ),
-                      child: Padding(
-                        padding: const EdgeInsets.symmetric(
-                            horizontal: 6, vertical: 2),
-                        child: Text(
-                          '${core.gitCommitHashShort ?? 'unknown'}${core.gitDirty ? ' (dirty)' : ''}',
-                          style: const TextStyle(fontFamily: 'monospace'),
-                        ),
-                      ),
+                if (commitHash.isNotEmpty)
+                  Flexible(
+                    child: buildCopyableText(
+                      context,
+                      '${core.gitCommitHashShort ?? commitHash}$dirtySuffix',
+                      copyText: '$commitHash$dirtySuffix',
+                      tooltipMessage: l10n.clickToCopyFullSha,
+                      style: const TextStyle(fontFamily: 'monospace'),
+                      maxLines: 1,
+                      overflow: TextOverflow.ellipsis,
                     ),
-                  ),
-                ),
+                  )
+                else
+                  const Text('unknown',
+                      style: TextStyle(fontFamily: 'monospace')),
                 const SizedBox(width: 6),
                 // IconButton(
                 //   tooltip: 'Copy full SHA',

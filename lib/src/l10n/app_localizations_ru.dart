@@ -802,6 +802,13 @@ class AppLocalizationsRu extends AppLocalizations {
   String get clickToCopy => 'Нажмите, чтобы скопировать';
 
   @override
+  String get clickToCopyFullSha => 'Нажмите, чтобы скопировать полный SHA';
+
+  @override
+  String get clickToCopyBatteryDetails =>
+      'Нажмите, чтобы скопировать сведения о батарее';
+
+  @override
   String get detailsPackageName => 'Имя пакета:';
 
   @override

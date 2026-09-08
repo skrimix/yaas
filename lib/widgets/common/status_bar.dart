@@ -86,7 +86,8 @@ class StatusBar extends StatelessWidget {
     return Tooltip(
       message: '${l10n.headset}: ${deviceState.batteryLevel}%$chargingSuffix\n'
           '${l10n.leftController}: ${deviceState.controllerBatteryLevel(deviceState.leftController)}%\n'
-          '${l10n.rightController}: ${deviceState.controllerBatteryLevel(deviceState.rightController)}%',
+          '${l10n.rightController}: ${deviceState.controllerBatteryLevel(deviceState.rightController)}%\n'
+          '${l10n.clickToCopyBatteryDetails}',
       child: Material(
         color: Colors.transparent,
         child: InkWell(

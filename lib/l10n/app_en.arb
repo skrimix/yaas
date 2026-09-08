@@ -379,6 +379,8 @@
   "usbSpeedLabel": "USB speed",
     "copiedToClipboard": "Copied to clipboard",
     "clickToCopy": "Click to copy",
+    "clickToCopyFullSha": "Click to copy full SHA",
+    "clickToCopyBatteryDetails": "Click to copy battery details",
     "detailsPackageName": "Package Name:",
     "detailsVersion": "Version:",
     "detailsVersionCode": "Version Code:",

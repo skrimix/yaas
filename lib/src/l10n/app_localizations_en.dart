@@ -785,6 +785,12 @@ class AppLocalizationsEn extends AppLocalizations {
   String get clickToCopy => 'Click to copy';
 
   @override
+  String get clickToCopyFullSha => 'Click to copy full SHA';
+
+  @override
+  String get clickToCopyBatteryDetails => 'Click to copy battery details';
+
+  @override
   String get detailsPackageName => 'Package Name:';
 
   @override

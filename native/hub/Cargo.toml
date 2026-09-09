@@ -12,6 +12,8 @@ edition = "2024"
 crate-type = ["lib", "cdylib", "staticlib"]
 
 [dependencies]
+app-update = { path = "../app_update" }
+sha2 = "0.11"
 anyhow = { version = "1.0.104", features = ["backtrace"] }
 bitflags = "2.13.1"
 csv-async = { version = "1.3.1", features = ["tokio"] }

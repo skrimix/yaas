@@ -139,6 +139,7 @@ class ReleaseTests(unittest.TestCase):
             "lib/libflutter_linux_gtk.so",
             "usr/bin/adb",
             "usr/bin/7zzs",
+            "usr/bin/yaas-updater",
         ]:
             path = self.root / name
             path.parent.mkdir(parents=True, exist_ok=True)
@@ -152,20 +153,22 @@ class ReleaseTests(unittest.TestCase):
         artifacts = self.root / "artifacts"
         windows = artifacts / "build-windows"
         windows.mkdir(parents=True)
-        for name in ["yaas.exe", "hub.dll", "adb.exe", "7za.exe"]:
+        for name in ["yaas.exe", "hub.dll", "adb.exe", "7za.exe", "yaas-updater.exe"]:
             (windows / name).write_bytes(pe())
         (windows / "launch_portable.bat").write_text("yaas.exe --portable")
         (artifacts / "build-linux").mkdir()
         (artifacts / "build-linux/yaas.AppImage").write_bytes(elf())
         (artifacts / "build-macos").mkdir()
         with zipfile.ZipFile(artifacts / "build-macos/YAAS-macos.zip", "w") as archive:
-            for name in ["YAAS", "adb", "7zz"]:
+            for name in ["YAAS", "adb", "7zz", "yaas-updater"]:
                 archive.writestr(f"YAAS.app/Contents/MacOS/{name}", universal())
         identity = {
             **release.build_identity("stable", SHA, ENV),
             "version": "1.0.0",
             "build_number": 1,
         }
+        with zipfile.ZipFile(artifacts / "build-macos/YAAS-macos.zip", "a") as archive:
+            archive.writestr("YAAS.app/Contents/Resources/yaas-build.json", json.dumps(identity))
         for platform in ["windows", "linux", "macos"]:
             (artifacts / f"build-{platform}/build-identity.json").write_text(
                 json.dumps(identity)
@@ -185,6 +188,13 @@ class ReleaseTests(unittest.TestCase):
         self.assertEqual(manifest["run_attempt"], 2)
         self.assertEqual(len(manifest["assets"]), 3)
         output = self.root / "release"
+        with zipfile.ZipFile(output / "YAAS-windows-x64.zip") as archive:
+            inventory = json.loads(archive.read("yaas-package.json"))
+            self.assertEqual(set(inventory["files"]), set(archive.namelist()))
+            self.assertNotIn("build-identity.json", inventory["files"])
+            self.assertIn("yaas-updater.exe", inventory["files"])
+            self.assertEqual(inventory["identity"]["commit"], SHA)
+            self.assertEqual(inventory["identity"]["version"], manifest["version"])
         with (
             patch.object(release, "app_version", return_value=("1.0.0", 1)),
             patch.object(release, "run", return_value=SHA),

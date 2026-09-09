@@ -136,14 +136,20 @@ def verify_bundle(platform, root):
         return found == expected
 
     required = {
-        "windows": ["yaas.exe", "hub.dll", "adb.exe", "7za.exe"],
-        "macos": ["Contents/MacOS/YAAS", "Contents/MacOS/adb", "Contents/MacOS/7zz"],
+        "windows": ["yaas.exe", "hub.dll", "adb.exe", "7za.exe", "yaas-updater.exe"],
+        "macos": [
+            "Contents/MacOS/YAAS",
+            "Contents/MacOS/adb",
+            "Contents/MacOS/7zz",
+            "Contents/MacOS/yaas-updater",
+        ],
         "linux": [
             "yaas",
             "lib/libhub.so",
             "lib/libflutter_linux_gtk.so",
             "usr/bin/adb",
             "usr/bin/7zzs",
+            "usr/bin/yaas-updater",
         ],
     }[platform]
     for name in required:
@@ -246,7 +252,7 @@ def package(sha, artifacts=Path("artifacts"), output=Path("release")):
     require(macos.is_file(), "Missing macOS ZIP")
     with zipfile.ZipFile(macos) as archive:
         require(archive.testzip() is None, "Corrupt macOS ZIP")
-        for binary in ("YAAS", "adb", "7zz"):
+        for binary in ("YAAS", "adb", "7zz", "yaas-updater"):
             name = f"YAAS.app/Contents/MacOS/{binary}"
             require(name in archive.namelist(), f"Missing macOS binary: {binary}")
             with archive.open(name) as stream:
@@ -254,6 +260,13 @@ def package(sha, artifacts=Path("artifacts"), output=Path("release")):
                     architectures(stream.read(65536)) == {"aarch64", "x86_64"},
                     f"Non-universal macOS binary: {binary}",
                 )
+        bundle_identity = json.loads(
+            archive.read("YAAS.app/Contents/Resources/yaas-build.json")
+        )
+        require(
+            bundle_identity == {**identity, "version": version, "build_number": build},
+            "macOS bundle identity differs from release",
+        )
         for name in archive.namelist():
             if name.endswith("/"):
                 continue
@@ -263,6 +276,18 @@ def package(sha, artifacts=Path("artifacts"), output=Path("release")):
                 archs is None or archs == {"aarch64", "x86_64"},
                 f"Non-universal macOS file: {name}",
             )
+    files = sorted(
+        p.relative_to(windows).as_posix()
+        for p in windows.rglob("*")
+        if p.is_file()
+        and p not in (windows / "build-identity.json", windows / "yaas-package.json")
+    )
+    inventory = {
+        "schema_version": 1,
+        "identity": {**identity, "version": version, "build_number": build},
+        "files": sorted([*files, "yaas-package.json"]),
+    }
+    (windows / "yaas-package.json").write_text(json.dumps(inventory, indent=2) + "\n")
     output.mkdir(parents=True, exist_ok=True)
     with zipfile.ZipFile(output / PACKAGES[0][0], "w", zipfile.ZIP_DEFLATED) as archive:
         for path in sorted(windows.rglob("*")):

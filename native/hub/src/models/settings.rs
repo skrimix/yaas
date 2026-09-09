@@ -80,10 +80,34 @@ pub(crate) enum DownloadMode {
     Staged,
 }
 
+/// Release channel to check when the user requests an update.
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize, SignalPiece)]
+#[serde(rename_all = "snake_case")]
+pub(crate) enum UpdateChannel {
+    Stable,
+    Nightly,
+}
+
+impl Default for UpdateChannel {
+    fn default() -> Self {
+        if env!("YAAS_RELEASE_CHANNEL") == "nightly" { Self::Nightly } else { Self::Stable }
+    }
+}
+
+impl UpdateChannel {
+    pub(crate) fn as_str(self) -> &'static str {
+        match self {
+            Self::Stable => "stable",
+            Self::Nightly => "nightly",
+        }
+    }
+}
+
 #[derive(Debug, Clone, Serialize, Deserialize, PartialEq, Eq, SignalPiece)]
 #[serde(default)]
 pub(crate) struct Settings {
     pub installation_id: String,
+    pub update_channel: UpdateChannel,
     pub active_downloader_config_id: String,
     pub rclone_remote_name: String,
     pub adb_path: String,
@@ -125,6 +149,7 @@ impl Default for Settings {
     fn default() -> Self {
         Self {
             installation_id: Uuid::new_v4().to_string(),
+            update_channel: UpdateChannel::default(),
             active_downloader_config_id: String::new(),
             rclone_remote_name: "FFA-90".to_string(),
             adb_path: "adb".to_string(),
@@ -432,6 +457,16 @@ mod tests {
         let saved: Settings =
             serde_json::from_str(&fs::read_to_string(&settings_file).unwrap()).unwrap();
         assert_eq!(saved, settings);
+    }
+
+    #[test]
+    fn update_channel_defaults_and_round_trips() {
+        let settings: Settings = serde_json::from_str("{}").unwrap();
+        assert_eq!(settings.update_channel, super::UpdateChannel::default());
+        let nightly: Settings = serde_json::from_str(r#"{"update_channel":"nightly"}"#).unwrap();
+        assert_eq!(nightly.update_channel, super::UpdateChannel::Nightly);
+        let json = serde_json::to_string(&nightly).unwrap();
+        assert_eq!(serde_json::from_str::<Settings>(&json).unwrap(), nightly);
     }
 
     #[test]

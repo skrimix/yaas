@@ -60,6 +60,7 @@ pub(crate) mod logging;
 pub(crate) mod models;
 pub(crate) mod settings;
 pub(crate) mod task;
+pub(crate) mod update;
 pub(crate) mod utils;
 
 #[cfg(test)]
@@ -102,7 +103,7 @@ fn main() {
         runtime.block_on(async move {
             let init_start = Instant::now();
             // Initialize everything
-            let (task_manager, native_casting) =
+            let (task_manager, native_casting, updater) =
                 timeout(Duration::from_secs(10), init(portable_mode))
                     .await
                     .expect("Core initialization timed out");
@@ -111,49 +112,82 @@ fn main() {
             let shutdown_request_receiver = AppShutdownRequest::get_dart_signal_receiver();
             enum ShutdownSource {
                 Dart,
-                Request,
+                Request(Option<String>),
                 Panic,
             }
 
-            let source = tokio::select! {
-                _ = rinf::dart_shutdown() => ShutdownSource::Dart,
-                request = shutdown_request_receiver.recv() => {
-                    if request.is_some() {
-                        ShutdownSource::Request
-                    } else {
-                        ShutdownSource::Dart
-                    }
-                },
-                _ = panic_notify.notified() => ShutdownSource::Panic,
-            };
-
-            match source {
-                ShutdownSource::Panic => {}
-                ShutdownSource::Dart => {
-                    native_casting.shutdown().await;
-                    tokio::select! {
-                        _ = task_manager.shutdown(TASK_SHUTDOWN_TIMEOUT) => {},
-                        _ = panic_notify.notified() => {},
-                    }
-                }
-                ShutdownSource::Request => {
-                    native_casting.shutdown().await;
-                    let shutdown_result = tokio::select! {
-                        result = task_manager.shutdown(TASK_SHUTDOWN_TIMEOUT) => Some(result),
-                        _ = panic_notify.notified() => None,
-                    };
-                    if let Some(shutdown_result) = shutdown_result {
-                        AppShutdownReady {
-                            timed_out: shutdown_result.timed_out,
-                            remaining_tasks: shutdown_result.remaining_tasks as u32,
+            loop {
+                let source = tokio::select! {
+                    _ = rinf::dart_shutdown() => ShutdownSource::Dart,
+                    request = shutdown_request_receiver.recv() => {
+                        if let Some(request) = request {
+                            ShutdownSource::Request(request.message.update_candidate_id)
+                        } else {
+                            ShutdownSource::Dart
                         }
-                        .send_signal_to_dart();
+                    },
+                    _ = panic_notify.notified() => ShutdownSource::Panic,
+                };
+
+                match source {
+                    ShutdownSource::Panic => {}
+                    ShutdownSource::Dart => {
+                        native_casting.shutdown().await;
                         tokio::select! {
-                            _ = rinf::dart_shutdown() => {},
+                            _ = task_manager.shutdown(TASK_SHUTDOWN_TIMEOUT) => {},
                             _ = panic_notify.notified() => {},
                         }
                     }
+                    ShutdownSource::Request(update_id) => {
+                        if let Some(id) = &update_id
+                            && let Err(error) = updater.validate_exit(id.clone()).await
+                        {
+                            AppShutdownReady {
+                                timed_out: false,
+                                remaining_tasks: 0,
+                                shutdown_cancelled: true,
+                                update_error: Some(format!("{error:#}")),
+                            }
+                            .send_signal_to_dart();
+                            continue;
+                        }
+                        native_casting.shutdown().await;
+                        let shutdown_result = tokio::select! {
+                            result = task_manager.shutdown(TASK_SHUTDOWN_TIMEOUT) => Some(result),
+                            _ = panic_notify.notified() => None,
+                        };
+                        if let Some(shutdown_result) = shutdown_result {
+                            let update_error = if let Some(id) = update_id {
+                                updater
+                                    .commit_exit(id)
+                                    .await
+                                    .err()
+                                    .map(|error| format!("{error:#}"))
+                            } else {
+                                None
+                            };
+                            if let Some(error) = &update_error {
+                                error!(
+                                    error,
+                                    "Update handoff failed; closing without installation"
+                                );
+                            }
+                            AppShutdownReady {
+                                update_error,
+                                shutdown_cancelled: false,
+                                timed_out: shutdown_result.timed_out,
+                                remaining_tasks: shutdown_result.remaining_tasks as u32,
+                            }
+                            .send_signal_to_dart();
+                            tokio::select! {
+                                _ = rinf::dart_shutdown() => {},
+                                _ = panic_notify.notified() => {},
+                            }
+                        }
+                    }
                 }
+                updater.stop().await;
+                break;
             }
         })
     });
@@ -162,7 +196,9 @@ fn main() {
 }
 
 #[instrument]
-async fn init(portable_mode: bool) -> (Arc<TaskManager>, Arc<NativeCastingManager>) {
+async fn init(
+    portable_mode: bool,
+) -> (Arc<TaskManager>, Arc<NativeCastingManager>, Arc<update::UpdateManager>) {
     let app_dir = resolve_app_dir(portable_mode);
     init_in_dir(app_dir, portable_mode).await
 }
@@ -170,7 +206,7 @@ async fn init(portable_mode: bool) -> (Arc<TaskManager>, Arc<NativeCastingManage
 async fn init_in_dir(
     app_dir: PathBuf,
     portable_mode: bool,
-) -> (Arc<TaskManager>, Arc<NativeCastingManager>) {
+) -> (Arc<TaskManager>, Arc<NativeCastingManager>, Arc<update::UpdateManager>) {
     if !app_dir.exists() {
         std::fs::create_dir_all(&app_dir).expect("Failed to create app directory");
     }
@@ -266,7 +302,8 @@ async fn init_in_dir(
     debug!("Starting signal layer request handler");
     SignalLayer::start_request_handler(app_dir.join("logs"));
 
-    (task_manager, native_casting)
+    let updater = update::UpdateManager::start(app_dir, settings_handler.subscribe());
+    (task_manager, native_casting, updater)
 }
 
 fn setup_logging(app_dir: &Path) -> Result<()> {

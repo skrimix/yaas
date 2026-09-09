@@ -173,6 +173,9 @@ jobs:
         if: matrix.target == 'linux'
         run: cargo test --locked
 
+      - name: Test update helper
+        run: cargo test --locked -p app-update
+
       - name: Build the app
         shell: bash
         run: |
@@ -203,12 +206,17 @@ jobs:
           fi
           ./scripts/bundle_7zip.sh "$dest"
           ./scripts/bundle_adb.sh "$dest"
+          ./scripts/bundle_updater.sh "$dest"
 
       - name: Add portable launcher script (Windows)
         if: matrix.target == 'windows'
         shell: bash
         run: |
           cp ./scripts/launch_portable.bat "${{ matrix.build-path }}/launch_portable.bat"
+
+      - name: Record macOS bundle identity
+        if: matrix.target == 'macos'
+        run: python scripts/release.py identity --sha "${{ inputs.sha }}" --output build/macos/Build/Products/Release/YAAS.app/Contents/Resources/yaas-build.json
 
       - name: Verify bundled architectures
         if: matrix.target != 'linux'

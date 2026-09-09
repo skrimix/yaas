@@ -62,6 +62,7 @@ chmod +x "$app"
 
 "$SCRIPT_DIR/bundle_7zip.sh" squashfs-root/usr/bin
 "$SCRIPT_DIR/bundle_adb.sh" squashfs-root/usr/bin
+"$SCRIPT_DIR/bundle_updater.sh" squashfs-root/usr/bin
 
 python3 "$SCRIPT_DIR/release.py" verify-bundle linux squashfs-root
 

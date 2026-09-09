@@ -6,6 +6,7 @@ import '../utils/theme_utils.dart' as app_theme;
 class SettingsState extends ChangeNotifier {
   Settings _settings = Settings(
     installationId: '',
+    updateChannel: UpdateChannel.stable,
     activeDownloaderConfigId: '',
     rcloneRemoteName: '',
     adbPath: '',

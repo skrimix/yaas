@@ -3,6 +3,7 @@ import 'dart:ui';
 
 import 'package:desktop_window/desktop_window.dart';
 import 'package:flutter/material.dart';
+import 'package:flutter/services.dart';
 import 'package:dynamic_color/dynamic_color.dart';
 import 'package:file_picker/file_picker.dart';
 import 'package:system_date_time_format/system_date_time_format.dart';
@@ -27,6 +28,7 @@ import 'providers/app_state.dart';
 import 'navigation.dart';
 import 'widgets/common/status_bar.dart';
 import 'utils/utils.dart';
+import 'utils/app_update_exit.dart';
 import 'widgets/dialogs/active_tasks_close_dialog.dart';
 
 void main() async {
@@ -103,10 +105,20 @@ class _YAASAppState extends State<YAASApp> {
   Color? _linuxKdeAccent;
   bool _triedReadLinuxAccent = false;
   bool _exitRequestInProgress = false;
+  late final AppUpdateExit _updateExit;
+  late final StreamSubscription _updateExitSubscription;
 
   @override
   void initState() {
     super.initState();
+    _updateExit = AppUpdateExit(
+      requestExit: () =>
+          ServicesBinding.instance.exitApplication(AppExitType.cancelable),
+      cancelUpdate: () => messages.CancelAppUpdateRequest().sendSignalToRust(),
+      isExiting: () => _exitRequestInProgress,
+    );
+    _updateExitSubscription = messages.AppUpdateExitRequested.rustSignalStream
+        .listen((event) => _updateExit.request(event.message.candidateId));
     _listener = AppLifecycleListener(
       onExitRequested: _handleExitRequested,
     );
@@ -124,6 +136,7 @@ class _YAASAppState extends State<YAASApp> {
 
   @override
   void dispose() {
+    _updateExitSubscription.cancel();
     _listener.dispose();
     super.dispose();
   }
@@ -241,8 +254,7 @@ class _YAASAppState extends State<YAASApp> {
           prepareShutdown: _prepareRustShutdown,
         );
       } else {
-        await _prepareRustShutdown();
-        shouldExit = true;
+        shouldExit = await _prepareRustShutdown();
       }
 
       if (!shouldExit) {
@@ -258,25 +270,31 @@ class _YAASAppState extends State<YAASApp> {
     }
   }
 
-  Future<void> _prepareRustShutdown() async {
+  Future<bool> _prepareRustShutdown() async {
     final ready = messages.AppShutdownReady.rustSignalStream.first.timeout(
       _shutdownWatchdog,
     );
-    messages.AppShutdownRequest().sendSignalToRust();
+    messages.AppShutdownRequest(updateCandidateId: _updateExit.candidateId)
+        .sendSignalToRust();
 
     try {
       final result = (await ready).message;
+      if (result.updateError != null) {
+        debugPrint('[Update] ${result.updateError}');
+      }
       if (result.timedOut) {
         debugPrint(
           '[Shutdown] Timed out with ${result.remainingTasks} tasks remaining',
         );
       }
+      return !result.shutdownCancelled;
     } on TimeoutException {
       debugPrint('[Shutdown] Rust shutdown handshake timed out');
     } catch (error, stackTrace) {
       debugPrint('[Shutdown] Rust shutdown handshake failed: $error');
       debugPrintStack(stackTrace: stackTrace);
     }
+    return true;
   }
 }
 

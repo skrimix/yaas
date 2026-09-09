@@ -7,6 +7,7 @@ import '../../providers/app_update_state.dart';
 import '../../src/bindings/bindings.dart';
 import '../../src/l10n/app_localizations.dart';
 import '../../utils/utils.dart';
+import 'setting_dropdown.dart';
 import 'setting_row.dart';
 
 class AppUpdateSection extends StatelessWidget {
@@ -75,9 +76,10 @@ class AppUpdateSection extends StatelessWidget {
             label: l10n.updatesChannel,
             description: Text(l10n.updatesChannelHint),
             enabled: update.canChangePreferences,
-            control: DropdownButton<UpdateChannel>(
-              value: update.channel,
-              isExpanded: true,
+            control: SettingDropdown<UpdateChannel>(
+              key: ValueKey((update.channel, update.savingPreferences)),
+              label: l10n.updatesChannel,
+              initialValue: update.channel,
               items: [
                 DropdownMenuItem(
                     value: UpdateChannel.stable,
@@ -102,7 +104,7 @@ class AppUpdateSection extends StatelessWidget {
                   : null,
             ),
           ),
-          const Divider(height: 1),
+          const Divider(height: 1, indent: 16, endIndent: 16),
           Padding(
             padding: const EdgeInsets.all(16),
             child: Column(
@@ -128,69 +130,64 @@ class AppUpdateSection extends StatelessWidget {
                   ],
                 ],
                 if (release != null) ...[
-                  const SizedBox(height: 12),
+                  const SizedBox(height: 16),
                   SelectableText(
                       'YAAS ${release.version}+${release.buildNumber}',
                       style: theme.textTheme.titleMedium),
+                  const SizedBox(height: 4),
                   Text(
                       '${release.channel == UpdateChannel.stable ? l10n.buildChannelStable : l10n.buildChannelNightly}'
                       ' · ${formatSize(total, 1)}'),
                   if (release.channel == UpdateChannel.nightly)
                     Text(l10n.ciBuildIdentity(release.runNumber.toString(),
                         release.runAttempt.toString())),
+                  const SizedBox(height: 8),
                   TextButton.icon(
                     onPressed: () => _openLink(context, release.releaseUrl),
                     icon: const Icon(Icons.open_in_new, size: 18),
                     label: Text(l10n.updatesReleaseLink),
                   ),
                   if (release.notes.trim().isNotEmpty)
-                    ExpansionTile(
+                    _UpdateDetails(
                       key: ValueKey(release.candidateId),
-                      tilePadding: EdgeInsets.zero,
-                      title: Text(l10n.updatesReleaseNotes),
-                      children: [
-                        Align(
-                          alignment: Alignment.centerLeft,
-                          child: Padding(
-                            padding: const EdgeInsets.only(bottom: 16),
-                            child: MarkdownBody(
-                              data: release.notes,
-                              selectable: true,
-                              onTapLink: (text, href, title) {
-                                if (href != null) {
-                                  _openLink(context, href,
-                                      baseUrl: release.releaseUrl);
-                                }
-                              },
-                            ),
-                          ),
-                        ),
-                      ],
+                      label: l10n.updatesReleaseNotes,
+                      icon: Icons.notes_rounded,
+                      child: MarkdownBody(
+                        data: release.notes,
+                        selectable: true,
+                        onTapLink: (text, href, title) {
+                          if (href != null) {
+                            _openLink(context, href,
+                                baseUrl: release.releaseUrl);
+                          }
+                        },
+                      ),
                     ),
                 ],
                 if (state?.installationUnavailableReason != null) ...[
-                  const SizedBox(height: 12),
+                  const SizedBox(height: 16),
                   Text(l10n.updatesUnavailable,
                       style: theme.textTheme.titleSmall),
-                  SelectableText(state!.installationUnavailableReason!),
+                  const SizedBox(height: 4),
+                  SelectableText(state!.installationUnavailableReason!,
+                      style: theme.textTheme.bodyMedium?.copyWith(
+                          color: theme.colorScheme.onSurfaceVariant)),
                 ],
                 if (state?.error != null || state?.errorKind != null) ...[
-                  const SizedBox(height: 12),
+                  const SizedBox(height: 16),
                   Text(_errorSummary(l10n, state!.errorKind),
                       style: TextStyle(color: theme.colorScheme.error)),
-                  if (state.error != null)
-                    ExpansionTile(
-                      tilePadding: EdgeInsets.zero,
-                      title: Text(l10n.updatesErrorDetails),
-                      children: [
-                        Align(
-                            alignment: Alignment.centerLeft,
-                            child: SelectableText(state.error!))
-                      ],
+                  if (state.error != null) ...[
+                    const SizedBox(height: 8),
+                    _UpdateDetails(
+                      label: l10n.updatesErrorDetails,
+                      icon: Icons.info_outline_rounded,
+                      child: SelectableText(state.error!),
                     ),
+                  ],
                 ],
                 if (phase == AppUpdatePhase.ready) ...[
-                  const SizedBox(height: 12),
+                  const SizedBox(height: 16),
                   Text(l10n.updatesRestartHint),
                 ],
                 const SizedBox(height: 16),
@@ -254,4 +251,84 @@ class AppUpdateSection extends StatelessWidget {
         AppUpdateErrorKind.recoveryRequired => l10n.updatesRecoveryError,
         null => l10n.updatesUnknownError,
       };
+}
+
+class _UpdateDetails extends StatefulWidget {
+  const _UpdateDetails({
+    super.key,
+    required this.label,
+    required this.icon,
+    required this.child,
+  });
+
+  final String label;
+  final IconData icon;
+  final Widget child;
+
+  @override
+  State<_UpdateDetails> createState() => _UpdateDetailsState();
+}
+
+class _UpdateDetailsState extends State<_UpdateDetails> {
+  bool _expanded = false;
+
+  @override
+  Widget build(BuildContext context) {
+    final colors = Theme.of(context).colorScheme;
+    final duration = MediaQuery.disableAnimationsOf(context)
+        ? Duration.zero
+        : const Duration(milliseconds: 200);
+
+    return Column(
+      crossAxisAlignment: CrossAxisAlignment.start,
+      children: [
+        Semantics(
+          expanded: _expanded,
+          child: TextButton(
+            onPressed: () => setState(() => _expanded = !_expanded),
+            style: TextButton.styleFrom(
+              padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 8),
+              shape: const StadiumBorder(),
+              splashFactory: NoSplash.splashFactory,
+            ).copyWith(
+              overlayColor: WidgetStateProperty.resolveWith((states) =>
+                  states.contains(WidgetState.hovered) ||
+                          states.contains(WidgetState.focused)
+                      ? colors.primary.withValues(alpha: 0.08)
+                      : Colors.transparent),
+            ),
+            child: Row(
+              mainAxisSize: MainAxisSize.min,
+              children: [
+                Icon(widget.icon, size: 18),
+                const SizedBox(width: 8),
+                Flexible(child: Text(widget.label)),
+                const SizedBox(width: 6),
+                AnimatedRotation(
+                  turns: _expanded ? 0.5 : 0,
+                  duration: duration,
+                  curve: Curves.easeInOut,
+                  child: const Icon(Icons.expand_more_rounded, size: 18),
+                ),
+              ],
+            ),
+          ),
+        ),
+        AnimatedSize(
+          duration: duration,
+          curve: Curves.easeInOut,
+          alignment: Alignment.topLeft,
+          child: SizedBox(
+            width: double.infinity,
+            child: _expanded
+                ? Padding(
+                    padding: const EdgeInsets.only(top: 8),
+                    child: widget.child,
+                  )
+                : const SizedBox.shrink(),
+          ),
+        ),
+      ],
+    );
+  }
 }

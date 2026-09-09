@@ -14,6 +14,7 @@ import '../../src/l10n/app_localizations.dart';
 import '../../utils/utils.dart';
 import '../../utils/sideload_utils.dart';
 import '../common/selectable_link_text.dart';
+import '../common/setting_dropdown.dart';
 import '../common/setting_row.dart';
 import '../dialogs/downloader_setup_dialog.dart';
 
@@ -1067,38 +1068,6 @@ class _SettingsScreenState extends State<SettingsScreen> {
     );
   }
 
-  Widget _dropdownControl<T>({
-    required String label,
-    required T? value,
-    required List<DropdownMenuItem<T>> items,
-    required ValueChanged<T?>? onChanged,
-    Widget? hint,
-  }) {
-    return Semantics(
-      label: label,
-      child: DropdownButtonFormField<T>(
-        initialValue: value,
-        isExpanded: true,
-        itemHeight: null,
-        hint: hint,
-        items: items,
-        selectedItemBuilder: (context) => items
-            .map((item) => Align(
-                  alignment: Alignment.centerLeft,
-                  child: DefaultTextStyle.merge(
-                    maxLines: 1,
-                    overflow: TextOverflow.ellipsis,
-                    child: item.child,
-                  ),
-                ))
-            .toList(),
-        onChanged: onChanged,
-        decoration: _controlDecoration(),
-        borderRadius: BorderRadius.circular(8),
-      ),
-    );
-  }
-
   Widget _buildDropdownSetting<T>({
     required String label,
     required T value,
@@ -1110,9 +1079,9 @@ class _SettingsScreenState extends State<SettingsScreen> {
       label: label,
       description: description == null ? null : Text(description),
       enabled: onChanged != null,
-      control: _dropdownControl(
+      control: SettingDropdown<T>(
         label: label,
-        value: value,
+        initialValue: value,
         items: items,
         onChanged: onChanged,
       ),
@@ -1152,9 +1121,9 @@ class _SettingsScreenState extends State<SettingsScreen> {
       control: Row(
         children: [
           Expanded(
-            child: _dropdownControl<String>(
+            child: SettingDropdown<String>(
               label: l10n.settingsRcloneRemote,
-              value: dropdownValue,
+              initialValue: dropdownValue,
               hint: currentRemote.isEmpty ? null : Text(currentRemote),
               items: remotes
                   .map((remote) => DropdownMenuItem(

@@ -135,6 +135,35 @@ void main() {
     ]);
   });
 
+  testWidgets('channel field responds across its padding and shows focus',
+      (tester) async {
+    fixture.emit(updateSnapshot(AppUpdatePhase.idle));
+    final l10n = await pumpUpdates(tester, fixture);
+    final field = find.byType(DropdownButtonFormField<UpdateChannel>);
+
+    await tester.sendKeyEvent(LogicalKeyboardKey.tab);
+    await tester.pumpAndSettle();
+    final decorator = tester.widget<InputDecorator>(
+        find.descendant(of: field, matching: find.byType(InputDecorator)));
+    expect(decorator.isFocused, isTrue);
+    expect(decorator.decoration.focusedBorder!.borderSide.width, 2);
+
+    final bounds = tester.getRect(field);
+    for (final point in [
+      bounds.topCenter + const Offset(0, 4),
+      bounds.bottomCenter - const Offset(0, 4),
+      bounds.centerLeft + const Offset(4, 0),
+      bounds.centerRight - const Offset(4, 0),
+    ]) {
+      await tester.tapAt(point);
+      await tester.pumpAndSettle();
+      expect(find.text(l10n.buildChannelNightly).hitTestable(), findsOneWidget);
+      await tester.sendKeyEvent(LogicalKeyboardKey.escape);
+      await tester.pumpAndSettle();
+    }
+    expect(fixture.settings.saves, isEmpty);
+  });
+
   testWidgets('failed preference saves restore confirmed channel and switch',
       (tester) async {
     fixture.emit(updateSnapshot(AppUpdatePhase.idle));

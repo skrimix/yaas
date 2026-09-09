@@ -51,9 +51,15 @@ void main() async {
         ChangeNotifierProvider(create: (_) => AdbStateProvider()),
         ChangeNotifierProvider(create: (_) => CastingState()),
         ChangeNotifierProvider(create: (_) => AppState()),
-        ChangeNotifierProvider(create: (_) => CloudAppsState()),
+        ChangeNotifierProvider(
+          lazy: false,
+          create: (_) => CloudAppsState(),
+        ),
         ChangeNotifierProvider(create: (_) => TaskState()),
-        ChangeNotifierProvider(create: (_) => SettingsState()),
+        ChangeNotifierProvider(
+          lazy: false,
+          create: (_) => SettingsState()..load(),
+        ),
         ChangeNotifierProvider(
           lazy: false,
           create: (context) =>
@@ -129,13 +135,6 @@ class _YAASAppState extends State<YAASApp> {
     _listener = AppLifecycleListener(
       onExitRequested: _handleExitRequested,
     );
-
-    // Initialize some providers.
-    WidgetsBinding.instance.addPostFrameCallback((_) {
-      context.read<
-          CloudAppsState>(); // Do not call load() here, it will be called when the downloader becomes available.
-      context.read<SettingsState>().load();
-    });
 
     // Best-effort read of KDE accent color on Linux
     _maybeLoadLinuxAccent();

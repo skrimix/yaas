@@ -3,9 +3,12 @@ import 'package:flutter_test/flutter_test.dart';
 import 'package:package_info_plus/package_info_plus.dart';
 import 'package:provider/provider.dart';
 import 'package:yaas/providers/app_state.dart';
+import 'package:yaas/providers/app_update_state.dart';
 import 'package:yaas/src/bindings/bindings.dart';
 import 'package:yaas/src/l10n/app_localizations.dart';
 import 'package:yaas/widgets/screens/about_screen.dart';
+
+import '../support/app_update_fixture.dart';
 
 void main() {
   for (final locale in ['en', 'ru']) {
@@ -20,10 +23,17 @@ void main() {
           buildSignature: '',
         );
         final state = AppState();
+        final updates = UpdateFixture();
+        updates.emit(updateSnapshot(AppUpdatePhase.upToDate));
+        addTearDown(updates.dispose);
         addTearDown(state.dispose);
         await tester.pumpWidget(
-          ChangeNotifierProvider.value(
-            value: state,
+          MultiProvider(
+            providers: [
+              ChangeNotifierProvider.value(value: state),
+              ChangeNotifierProvider<AppUpdateState>.value(
+                  value: updates.state),
+            ],
             child: MaterialApp(
               locale: Locale(locale),
               localizationsDelegates: AppLocalizations.localizationsDelegates,

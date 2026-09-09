@@ -37,6 +37,7 @@ dependencies:
   tuple: ^2.0.2
   meta: ^1.19.0
   flutter_svg: ^2.3.0
+  flutter_markdown_plus: ^1.0.12
   provider: ^6.1.5+1
   dynamic_color: ^1.9.0 # Version 2 uses material_ui ColorScheme instead of Flutter's.
   filesize: ^2.0.1

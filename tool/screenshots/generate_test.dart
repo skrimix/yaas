@@ -12,6 +12,7 @@ import 'package:system_date_time_format/system_date_time_format.dart';
 import 'package:yaas/main.dart';
 import 'package:yaas/providers/adb_state.dart';
 import 'package:yaas/providers/app_state.dart';
+import 'package:yaas/providers/app_update_state.dart';
 import 'package:yaas/providers/cloud_apps_state.dart';
 import 'package:yaas/providers/device_state.dart';
 import 'package:yaas/providers/settings_state.dart';
@@ -194,6 +195,13 @@ void main() {
               create: (_) => AdbStateProvider(), lazy: false),
           ChangeNotifierProvider(create: (_) => CloudAppsState(), lazy: false),
           ChangeNotifierProvider<SettingsState>(create: (_) => settings),
+          ChangeNotifierProvider(
+            create: (_) => AppUpdateState(
+              settings: settings,
+              events: const Stream.empty(),
+              requestSnapshot: () {},
+            ),
+          ),
           ChangeNotifierProvider<AppState>(create: (_) => app),
           ChangeNotifierProvider<TaskState>(create: (_) => tasks),
         ],

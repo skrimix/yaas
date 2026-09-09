@@ -80,7 +80,7 @@ pub(crate) enum DownloadMode {
     Staged,
 }
 
-/// Release channel to check when the user requests an update.
+/// Release channel used for application update checks.
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize, SignalPiece)]
 #[serde(rename_all = "snake_case")]
 pub(crate) enum UpdateChannel {
@@ -108,6 +108,7 @@ impl UpdateChannel {
 pub(crate) struct Settings {
     pub installation_id: String,
     pub update_channel: UpdateChannel,
+    pub check_updates_on_startup: bool,
     pub active_downloader_config_id: String,
     pub rclone_remote_name: String,
     pub adb_path: String,
@@ -150,6 +151,7 @@ impl Default for Settings {
         Self {
             installation_id: Uuid::new_v4().to_string(),
             update_channel: UpdateChannel::default(),
+            check_updates_on_startup: true,
             active_downloader_config_id: String::new(),
             rclone_remote_name: "FFA-90".to_string(),
             adb_path: "adb".to_string(),
@@ -463,10 +465,20 @@ mod tests {
     fn update_channel_defaults_and_round_trips() {
         let settings: Settings = serde_json::from_str("{}").unwrap();
         assert_eq!(settings.update_channel, super::UpdateChannel::default());
+        assert!(settings.check_updates_on_startup);
         let nightly: Settings = serde_json::from_str(r#"{"update_channel":"nightly"}"#).unwrap();
         assert_eq!(nightly.update_channel, super::UpdateChannel::Nightly);
         let json = serde_json::to_string(&nightly).unwrap();
         assert_eq!(serde_json::from_str::<Settings>(&json).unwrap(), nightly);
+    }
+
+    #[test]
+    fn startup_update_checks_can_be_disabled() {
+        let settings: Settings =
+            serde_json::from_str(r#"{"check_updates_on_startup":false}"#).unwrap();
+        assert!(!settings.check_updates_on_startup);
+        let json = serde_json::to_string(&settings).unwrap();
+        assert_eq!(serde_json::from_str::<Settings>(&json).unwrap(), settings);
     }
 
     #[test]

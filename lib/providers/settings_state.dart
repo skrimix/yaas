@@ -7,6 +7,7 @@ class SettingsState extends ChangeNotifier {
   Settings _settings = Settings(
     installationId: '',
     updateChannel: UpdateChannel.stable,
+    checkUpdatesOnStartup: true,
     activeDownloaderConfigId: '',
     rcloneRemoteName: '',
     adbPath: '',

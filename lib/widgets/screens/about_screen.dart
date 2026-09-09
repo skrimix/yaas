@@ -5,6 +5,7 @@ import 'package:provider/provider.dart';
 import '../../providers/app_state.dart';
 import '../../src/l10n/app_localizations.dart';
 import '../../utils/utils.dart';
+import '../common/app_update_section.dart';
 
 class AboutScreen extends StatefulWidget {
   const AboutScreen({super.key});
@@ -79,6 +80,11 @@ class _AboutScreenState extends State<AboutScreen> {
                       style: const TextStyle(fontFamily: 'monospace')),
               ],
             ),
+          ] else
+            Text(l10n.aboutBuildInfoLoading),
+          const SizedBox(height: 16),
+          const AppUpdateSection(),
+          if (core != null) ...[
             const SizedBox(height: 16),
             Text(l10n.aboutCoreDetails,
                 style: Theme.of(context).textTheme.titleSmall),
@@ -88,8 +94,7 @@ class _AboutScreenState extends State<AboutScreen> {
             Text(l10n.aboutBuildProfile(core.profile)),
             const SizedBox(height: 4),
             Text(l10n.aboutCompiler(core.rustcVersion)),
-          ] else
-            Text(l10n.aboutBuildInfoLoading),
+          ],
         ],
       ),
     );

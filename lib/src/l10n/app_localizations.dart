@@ -3386,6 +3386,216 @@ abstract class AppLocalizations {
   /// In en, this message translates to:
   /// **'Disable (no limit)'**
   String get proximityDisableNoLimit;
+
+  /// No description provided for @updatesTitle.
+  ///
+  /// In en, this message translates to:
+  /// **'Application updates'**
+  String get updatesTitle;
+
+  /// No description provided for @updatesChannel.
+  ///
+  /// In en, this message translates to:
+  /// **'Update channel'**
+  String get updatesChannel;
+
+  /// No description provided for @updatesChannelHint.
+  ///
+  /// In en, this message translates to:
+  /// **'Nightly builds may be less stable. Switching channels can offer an older version.'**
+  String get updatesChannelHint;
+
+  /// No description provided for @updatesCheckOnStartup.
+  ///
+  /// In en, this message translates to:
+  /// **'Check for updates on startup'**
+  String get updatesCheckOnStartup;
+
+  /// No description provided for @updatesLoading.
+  ///
+  /// In en, this message translates to:
+  /// **'Loading update status…'**
+  String get updatesLoading;
+
+  /// No description provided for @updatesIdle.
+  ///
+  /// In en, this message translates to:
+  /// **'Check for a new version of YAAS.'**
+  String get updatesIdle;
+
+  /// No description provided for @updatesChecking.
+  ///
+  /// In en, this message translates to:
+  /// **'Checking for updates…'**
+  String get updatesChecking;
+
+  /// No description provided for @updatesAvailable.
+  ///
+  /// In en, this message translates to:
+  /// **'An update is available'**
+  String get updatesAvailable;
+
+  /// No description provided for @updatesUpToDate.
+  ///
+  /// In en, this message translates to:
+  /// **'You’re up to date.'**
+  String get updatesUpToDate;
+
+  /// No description provided for @updatesDownloading.
+  ///
+  /// In en, this message translates to:
+  /// **'Downloading update…'**
+  String get updatesDownloading;
+
+  /// No description provided for @updatesReady.
+  ///
+  /// In en, this message translates to:
+  /// **'Update ready to install'**
+  String get updatesReady;
+
+  /// No description provided for @updatesPreparing.
+  ///
+  /// In en, this message translates to:
+  /// **'Preparing update…'**
+  String get updatesPreparing;
+
+  /// No description provided for @updatesAwaitingExit.
+  ///
+  /// In en, this message translates to:
+  /// **'Waiting to restart…'**
+  String get updatesAwaitingExit;
+
+  /// No description provided for @updatesCheck.
+  ///
+  /// In en, this message translates to:
+  /// **'Check for updates'**
+  String get updatesCheck;
+
+  /// No description provided for @updatesCheckAgain.
+  ///
+  /// In en, this message translates to:
+  /// **'Check again'**
+  String get updatesCheckAgain;
+
+  /// No description provided for @updatesDownload.
+  ///
+  /// In en, this message translates to:
+  /// **'Download update'**
+  String get updatesDownload;
+
+  /// No description provided for @updatesInstall.
+  ///
+  /// In en, this message translates to:
+  /// **'Install and restart'**
+  String get updatesInstall;
+
+  /// No description provided for @updatesRestartHint.
+  ///
+  /// In en, this message translates to:
+  /// **'YAAS will close to install the update, then reopen.'**
+  String get updatesRestartHint;
+
+  /// No description provided for @updatesReleaseNotes.
+  ///
+  /// In en, this message translates to:
+  /// **'Release notes'**
+  String get updatesReleaseNotes;
+
+  /// No description provided for @updatesReleaseLink.
+  ///
+  /// In en, this message translates to:
+  /// **'View release on GitHub'**
+  String get updatesReleaseLink;
+
+  /// No description provided for @updatesUnavailable.
+  ///
+  /// In en, this message translates to:
+  /// **'Automatic installation is unavailable'**
+  String get updatesUnavailable;
+
+  /// No description provided for @updatesErrorDetails.
+  ///
+  /// In en, this message translates to:
+  /// **'Error details'**
+  String get updatesErrorDetails;
+
+  /// No description provided for @updatesView.
+  ///
+  /// In en, this message translates to:
+  /// **'View update'**
+  String get updatesView;
+
+  /// No description provided for @updatesDismiss.
+  ///
+  /// In en, this message translates to:
+  /// **'Dismiss update notification'**
+  String get updatesDismiss;
+
+  /// No description provided for @updatesNetworkError.
+  ///
+  /// In en, this message translates to:
+  /// **'Could not reach the update server. Try again later.'**
+  String get updatesNetworkError;
+
+  /// No description provided for @updatesNoReleaseError.
+  ///
+  /// In en, this message translates to:
+  /// **'No release is available on this channel yet.'**
+  String get updatesNoReleaseError;
+
+  /// No description provided for @updatesIncompleteReleaseError.
+  ///
+  /// In en, this message translates to:
+  /// **'This release is still being published. Check again later.'**
+  String get updatesIncompleteReleaseError;
+
+  /// No description provided for @updatesInvalidMetadataError.
+  ///
+  /// In en, this message translates to:
+  /// **'The release information could not be verified. Check again later.'**
+  String get updatesInvalidMetadataError;
+
+  /// No description provided for @updatesNoPackageError.
+  ///
+  /// In en, this message translates to:
+  /// **'This release has no package for your platform.'**
+  String get updatesNoPackageError;
+
+  /// No description provided for @updatesIntegrityError.
+  ///
+  /// In en, this message translates to:
+  /// **'The download failed verification. Check again and download a fresh copy.'**
+  String get updatesIntegrityError;
+
+  /// No description provided for @updatesInstallationError.
+  ///
+  /// In en, this message translates to:
+  /// **'The update could not be installed.'**
+  String get updatesInstallationError;
+
+  /// No description provided for @updatesInvalidRequestError.
+  ///
+  /// In en, this message translates to:
+  /// **'The update is no longer ready for this action. Check its current status.'**
+  String get updatesInvalidRequestError;
+
+  /// No description provided for @updatesRecoveryError.
+  ///
+  /// In en, this message translates to:
+  /// **'A previous update needs recovery before installation can continue.'**
+  String get updatesRecoveryError;
+
+  /// No description provided for @updatesUnknownError.
+  ///
+  /// In en, this message translates to:
+  /// **'The update could not be completed.'**
+  String get updatesUnknownError;
+
+  /// No description provided for @updatesSaving.
+  ///
+  /// In en, this message translates to:
+  /// **'Saving update preferences…'**
+  String get updatesSaving;
 }
 
 class _AppLocalizationsDelegate

@@ -25,8 +25,10 @@ import 'providers/task_state.dart';
 import 'providers/settings_state.dart';
 import 'providers/log_state.dart';
 import 'providers/app_state.dart';
+import 'providers/app_update_state.dart';
 import 'navigation.dart';
 import 'widgets/common/status_bar.dart';
+import 'widgets/common/app_update_banner.dart';
 import 'utils/utils.dart';
 import 'utils/app_update_exit.dart';
 import 'widgets/dialogs/active_tasks_close_dialog.dart';
@@ -52,6 +54,11 @@ void main() async {
         ChangeNotifierProvider(create: (_) => CloudAppsState()),
         ChangeNotifierProvider(create: (_) => TaskState()),
         ChangeNotifierProvider(create: (_) => SettingsState()),
+        ChangeNotifierProvider(
+          lazy: false,
+          create: (context) =>
+              AppUpdateState(settings: context.read<SettingsState>()),
+        ),
         ChangeNotifierProvider(create: (_) => LogState()),
       ],
       child: const SDTFScope(child: YAASApp()),
@@ -392,6 +399,7 @@ class _SinglePageState extends State<SinglePage> {
         Expanded(
           child: Column(
             children: [
+              if (_currentPageKey != 'about') const AppUpdateBanner(),
               Expanded(
                 child: AnimatedSwitcher(
                   duration: const Duration(milliseconds: 100),

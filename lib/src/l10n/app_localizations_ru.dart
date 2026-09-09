@@ -1838,4 +1838,118 @@ class AppLocalizationsRu extends AppLocalizations {
 
   @override
   String get proximityDisableNoLimit => 'Отключить (без лимита)';
+
+  @override
+  String get updatesTitle => 'Обновления приложения';
+
+  @override
+  String get updatesChannel => 'Канал обновлений';
+
+  @override
+  String get updatesChannelHint =>
+      'Ночные сборки могут быть менее стабильными. При смене канала может быть предложена более старая версия.';
+
+  @override
+  String get updatesCheckOnStartup => 'Проверять обновления при запуске';
+
+  @override
+  String get updatesLoading => 'Загрузка состояния обновлений…';
+
+  @override
+  String get updatesIdle => 'Проверьте наличие новой версии YAAS.';
+
+  @override
+  String get updatesChecking => 'Проверка обновлений…';
+
+  @override
+  String get updatesAvailable => 'Доступно обновление';
+
+  @override
+  String get updatesUpToDate => 'У вас актуальная версия.';
+
+  @override
+  String get updatesDownloading => 'Загрузка обновления…';
+
+  @override
+  String get updatesReady => 'Обновление готово к установке';
+
+  @override
+  String get updatesPreparing => 'Подготовка обновления…';
+
+  @override
+  String get updatesAwaitingExit => 'Ожидание перезапуска…';
+
+  @override
+  String get updatesCheck => 'Проверить обновления';
+
+  @override
+  String get updatesCheckAgain => 'Проверить снова';
+
+  @override
+  String get updatesDownload => 'Скачать обновление';
+
+  @override
+  String get updatesInstall => 'Установить и перезапустить';
+
+  @override
+  String get updatesRestartHint =>
+      'YAAS закроется для установки обновления, затем откроется снова.';
+
+  @override
+  String get updatesReleaseNotes => 'Что нового';
+
+  @override
+  String get updatesReleaseLink => 'Открыть релиз на GitHub';
+
+  @override
+  String get updatesUnavailable => 'Автоматическая установка недоступна';
+
+  @override
+  String get updatesErrorDetails => 'Подробности ошибки';
+
+  @override
+  String get updatesView => 'Посмотреть обновление';
+
+  @override
+  String get updatesDismiss => 'Скрыть уведомление об обновлении';
+
+  @override
+  String get updatesNetworkError =>
+      'Не удалось связаться с сервером обновлений. Повторите попытку позже.';
+
+  @override
+  String get updatesNoReleaseError => 'В этом канале пока нет релизов.';
+
+  @override
+  String get updatesIncompleteReleaseError =>
+      'Публикация релиза ещё не завершена. Проверьте позже.';
+
+  @override
+  String get updatesInvalidMetadataError =>
+      'Не удалось проверить сведения о релизе. Проверьте позже.';
+
+  @override
+  String get updatesNoPackageError =>
+      'В этом релизе нет пакета для вашей платформы.';
+
+  @override
+  String get updatesIntegrityError =>
+      'Загруженный файл не прошёл проверку. Проверьте обновления и скачайте его заново.';
+
+  @override
+  String get updatesInstallationError => 'Не удалось установить обновление.';
+
+  @override
+  String get updatesInvalidRequestError =>
+      'Обновление больше не готово к этому действию. Проверьте его текущее состояние.';
+
+  @override
+  String get updatesRecoveryError =>
+      'Прежде чем продолжить установку, необходимо восстановление после предыдущего обновления.';
+
+  @override
+  String get updatesUnknownError => 'Не удалось завершить обновление.';
+
+  @override
+  String get updatesSaving => 'Сохранение настроек обновлений…';
 }

@@ -1,0 +1,71 @@
+name: Prepare release
+
+on:
+  workflow_dispatch:
+    inputs:
+      validation_only:
+        description: Build and validate without creating a draft (no changelog entry required)
+        type: boolean
+        default: true
+
+permissions:
+  contents: read
+
+concurrency:
+  group: prepare-release
+  cancel-in-progress: false
+
+jobs:
+  validate:
+    name: Validate release request
+    runs-on: ubuntu-24.04
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          ref: ${{ github.sha }}
+          fetch-depth: 0
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+      - name: Check version and publication policy
+        env:
+          GH_TOKEN: ${{ github.token }}
+          VALIDATION_ONLY: ${{ inputs.validation_only }}
+        run: |
+          if [[ "$VALIDATION_ONLY" == "true" ]]; then
+            python3 scripts/release.py validate
+          else
+            python3 scripts/release.py validate --require-notes
+            python3 scripts/release.py check-draft --sha "$GITHUB_SHA"
+          fi
+
+  build:
+    needs: validate
+    uses: ./.github/workflows/packages.yaml
+    with:
+      sha: ${{ github.sha }}
+      channel: stable
+
+  draft:
+    name: Prepare draft downloads
+    needs: build
+    if: ${{ !inputs.validation_only }}
+    runs-on: ubuntu-24.04
+    permissions:
+      contents: write
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          ref: ${{ github.sha }}
+          fetch-depth: 0
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+      - uses: actions/download-artifact@v4
+        with:
+          name: release-files
+          path: release
+      - name: Create or refresh unpublished draft
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: python3 scripts/release.py publish stable

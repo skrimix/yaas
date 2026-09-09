@@ -40,6 +40,16 @@ pub(crate) struct MediaConfigChanged {
 /// Sent once on startup with build/version information.
 #[derive(Serialize, Deserialize, RustSignal)]
 pub(crate) struct AppVersionInfo {
+    /// Application version from pubspec.yaml.
+    pub app_version: String,
+    /// Numeric package build number from pubspec.yaml.
+    pub build_number: String,
+    /// development, nightly, or stable.
+    pub release_channel: String,
+    /// CI workflow run number; absent for local builds.
+    pub run_number: Option<String>,
+    /// CI workflow run attempt; absent for local builds.
+    pub run_attempt: Option<String>,
     /// Crate version (from Cargo.toml)
     pub core_version: String,
     /// Rust profile (debug/release)

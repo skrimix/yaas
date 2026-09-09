@@ -62,11 +62,15 @@ pub(crate) mod settings;
 pub(crate) mod task;
 pub(crate) mod utils;
 
+#[cfg(test)]
+#[path = "../build_support.rs"]
+mod build_support;
+
 pub(crate) mod built_info {
     include!(concat!(env!("OUT_DIR"), "/built.rs"));
 }
 
-pub(crate) const USER_AGENT: &str = concat!("YAAS/", env!("CARGO_PKG_VERSION"));
+pub(crate) const USER_AGENT: &str = concat!("YAAS/", env!("YAAS_APP_VERSION"));
 const TASK_SHUTDOWN_TIMEOUT: Duration = Duration::from_secs(10);
 
 fn main() {
@@ -176,6 +180,14 @@ async fn init_in_dir(
     }
     // Log and send version/build info
     info!(
+        app_version = env!("YAAS_APP_VERSION"),
+        build_number = env!("YAAS_BUILD_NUMBER"),
+        channel = env!("YAAS_RELEASE_CHANNEL"),
+        run_number = env!("YAAS_RUN_NUMBER"),
+        run_attempt = env!("YAAS_RUN_ATTEMPT"),
+        "Application build"
+    );
+    info!(
         "Starting YAAS core {}| version={} | commit={}{} | profile={} | rustc={} | built={}",
         if portable_mode { "(portable mode)" } else { "" },
         built_info::PKG_VERSION,
@@ -186,6 +198,13 @@ async fn init_in_dir(
         built_info::BUILT_TIME_UTC
     );
     AppVersionInfo {
+        app_version: env!("YAAS_APP_VERSION").to_string(),
+        build_number: env!("YAAS_BUILD_NUMBER").to_string(),
+        release_channel: env!("YAAS_RELEASE_CHANNEL").to_string(),
+        run_number: (!env!("YAAS_RUN_NUMBER").is_empty())
+            .then(|| env!("YAAS_RUN_NUMBER").to_string()),
+        run_attempt: (!env!("YAAS_RUN_ATTEMPT").is_empty())
+            .then(|| env!("YAAS_RUN_ATTEMPT").to_string()),
         core_version: built_info::PKG_VERSION.to_string(),
         profile: built_info::PROFILE.to_string(),
         rustc_version: built_info::RUSTC_VERSION.to_string(),

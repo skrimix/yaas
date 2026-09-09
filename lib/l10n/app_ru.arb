@@ -9,6 +9,26 @@
     "navSettings": "Настройки",
     "navLogs": "Журнал",
     "navAbout": "О программе",
+    "buildChannelStable": "Стабильный выпуск",
+    "buildChannelNightly": "Ночная сборка",
+    "buildChannelDevelopment": "Сборка для разработки",
+    "ciBuildIdentity": "CI {run}.{attempt}",
+    "@ciBuildIdentity": {
+        "placeholders": {
+            "run": { "type": "String" },
+            "attempt": { "type": "String" }
+        }
+    },
+    "aboutCommit": "Коммит",
+    "aboutUnknown": "неизвестно",
+    "aboutBuildInfoLoading": "Загрузка сведений о сборке…",
+    "aboutCoreDetails": "Сведения о ядре",
+    "aboutBuiltAt": "Дата сборки: {time}",
+    "@aboutBuiltAt": { "placeholders": { "time": { "type": "String" } } },
+    "aboutBuildProfile": "Профиль: {profile}",
+    "@aboutBuildProfile": { "placeholders": { "profile": { "type": "String" } } },
+    "aboutCompiler": "Компилятор: {compiler}",
+    "@aboutCompiler": { "placeholders": { "compiler": { "type": "String" } } },
     "navDownloads": "Загрузки",
     "settingsTitle": "Настройки",
     "settingsErrorLoading": "Ошибка загрузки настроек",

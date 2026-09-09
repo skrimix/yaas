@@ -25,12 +25,19 @@ class _AboutScreenState extends State<AboutScreen> {
   @override
   Widget build(BuildContext context) {
     final l10n = AppLocalizations.of(context);
-    final appState = context.watch<AppState>();
-    final core = appState.coreVersionInfo;
+    final core = context.watch<AppState>().coreVersionInfo;
     final commitHash = core?.gitCommitHash ?? core?.gitCommitHashShort ?? '';
     final dirtySuffix = core?.gitDirty == true ? ' (dirty)' : '';
+    final channel = switch (core?.releaseChannel) {
+      'stable' => l10n.buildChannelStable,
+      'nightly' => l10n.buildChannelNightly,
+      _ => l10n.buildChannelDevelopment,
+    };
+    final ciBuild = core?.runNumber != null && core?.runAttempt != null
+        ? l10n.ciBuildIdentity(core!.runNumber!, core.runAttempt!)
+        : null;
 
-    return Padding(
+    return SingleChildScrollView(
       padding: const EdgeInsets.all(16.0),
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.start,
@@ -40,41 +47,21 @@ class _AboutScreenState extends State<AboutScreen> {
           FutureBuilder<PackageInfo>(
             future: _pkgInfo,
             builder: (context, snapshot) {
-              final version = snapshot.data?.version ?? 'unknown';
-              final build = snapshot.data?.buildNumber ?? '';
-              final text = 'YAAS $version${build.isNotEmpty ? "+$build" : ''}';
-              return Row(
-                children: [
-                  Text(text),
-                  // const SizedBox(width: 6),
-                  // IconButton(
-                  //   tooltip: 'Copy version',
-                  //   icon: const Icon(Icons.copy, size: 16),
-                  //   onPressed: () => copyToClipboard(context, text,
-                  //       title: 'Version copied', description: text),
-                  // ),
-                ],
-              );
+              final version = core?.appVersion ??
+                  snapshot.data?.version ??
+                  l10n.aboutUnknown;
+              final build =
+                  core?.buildNumber ?? snapshot.data?.buildNumber ?? '';
+              return Text('YAAS $version${build.isNotEmpty ? "+$build" : ''}');
             },
           ),
           const SizedBox(height: 4),
           if (core != null) ...[
+            Text(ciBuild == null ? channel : '$channel · $ciBuild'),
+            const SizedBox(height: 4),
             Row(
               children: [
-                Text('Core v${core.coreVersion}'),
-                const SizedBox(width: 6),
-                // IconButton(
-                //   tooltip: 'Copy core version',
-                //   icon: const Icon(Icons.copy, size: 16),
-                //   onPressed: () => copyToClipboard(
-                //     context,
-                //     'v${core.coreVersion}',
-                //     title: 'Version copied',
-                //     description: 'v${core.coreVersion}',
-                //   ),
-                // ),
-                // const SizedBox(width: 8),
-                const Text('• commit '),
+                Text('${l10n.aboutCommit} '),
                 if (commitHash.isNotEmpty)
                   Flexible(
                     child: buildCopyableText(
@@ -88,40 +75,21 @@ class _AboutScreenState extends State<AboutScreen> {
                     ),
                   )
                 else
-                  const Text('unknown',
-                      style: TextStyle(fontFamily: 'monospace')),
-                const SizedBox(width: 6),
-                // IconButton(
-                //   tooltip: 'Copy full SHA',
-                //   icon: const Icon(Icons.copy, size: 16),
-                //   onPressed: () {
-                //     final full = core.gitCommitHash ??
-                //         core.gitCommitHashShort ??
-                //         '';
-                //     if (full.isEmpty) return;
-                //     copyToClipboard(
-                //       context,
-                //       full,
-                //       title: 'Commit copied',
-                //       description: full,
-                //     );
-                //   },
-                // ),
+                  Text(l10n.aboutUnknown,
+                      style: const TextStyle(fontFamily: 'monospace')),
               ],
             ),
+            const SizedBox(height: 16),
+            Text(l10n.aboutCoreDetails,
+                style: Theme.of(context).textTheme.titleSmall),
+            const SizedBox(height: 8),
+            Text(l10n.aboutBuiltAt(core.builtTimeUtc)),
             const SizedBox(height: 4),
-            Text(
-                'Built ${core.builtTimeUtc} • ${core.profile} • ${core.rustcVersion}'),
-          ] else ...[
-            const Text('Core: loading…'),
-          ],
-          const SizedBox(height: 8),
-          // Text(
-          //   'Tip: click the commit to copy the full SHA.',
-          //   style: Theme.of(context).textTheme.bodySmall?.copyWith(
-          //         color: Theme.of(context).colorScheme.onSurfaceVariant,
-          //       ),
-          // ),
+            Text(l10n.aboutBuildProfile(core.profile)),
+            const SizedBox(height: 4),
+            Text(l10n.aboutCompiler(core.rustcVersion)),
+          ] else
+            Text(l10n.aboutBuildInfoLoading),
         ],
       ),
     );

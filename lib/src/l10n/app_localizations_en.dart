@@ -36,6 +36,47 @@ class AppLocalizationsEn extends AppLocalizations {
   String get navAbout => 'About';
 
   @override
+  String get buildChannelStable => 'Stable release';
+
+  @override
+  String get buildChannelNightly => 'Nightly build';
+
+  @override
+  String get buildChannelDevelopment => 'Development build';
+
+  @override
+  String ciBuildIdentity(String run, String attempt) {
+    return 'CI $run.$attempt';
+  }
+
+  @override
+  String get aboutCommit => 'Commit';
+
+  @override
+  String get aboutUnknown => 'unknown';
+
+  @override
+  String get aboutBuildInfoLoading => 'Loading build information…';
+
+  @override
+  String get aboutCoreDetails => 'Core details';
+
+  @override
+  String aboutBuiltAt(String time) {
+    return 'Built: $time';
+  }
+
+  @override
+  String aboutBuildProfile(String profile) {
+    return 'Profile: $profile';
+  }
+
+  @override
+  String aboutCompiler(String compiler) {
+    return 'Compiler: $compiler';
+  }
+
+  @override
   String get navDownloads => 'Downloads';
 
   @override

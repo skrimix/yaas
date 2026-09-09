@@ -152,6 +152,72 @@ abstract class AppLocalizations {
   /// **'About'**
   String get navAbout;
 
+  /// No description provided for @buildChannelStable.
+  ///
+  /// In en, this message translates to:
+  /// **'Stable release'**
+  String get buildChannelStable;
+
+  /// No description provided for @buildChannelNightly.
+  ///
+  /// In en, this message translates to:
+  /// **'Nightly build'**
+  String get buildChannelNightly;
+
+  /// No description provided for @buildChannelDevelopment.
+  ///
+  /// In en, this message translates to:
+  /// **'Development build'**
+  String get buildChannelDevelopment;
+
+  /// No description provided for @ciBuildIdentity.
+  ///
+  /// In en, this message translates to:
+  /// **'CI {run}.{attempt}'**
+  String ciBuildIdentity(String run, String attempt);
+
+  /// No description provided for @aboutCommit.
+  ///
+  /// In en, this message translates to:
+  /// **'Commit'**
+  String get aboutCommit;
+
+  /// No description provided for @aboutUnknown.
+  ///
+  /// In en, this message translates to:
+  /// **'unknown'**
+  String get aboutUnknown;
+
+  /// No description provided for @aboutBuildInfoLoading.
+  ///
+  /// In en, this message translates to:
+  /// **'Loading build information…'**
+  String get aboutBuildInfoLoading;
+
+  /// No description provided for @aboutCoreDetails.
+  ///
+  /// In en, this message translates to:
+  /// **'Core details'**
+  String get aboutCoreDetails;
+
+  /// No description provided for @aboutBuiltAt.
+  ///
+  /// In en, this message translates to:
+  /// **'Built: {time}'**
+  String aboutBuiltAt(String time);
+
+  /// No description provided for @aboutBuildProfile.
+  ///
+  /// In en, this message translates to:
+  /// **'Profile: {profile}'**
+  String aboutBuildProfile(String profile);
+
+  /// No description provided for @aboutCompiler.
+  ///
+  /// In en, this message translates to:
+  /// **'Compiler: {compiler}'**
+  String aboutCompiler(String compiler);
+
   /// No description provided for @navDownloads.
   ///
   /// In en, this message translates to:

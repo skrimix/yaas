@@ -200,6 +200,11 @@ class AppState extends ChangeNotifier {
   CoreVersionInfo? get coreVersionInfo => _coreVersionInfo;
   void setCoreVersionInfo(messages.AppVersionInfo info) {
     _coreVersionInfo = CoreVersionInfo(
+      appVersion: info.appVersion,
+      buildNumber: info.buildNumber,
+      releaseChannel: info.releaseChannel,
+      runNumber: info.runNumber,
+      runAttempt: info.runAttempt,
       coreVersion: info.coreVersion,
       profile: info.profile,
       rustcVersion: info.rustcVersion,
@@ -213,6 +218,11 @@ class AppState extends ChangeNotifier {
 }
 
 class CoreVersionInfo {
+  final String appVersion;
+  final String buildNumber;
+  final String releaseChannel;
+  final String? runNumber;
+  final String? runAttempt;
   final String coreVersion;
   final String profile;
   final String rustcVersion;
@@ -222,6 +232,11 @@ class CoreVersionInfo {
   final bool gitDirty;
 
   const CoreVersionInfo({
+    required this.appVersion,
+    required this.buildNumber,
+    required this.releaseChannel,
+    this.runNumber,
+    this.runAttempt,
     required this.coreVersion,
     required this.profile,
     required this.rustcVersion,

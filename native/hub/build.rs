@@ -1,14 +1,42 @@
 use std::path::Path;
 
+mod build_support;
+
 fn main() {
     println!("cargo:rerun-if-changed=build.rs");
     println!("cargo:rerun-if-changed=src");
     println!("cargo:rerun-if-changed=assets");
+    write_app_identity();
     // TODO: Is there a better way to do this? Feels hacky.
     // Workaround: trigger a rebuild when the git repo changes to update
     // our built file.
     track_git_changes().expect("Failed to track Git build inputs");
     built::write_built_file().expect("Failed to acquire build-time information")
+}
+
+fn write_app_identity() {
+    let manifest_dir = std::env::var_os("CARGO_MANIFEST_DIR").unwrap();
+    let pubspec_path = Path::new(&manifest_dir).join("../../pubspec.yaml");
+    track_path(&pubspec_path);
+    println!("cargo:rerun-if-changed=build_support.rs");
+    let pubspec = std::fs::read_to_string(pubspec_path).expect("Failed to read pubspec.yaml");
+    let (version, build) = build_support::app_version(&pubspec).expect("Invalid app version");
+    let values = ["YAAS_RELEASE_CHANNEL", "YAAS_RUN_NUMBER", "YAAS_RUN_ATTEMPT"].map(|key| {
+        println!("cargo:rerun-if-env-changed={key}");
+        std::env::var(key).unwrap_or_default()
+    });
+    let [channel, run, attempt] = values;
+    let channel = if channel.is_empty() { "development" } else { &channel };
+    build_support::validate_channel(channel, &run, &attempt).expect("Invalid build identity");
+    for (key, value) in [
+        ("YAAS_APP_VERSION", version),
+        ("YAAS_BUILD_NUMBER", build),
+        ("YAAS_RELEASE_CHANNEL", channel),
+        ("YAAS_RUN_NUMBER", &run),
+        ("YAAS_RUN_ATTEMPT", &attempt),
+    ] {
+        println!("cargo:rustc-env={key}={value}");
+    }
 }
 
 fn track_git_changes() -> Result<(), git2::Error> {

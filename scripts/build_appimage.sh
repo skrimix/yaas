@@ -29,6 +29,7 @@ require_cmd curl
 require_cmd tar
 require_cmd rinf
 require_cmd unzip
+require_cmd python3
 
 mkdir -p dist
 
@@ -41,18 +42,18 @@ rinf gen
 echo "==> Building AppImage with fastforge..."
 fastforge package --platform linux --targets appimage --skip-clean --flutter-build-args=no-pub
 
-echo "==> Locating built AppImage under dist/..."
-shopt -s globstar nullglob
-files=(dist/**/*.AppImage)
-if (( ${#files[@]} == 0 )); then
-  echo "No AppImage found in dist/" >&2
-  find dist -maxdepth 3 -type f -name '*.AppImage' -print || true
+APP_VERSION="$(python3 -c 'from scripts.release import app_version; version, build = app_version(); print(f"{version}+{build}")')"
+BUILT_APPIMAGE="dist/${APP_VERSION}/yaas-${APP_VERSION}-linux.AppImage"
+if [[ ! -f "$BUILT_APPIMAGE" ]]; then
+  echo "No AppImage found at $BUILT_APPIMAGE" >&2
   exit 1
 fi
 
 mkdir -p "$(dirname "$OUTPUT_APPIMAGE")"
-echo "==> Copying ${files[0]} to ${OUTPUT_APPIMAGE}..."
-cp -v "${files[0]}" "$OUTPUT_APPIMAGE"
+if [[ ! "$BUILT_APPIMAGE" -ef "$OUTPUT_APPIMAGE" ]]; then
+  echo "==> Copying ${BUILT_APPIMAGE} to ${OUTPUT_APPIMAGE}..."
+  cp -v "$BUILT_APPIMAGE" "$OUTPUT_APPIMAGE"
+fi
 
 echo "==> Repacking AppImage with bundled 7-Zip..."
 app="$OUTPUT_APPIMAGE"
@@ -62,8 +63,11 @@ chmod +x "$app"
 "$SCRIPT_DIR/bundle_7zip.sh" squashfs-root/usr/bin
 "$SCRIPT_DIR/bundle_adb.sh" squashfs-root/usr/bin
 
+python3 "$SCRIPT_DIR/release.py" verify-bundle linux squashfs-root
+
 # Dart opens libmpv.so, while the video plugin links the versioned library.
 # Both names must load the same bundled copy.
+shopt -s nullglob
 mpv_libraries=(squashfs-root/usr/lib/libmpv.so.*)
 if (( ${#mpv_libraries[@]} != 1 )); then
   echo "Expected one bundled libmpv library, found ${#mpv_libraries[@]}" >&2

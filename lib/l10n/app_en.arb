@@ -9,6 +9,26 @@
     "navSettings": "Settings",
     "navLogs": "Logs",
     "navAbout": "About",
+    "buildChannelStable": "Stable release",
+    "buildChannelNightly": "Nightly build",
+    "buildChannelDevelopment": "Development build",
+    "ciBuildIdentity": "CI {run}.{attempt}",
+    "@ciBuildIdentity": {
+        "placeholders": {
+            "run": { "type": "String" },
+            "attempt": { "type": "String" }
+        }
+    },
+    "aboutCommit": "Commit",
+    "aboutUnknown": "unknown",
+    "aboutBuildInfoLoading": "Loading build information…",
+    "aboutCoreDetails": "Core details",
+    "aboutBuiltAt": "Built: {time}",
+    "@aboutBuiltAt": { "placeholders": { "time": { "type": "String" } } },
+    "aboutBuildProfile": "Profile: {profile}",
+    "@aboutBuildProfile": { "placeholders": { "profile": { "type": "String" } } },
+    "aboutCompiler": "Compiler: {compiler}",
+    "@aboutCompiler": { "placeholders": { "compiler": { "type": "String" } } },
     "navDownloads": "Downloads",
     "settingsTitle": "Settings",
     "settingsErrorLoading": "Error loading settings",

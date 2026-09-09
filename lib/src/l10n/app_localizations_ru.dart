@@ -36,6 +36,47 @@ class AppLocalizationsRu extends AppLocalizations {
   String get navAbout => 'О программе';
 
   @override
+  String get buildChannelStable => 'Стабильный выпуск';
+
+  @override
+  String get buildChannelNightly => 'Ночная сборка';
+
+  @override
+  String get buildChannelDevelopment => 'Сборка для разработки';
+
+  @override
+  String ciBuildIdentity(String run, String attempt) {
+    return 'CI $run.$attempt';
+  }
+
+  @override
+  String get aboutCommit => 'Коммит';
+
+  @override
+  String get aboutUnknown => 'неизвестно';
+
+  @override
+  String get aboutBuildInfoLoading => 'Загрузка сведений о сборке…';
+
+  @override
+  String get aboutCoreDetails => 'Сведения о ядре';
+
+  @override
+  String aboutBuiltAt(String time) {
+    return 'Дата сборки: $time';
+  }
+
+  @override
+  String aboutBuildProfile(String profile) {
+    return 'Профиль: $profile';
+  }
+
+  @override
+  String aboutCompiler(String compiler) {
+    return 'Компилятор: $compiler';
+  }
+
+  @override
   String get navDownloads => 'Загрузки';
 
   @override

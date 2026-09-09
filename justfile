@@ -38,6 +38,10 @@ test:
 test-all:
     cargo test -- --include-ignored
 
+# Check release validation, packaging, and publication policy without publishing
+test-release:
+    python3 -m unittest discover -s scripts/tests -v
+
 # Refresh documentation screenshots, or pass a directory for previews
 screenshots output="screenshots":
     dart run tool/screenshots.dart "{{output}}"

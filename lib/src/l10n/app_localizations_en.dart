@@ -789,6 +789,9 @@ class AppLocalizationsEn extends AppLocalizations {
   String get deviceEnableWirelessAdb => 'Enable ADB over Wi‑Fi';
 
   @override
+  String get deviceDisableWirelessAdb => 'Disable ADB over Wi-Fi';
+
+  @override
   String get deviceStorageConnection => 'Storage connection';
 
   @override

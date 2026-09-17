@@ -892,23 +892,69 @@ impl AdbService {
                 }
             }
 
-            AdbCommand::EnableWirelessAdb => {
-                let device = self.current_device().await?;
-
-                if device.is_wireless {
-                    AdbCommandCompletedEvent {
-                        command_type: AdbCommandKind::WirelessAdbEnable,
-                        command_key: key.clone(),
-                        success: false,
+            AdbCommand::DisableWirelessAdb => {
+                let result = async {
+                    let device = self.current_device().await?;
+                    device.disable_wireless_adb().await?;
+                    if let Err(e) = self
+                        .request_device_patch(
+                            DeviceUpdateTarget::from_device(&device),
+                            DevicePatch {
+                                wireless_adb_enabled: Some(Some(false)),
+                                ..DevicePatch::default()
+                            },
+                        )
+                        .await
+                    {
+                        debug!(
+                            error = e.as_ref() as &dyn Error,
+                            "Device disconnected before updating Wireless ADB state"
+                        );
                     }
-                    .send_signal_to_dart();
-                    bail!("Current device is already wireless")
+                    Ok::<_, anyhow::Error>(())
                 }
+                .await;
+                AdbCommandCompletedEvent {
+                    command_type: AdbCommandKind::WirelessAdbDisable,
+                    command_key: key.clone(),
+                    success: result.is_ok(),
+                }
+                .send_signal_to_dart();
+                if let Err(e) = &result {
+                    Toast::send(
+                        "Disable Wireless ADB failed".to_string(),
+                        format!("{e:#}"),
+                        true,
+                        None,
+                    );
+                }
+                result
+            }
 
-                // Step 1: enable Wireless ADB (tcpip mode) and compute target address
-                match device.enable_wireless_adb().await {
-                    Ok(addr) => {
-                        // Report success, things can get kinda random from here
+            AdbCommand::EnableWirelessAdb => {
+                let result = async {
+                    let device = self.current_device().await?;
+                    let addr = device.enable_wireless_adb().await?;
+                    Ok::<_, anyhow::Error>((device, addr))
+                }
+                .await;
+                match result {
+                    Ok((device, addr)) => {
+                        if let Err(e) = self
+                            .request_device_patch(
+                                DeviceUpdateTarget::from_device(&device),
+                                DevicePatch {
+                                    wireless_adb_enabled: Some(Some(true)),
+                                    ..DevicePatch::default()
+                                },
+                            )
+                            .await
+                        {
+                            debug!(
+                                error = e.as_ref() as &dyn Error,
+                                "Device disconnected before updating Wireless ADB state"
+                            );
+                        }
                         AdbCommandCompletedEvent {
                             command_type: AdbCommandKind::WirelessAdbEnable,
                             command_key: key.clone(),
@@ -1589,8 +1635,9 @@ impl AdbService {
             let Some(device) = self.try_current_device().await else {
                 continue;
             };
-            let mut components =
-                DeviceRefreshComponents::GUARDIAN | DeviceRefreshComponents::PROXIMITY;
+            let mut components = DeviceRefreshComponents::GUARDIAN
+                | DeviceRefreshComponents::PROXIMITY
+                | DeviceRefreshComponents::WIRELESS_ADB;
             if !device.is_wireless {
                 components |= DeviceRefreshComponents::USB;
             }

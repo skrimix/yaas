@@ -26,6 +26,8 @@ pub(crate) enum AdbCommand {
     ConnectTo(String),
     /// Enable ADB over Wi‑Fi on the current device and connect to it
     EnableWirelessAdb,
+    /// Disable ADB over Wi-Fi by switching the daemon to USB mode.
+    DisableWirelessAdb,
     /// Connect or reset USB storage functions.
     SetStorageConnection(bool),
     RefreshPackages,
@@ -49,6 +51,7 @@ pub(crate) enum AdbCommandKind {
     StartCasting,
     ConnectTo,
     WirelessAdbEnable,
+    WirelessAdbDisable,
     StorageConnectionSet,
     RefreshDevice,
     RefreshPackages,

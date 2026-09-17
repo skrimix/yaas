@@ -382,6 +382,7 @@
     "guardianStatusActive": "Активен",
     "deviceWirelessAdb": "Беспроводной ADB",
     "deviceEnableWirelessAdb": "Включить ADB по Wi‑Fi",
+    "deviceDisableWirelessAdb": "Выключить ADB по Wi-Fi",
     "deviceStorageConnection": "Подключeние хранилища",
     "deviceStorageConnectionTooltip": "Подключить хранилище через MTP.",
     "deviceStorageResetTooltip": "Сбросить функции USB.",

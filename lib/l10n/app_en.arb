@@ -388,6 +388,7 @@
   "guardianStatusActive": "Active",
   "deviceWirelessAdb": "Wireless ADB",
   "deviceEnableWirelessAdb": "Enable ADB over Wi‑Fi",
+  "deviceDisableWirelessAdb": "Disable ADB over Wi-Fi",
   "deviceStorageConnection": "Storage connection",
   "deviceStorageConnectionTooltip": "Connect storage with MTP.",
   "deviceStorageResetTooltip": "Reset USB functions.",

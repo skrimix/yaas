@@ -34,6 +34,7 @@ bitflags! {
         const GUARDIAN = 1 << 3;
         const PROXIMITY = 1 << 4;
         const USB = 1 << 5;
+        const WIRELESS_ADB = 1 << 6;
     }
 }
 
@@ -60,6 +61,7 @@ pub(super) struct DevicePatch {
     pub(super) guardian_paused: Option<Option<bool>>,
     pub(super) proximity_disabled: Option<Option<bool>>,
     pub(super) usb_state: Option<(Option<bool>, Option<String>)>,
+    pub(super) wireless_adb_enabled: Option<Option<bool>>,
     /// Applied after `usb_state`, so direct MTP updates take precedence.
     pub(super) storage_connected: Option<Option<bool>>,
 }
@@ -142,6 +144,8 @@ pub(crate) struct AdbDevice {
     pub transport_id: String,
     /// True if connected over TCP/IP (adb over network)
     pub is_wireless: bool,
+    /// Whether ADB is listening over the network, including while connected over USB.
+    pub wireless_adb_enabled: Option<bool>,
     /// Device battery level (0-100)
     pub battery_level: u8,
     /// Whether the device is charging or full while connected to power
@@ -200,6 +204,7 @@ impl AdbDevice {
             true_serial,
             transport_id,
             is_wireless,
+            wireless_adb_enabled: None,
             battery_level: 0,
             is_charging: None,
             controllers: HeadsetControllersInfo::default(),
@@ -326,8 +331,23 @@ impl AdbDevice {
             }
         };
 
-        let (packages, battery_and_controllers, storage, guardian, proximity, usb) =
-            tokio::join!(packages, battery_and_controllers, storage, guardian, proximity, usb,);
+        let wireless_adb = async {
+            if components.contains(DeviceRefreshComponents::WIRELESS_ADB) {
+                Some(self.query_wireless_adb_enabled().await)
+            } else {
+                None
+            }
+        };
+
+        let (packages, battery_and_controllers, storage, guardian, proximity, usb, wireless_adb) = tokio::join!(
+            packages,
+            battery_and_controllers,
+            storage,
+            guardian,
+            proximity,
+            usb,
+            wireless_adb
+        );
 
         let mut outcome = DeviceQueryOutcome::default();
         macro_rules! apply_result {
@@ -358,6 +378,12 @@ impl AdbDevice {
             "proximity"
         );
         apply_result!(usb, usb_state, DeviceRefreshComponents::USB, "usb");
+        apply_result!(
+            wireless_adb,
+            wireless_adb_enabled,
+            DeviceRefreshComponents::WIRELESS_ADB,
+            "wireless ADB"
+        );
         outcome
     }
 
@@ -423,6 +449,13 @@ impl AdbDevice {
             && self.storage_connected != storage_connected
         {
             self.storage_connected = storage_connected;
+            changed = true;
+        }
+
+        if let Some(enabled) = patch.wireless_adb_enabled
+            && self.wireless_adb_enabled != enabled
+        {
+            self.wireless_adb_enabled = enabled;
             changed = true;
         }
 
@@ -877,6 +910,20 @@ impl AdbDevice {
         Ok(Some(ip))
     }
 
+    async fn query_wireless_adb_enabled(&self) -> Result<Option<bool>> {
+        if self.is_wireless {
+            return Ok(Some(true));
+        }
+        let output = self
+            .shell_checked("getprop service.adb.tcp.port; getprop persist.adb.tcp.port")
+            .await?;
+        Ok(parse_wireless_adb_enabled(&output))
+    }
+
+    pub(super) async fn disable_wireless_adb(&self) -> Result<()> {
+        self.inner.usb().await.context("Failed to switch ADB to USB mode")
+    }
+
     #[instrument(level = "debug", skip(self), ret, err)]
     async fn enable_tcpip(&self, ip: Ipv4Addr) -> Result<SocketAddrV4> {
         self.inner.tcpip(Self::WIRELESS_ADB_PORT).await.context("Failed to enable tcpip mode")?;
@@ -915,6 +962,12 @@ impl AdbDevice {
     }
 }
 
+fn parse_wireless_adb_enabled(output: &str) -> Option<bool> {
+    // The service property overrides the persistent port, including when set to -1.
+    let port = output.lines().map(str::trim).find(|line| !line.is_empty()).unwrap_or("0");
+    port.parse::<i32>().ok().map(|port| port > 0)
+}
+
 pub(crate) fn format_usb_speed(output: &str) -> Option<String> {
     let value = output
         .trim()
@@ -950,6 +1003,7 @@ mod tests {
 
     use super::{
         AdbDevice, DevicePatch, DeviceRefreshComponents, format_usb_speed, parse_battery_state,
+        parse_wireless_adb_enabled,
     };
     use crate::models::{InstalledPackage, SpaceInfo};
 
@@ -964,6 +1018,7 @@ mod tests {
             true_serial: "serial".to_string(),
             transport_id: "1".to_string(),
             is_wireless: false,
+            wireless_adb_enabled: Some(false),
             battery_level: 50,
             is_charging: Some(false),
             controllers: Default::default(),
@@ -974,6 +1029,16 @@ mod tests {
             storage_connected: Some(false),
             usb_speed: Some("5 Gbps".to_string()),
         }
+    }
+
+    #[test]
+    fn wireless_adb_service_port_overrides_persistent_port() {
+        assert_eq!(parse_wireless_adb_enabled("5555\n\n"), Some(true));
+        assert_eq!(parse_wireless_adb_enabled("-1\n5555\n"), Some(false));
+        assert_eq!(parse_wireless_adb_enabled("0\n5555\n"), Some(false));
+        assert_eq!(parse_wireless_adb_enabled("\n5555\n"), Some(true));
+        assert_eq!(parse_wireless_adb_enabled("\n\n"), Some(false));
+        assert_eq!(parse_wireless_adb_enabled("unreadable\n5555\n"), None);
     }
 
     #[test]

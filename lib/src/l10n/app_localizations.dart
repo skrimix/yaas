@@ -1490,6 +1490,12 @@ abstract class AppLocalizations {
   /// **'Enable ADB over Wi‑Fi'**
   String get deviceEnableWirelessAdb;
 
+  /// No description provided for @deviceDisableWirelessAdb.
+  ///
+  /// In en, this message translates to:
+  /// **'Disable ADB over Wi-Fi'**
+  String get deviceDisableWirelessAdb;
+
   /// No description provided for @deviceStorageConnection.
   ///
   /// In en, this message translates to:

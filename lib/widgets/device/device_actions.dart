@@ -4,11 +4,9 @@ import 'dart:math' as math;
 import 'package:flutter/material.dart';
 import 'package:rinf/rinf.dart';
 import 'package:toastification/toastification.dart';
-import '../../providers/adb_state.dart';
 import '../../src/bindings/bindings.dart';
 import '../../src/l10n/app_localizations.dart';
 import '../casting/cast_screen.dart';
-import '../common/animated_adb_button.dart';
 import '../common/card_header.dart';
 import '../../providers/casting_state.dart';
 import '../../providers/device_state.dart';
@@ -18,10 +16,6 @@ import '../../utils/utils.dart';
 
 class DeviceActionsCard extends StatelessWidget {
   const DeviceActionsCard({super.key});
-
-  void _send(String key, AdbCommand command) {
-    AdbRequest(command: command, commandKey: key).sendSignalToRust();
-  }
 
   @override
   Widget build(BuildContext context) {
@@ -57,40 +51,16 @@ class DeviceActionsCard extends StatelessWidget {
               );
             }),
 
-            // Wireless ADB (when not already enabled)
-            Builder(
-              builder: (context) {
-                final device = context.watch<DeviceState>();
-                final adb = context.watch<AdbStateProvider>();
-                if (!device.isConnected ||
-                    device.isWireless ||
-                    // Check that we don't have an active wireless connection for this device already
-                    adb.availableDevices.any((d) =>
-                        d.isWireless &&
-                        d.trueSerial == device.deviceTrueSerial &&
-                        d.state == AdbBriefState.device)) {
-                  return const SizedBox.shrink();
-                }
-                return Row(
-                  children: [
-                    const Icon(Icons.wifi_tethering),
-                    const SizedBox(width: 8),
-                    Expanded(
-                      child: Text(l10n.deviceWirelessAdb,
-                          style: Theme.of(context).textTheme.titleSmall),
-                    ),
-                    AnimatedAdbButton(
-                      icon: Icons.wifi,
-                      tooltip: l10n.deviceEnableWirelessAdb,
-                      commandType: AdbCommandKind.wirelessAdbEnable,
-                      commandKey: 'enable-wireless',
-                      onPressed: () => _send('enable-wireless',
-                          const AdbCommandEnableWirelessAdb()),
-                    ),
-                  ],
-                );
-              },
-            ),
+            Builder(builder: (context) {
+              final device = context.watch<DeviceState>();
+              if (!device.isConnected) return const SizedBox.shrink();
+              return Padding(
+                padding: const EdgeInsets.only(top: 12),
+                child: _WirelessAdbToggle(
+                  key: ValueKey(device.deviceTrueSerial),
+                ),
+              );
+            }),
 
             // Casting
             Builder(
@@ -170,6 +140,96 @@ class DeviceActionsCard extends StatelessWidget {
 
     AdbRequest(command: const AdbCommandStartCasting(), commandKey: 'cast')
         .sendSignalToRust();
+  }
+}
+
+class _WirelessAdbToggle extends StatefulWidget {
+  const _WirelessAdbToggle({super.key});
+
+  @override
+  State<_WirelessAdbToggle> createState() => _WirelessAdbToggleState();
+}
+
+class _WirelessAdbToggleState extends State<_WirelessAdbToggle> {
+  StreamSubscription<RustSignalPack<AdbCommandCompletedEvent>>? _subscription;
+  bool? _pendingState;
+  late final String _commandKey;
+
+  @override
+  void initState() {
+    super.initState();
+    _commandKey = 'wireless-adb-${UniqueKey()}';
+    _subscription = AdbCommandCompletedEvent.rustSignalStream.listen((event) {
+      final signal = event.message;
+      if (signal.commandKey == _commandKey &&
+          (signal.commandType == AdbCommandKind.wirelessAdbEnable ||
+              signal.commandType == AdbCommandKind.wirelessAdbDisable)) {
+        setState(() => _pendingState = null);
+      }
+    });
+  }
+
+  @override
+  void dispose() {
+    _subscription?.cancel();
+    super.dispose();
+  }
+
+  void _toggle(bool enabled) {
+    if (_pendingState != null) return;
+    setState(() => _pendingState = enabled);
+    AdbRequest(
+      command: enabled
+          ? const AdbCommandEnableWirelessAdb()
+          : const AdbCommandDisableWirelessAdb(),
+      commandKey: _commandKey,
+    ).sendSignalToRust();
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    final l10n = AppLocalizations.of(context);
+    final device = context.watch<DeviceState>();
+    final enabled = device.wirelessAdbEnabled;
+    final theme = Theme.of(context);
+    return Row(
+      children: [
+        const Icon(Icons.wifi_tethering),
+        const SizedBox(width: 8),
+        Expanded(
+          child:
+              Text(l10n.deviceWirelessAdb, style: theme.textTheme.titleSmall),
+        ),
+        if (_pendingState != null)
+          const SizedBox(
+            width: 60,
+            height: 40,
+            child: Center(
+              child: SizedBox(
+                width: 20,
+                height: 20,
+                child: CircularProgressIndicator(strokeWidth: 2),
+              ),
+            ),
+          )
+        else
+          Tooltip(
+            message: enabled == true
+                ? l10n.deviceDisableWirelessAdb
+                : l10n.deviceEnableWirelessAdb,
+            child: Switch.adaptive(
+              value: enabled ?? false,
+              onChanged: device.isConnected && enabled != null ? _toggle : null,
+              activeTrackColor:
+                  theme.colorScheme.primaryContainer.withValues(alpha: 0.6),
+              activeThumbColor:
+                  theme.colorScheme.primary.withValues(alpha: 0.8),
+              inactiveTrackColor: theme.colorScheme.surfaceContainerHighest,
+              inactiveThumbColor: theme.colorScheme.outline,
+            ),
+          ),
+      ],
+    );
   }
 }
 

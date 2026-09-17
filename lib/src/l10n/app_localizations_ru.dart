@@ -805,6 +805,9 @@ class AppLocalizationsRu extends AppLocalizations {
   String get deviceEnableWirelessAdb => 'Включить ADB по Wi‑Fi';
 
   @override
+  String get deviceDisableWirelessAdb => 'Выключить ADB по Wi-Fi';
+
+  @override
   String get deviceStorageConnection => 'Подключeние хранилища';
 
   @override

@@ -9,6 +9,7 @@ import '../../src/bindings/bindings.dart';
 import '../../src/l10n/app_localizations.dart';
 import '../casting/cast_screen.dart';
 import '../common/animated_adb_button.dart';
+import '../common/card_header.dart';
 import '../../providers/casting_state.dart';
 import '../../providers/device_state.dart';
 import '../../providers/settings_state.dart';
@@ -30,13 +31,12 @@ class DeviceActionsCard extends StatelessWidget {
       elevation: 0,
       shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(20)),
       child: Padding(
-        padding: const EdgeInsets.all(24),
+        padding: const EdgeInsets.all(20),
         child: Column(
           crossAxisAlignment: CrossAxisAlignment.start,
           children: [
-            Text(l10n.deviceActions,
-                style: Theme.of(context).textTheme.titleMedium),
-            const SizedBox(height: 24),
+            CardHeader(icon: Icons.tune_rounded, title: l10n.deviceActions),
+            const SizedBox(height: 20),
 
             // Proximity sensor toggle
             const _ProximityToggle(),
@@ -522,18 +522,21 @@ class _ProximityToggleState extends State<_ProximityToggle> {
               ),
             ],
             child: Container(
-              padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 8),
+              padding: const EdgeInsets.fromLTRB(16, 10, 10, 10),
               decoration: BoxDecoration(
-                color: theme.colorScheme.surfaceContainerHighest,
-                borderRadius: BorderRadius.circular(8),
+                color: theme.colorScheme.secondaryContainer,
+                borderRadius: BorderRadius.circular(20),
               ),
               child: Row(
                 mainAxisSize: MainAxisSize.min,
                 children: [
-                  Text(l10n.disable, style: theme.textTheme.labelLarge),
+                  Text(l10n.disable,
+                      style: theme.textTheme.labelLarge?.copyWith(
+                        color: theme.colorScheme.onSecondaryContainer,
+                      )),
                   const SizedBox(width: 4),
                   Icon(Icons.arrow_drop_down,
-                      size: 18, color: theme.colorScheme.onSurfaceVariant),
+                      size: 18, color: theme.colorScheme.onSecondaryContainer),
                 ],
               ),
             ),

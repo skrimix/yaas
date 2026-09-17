@@ -189,12 +189,9 @@ class ReleaseTests(unittest.TestCase):
         self.assertEqual(len(manifest["assets"]), 3)
         output = self.root / "release"
         with zipfile.ZipFile(output / "YAAS-windows-x64.zip") as archive:
-            inventory = json.loads(archive.read("yaas-package.json"))
-            self.assertEqual(set(inventory["files"]), set(archive.namelist()))
-            self.assertNotIn("build-identity.json", inventory["files"])
-            self.assertIn("yaas-updater.exe", inventory["files"])
-            self.assertEqual(inventory["identity"]["commit"], SHA)
-            self.assertEqual(inventory["identity"]["version"], manifest["version"])
+            self.assertNotIn("yaas-package.json", archive.namelist())
+            self.assertNotIn("build-identity.json", archive.namelist())
+            self.assertIn("yaas-updater.exe", archive.namelist())
         with (
             patch.object(release, "app_version", return_value=("1.0.0", 1)),
             patch.object(release, "run", return_value=SHA),

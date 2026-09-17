@@ -6,7 +6,7 @@ mod download;
 mod install;
 mod manager;
 pub(crate) use donate::DONATE_TMP_DIR;
-pub(crate) use manager::TaskManager;
+pub(crate) use manager::{TaskManager, TaskShutdownResult};
 
 macro_rules! acquire_permit_or_cancel {
     ($semaphore:expr, $token:expr, $semaphore_name:literal) => {{

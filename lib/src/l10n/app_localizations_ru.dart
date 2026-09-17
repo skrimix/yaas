@@ -1944,10 +1944,6 @@ class AppLocalizationsRu extends AppLocalizations {
       'Обновление больше не готово к этому действию. Проверьте его текущее состояние.';
 
   @override
-  String get updatesRecoveryError =>
-      'Прежде чем продолжить установку, необходимо восстановление после предыдущего обновления.';
-
-  @override
   String get updatesUnknownError => 'Не удалось завершить обновление.';
 
   @override

@@ -269,7 +269,6 @@ void main() {
         AppUpdateErrorKind.integrity => l10n.updatesIntegrityError,
         AppUpdateErrorKind.installation => l10n.updatesInstallationError,
         AppUpdateErrorKind.invalidRequest => l10n.updatesInvalidRequestError,
-        AppUpdateErrorKind.recoveryRequired => l10n.updatesRecoveryError,
       };
       expect(find.text(summary), findsOneWidget);
       expect(find.text(l10n.updatesInstall), findsOneWidget);

@@ -914,7 +914,6 @@
   "updatesIntegrityError": "The download failed verification. Check again and download a fresh copy.",
   "updatesInstallationError": "The update could not be installed.",
   "updatesInvalidRequestError": "The update is no longer ready for this action. Check its current status.",
-  "updatesRecoveryError": "A previous update needs recovery before installation can continue.",
   "updatesUnknownError": "The update could not be completed.",
   "updatesSaving": "Saving update preferences…"
 }

@@ -132,40 +132,37 @@ fn main() {
                 match source {
                     ShutdownSource::Panic => {}
                     ShutdownSource::Dart => {
-                        native_casting.shutdown().await;
                         tokio::select! {
-                            _ = task_manager.shutdown(TASK_SHUTDOWN_TIMEOUT) => {},
+                            _ = prepare_shutdown(&task_manager, &native_casting) => {},
                             _ = panic_notify.notified() => {},
                         }
                     }
                     ShutdownSource::Request(update_id) => {
-                        if let Some(id) = &update_id
-                            && let Err(error) = updater.validate_exit(id.clone()).await
-                        {
-                            AppShutdownReady {
-                                timed_out: false,
-                                remaining_tasks: 0,
-                                shutdown_cancelled: true,
-                                update_error: Some(format!("{error:#}")),
+                        let prepared = if let Some(id) = update_id {
+                            match updater.take_install(id).await {
+                                Ok(prepared) => Some(prepared),
+                                Err(error) => {
+                                    AppShutdownReady {
+                                        timed_out: false,
+                                        remaining_tasks: 0,
+                                        shutdown_cancelled: true,
+                                        update_error: Some(format!("{error:#}")),
+                                    }
+                                    .send_signal_to_dart();
+                                    continue;
+                                }
                             }
-                            .send_signal_to_dart();
-                            continue;
-                        }
-                        native_casting.shutdown().await;
+                        } else {
+                            None
+                        };
                         let shutdown_result = tokio::select! {
-                            result = task_manager.shutdown(TASK_SHUTDOWN_TIMEOUT) => Some(result),
+                            result = prepare_shutdown(&task_manager, &native_casting) => Some(result),
                             _ = panic_notify.notified() => None,
                         };
                         if let Some(shutdown_result) = shutdown_result {
-                            let update_error = if let Some(id) = update_id {
-                                updater
-                                    .commit_exit(id)
-                                    .await
-                                    .err()
-                                    .map(|error| format!("{error:#}"))
-                            } else {
-                                None
-                            };
+                            let update_error = prepared.and_then(|prepared| {
+                                prepared.launch().err().map(|error| format!("{error:#}"))
+                            });
                             if let Some(error) = &update_error {
                                 error!(
                                     error,
@@ -193,6 +190,21 @@ fn main() {
     });
 
     runtime.shutdown_timeout(Duration::from_secs(3));
+}
+
+async fn prepare_shutdown(
+    task_manager: &TaskManager,
+    native_casting: &NativeCastingManager,
+) -> task::TaskShutdownResult {
+    let (casting, mut result) = tokio::join!(
+        timeout(TASK_SHUTDOWN_TIMEOUT, native_casting.shutdown()),
+        task_manager.shutdown(TASK_SHUTDOWN_TIMEOUT),
+    );
+    if casting.is_err() {
+        error!("Casting shutdown timed out");
+        result.timed_out = true;
+    }
+    result
 }
 
 #[instrument]

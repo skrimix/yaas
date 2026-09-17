@@ -248,7 +248,6 @@ class AppUpdateSection extends StatelessWidget {
         AppUpdateErrorKind.integrity => l10n.updatesIntegrityError,
         AppUpdateErrorKind.installation => l10n.updatesInstallationError,
         AppUpdateErrorKind.invalidRequest => l10n.updatesInvalidRequestError,
-        AppUpdateErrorKind.recoveryRequired => l10n.updatesRecoveryError,
         null => l10n.updatesUnknownError,
       };
 }

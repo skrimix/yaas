@@ -1,59 +1,49 @@
 use std::{
-    ffi::OsString,
     fs,
-    io::Read,
     path::{Path, PathBuf},
-    process::Stdio,
+    process::{Command, Stdio},
 };
 
 use anyhow::{Context, Result, ensure};
 use app_update::{
     Identity,
-    package::{Inventory, extract_zip},
-    transaction::{Phase, Transaction, clean_environment, replacement, windows_replacements},
-};
-use tokio::{
-    io::{AsyncBufReadExt, AsyncWriteExt, BufReader},
-    process::Child,
-    time::{Duration, timeout},
+    install::{InstallRequest, clean_environment},
+    processes::ProcessIdentity,
 };
 
 use super::release::Candidate;
 
-pub(super) struct Prepared {
-    pub directory: PathBuf,
-    pub transaction: Transaction,
-    pub helper: Child,
-    pub committed: bool,
-}
-
-impl Drop for Prepared {
-    fn drop(&mut self) {
-        if !self.committed {
-            let _ = self.helper.start_kill();
-        }
-    }
+pub(crate) struct Prepared {
+    directory: PathBuf,
 }
 
 impl Prepared {
-    pub async fn commit(&mut self) -> Result<()> {
-        ensure!(self.helper.try_wait()?.is_none(), "Update helper stopped before shutdown");
-        let mut input =
-            self.helper.stdin.take().context("Update helper is not waiting for shutdown")?;
-        input.write_all(b"COMMIT\n").await?;
-        input.shutdown().await?;
-        self.committed = true;
+    pub(crate) fn launch(self) -> Result<()> {
+        let mut command = Command::new(self.directory.join(helper_name()));
+        let log = fs::File::create(self.directory.join("updater.log"))?;
+        command
+            .arg(self.directory.join("request.json"))
+            .current_dir(&self.directory)
+            .stdin(Stdio::null())
+            .stdout(Stdio::from(log.try_clone()?))
+            .stderr(Stdio::from(log));
+        clean_environment(&mut command);
+        #[cfg(windows)]
+        {
+            use std::os::windows::process::CommandExt;
+            command.creation_flags(0x08000000);
+        }
+        command.spawn().context("Cannot start update helper")?;
         Ok(())
     }
 
-    pub async fn cancel(mut self) {
-        let _ = self.helper.kill().await;
-        let _ = self.helper.wait().await;
-        let _ = fs::remove_dir_all(&self.transaction.workspace);
-        if self.transaction.error.is_none() {
-            let _ = fs::remove_dir_all(&self.directory);
-        }
+    pub async fn cancel(self) {
+        let _ = tokio::fs::remove_dir_all(self.directory).await;
     }
+}
+
+fn helper_name() -> &'static str {
+    if cfg!(windows) { "yaas-updater.exe" } else { "yaas-updater" }
 }
 
 pub(super) fn installed_identity() -> Identity {
@@ -87,13 +77,6 @@ pub(super) fn installation() -> Result<(PathBuf, PathBuf)> {
         Ok((appimage, helper))
     } else if cfg!(target_os = "windows") {
         let directory = exe.parent().context("Missing application directory")?.to_path_buf();
-        let inventory = Inventory::read(&directory).context(
-            "This installation has no package inventory; install a current release manually first",
-        )?;
-        ensure!(
-            inventory.identity == installed_identity(),
-            "The package inventory does not match this build; reinstall YAAS manually"
-        );
         let helper = directory.join("yaas-updater.exe");
         ensure!(helper.is_file(), "The installed update helper is missing");
         Ok((directory, helper))
@@ -138,11 +121,7 @@ pub(super) fn unavailable_reason() -> Option<String> {
         .map(|e| format!("{e:#}"))
 }
 
-fn prepare_files(
-    root: &Path,
-    download: &Path,
-    candidate: &Candidate,
-) -> Result<(PathBuf, Transaction)> {
+fn prepare_files(download: &Path, candidate: &Candidate) -> Result<Prepared> {
     app_update::verify_file(&download.join("package"), &candidate.asset).map_err(|e| {
         super::release::failure(
             crate::models::signals::update::AppUpdateErrorKind::Integrity,
@@ -150,212 +129,44 @@ fn prepare_files(
         )
     })?;
     let (target, helper) = installation()?;
-    let directory = root.join("transactions").join(uuid::Uuid::new_v4().to_string());
-    fs::create_dir_all(&directory)?;
-    let installation_lock = if cfg!(windows) {
-        target.join(".yaas-update.lock")
-    } else {
-        target.with_file_name(format!(
-            ".{}.yaas-update.lock",
-            target.file_name().unwrap().to_string_lossy()
-        ))
-    };
-    let working_directory = restart_directory(&target)?;
-    let workspace_parent = if cfg!(windows) { target.as_path() } else { target.parent().unwrap() };
-    let workspace = tempfile::Builder::new()
-        .prefix(".yaas-update-")
-        .tempdir_in(workspace_parent)
-        .context("Cannot stage update beside installation")?;
-    let staged = workspace.path().join("new");
-    let backup = workspace.path().join("backup");
-    let result = (|| -> Result<Transaction> {
-        let replacements;
-        let executable;
-        if cfg!(target_os = "linux") {
-            fs::copy(download.join("package"), &staged)?;
-            fs::set_permissions(&staged, fs::metadata(&target)?.permissions())?;
-            let mut bytes = [0; 64];
-            fs::File::open(&staged)?.read_exact(&mut bytes)?;
-            ensure!(
-                bytes.starts_with(b"\x7fELF") && bytes.get(8..11) == Some(b"AI\x02"),
-                "Downloaded file is not an AppImage"
-            );
-            executable = target.clone();
-            replacements = vec![replacement(target, Some(staged), backup)];
-        } else {
-            extract_zip(&download.join("package"), &staged, cfg!(target_os = "macos"))?;
-            if cfg!(target_os = "windows") {
-                replacements =
-                    windows_replacements(&target, &staged, &backup, &candidate.identity)?;
-                executable = target.join("yaas.exe");
-            } else {
-                let bundle = staged.join("YAAS.app");
-                let identity: Identity = serde_json::from_slice(&fs::read(
-                    bundle.join("Contents/Resources/yaas-build.json"),
-                )?)?;
-                ensure!(identity == candidate.identity, "Downloaded bundle identity mismatch");
-                #[cfg(target_os = "macos")]
-                ensure!(
-                    std::process::Command::new("/usr/bin/codesign")
-                        .args(["--verify", "--deep", "--strict"])
-                        .arg(&bundle)
-                        .status()?
-                        .success(),
-                    "Downloaded app signature is invalid"
-                );
-                executable = target.join("Contents/MacOS/YAAS");
-                replacements = vec![replacement(target, Some(bundle), backup)];
-            }
-        }
-        let helper_name = if cfg!(windows) { "yaas-updater.exe" } else { "yaas-updater" };
-        fs::copy(helper, directory.join(helper_name))?;
-        let arguments: Vec<OsString> = std::env::args_os().skip(1).collect();
-        let transaction = Transaction {
-            id: candidate.info.candidate_id.clone(),
-            expected: candidate.identity.clone(),
-            parent_pid: std::process::id(),
-            installation_lock,
-            workspace: workspace.path().to_path_buf(),
-            executable,
-            arguments,
-            working_directory,
-            replacements,
-            phase: Phase::Prepared,
-            error: None,
-        };
-        transaction.preflight()?;
-        transaction.save(&directory)?;
-        Ok(transaction)
-    })();
-    match result {
-        Ok(transaction) => {
-            let _ = workspace.keep();
-            Ok((directory, transaction))
-        }
-        Err(error) => {
-            let _ = fs::remove_dir_all(directory);
-            Err(error)
-        }
+    if let Some(reason) = unavailable_reason() {
+        anyhow::bail!(reason)
     }
-}
-
-pub(super) async fn prepare(
-    root: PathBuf,
-    download: PathBuf,
-    candidate: Candidate,
-) -> Result<Prepared> {
-    let (directory, mut transaction) =
-        tokio::task::spawn_blocking(move || prepare_files(&root, &download, &candidate)).await??;
-    let result = async {
-        let name = if cfg!(windows) { "yaas-updater.exe" } else { "yaas-updater" };
-        let mut command = tokio::process::Command::new(directory.join(name));
-        command
-            .arg(&directory)
-            .current_dir(&directory)
-            .stdin(Stdio::piped())
-            .stdout(Stdio::piped())
-            .stderr(Stdio::from(fs::File::create(directory.join("helper.log"))?))
-            .kill_on_drop(false);
-        clean_environment(command.as_std_mut());
-        #[cfg(windows)]
-        command.creation_flags(0x08000000);
-        let mut helper = command.spawn().context("Cannot start update helper")?;
-        let mut output = BufReader::new(helper.stdout.take().unwrap());
-        let mut line = String::new();
-        let ready = timeout(Duration::from_secs(10), output.read_line(&mut line)).await;
-        if !matches!(ready, Ok(Ok(_))) || line.trim() != "READY" {
-            let _ = helper.kill().await;
-            let _ = helper.wait().await;
-            anyhow::bail!("Update helper failed preflight; see helper.log");
-        }
-        Ok(helper)
-    }
-    .await;
-    match result {
-        Ok(helper) => Ok(Prepared { directory, transaction, helper, committed: false }),
-        Err(error) => {
-            let _ = fs::remove_dir_all(&transaction.workspace);
-            transaction.error = Some(format!("{error:#}"));
-            let _ = transaction.save(&directory);
-            Err(error)
-                .with_context(|| format!("Helper log: {}", directory.join("helper.log").display()))
-        }
-    }
-}
-
-#[derive(Default)]
-pub(super) struct Recovery {
-    pub message: Option<String>,
-    pub block: Option<String>,
-}
-
-pub(super) fn recover_startup(root: &Path) -> Result<Recovery> {
-    let transactions = root.join("transactions");
-    if !transactions.exists() {
-        return Ok(Recovery::default());
-    }
-    let mut block = None;
-    let mut messages = Vec::new();
-    for entry in fs::read_dir(transactions)? {
-        let directory = entry?.path();
-        if !directory.is_dir() {
-            continue;
-        }
-        let Ok(mut tx) = Transaction::read(&directory) else {
-            continue;
-        };
-        let lock = fs::OpenOptions::new()
-            .read(true)
-            .write(true)
-            .create(true)
-            .truncate(false)
-            .open(directory.join("helper.lock"))?;
-        if matches!(tx.phase, Phase::Launching | Phase::Launched)
-            && tx.expected == installed_identity()
+    // Also exclude startup cleanup while the request directory is being written.
+    let _lock = app_update::install::lock()?;
+    let requests = app_update::install::user_update_dir()?.join("requests");
+    fs::create_dir_all(&requests)?;
+    let directory = tempfile::Builder::new().prefix("update-").tempdir_in(requests)?;
+    fs::copy(helper, directory.path().join(helper_name()))?;
+    let runtime_executable = std::env::current_exe()?.canonicalize()?;
+    let appdir = std::env::var_os("APPDIR").map(PathBuf::from);
+    let mut bundled_executables = Vec::new();
+    for name in ["adb", "7za", "7zz", "7zzs", "rclone"] {
+        if let Ok(path) = crate::utils::resolve_binary_path(None, name)
+            && let Ok(path) = path.canonicalize()
+            && (path.starts_with(&target)
+                || appdir.as_ref().is_some_and(|dir| path.starts_with(dir)))
         {
-            app_update::transaction::acknowledge(&directory, &installed_identity())?;
-            let _ = fs::remove_dir_all(root.join("downloads").join(&tx.id));
-            if lock.try_lock().is_ok() {
-                app_update::transaction::remove(&tx.workspace)?;
-                drop(lock);
-                fs::remove_dir_all(&directory)?;
-            }
-            continue;
-        }
-        if lock.try_lock().is_err() {
-            continue;
-        }
-        match tx.phase {
-            Phase::Prepared => {
-                app_update::transaction::remove(&tx.workspace)?;
-            }
-            Phase::Applying => {
-                // The old app may have been started manually after a power loss. Do not
-                // replace its loaded files; keep the journal for explicit recovery.
-                tx.phase = Phase::RecoveryRequired;
-                tx.error = Some(
-                    "An update was interrupted. Close YAAS and restore the backup recorded in \
-                     transaction.json before retrying."
-                        .into(),
-                );
-                tx.save(&directory)?;
-            }
-            _ => {}
-        }
-        if tx.phase == Phase::RecoveryRequired {
-            block =
-                Some(format!("An interrupted update needs recovery; see {}", directory.display()));
-        }
-        if let Some(error) = tx.error {
-            messages.push(format!("{error} ({})", directory.display()));
-        } else if matches!(tx.phase, Phase::Launching | Phase::Launched) {
-            messages.push(format!(
-                "An update has not confirmed startup; backup retained at {}",
-                tx.workspace.display()
-            ));
+            bundled_executables.push(path);
         }
     }
-    Ok(Recovery { message: (!messages.is_empty()).then(|| messages.join("\n")), block })
+    let request = InstallRequest {
+        package: download.join("package").canonicalize()?,
+        working_directory: restart_directory(&target)?,
+        target,
+        expected: candidate.identity.clone(),
+        parent: ProcessIdentity::current()?,
+        runtime_executable,
+        bundled_executables,
+        appdir,
+        arguments: std::env::args_os().skip(1).collect(),
+    };
+    request.save(&directory.path().join("request.json"))?;
+    Ok(Prepared { directory: directory.keep() })
+}
+
+pub(super) async fn prepare(download: PathBuf, candidate: Candidate) -> Result<Prepared> {
+    tokio::task::spawn_blocking(move || prepare_files(&download, &candidate)).await?
 }
 
 fn restart_directory(target: &Path) -> Result<PathBuf> {
@@ -378,66 +189,27 @@ fn restart_directory(target: &Path) -> Result<PathBuf> {
 mod tests {
     use super::*;
 
-    fn transaction(root: &Path, phase: Phase) -> (PathBuf, Transaction) {
-        let directory = root.join("transactions/test");
-        fs::create_dir_all(&directory).unwrap();
-        let workspace = root.join("workspace");
-        fs::create_dir_all(&workspace).unwrap();
-        fs::write(workspace.join("backup"), "old app").unwrap();
-        let tx = Transaction {
-            id: "test".into(),
-            expected: installed_identity(),
-            parent_pid: std::process::id(),
-            installation_lock: root.join("install.lock"),
-            workspace,
-            executable: root.join("app"),
-            arguments: vec![],
-            working_directory: root.into(),
-            replacements: vec![],
-            phase,
-            error: None,
-        };
-        tx.save(&directory).unwrap();
-        (directory, tx)
-    }
-
-    #[test]
-    fn interrupted_replacement_preserves_backup_and_blocks_installation() {
+    #[tokio::test]
+    async fn cancellation_removes_preparation_but_keeps_download() {
         let root = tempfile::tempdir().unwrap();
-        let (directory, tx) = transaction(root.path(), Phase::Applying);
-        let recovery = recover_startup(root.path()).unwrap();
-        assert!(recovery.block.is_some());
-        assert!(recovery.message.is_some());
-        assert_eq!(Transaction::read(&directory).unwrap().phase, Phase::RecoveryRequired);
-        assert_eq!(fs::read_to_string(tx.workspace.join("backup")).unwrap(), "old app");
-    }
-
-    #[test]
-    fn accepted_build_cleans_completed_transaction_and_download() {
-        let root = tempfile::tempdir().unwrap();
-        let (directory, tx) = transaction(root.path(), Phase::Launched);
-        fs::create_dir_all(root.path().join("downloads/test")).unwrap();
-        let recovery = recover_startup(root.path()).unwrap();
-        assert!(recovery.block.is_none());
+        let directory = root.path().join("request");
+        fs::create_dir(&directory).unwrap();
+        fs::write(directory.join("request.json"), "request").unwrap();
+        fs::write(directory.join(helper_name()), "helper").unwrap();
+        let package = root.path().join("package");
+        fs::write(&package, "verified download").unwrap();
+        Prepared { directory: directory.clone() }.cancel().await;
         assert!(!directory.exists());
-        assert!(!tx.workspace.exists());
-        assert!(!root.path().join("downloads/test").exists());
+        assert_eq!(fs::read_to_string(package).unwrap(), "verified download");
     }
 
     #[test]
-    fn running_helper_owns_cleanup_after_acknowledgement() {
+    fn failed_helper_spawn_retains_request_and_log() {
         let root = tempfile::tempdir().unwrap();
-        let (directory, tx) = transaction(root.path(), Phase::Launching);
-        let lock = fs::OpenOptions::new()
-            .read(true)
-            .write(true)
-            .create(true)
-            .truncate(false)
-            .open(directory.join("helper.lock"))
-            .unwrap();
-        lock.try_lock().unwrap();
-        recover_startup(root.path()).unwrap();
-        assert!(directory.join("accepted.json").exists());
-        assert!(tx.workspace.join("backup").exists());
+        fs::write(root.path().join("request.json"), "request").unwrap();
+        let result = Prepared { directory: root.path().into() }.launch();
+        assert!(result.is_err());
+        assert!(root.path().join("request.json").exists());
+        assert!(root.path().join("updater.log").exists());
     }
 }

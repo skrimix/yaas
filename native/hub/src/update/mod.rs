@@ -6,7 +6,7 @@ mod release;
 use std::{path::PathBuf, sync::Arc};
 
 use anyhow::{Context, Result, ensure};
-use install::Prepared;
+pub(crate) use install::Prepared;
 use release::{Candidate, Failure};
 use rinf::{DartSignal, RustSignal};
 use tokio::{
@@ -21,13 +21,12 @@ pub(crate) struct UpdateManager {
     sender: mpsc::UnboundedSender<ShutdownCommand>,
 }
 enum ShutdownCommand {
-    Validate(String, oneshot::Sender<Result<()>>),
-    Commit(String, oneshot::Sender<Result<()>>),
+    Take(String, oneshot::Sender<Result<Prepared>>),
     Stop(oneshot::Sender<()>),
 }
 
 enum Outcome {
-    Checked(Option<Candidate>),
+    Checked(Option<Box<Candidate>>),
     Downloaded,
     Prepared(Prepared),
 }
@@ -48,7 +47,6 @@ struct Manager {
     operation: Option<Operation>,
     prepared: Option<Prepared>,
     exiting: bool,
-    recovery_block: Option<String>,
     progress_tx: mpsc::UnboundedSender<u64>,
 }
 
@@ -69,21 +67,15 @@ impl UpdateManager {
             operation: None,
             prepared: None,
             exiting: false,
-            recovery_block: None,
             progress_tx,
         };
         tokio::spawn(manager.run(settings, receiver, progress_rx));
         Arc::new(Self { sender })
     }
 
-    pub(crate) async fn validate_exit(&self, id: String) -> Result<()> {
+    pub(crate) async fn take_install(&self, id: String) -> Result<Prepared> {
         let (tx, rx) = oneshot::channel();
-        self.sender.send(ShutdownCommand::Validate(id, tx)).context("Update manager stopped")?;
-        rx.await.context("Update manager stopped")?
-    }
-    pub(crate) async fn commit_exit(&self, id: String) -> Result<()> {
-        let (tx, rx) = oneshot::channel();
-        self.sender.send(ShutdownCommand::Commit(id, tx)).context("Update manager stopped")?;
+        self.sender.send(ShutdownCommand::Take(id, tx)).context("Update manager stopped")?;
         rx.await.context("Update manager stopped")?
     }
     pub(crate) async fn stop(&self) {
@@ -140,9 +132,6 @@ impl Manager {
         }
     }
     async fn cancel(&mut self) {
-        if self.prepared.as_ref().is_some_and(|p| p.committed) {
-            return;
-        }
         if let Some(operation) = self.operation.take() {
             operation.cancel.cancel();
             // File preparation runs on the blocking pool; wait before cleaning its workspace.
@@ -195,7 +184,7 @@ impl Manager {
                         ),
                     )
                     .await??;
-                    Ok(Outcome::Checked(candidate))
+                    Ok(Outcome::Checked(candidate.map(Box::new)))
                 })
                 .await
                 .unwrap_or_else(|| Err(anyhow::anyhow!("Check cancelled")))
@@ -244,18 +233,14 @@ impl Manager {
 
     fn begin_install(&mut self, id: &str) -> Result<()> {
         self.require_candidate(id, AppUpdatePhase::Ready)?;
-        if let Some(reason) = &self.recovery_block {
-            return Err(release::failure(AppUpdateErrorKind::RecoveryRequired, reason));
-        }
         if let Some(reason) = install::unavailable_reason() {
             self.installation_unavailable_reason = Some(reason.clone());
             return Err(release::failure(AppUpdateErrorKind::Installation, reason));
         }
-        let root = self.root.clone();
         let download = self.download_dir();
         let candidate = self.candidate.as_ref().unwrap().clone();
         let task = tokio::spawn(async move {
-            Ok(Outcome::Prepared(install::prepare(root, download, candidate).await?))
+            Ok(Outcome::Prepared(install::prepare(download, candidate).await?))
         });
         self.operation = Some(Operation { task, cancel: CancellationToken::new() });
         self.clear_error();
@@ -275,7 +260,7 @@ impl Manager {
                 } else {
                     AppUpdatePhase::UpToDate
                 };
-                self.candidate = candidate;
+                self.candidate = candidate.map(|candidate| *candidate);
             }
             Ok(Outcome::Downloaded) => {
                 self.phase = AppUpdatePhase::Ready;
@@ -313,53 +298,29 @@ impl Manager {
         let download_rx = DownloadAppUpdateRequest::get_dart_signal_receiver();
         let install_rx = InstallAppUpdateRequest::get_dart_signal_receiver();
         let cancel_rx = CancelAppUpdateRequest::get_dart_signal_receiver();
-        match install::recover_startup(&self.root) {
-            Ok(recovery) => {
-                if let Some(reason) = recovery.block {
-                    self.installation_unavailable_reason = Some(reason.clone());
-                    self.recovery_block = Some(reason);
-                }
-                if let Some(error) = recovery.message {
-                    self.set_error(anyhow::anyhow!(error), AppUpdateErrorKind::RecoveryRequired);
-                }
-            }
-            Err(error) => {
-                self.recovery_block = Some(format!("{error:#}"));
-                self.installation_unavailable_reason = self.recovery_block.clone();
-                self.set_error(error, AppUpdateErrorKind::RecoveryRequired);
-            }
+        if let Err(error) = app_update::install::cleanup() {
+            tracing::warn!(%error, "Could not clean leftover update helpers");
         }
         self.publish();
         loop {
             tokio::select! {
                 command = shutdown.recv() => {
                     match command {
-                        Some(ShutdownCommand::Validate(id, reply)) => {
-                            let result = self.valid_exit(&id).and_then(|()| {
-                                ensure!(self.prepared.as_mut().unwrap().helper.try_wait()?.is_none(), "Update helper stopped before shutdown");
-                                Ok(())
+                        Some(ShutdownCommand::Take(id, reply)) => {
+                            let result = self.valid_exit(&id).map(|()| {
+                                self.exiting = true;
+                                self.prepared.take().unwrap()
                             });
-                            self.exiting = result.is_ok();
                             if let Err(error) = &result {
                                 self.error = Some(format!("{error:#}"));
                                 self.error_kind = Some(AppUpdateErrorKind::Installation);
                                 self.cancel().await;
                                 self.publish();
                             }
-                            let _ = reply.send(result);
-                        }
-                        Some(ShutdownCommand::Commit(id, reply)) => {
-                            let result = match self.valid_exit(&id) {
-                                Ok(()) => self.prepared.as_mut().unwrap().commit().await,
-                                Err(error) => Err(error),
-                            };
-                            if let Err(error) = &result
-                                && let Some(prepared) = &mut self.prepared
-                            {
-                                prepared.transaction.error = Some(format!("{error:#}"));
-                                let _ = prepared.transaction.save(&prepared.directory);
+                            if let Err(Ok(prepared)) = reply.send(result) {
+                                prepared.cancel().await;
+                                self.exiting = false;
                             }
-                            let _ = reply.send(result);
                         }
                         Some(ShutdownCommand::Stop(reply)) => {
                             self.cancel().await;
@@ -475,7 +436,6 @@ mod tests {
             operation: None,
             prepared: None,
             exiting: false,
-            recovery_block: None,
             progress_tx: mpsc::unbounded_channel().0,
         }
     }

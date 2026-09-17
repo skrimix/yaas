@@ -276,22 +276,12 @@ def package(sha, artifacts=Path("artifacts"), output=Path("release")):
                 archs is None or archs == {"aarch64", "x86_64"},
                 f"Non-universal macOS file: {name}",
             )
-    files = sorted(
-        p.relative_to(windows).as_posix()
-        for p in windows.rglob("*")
-        if p.is_file()
-        and p not in (windows / "build-identity.json", windows / "yaas-package.json")
-    )
-    inventory = {
-        "schema_version": 1,
-        "identity": {**identity, "version": version, "build_number": build},
-        "files": sorted([*files, "yaas-package.json"]),
-    }
-    (windows / "yaas-package.json").write_text(json.dumps(inventory, indent=2) + "\n")
     output.mkdir(parents=True, exist_ok=True)
     with zipfile.ZipFile(output / PACKAGES[0][0], "w", zipfile.ZIP_DEFLATED) as archive:
         for path in sorted(windows.rglob("*")):
-            if path.is_file() and path != windows / "build-identity.json":
+            if path.is_file() and path not in (
+                windows / "build-identity.json", windows / "yaas-package.json"
+            ):
                 archive.write(path, path.relative_to(windows))
     shutil.copyfile(linux, output / PACKAGES[1][0])
     (output / PACKAGES[1][0]).chmod(0o755)

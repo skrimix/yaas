@@ -3579,12 +3579,6 @@ abstract class AppLocalizations {
   /// **'The update is no longer ready for this action. Check its current status.'**
   String get updatesInvalidRequestError;
 
-  /// No description provided for @updatesRecoveryError.
-  ///
-  /// In en, this message translates to:
-  /// **'A previous update needs recovery before installation can continue.'**
-  String get updatesRecoveryError;
-
   /// No description provided for @updatesUnknownError.
   ///
   /// In en, this message translates to:

@@ -1921,10 +1921,6 @@ class AppLocalizationsEn extends AppLocalizations {
       'The update is no longer ready for this action. Check its current status.';
 
   @override
-  String get updatesRecoveryError =>
-      'A previous update needs recovery before installation can continue.';
-
-  @override
   String get updatesUnknownError => 'The update could not be completed.';
 
   @override

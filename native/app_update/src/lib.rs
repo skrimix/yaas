@@ -1,8 +1,8 @@
-//! Release metadata and installation transactions shared with the update helper.
+//! Release metadata, package extraction, and the standalone update installer.
 
-pub mod adb;
+pub mod install;
 pub mod package;
-pub mod transaction;
+pub mod processes;
 
 use std::{fs::File, io::Read, path::Path};
 

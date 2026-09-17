@@ -1,23 +1,12 @@
 //! Package layout checks and ZIP extraction for staged updates.
 
-use crate::Identity;
-use anyhow::{Context, Result, ensure};
-use serde::{Deserialize, Serialize};
+use anyhow::{Result, ensure};
 use std::{
     collections::BTreeSet,
     fs,
     io::{Read, Write},
     path::{Component, Path, PathBuf},
 };
-
-pub const INVENTORY: &str = "yaas-package.json";
-
-#[derive(Debug, Clone, Serialize, Deserialize)]
-pub struct Inventory {
-    pub schema_version: u32,
-    pub identity: Identity,
-    pub files: Vec<String>,
-}
 
 pub fn relative_path(name: &str) -> Result<PathBuf> {
     ensure!(
@@ -45,37 +34,6 @@ pub fn relative_path(name: &str) -> Result<PathBuf> {
         );
     }
     Ok(path)
-}
-
-impl Inventory {
-    pub fn read(root: &Path) -> Result<Self> {
-        let inventory: Self = serde_json::from_slice(&fs::read(root.join(INVENTORY))?)
-            .context("Invalid package inventory")?;
-        ensure!(
-            inventory.schema_version == 1,
-            "Unsupported package inventory"
-        );
-        inventory.identity.validate()?;
-        let mut seen = BTreeSet::new();
-        for name in &inventory.files {
-            relative_path(name)?;
-            ensure!(seen.insert(name.to_lowercase()), "Duplicate package path");
-            ensure!(
-                !name
-                    .split('/')
-                    .any(|p| p.eq_ignore_ascii_case("_portable_data")
-                        || p.starts_with(".yaas-update")),
-                "Package overlaps user data"
-            );
-        }
-        for required in [INVENTORY, "yaas.exe", "hub.dll", "yaas-updater.exe"] {
-            ensure!(
-                inventory.files.iter().any(|p| p == required),
-                "Missing package file: {required}"
-            );
-        }
-        Ok(inventory)
-    }
 }
 
 /// Rejects symlinks in an existing destination path, including its parents.
@@ -122,6 +80,13 @@ pub fn extract_zip(archive: &Path, output: &Path, macos: bool) -> Result<()> {
                 "Unexpected macOS ZIP layout"
             );
         }
+        ensure!(
+            !relative.components().any(|part| {
+                let name = part.as_os_str().to_string_lossy();
+                name.eq_ignore_ascii_case("_portable_data") || name.starts_with(".yaas-update")
+            }),
+            "Package overlaps user data"
+        );
         let path = output.join(&relative);
         check_destination(&path)?;
         let mode = entry.unix_mode().unwrap_or(0o644);
@@ -200,12 +165,12 @@ pub fn extract_zip(archive: &Path, output: &Path, macos: bool) -> Result<()> {
         // Resolve every link after extraction, including chains, and keep it inside the bundle.
         validate_links(&root, &root.canonicalize()?)?;
     } else {
-        let inventory = Inventory::read(output)?;
-        let actual = regular_files(output, output)?;
-        ensure!(
-            actual == inventory.files.into_iter().collect(),
-            "Package inventory does not match ZIP contents"
-        );
+        for name in ["yaas.exe", "hub.dll", "yaas-updater.exe"] {
+            ensure!(
+                output.join(name).is_file(),
+                "Missing Windows package file: {name}"
+            );
+        }
     }
     Ok(())
 }
@@ -223,27 +188,6 @@ fn validate_links(root: &Path, boundary: &Path) -> Result<()> {
         }
     }
     Ok(())
-}
-
-fn regular_files(root: &Path, directory: &Path) -> Result<BTreeSet<String>> {
-    let mut files = BTreeSet::new();
-    for entry in fs::read_dir(directory)? {
-        let entry = entry?;
-        if entry.file_type()?.is_dir() {
-            files.extend(regular_files(root, &entry.path())?);
-        } else {
-            ensure!(entry.file_type()?.is_file(), "Unexpected package entry");
-            files.insert(
-                entry
-                    .path()
-                    .strip_prefix(root)?
-                    .to_str()
-                    .context("Non-UTF8 package path")?
-                    .replace('\\', "/"),
-            );
-        }
-    }
-    Ok(files)
 }
 
 #[cfg(test)]
@@ -274,7 +218,11 @@ mod zip_tests {
 
     #[test]
     fn extraction_rejects_traversal_and_duplicate_files() {
-        for names in [vec!["../escape"], vec!["a", "A"]] {
+        for names in [
+            vec!["../escape"],
+            vec!["a", "A"],
+            vec!["_portable_data/settings.json"],
+        ] {
             let root = tempfile::tempdir_in(std::env::temp_dir().canonicalize().unwrap()).unwrap();
             let archive = root.path().join("package.zip");
             let mut zip = ZipWriter::new(fs::File::create(&archive).unwrap());
@@ -283,7 +231,8 @@ mod zip_tests {
                 zip.write_all(b"data").unwrap();
             }
             zip.finish().unwrap();
-            assert!(extract_zip(&archive, &root.path().join("output"), false).is_err());
+            let error = extract_zip(&archive, &root.path().join("output"), false).unwrap_err();
+            assert!(!error.to_string().contains("Missing Windows package file"));
             assert!(!root.path().join("escape").exists());
         }
     }

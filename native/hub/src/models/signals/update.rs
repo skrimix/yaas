@@ -15,7 +15,7 @@ pub(crate) struct DownloadAppUpdateRequest {
 pub(crate) struct InstallAppUpdateRequest {
     pub candidate_id: String,
 }
-/// Cancels a check, download, or pending exit. An armed installation cannot be cancelled.
+/// Cancels a check, download, or pending exit. Installation cannot be cancelled after shutdown begins.
 #[derive(Serialize, Deserialize, DartSignal)]
 pub(crate) struct CancelAppUpdateRequest {}
 
@@ -41,7 +41,6 @@ pub(crate) enum AppUpdateErrorKind {
     Integrity,
     Installation,
     InvalidRequest,
-    RecoveryRequired,
 }
 
 #[derive(Debug, Clone, Serialize, Deserialize, SignalPiece)]

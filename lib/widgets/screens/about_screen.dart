@@ -82,8 +82,10 @@ class _AboutScreenState extends State<AboutScreen> {
             ),
           ] else
             Text(l10n.aboutBuildInfoLoading),
-          const SizedBox(height: 16),
-          const AppUpdateSection(),
+          if (core?.releaseChannel == 'development') ...[
+            const SizedBox(height: 16),
+            const AppUpdateSection(),
+          ],
           if (core != null) ...[
             const SizedBox(height: 16),
             Text(l10n.aboutCoreDetails,

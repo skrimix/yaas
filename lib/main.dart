@@ -398,7 +398,9 @@ class _SinglePageState extends State<SinglePage> {
         Expanded(
           child: Column(
             children: [
-              if (_currentPageKey != 'about') const AppUpdateBanner(),
+              if (appState.coreVersionInfo?.releaseChannel == 'development' &&
+                  _currentPageKey != 'about')
+                const AppUpdateBanner(),
               Expanded(
                 child: AnimatedSwitcher(
                   duration: const Duration(milliseconds: 100),

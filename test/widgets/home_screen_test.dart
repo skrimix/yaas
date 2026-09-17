@@ -98,7 +98,7 @@ void main() {
   });
 
   for (final width in [800.0, 360.0]) {
-    testWidgets('stacks and scrolls at $width with larger Russian text',
+    testWidgets('adapts and scrolls at $width with larger Russian text',
         (tester) async {
       await _pumpHome(tester,
           size: Size(width, 600),
@@ -108,7 +108,11 @@ void main() {
       expect(tester.takeException(), isNull);
       final device = tester.getRect(find.text('Oculus Quest 2'));
       final controls = tester.getRect(find.byType(DeviceActionsCard));
-      expect(controls.top, greaterThan(device.bottom));
+      if (width == 800) {
+        expect(controls.left, greaterThan(device.right));
+      } else {
+        expect(controls.top, greaterThan(device.bottom));
+      }
       await tester.ensureVisible(find.text('Свободное место'));
       await tester.pumpAndSettle();
       expect(tester.takeException(), isNull);

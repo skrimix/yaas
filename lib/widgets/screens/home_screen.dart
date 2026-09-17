@@ -1,5 +1,4 @@
 import 'package:flutter/material.dart';
-import 'package:flutter/services.dart';
 import 'package:flutter_svg/svg.dart';
 import 'package:proper_filesize/proper_filesize.dart';
 import 'package:provider/provider.dart';
@@ -17,10 +16,10 @@ class _HomeMetrics {
   static const double cardRadius = 20;
   static const double cardPadding = 20;
   static const double heroPadding = 24;
-  static const double heroContentBreakpoint = 540;
+  static const double heroContentBreakpoint = 400;
+  static const double minOverviewWidth = 360;
   static const double controlsWidth = 360;
-  static const double wideBreakpoint =
-      heroContentBreakpoint + 2 * heroPadding + gap + controlsWidth;
+  static const double wideBreakpoint = minOverviewWidth + gap + controlsWidth;
 }
 
 class HomeScreen extends StatelessWidget {
@@ -192,26 +191,9 @@ class _DeviceHeroCard extends StatelessWidget {
                     Text(l10n.homeSerialNumber,
                         style: theme.textTheme.labelMedium
                             ?.copyWith(color: mutedOnHero)),
-                    Row(
-                      mainAxisSize: MainAxisSize.min,
-                      children: [
-                        Flexible(
-                          child: SelectableText(
-                            device.deviceTrueSerial,
-                            style: theme.textTheme.bodyLarge
-                                ?.copyWith(color: onHero),
-                          ),
-                        ),
-                        const SizedBox(width: 4),
-                        IconButton(
-                          visualDensity: VisualDensity.compact,
-                          iconSize: 18,
-                          tooltip: l10n.commonCopy,
-                          color: mutedOnHero,
-                          onPressed: () => _copySerial(context),
-                          icon: const Icon(Icons.copy_rounded),
-                        ),
-                      ],
+                    SelectableText(
+                      device.deviceTrueSerial,
+                      style: theme.textTheme.bodyLarge?.copyWith(color: onHero),
                     ),
                     const SizedBox(height: 16),
                     _InfoPill(
@@ -232,7 +214,7 @@ class _DeviceHeroCard extends StatelessWidget {
                 return Row(
                   children: [
                     Expanded(child: details),
-                    const SizedBox(width: 16),
+                    const SizedBox(width: _HomeMetrics.gap),
                     Expanded(child: artwork),
                   ],
                 );
@@ -241,14 +223,6 @@ class _DeviceHeroCard extends StatelessWidget {
           ],
         ),
       ),
-    );
-  }
-
-  void _copySerial(BuildContext context) {
-    Clipboard.setData(ClipboardData(text: device.deviceTrueSerial));
-    final messenger = ScaffoldMessenger.maybeOf(context);
-    messenger?.showSnackBar(
-      SnackBar(content: Text(AppLocalizations.of(context).copiedToClipboard)),
     );
   }
 }
@@ -340,7 +314,7 @@ class _BatteryCard extends StatelessWidget {
             const SizedBox(height: 16),
             LayoutBuilder(
               builder: (context, constraints) {
-                final sideBySide = constraints.maxWidth >= 520;
+                final sideBySide = constraints.maxWidth >= 410;
                 final tiles = [
                   for (final entry in entries)
                     _BatteryTile(
@@ -368,7 +342,7 @@ class _BatteryCard extends StatelessWidget {
                     crossAxisAlignment: CrossAxisAlignment.stretch,
                     children: [
                       for (var i = 0; i < tiles.length; i++) ...[
-                        if (i > 0) const VerticalDivider(width: 33),
+                        if (i > 0) const VerticalDivider(width: 17),
                         Expanded(child: tiles[i]),
                       ],
                     ],
@@ -428,7 +402,7 @@ class _BatteryTile extends StatelessWidget {
                   available ? scheme.onSurfaceVariant : scheme.outline,
                   BlendMode.srcIn),
             ),
-            const SizedBox(width: 10),
+            const SizedBox(width: 8),
             Expanded(
               child: Text(
                 title,

@@ -16,7 +16,11 @@ class _HomeMetrics {
   static const double heroRadius = 28;
   static const double cardRadius = 20;
   static const double cardPadding = 20;
-  static const double wideBreakpoint = 960;
+  static const double heroPadding = 24;
+  static const double heroContentBreakpoint = 540;
+  static const double controlsWidth = 360;
+  static const double wideBreakpoint =
+      heroContentBreakpoint + 2 * heroPadding + gap + controlsWidth;
 }
 
 class HomeScreen extends StatelessWidget {
@@ -66,7 +70,8 @@ class HomeScreen extends StatelessWidget {
                       children: [
                         Expanded(child: overview),
                         const SizedBox(width: _HomeMetrics.gap),
-                        SizedBox(width: 360, child: controls),
+                        SizedBox(
+                            width: _HomeMetrics.controlsWidth, child: controls),
                       ],
                     )
                   else ...[
@@ -152,7 +157,7 @@ class _DeviceHeroCard extends StatelessWidget {
         borderRadius: BorderRadius.circular(_HomeMetrics.heroRadius),
       ),
       child: Padding(
-        padding: const EdgeInsets.all(24),
+        padding: const EdgeInsets.all(_HomeMetrics.heroPadding),
         child: Column(
           crossAxisAlignment: CrossAxisAlignment.stretch,
           children: [
@@ -175,7 +180,8 @@ class _DeviceHeroCard extends StatelessWidget {
             const SizedBox(height: 16),
             LayoutBuilder(
               builder: (context, constraints) {
-                final compact = constraints.maxWidth < 540;
+                final compact =
+                    constraints.maxWidth < _HomeMetrics.heroContentBreakpoint;
                 final details = Column(
                   crossAxisAlignment: CrossAxisAlignment.start,
                   children: [

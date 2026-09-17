@@ -763,30 +763,30 @@ class _InlineNetworkImage extends StatelessWidget {
       child: const Center(child: Icon(Icons.broken_image_outlined, size: 40)),
     );
 
-    final img = CachedNetworkImage(
-      imageUrl: url,
-      placeholder: (_, __) => placeholder,
-      errorWidget: (_, __, ___) => error,
-      imageBuilder: (context, provider) => ClipRRect(
+    return MouseRegion(
+      cursor: onTap != null ? SystemMouseCursors.click : MouseCursor.defer,
+      child: ClipRRect(
         borderRadius: borderRadius,
         child: Container(
           constraints: const BoxConstraints(maxHeight: 360),
           color: Colors.black12,
           child: GestureDetector(
             onTap: onTap,
-            child: Image(
-              image: provider,
-              fit: BoxFit.contain,
-              width: double.infinity,
+            child: LayoutBuilder(
+              builder: (context, constraints) => CachedNetworkImage(
+                imageUrl: url,
+                memCacheWidth: (constraints.maxWidth *
+                        MediaQuery.devicePixelRatioOf(context))
+                    .ceil(),
+                fit: BoxFit.contain,
+                width: double.infinity,
+                placeholder: (_, __) => placeholder,
+                errorWidget: (_, __, ___) => error,
+              ),
             ),
           ),
         ),
       ),
-    );
-
-    return MouseRegion(
-      cursor: onTap != null ? SystemMouseCursors.click : MouseCursor.defer,
-      child: img,
     );
   }
 }
@@ -1179,6 +1179,9 @@ class _CloudAppMediaState extends State<_CloudAppMedia> {
                 CachedNetworkImage(
                   imageUrl: thumbUrl,
                   cacheManager: _cacheManager,
+                  memCacheHeight:
+                      (widget.height * MediaQuery.devicePixelRatioOf(context))
+                          .ceil(),
                   fit: BoxFit.cover,
                   placeholder: (context, url) =>
                       _mediaPlaceholder(context, loading: true),

@@ -56,3 +56,4 @@ target/
 
 /squashfs-root/
 /AppDir/
+.widget_preview/

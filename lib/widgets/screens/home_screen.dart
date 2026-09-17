@@ -387,7 +387,7 @@ class _BatteryTile extends StatelessWidget {
             ? scheme.error
             : scheme.primary;
     final subtitle =
-        isCharging ? l10n.chargingLabel : status ?? l10n.batteryLabel;
+        isCharging ? l10n.homeChargingLabel : status ?? l10n.batteryLabel;
 
     return Column(
       crossAxisAlignment: CrossAxisAlignment.start,

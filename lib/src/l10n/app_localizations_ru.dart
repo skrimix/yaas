@@ -1268,6 +1268,9 @@ class AppLocalizationsRu extends AppLocalizations {
   String get chargingLabel => 'заряжается';
 
   @override
+  String get homeChargingLabel => 'Заряжается';
+
+  @override
   String get powerOffDevice => 'Выключить устройство';
 
   @override

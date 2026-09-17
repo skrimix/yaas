@@ -605,6 +605,7 @@
     "controllerStatusUnknown": "Неизвестно",
     "batteryLabel": "Батарея",
     "chargingLabel": "заряжается",
+    "homeChargingLabel": "Заряжается",
     "powerOffDevice": "Выключить устройство",
     "powerOffConfirm": "Вы уверены, что хотите выключить устройство?",
     "powerOffMenu": "Выключить...",

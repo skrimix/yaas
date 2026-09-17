@@ -2336,6 +2336,12 @@ abstract class AppLocalizations {
   /// **'charging'**
   String get chargingLabel;
 
+  /// No description provided for @homeChargingLabel.
+  ///
+  /// In en, this message translates to:
+  /// **'Charging'**
+  String get homeChargingLabel;
+
   /// No description provided for @powerOffDevice.
   ///
   /// In en, this message translates to:

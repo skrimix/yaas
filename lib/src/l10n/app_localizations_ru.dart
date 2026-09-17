@@ -89,8 +89,10 @@ class AppLocalizationsRu extends AppLocalizations {
   String get settingsResetToDefaults => 'Сбросить по умолчанию';
 
   @override
-  String get settingsRevertChangesTooltip =>
-      'Отменить изменения\n(Shift+Клик для полного сброса)';
+  String get settingsRevertChanges => 'Отменить изменения';
+
+  @override
+  String get settingsUnsavedChanges => 'Есть несохранённые изменения';
 
   @override
   String get settingsSaveChanges => 'Сохранить изменения';
@@ -1694,6 +1696,9 @@ class AppLocalizationsRu extends AppLocalizations {
 
   @override
   String get commonClear => 'Очистить';
+
+  @override
+  String get commonMoreActions => 'Другие действия';
 
   @override
   String logsCopied(int count) {

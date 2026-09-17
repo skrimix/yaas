@@ -242,11 +242,17 @@ abstract class AppLocalizations {
   /// **'Reset to Defaults'**
   String get settingsResetToDefaults;
 
-  /// No description provided for @settingsRevertChangesTooltip.
+  /// No description provided for @settingsRevertChanges.
   ///
   /// In en, this message translates to:
-  /// **'Revert Changes\n(Shift+Click to reset to defaults)'**
-  String get settingsRevertChangesTooltip;
+  /// **'Revert Changes'**
+  String get settingsRevertChanges;
+
+  /// No description provided for @settingsUnsavedChanges.
+  ///
+  /// In en, this message translates to:
+  /// **'You have unsaved changes'**
+  String get settingsUnsavedChanges;
 
   /// No description provided for @settingsSaveChanges.
   ///
@@ -3121,6 +3127,12 @@ abstract class AppLocalizations {
   /// In en, this message translates to:
   /// **'Clear'**
   String get commonClear;
+
+  /// No description provided for @commonMoreActions.
+  ///
+  /// In en, this message translates to:
+  /// **'More actions'**
+  String get commonMoreActions;
 
   /// No description provided for @logsCopied.
   ///

@@ -89,8 +89,10 @@ class AppLocalizationsEn extends AppLocalizations {
   String get settingsResetToDefaults => 'Reset to Defaults';
 
   @override
-  String get settingsRevertChangesTooltip =>
-      'Revert Changes\n(Shift+Click to reset to defaults)';
+  String get settingsRevertChanges => 'Revert Changes';
+
+  @override
+  String get settingsUnsavedChanges => 'You have unsaved changes';
 
   @override
   String get settingsSaveChanges => 'Save Changes';
@@ -1671,6 +1673,9 @@ class AppLocalizationsEn extends AppLocalizations {
 
   @override
   String get commonClear => 'Clear';
+
+  @override
+  String get commonMoreActions => 'More actions';
 
   @override
   String logsCopied(int count) {

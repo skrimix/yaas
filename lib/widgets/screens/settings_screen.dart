@@ -3,7 +3,6 @@ import 'dart:math' as math;
 
 import 'package:flutter/material.dart';
 import '../../utils/theme_utils.dart' as app_theme;
-import 'package:flutter/services.dart';
 import 'package:file_picker/file_picker.dart';
 import 'package:provider/provider.dart';
 import '../../src/bindings/bindings.dart';
@@ -14,8 +13,7 @@ import '../../src/l10n/app_localizations.dart';
 import '../../utils/utils.dart';
 import '../../utils/sideload_utils.dart';
 import '../common/selectable_link_text.dart';
-import '../common/setting_dropdown.dart';
-import '../common/setting_row.dart';
+import '../common/settings_tiles.dart';
 import '../dialogs/downloader_setup_dialog.dart';
 
 enum SettingTextField {
@@ -24,14 +22,6 @@ enum SettingTextField {
   downloadsLocation,
   backupsLocation,
   bandwidthLimit,
-}
-
-class SettingsConstants {
-  static const double sectionSpacing = 24.0;
-  static const double padding = 16.0;
-  static const double verticalSpacing = 8.0;
-  static const double iconButtonSize = 32.0;
-  static const double iconSize = 16.0;
 }
 
 // TODO: validate paths on input change
@@ -48,14 +38,14 @@ class SettingsScreen extends StatefulWidget {
 }
 
 class _SettingsScreenState extends State<SettingsScreen> {
+  static const double _maxContentWidth = 1000;
+
   final Map<SettingTextField, TextEditingController> _textControllers = {};
 
   late Settings _originalSettings;
   late Settings _currentFormSettings;
   bool _hasChanges = false;
   SettingsState? _settingsState;
-  final ValueNotifier<bool> _isShiftPressedNotifier =
-      ValueNotifier<bool>(false);
   bool _seedColorCustom = false;
   final TextEditingController _customColorController = TextEditingController();
   bool _castingStatusRequested = false;
@@ -69,8 +59,6 @@ class _SettingsScreenState extends State<SettingsScreen> {
     _settingsState = settingsState;
     _originalSettings = settingsState.settings;
     _currentFormSettings = _originalSettings.copyWith();
-    _originalSettings = settingsState.settings;
-    _currentFormSettings = _originalSettings.copyWith();
 
     for (final setting in SettingTextField.values) {
       _textControllers[setting] = TextEditingController();
@@ -80,8 +68,6 @@ class _SettingsScreenState extends State<SettingsScreen> {
     settingsState.addListener(_onSettingsProviderUpdated);
     _unregisterSaveErrorListener =
         settingsState.addSaveErrorListener(_onSettingsSaveError);
-
-    HardwareKeyboard.instance.addHandler(_handleKeyEvent);
   }
 
   void _onSettingsSaveError(String error) {
@@ -98,18 +84,7 @@ class _SettingsScreenState extends State<SettingsScreen> {
       controller.dispose();
     }
     _customColorController.dispose();
-    HardwareKeyboard.instance.removeHandler(_handleKeyEvent);
-    _isShiftPressedNotifier.dispose();
     super.dispose();
-  }
-
-  bool _handleKeyEvent(KeyEvent event) {
-    final isShiftPressed = HardwareKeyboard.instance.isShiftPressed;
-    if (_isShiftPressedNotifier.value != isShiftPressed) {
-      _isShiftPressedNotifier.value = isShiftPressed;
-      setState(() {});
-    }
-    return false;
   }
 
   void _onSettingsProviderUpdated() {
@@ -336,139 +311,175 @@ class _SettingsScreenState extends State<SettingsScreen> {
       return const Center(child: CircularProgressIndicator());
     }
 
-    return Align(
-      alignment: Alignment.topCenter,
-      child: ConstrainedBox(
-        constraints: const BoxConstraints(maxWidth: 1000),
-        child: Column(
-          children: [
-            Padding(
-              padding: const EdgeInsets.fromLTRB(
-                SettingsConstants.padding,
-                SettingsConstants.padding,
-                SettingsConstants.padding,
-                SettingsConstants.verticalSpacing,
+    return Scaffold(
+      backgroundColor: Colors.transparent,
+      bottomNavigationBar: _buildSaveBar(l10n),
+      body: LayoutBuilder(
+        builder: (context, constraints) {
+          final side =
+              math.max(16.0, (constraints.maxWidth - _maxContentWidth) / 2);
+          final titleInset = math.max(0.0, side - 16);
+          final sections = _buildSettingsSections(l10n, settingsState);
+
+          return CustomScrollView(
+            slivers: [
+              SliverAppBar.large(
+                pinned: true,
+                title: Padding(
+                  padding: EdgeInsets.only(left: titleInset),
+                  child: Text(l10n.settingsTitle),
+                ),
+                actions: [
+                  _buildOverflowMenu(l10n),
+                  SizedBox(width: titleInset),
+                ],
               ),
-              child: _buildHeader(l10n),
-            ),
-            Expanded(
-              child: SingleChildScrollView(
-                padding: const EdgeInsets.all(SettingsConstants.padding),
-                child: Column(
-                  crossAxisAlignment: CrossAxisAlignment.start,
-                  children: _buildSettingsSections(l10n, settingsState),
+              SliverPadding(
+                padding: EdgeInsets.only(left: side, right: side, bottom: 24),
+                sliver: SliverToBoxAdapter(
+                  child: Column(
+                    crossAxisAlignment: CrossAxisAlignment.stretch,
+                    children: [
+                      for (var i = 0; i < sections.length; i++) ...[
+                        if (i > 0)
+                          const SizedBox(
+                              height: SettingsMetrics.sectionSpacing),
+                        sections[i],
+                      ],
+                    ],
+                  ),
+                ),
+              ),
+            ],
+          );
+        },
+      ),
+    );
+  }
+
+  Widget _buildOverflowMenu(AppLocalizations l10n) {
+    return PopupMenuButton<VoidCallback>(
+      tooltip: l10n.commonMoreActions,
+      position: PopupMenuPosition.under,
+      icon: const Icon(Icons.more_vert),
+      onSelected: (action) => action(),
+      itemBuilder: (context) => [
+        PopupMenuItem<VoidCallback>(
+          value: _revertChanges,
+          enabled: _hasChanges,
+          child: ListTile(
+            contentPadding: EdgeInsets.zero,
+            leading: const Icon(Icons.undo),
+            title: Text(l10n.settingsRevertChanges),
+          ),
+        ),
+        PopupMenuItem<VoidCallback>(
+          value: _resetToDefaults,
+          child: ListTile(
+            contentPadding: EdgeInsets.zero,
+            leading: const Icon(Icons.restart_alt),
+            title: Text(l10n.settingsResetToDefaults),
+          ),
+        ),
+      ],
+    );
+  }
+
+  Widget _buildSaveBar(AppLocalizations l10n) {
+    final theme = Theme.of(context);
+    return AnimatedSize(
+      duration: const Duration(milliseconds: 180),
+      curve: Curves.easeOutCubic,
+      alignment: Alignment.topCenter,
+      child: !_hasChanges
+          ? const SizedBox(width: double.infinity)
+          : Material(
+              color: theme.colorScheme.surfaceContainer,
+              child: SafeArea(
+                top: false,
+                child: Padding(
+                  padding:
+                      const EdgeInsets.symmetric(horizontal: 20, vertical: 12),
+                  child: Center(
+                    heightFactor: 1,
+                    child: ConstrainedBox(
+                      constraints:
+                          const BoxConstraints(maxWidth: _maxContentWidth),
+                      child: Wrap(
+                        alignment: WrapAlignment.spaceBetween,
+                        crossAxisAlignment: WrapCrossAlignment.center,
+                        spacing: 16,
+                        runSpacing: 8,
+                        children: [
+                          Row(
+                            mainAxisSize: MainAxisSize.min,
+                            children: [
+                              Icon(Icons.edit_note,
+                                  size: 20, color: theme.colorScheme.primary),
+                              const SizedBox(width: 10),
+                              Flexible(
+                                child: Text(
+                                  l10n.settingsUnsavedChanges,
+                                  style: theme.textTheme.bodyMedium,
+                                ),
+                              ),
+                            ],
+                          ),
+                          Wrap(
+                            alignment: WrapAlignment.end,
+                            spacing: 8,
+                            runSpacing: 8,
+                            children: [
+                              TextButton(
+                                onPressed: _revertChanges,
+                                child: Text(l10n.settingsRevertChanges),
+                              ),
+                              FilledButton(
+                                onPressed: _saveSettings,
+                                child: Text(l10n.settingsSaveChanges),
+                              ),
+                            ],
+                          ),
+                        ],
+                      ),
+                    ),
+                  ),
                 ),
               ),
             ),
+    );
+  }
+
+  Widget _buildErrorView(AppLocalizations l10n, String error) {
+    final theme = Theme.of(context);
+    return Center(
+      child: Padding(
+        padding: const EdgeInsets.all(24),
+        child: Column(
+          mainAxisSize: MainAxisSize.min,
+          children: [
+            Icon(Icons.error_outline, size: 40, color: theme.colorScheme.error),
+            const SizedBox(height: 12),
+            Text(l10n.settingsErrorLoading, style: theme.textTheme.titleLarge),
+            const SizedBox(height: 8),
+            Text(error, textAlign: TextAlign.center),
           ],
         ),
       ),
     );
   }
 
-  Widget _buildErrorView(AppLocalizations l10n, String error) {
-    return Center(
-      child: Column(
-        mainAxisSize: MainAxisSize.min,
-        children: [
-          Text(
-            l10n.settingsErrorLoading,
-            style: Theme.of(context).textTheme.titleLarge,
-          ),
-          const SizedBox(height: SettingsConstants.verticalSpacing),
-          Text(error),
-        ],
-      ),
-    );
-  }
-
-  Widget _buildHeader(AppLocalizations l10n) {
-    return SizedBox(
-      width: double.infinity,
-      child: Wrap(
-        alignment: WrapAlignment.spaceBetween,
-        crossAxisAlignment: WrapCrossAlignment.center,
-        spacing: 16,
-        runSpacing: 12,
-        children: [
-          Text(
-            l10n.settingsTitle,
-            style: Theme.of(context).textTheme.headlineMedium,
-          ),
-          Row(
-            mainAxisSize: MainAxisSize.min,
-            children: [
-              ValueListenableBuilder<bool>(
-                valueListenable: _isShiftPressedNotifier,
-                builder: (context, isShiftPressed, _) {
-                  final bool enabled = isShiftPressed || _hasChanges;
-                  return SizedBox(
-                    height: SettingsConstants.iconButtonSize,
-                    width: SettingsConstants.iconButtonSize,
-                    child: IconButton.filledTonal(
-                      onPressed: enabled
-                          ? (isShiftPressed ? _resetToDefaults : _revertChanges)
-                          : null,
-                      iconSize: SettingsConstants.iconSize,
-                      icon:
-                          Icon(isShiftPressed ? Icons.restart_alt : Icons.undo),
-                      tooltip: isShiftPressed
-                          ? l10n.settingsResetToDefaults
-                          : l10n.settingsRevertChangesTooltip,
-                    ),
-                  );
-                },
-              ),
-              const SizedBox(width: SettingsConstants.verticalSpacing),
-              Flexible(
-                child: FilledButton.icon(
-                  onPressed: _hasChanges ? _saveSettings : null,
-                  icon: const Icon(Icons.save),
-                  label: Text(l10n.settingsSaveChanges),
-                ),
-              ),
-            ],
-          ),
-        ],
-      ),
-    );
-  }
-
   List<Widget> _buildSettingsSections(
       AppLocalizations l10n, SettingsState settingsState) {
-    final sections = <Widget>[
-      _buildSection(
+    return <Widget>[
+      SettingsSection(
         title: l10n.settingsSectionAppearance,
+        icon: Icons.palette_outlined,
         children: [
-          _buildDropdownSetting<ThemePreference>(
-            label: l10n.settingsTheme,
-            value: _currentFormSettings.themePreference,
-            items: [
-              DropdownMenuItem(
-                value: ThemePreference.auto,
-                child: Text(l10n.themeAuto),
-              ),
-              DropdownMenuItem(
-                value: ThemePreference.dark,
-                child: Text(l10n.themeDark),
-              ),
-              DropdownMenuItem(
-                value: ThemePreference.light,
-                child: Text(l10n.themeLight),
-              ),
-            ],
-            onChanged: (value) {
-              if (value == null) return;
-              settingsState.setThemePreference(value);
-              setState(() {
-                _currentFormSettings =
-                    _currentFormSettings.copyWith(themePreference: value);
-                _hasChanges = false;
-              });
-            },
-          ),
-          _buildSwitchSetting(
-            label: l10n.settingsUseSystemColor,
+          _buildThemeSetting(l10n, settingsState),
+          SettingSwitchTile(
+            icon: Icons.format_color_fill,
+            title: l10n.settingsUseSystemColor,
             value: settingsState.settings.useSystemColor,
             onChanged: (v) {
               settingsState.setUseSystemColor(v);
@@ -482,113 +493,110 @@ class _SettingsScreenState extends State<SettingsScreen> {
           _buildSeedColorSelector(l10n, settingsState),
         ],
       ),
-      const SizedBox(height: SettingsConstants.sectionSpacing),
-      _buildSection(
+      SettingsSection(
         title: l10n.settingsSectionGeneral,
+        icon: Icons.tune,
         children: [
-          _buildDropdownSetting<String>(
-            label: l10n.settingsLanguage,
+          SettingChoiceTile<String>(
+            icon: Icons.translate,
+            title: l10n.settingsLanguage,
             value: settingsState.settings.localeCode.isEmpty
                 ? 'system'
                 : settingsState.settings.localeCode,
-            items: [
-              DropdownMenuItem(
-                  value: 'system', child: Text(l10n.settingsSystemDefault)),
-              DropdownMenuItem(value: 'en', child: Text(l10n.languageEnglish)),
-              DropdownMenuItem(value: 'ru', child: Text(l10n.languageRussian)),
+            choices: [
+              SettingChoice(value: 'system', label: l10n.settingsSystemDefault),
+              SettingChoice(value: 'en', label: l10n.languageEnglish),
+              SettingChoice(value: 'ru', label: l10n.languageRussian),
             ],
-            onChanged: (code) {
-              if (code != null) {
-                settingsState.setLocaleCode(code);
-              }
-            },
+            onChanged: settingsState.setLocaleCode,
           ),
-          _buildDropdownSetting<NavigationRailLabelVisibility>(
-            label: l10n.settingsNavigationRailLabels,
+          SettingChoiceTile<NavigationRailLabelVisibility>(
+            icon: Icons.label_outline,
+            title: l10n.settingsNavigationRailLabels,
             value: _currentFormSettings.navigationRailLabelVisibility,
-            items: NavigationRailLabelVisibility.values
-                .map((visibility) => DropdownMenuItem(
+            choices: NavigationRailLabelVisibility.values
+                .map((visibility) => SettingChoice(
                       value: visibility,
-                      child: Text(_formatNavigationRailLabelVisibility(
-                          l10n, visibility)),
+                      label: _formatNavigationRailLabelVisibility(
+                          l10n, visibility),
                     ))
                 .toList(),
             onChanged: (value) {
-              if (value != null) {
-                setState(() => _currentFormSettings = _currentFormSettings
-                    .copyWith(navigationRailLabelVisibility: value));
-                _checkForChanges();
-              }
+              setState(() => _currentFormSettings = _currentFormSettings
+                  .copyWith(navigationRailLabelVisibility: value));
+              _checkForChanges();
             },
           ),
-          _buildDropdownSetting<String>(
-            label: l10n.settingsStartupPage,
+          SettingChoiceTile<String>(
+            icon: Icons.launch,
+            title: l10n.settingsStartupPage,
             value: _currentFormSettings.startupPageKey,
-            items: _computeStartupPageOptions(settingsState, l10n)
-                .map((page) => DropdownMenuItem(
-                      value: page.key,
-                      child: Text(page.label(l10n)),
-                    ))
+            choices: _computeStartupPageOptions(settingsState, l10n)
+                .map((page) =>
+                    SettingChoice(value: page.key, label: page.label(l10n)))
                 .toList(),
             onChanged: (value) {
-              if (value != null) {
-                setState(() => _currentFormSettings =
-                    _currentFormSettings.copyWith(startupPageKey: value));
-                _checkForChanges();
-              }
+              setState(() => _currentFormSettings =
+                  _currentFormSettings.copyWith(startupPageKey: value));
+              _checkForChanges();
             },
           ),
           Consumer<SettingsState>(builder: (context, settings, _) {
             final hasFavorites = settings.favoritePackages.isNotEmpty;
-            return SettingRow(
-              label: l10n.settingsFavorites,
-              control: Align(
-                alignment: Alignment.centerRight,
-                child: TextButton(
-                  onPressed: hasFavorites
-                      ? () async {
-                          final confirmed = await _confirmClearFavorites(l10n);
-                          if (!confirmed) return;
-                          settings.clearFavorites();
-                        }
-                      : null,
-                  child: Text(l10n.commonClear),
-                ),
+            return SettingTile(
+              icon: Icons.star_outline,
+              title: l10n.settingsFavorites,
+              enabled: hasFavorites,
+              trailing: TextButton.icon(
+                icon: const Icon(Icons.delete_outline, size: 18),
+                onPressed: hasFavorites
+                    ? () async {
+                        final confirmed = await _confirmClearFavorites(l10n);
+                        if (!confirmed) return;
+                        settings.clearFavorites();
+                      }
+                    : null,
+                label: Text(l10n.commonClear),
               ),
             );
           }),
         ],
       ),
-      const SizedBox(height: SettingsConstants.sectionSpacing),
-      _buildSection(
+      SettingsSection(
         title: l10n.settingsSectionStorage,
+        icon: Icons.folder_outlined,
         children: [
           _buildPathSetting(
             field: SettingTextField.downloadsLocation,
+            icon: Icons.download_outlined,
             label: l10n.settingsDownloadsLocation,
             isDirectory: true,
             currentValue: _currentFormSettings.downloadsLocation,
           ),
           _buildPathSetting(
             field: SettingTextField.backupsLocation,
+            icon: Icons.inventory_2_outlined,
             label: l10n.settingsBackupsLocation,
             isDirectory: true,
             currentValue: _currentFormSettings.backupsLocation,
           ),
         ],
       ),
-      const SizedBox(height: SettingsConstants.sectionSpacing),
-      _buildSection(
+      SettingsSection(
         title: l10n.settingsSectionAdb,
+        icon: Icons.phonelink_setup_outlined,
         children: [
           _buildPathSetting(
             field: SettingTextField.adbPath,
+            icon: Icons.terminal,
             label: l10n.settingsAdbPath,
             isDirectory: false,
             currentValue: _currentFormSettings.adbPath,
           ),
-          _buildSwitchSetting(
-            label: l10n.settingsMdnsAutoConnect,
+          _buildConnectionKindSetting(l10n),
+          SettingSwitchTile(
+            icon: Icons.wifi_tethering,
+            title: l10n.settingsMdnsAutoConnect,
             description: l10n.settingsMdnsAutoConnectHelp,
             value: _currentFormSettings.mdnsAutoConnect,
             onChanged: (v) {
@@ -599,8 +607,9 @@ class _SettingsScreenState extends State<SettingsScreen> {
               });
             },
           ),
-          _buildSwitchSetting(
-            label: l10n.settingsAutoReinstallOnConflict,
+          SettingSwitchTile(
+            icon: Icons.autorenew,
+            title: l10n.settingsAutoReinstallOnConflict,
             description: l10n.settingsAutoReinstallOnConflictHelp,
             value: _currentFormSettings.autoReinstallOnConflict,
             onChanged: (v) {
@@ -611,8 +620,9 @@ class _SettingsScreenState extends State<SettingsScreen> {
               });
             },
           ),
-          _buildSwitchSetting(
-            label: l10n.settingsAutoBackupOnUninstall,
+          SettingSwitchTile(
+            icon: Icons.backup_outlined,
+            title: l10n.settingsAutoBackupOnUninstall,
             description: l10n.settingsAutoBackupOnUninstallHelp,
             value: _currentFormSettings.autoBackupOnUninstall,
             onChanged: (v) {
@@ -623,32 +633,105 @@ class _SettingsScreenState extends State<SettingsScreen> {
               });
             },
           ),
-          _buildDropdownSetting<ConnectionKind>(
-            label: l10n.settingsPreferredConnection,
-            value: _currentFormSettings.preferredConnectionType,
-            items: ConnectionKind.values.map((type) {
-              return DropdownMenuItem(
-                value: type,
-                child: Text(_formatConnectionKind(l10n, type)),
-              );
-            }).toList(),
-            onChanged: (value) {
-              if (value != null) {
-                setState(() => _currentFormSettings = _currentFormSettings
-                    .copyWith(preferredConnectionType: value));
-                _checkForChanges();
-              }
-            },
-          ),
-          if (Platform.isWindows) _buildCastingToolCard(context),
+          if (Platform.isWindows) _buildCastingToolTile(context),
         ],
       ),
-      const SizedBox(height: SettingsConstants.sectionSpacing),
-      _buildSection(
-        title: l10n.settingsSectionExperimental,
+      SettingsSection(
+        title: l10n.settingsSectionDownloader,
+        icon: Icons.cloud_outlined,
         children: [
-          _buildSwitchSetting(
-            label: l10n.settingsExperimentalNativeCast,
+          if (settingsState.isDownloaderInitializing)
+            _buildDownloaderInitTile(l10n, settingsState),
+          if (!settingsState.isDownloaderInitializing &&
+              settingsState.downloaderError != null)
+            _buildDownloaderErrorBanner(l10n, settingsState.downloaderError!),
+          _buildDownloaderSourceSummary(l10n, settingsState),
+          if (settingsState.isDownloaderAvailable) ...[
+            if (settingsState.downloaderSupportsRemoteSelection)
+              _buildRcloneRemoteSelector(l10n),
+            if (settingsState.downloaderSupportsBandwidthLimit)
+              _buildTextSetting(
+                field: SettingTextField.bandwidthLimit,
+                icon: Icons.speed_outlined,
+                label: l10n.settingsBandwidthLimit,
+                description: InkWell(
+                  onTap: () => _launchURL(
+                      'https://rclone.org/docs/#bwlimit-bwtimetable'),
+                  child: Text(
+                    l10n.settingsBandwidthHelper,
+                    style: Theme.of(context).textTheme.bodySmall?.copyWith(
+                          color: Theme.of(context).colorScheme.primary,
+                          decoration: TextDecoration.underline,
+                        ),
+                  ),
+                ),
+              ),
+            SettingChoiceTile<DownloadCleanupPolicy>(
+              icon: Icons.auto_delete_outlined,
+              title: l10n.settingsDownloadsCleanup,
+              value: _currentFormSettings.cleanupPolicy,
+              choices: DownloadCleanupPolicy.values
+                  .map((policy) => SettingChoice(
+                        value: policy,
+                        label: _formatCleanupPolicy(l10n, policy),
+                      ))
+                  .toList(),
+              onChanged: (value) {
+                setState(() => _currentFormSettings =
+                    _currentFormSettings.copyWith(cleanupPolicy: value));
+                _checkForChanges();
+              },
+            ),
+            if (_currentFormSettings.cleanupPolicy ==
+                    DownloadCleanupPolicy.keepOneVersion ||
+                _currentFormSettings.cleanupPolicy ==
+                    DownloadCleanupPolicy.keepTwoVersions)
+              SettingChoiceTile<DownloadCleanupTiming>(
+                icon: Icons.schedule,
+                title: l10n.settingsCleanupTiming,
+                value: _currentFormSettings.cleanupTiming,
+                choices: DownloadCleanupTiming.values
+                    .map((timing) => SettingChoice(
+                          value: timing,
+                          label: switch (timing) {
+                            DownloadCleanupTiming.afterInstall =>
+                              l10n.settingsCleanupAfterInstall,
+                            DownloadCleanupTiming.afterDownload =>
+                              l10n.settingsCleanupAfterDownload,
+                          },
+                        ))
+                    .toList(),
+                onChanged: (value) {
+                  setState(() => _currentFormSettings =
+                      _currentFormSettings.copyWith(cleanupTiming: value));
+                  _checkForChanges();
+                },
+              ),
+            if (settingsState.downloaderSupportsDownloadModeSelection)
+              _buildDownloadModeSetting(l10n),
+            SettingSwitchTile(
+              icon: Icons.description_outlined,
+              title: l10n.settingsWriteLegacyReleaseJson,
+              description: l10n.settingsWriteLegacyReleaseJsonHelp,
+              value: _currentFormSettings.writeLegacyReleaseJson,
+              onChanged: (v) {
+                setState(() {
+                  _currentFormSettings =
+                      _currentFormSettings.copyWith(writeLegacyReleaseJson: v);
+                  _checkForChanges();
+                });
+              },
+            ),
+          ],
+        ],
+      ),
+      SettingsSection(
+        title: l10n.settingsSectionExperimental,
+        icon: Icons.science_outlined,
+        children: [
+          SettingSwitchTile(
+            icon: Icons.cast_connected_outlined,
+            title: l10n.settingsExperimentalNativeCast,
             description: l10n.settingsExperimentalNativeCastWarning,
             value: settingsState.settings.experimentalNativeCast,
             onChanged: (v) {
@@ -663,101 +746,6 @@ class _SettingsScreenState extends State<SettingsScreen> {
         ],
       ),
     ];
-
-    // Downloader section
-    sections.addAll([
-      const SizedBox(height: SettingsConstants.sectionSpacing),
-      _buildSection(
-        title: l10n.settingsSectionDownloader,
-        children: [
-          if (settingsState.isDownloaderInitializing)
-            _buildDownloaderInitBanner(l10n, settingsState),
-          if (!settingsState.isDownloaderInitializing &&
-              settingsState.downloaderError != null)
-            _buildDownloaderErrorBanner(l10n, settingsState.downloaderError!),
-          _buildDownloaderSourceSummary(l10n, settingsState),
-          if (settingsState.isDownloaderAvailable) ...[
-            if (settingsState.downloaderSupportsRemoteSelection)
-              _buildRcloneRemoteSelector(l10n),
-            if (settingsState.downloaderSupportsBandwidthLimit)
-              _buildTextSetting(
-                field: SettingTextField.bandwidthLimit,
-                label: l10n.settingsBandwidthLimit,
-                helper: InkWell(
-                  onTap: () => _launchURL(
-                      'https://rclone.org/docs/#bwlimit-bwtimetable'),
-                  child: Text(
-                    l10n.settingsBandwidthHelper,
-                    style: Theme.of(context).textTheme.bodySmall?.copyWith(
-                          color: Theme.of(context).colorScheme.primary,
-                          decoration: TextDecoration.underline,
-                        ),
-                  ),
-                ),
-              ),
-            _buildDropdownSetting<DownloadCleanupPolicy>(
-              label: l10n.settingsDownloadsCleanup,
-              value: _currentFormSettings.cleanupPolicy,
-              items: DownloadCleanupPolicy.values.map((policy) {
-                return DropdownMenuItem(
-                  value: policy,
-                  child: Text(_formatCleanupPolicy(l10n, policy)),
-                );
-              }).toList(),
-              onChanged: (value) {
-                if (value != null) {
-                  setState(() => _currentFormSettings =
-                      _currentFormSettings.copyWith(cleanupPolicy: value));
-                  _checkForChanges();
-                }
-              },
-            ),
-            if (_currentFormSettings.cleanupPolicy ==
-                    DownloadCleanupPolicy.keepOneVersion ||
-                _currentFormSettings.cleanupPolicy ==
-                    DownloadCleanupPolicy.keepTwoVersions)
-              _buildDropdownSetting<DownloadCleanupTiming>(
-                label: l10n.settingsCleanupTiming,
-                value: _currentFormSettings.cleanupTiming,
-                items: DownloadCleanupTiming.values.map((timing) {
-                  return DropdownMenuItem(
-                    value: timing,
-                    child: Text(switch (timing) {
-                      DownloadCleanupTiming.afterInstall =>
-                        l10n.settingsCleanupAfterInstall,
-                      DownloadCleanupTiming.afterDownload =>
-                        l10n.settingsCleanupAfterDownload,
-                    }),
-                  );
-                }).toList(),
-                onChanged: (value) {
-                  if (value != null) {
-                    setState(() => _currentFormSettings =
-                        _currentFormSettings.copyWith(cleanupTiming: value));
-                    _checkForChanges();
-                  }
-                },
-              ),
-            if (settingsState.downloaderSupportsDownloadModeSelection)
-              _buildDownloadModeSetting(l10n),
-            _buildSwitchSetting(
-              label: l10n.settingsWriteLegacyReleaseJson,
-              description: l10n.settingsWriteLegacyReleaseJsonHelp,
-              value: _currentFormSettings.writeLegacyReleaseJson,
-              onChanged: (v) {
-                setState(() {
-                  _currentFormSettings =
-                      _currentFormSettings.copyWith(writeLegacyReleaseJson: v);
-                  _checkForChanges();
-                });
-              },
-            ),
-          ],
-        ],
-      ),
-    ]);
-
-    return sections;
   }
 
   List<StartupPageOption> _computeStartupPageOptions(
@@ -771,86 +759,77 @@ class _SettingsScreenState extends State<SettingsScreen> {
         .toList(growable: false);
   }
 
-  Widget _buildSection({
-    required String title,
-    required List<Widget> children,
-  }) {
-    return Column(
-      crossAxisAlignment: CrossAxisAlignment.start,
-      children: [
-        Padding(
-          padding: const EdgeInsets.only(left: 16, bottom: 8),
-          child: Text(title, style: Theme.of(context).textTheme.titleSmall),
-        ),
-        Card(
-          margin: EdgeInsets.zero,
-          elevation: 0,
-          clipBehavior: Clip.antiAlias,
-          child: Column(
-            crossAxisAlignment: CrossAxisAlignment.stretch,
-            children: [
-              for (var i = 0; i < children.length; i++) ...[
-                if (i > 0)
-                  Divider(
-                    height: 1,
-                    indent: 16,
-                    endIndent: 16,
-                    color: Theme.of(context)
-                        .colorScheme
-                        .outlineVariant
-                        .withValues(alpha: 0.45),
-                  ),
-                children[i],
-              ],
-            ],
-          ),
-        ),
-      ],
-    );
-  }
-
-  Widget _buildSwitchSetting({
-    required String label,
-    String? description,
-    required bool value,
-    required ValueChanged<bool> onChanged,
-  }) {
-    return MergeSemantics(
-      child: InkWell(
-        onTap: () => onChanged(!value),
-        child: SettingRow(
-          label: label,
-          description: description == null ? null : Text(description),
-          compact: true,
-          control: Switch(value: value, onChanged: onChanged),
+  Widget _buildThemeSetting(
+      AppLocalizations l10n, SettingsState settingsState) {
+    return SettingTile(
+      icon: Icons.brightness_6_outlined,
+      title: l10n.settingsTheme,
+      content: Align(
+        alignment: Alignment.centerLeft,
+        child: SegmentedButton<ThemePreference>(
+          showSelectedIcon: false,
+          segments: [
+            ButtonSegment(
+              value: ThemePreference.auto,
+              icon: const Icon(Icons.brightness_auto),
+              label: Text(l10n.themeAuto),
+            ),
+            ButtonSegment(
+              value: ThemePreference.light,
+              icon: const Icon(Icons.light_mode_outlined),
+              label: Text(l10n.themeLight),
+            ),
+            ButtonSegment(
+              value: ThemePreference.dark,
+              icon: const Icon(Icons.dark_mode_outlined),
+              label: Text(l10n.themeDark),
+            ),
+          ],
+          selected: {_currentFormSettings.themePreference},
+          onSelectionChanged: (selection) {
+            final value = selection.first;
+            settingsState.setThemePreference(value);
+            setState(() {
+              _currentFormSettings =
+                  _currentFormSettings.copyWith(themePreference: value);
+              _hasChanges = false;
+            });
+          },
         ),
       ),
     );
   }
 
-  InputDecoration _controlDecoration({String? hintText}) {
-    final colors = Theme.of(context).colorScheme;
-    final border = OutlineInputBorder(
-      borderRadius: BorderRadius.circular(8),
-      borderSide: BorderSide.none,
-    );
-    return InputDecoration(
-      hintText: hintText,
-      filled: true,
-      fillColor: colors.surfaceContainerHighest.withValues(alpha: 0.55),
-      isDense: true,
-      contentPadding: const EdgeInsets.symmetric(horizontal: 12, vertical: 12),
-      border: border,
-      enabledBorder: border,
-      disabledBorder: border,
-      focusedBorder: border.copyWith(
-        borderSide: BorderSide(color: colors.primary, width: 2),
+  Widget _buildConnectionKindSetting(AppLocalizations l10n) {
+    return SettingTile(
+      icon: Icons.cable_outlined,
+      title: l10n.settingsPreferredConnection,
+      content: Align(
+        alignment: Alignment.centerLeft,
+        child: SegmentedButton<ConnectionKind>(
+          showSelectedIcon: false,
+          segments: ConnectionKind.values
+              .map((kind) => ButtonSegment(
+                    value: kind,
+                    icon: Icon(kind == ConnectionKind.usb
+                        ? Icons.usb
+                        : Icons.wifi_outlined),
+                    label: Text(_formatConnectionKind(l10n, kind)),
+                  ))
+              .toList(),
+          selected: {_currentFormSettings.preferredConnectionType},
+          onSelectionChanged: (selection) {
+            setState(() => _currentFormSettings = _currentFormSettings.copyWith(
+                preferredConnectionType: selection.first));
+            _checkForChanges();
+          },
+        ),
       ),
     );
   }
 
-  Widget _buildCastingToolCard(BuildContext context) {
-    // Request status once when this card first builds
+  Widget _buildCastingToolTile(BuildContext context) {
+    // Request status once when this tile first builds
     if (!_castingStatusRequested) {
       _castingStatusRequested = true;
       WidgetsBinding.instance.addPostFrameCallback((_) {
@@ -858,126 +837,123 @@ class _SettingsScreenState extends State<SettingsScreen> {
       });
     }
 
-    return SettingRow(
-      label: AppLocalizations.of(context).castingToolTitle,
-      control: Align(
-        alignment: Alignment.centerRight,
-        child: TextButton(
-          onPressed: () async {
-            final confirmed = await showDialog<bool>(
-              context: context,
-              builder: (ctx) => AlertDialog(
-                title: Text(
-                    AppLocalizations.of(context).castingToolInstallUpdateTitle),
-                content: Text(
-                    AppLocalizations.of(context).castingToolInstallUpdateDesc),
-                actions: [
-                  TextButton(
-                    onPressed: () => Navigator.pop(ctx, false),
-                    child: Text(AppLocalizations.of(context).commonCancel),
-                  ),
-                  FilledButton(
-                    onPressed: () => Navigator.pop(ctx, true),
-                    child: Text(AppLocalizations.of(context).commonDownload),
-                  ),
-                ],
-              ),
-            );
-            if (confirmed == true) {
-              const DownloadCastingBundleRequest().sendSignalToRust();
-              if (!context.mounted) return;
-              final l10n = AppLocalizations.of(context);
-              ScaffoldMessenger.of(context).showSnackBar(
-                SnackBar(content: Text(l10n.castingToolDownloading)),
-              );
-            }
-          },
-          child: Text(AppLocalizations.of(context).castingToolDownloadUpdate),
-        ),
-      ),
-      footer: StreamBuilder(
-        stream: CastingStatusChanged.rustSignalStream,
-        builder: (context, snapshot) {
-          final msg = snapshot.data?.message;
-          final installed = msg?.installed == true;
-          final path = msg?.exePath ?? '';
-          return Column(
-            crossAxisAlignment: CrossAxisAlignment.start,
+    final l10n = AppLocalizations.of(context);
+    final theme = Theme.of(context);
+
+    return StreamBuilder(
+      stream: CastingStatusChanged.rustSignalStream,
+      builder: (context, snapshot) {
+        final msg = snapshot.data?.message;
+        final installed = msg?.installed == true;
+        final path = msg?.exePath ?? '';
+
+        return SettingTile(
+          icon: Icons.cast,
+          title: l10n.castingToolTitle,
+          description: Row(
             children: [
-              Row(
-                children: [
-                  Icon(installed ? Icons.check_circle : Icons.info_outline,
-                      size: 16,
-                      color: installed
-                          ? Colors.green
-                          : Theme.of(context).colorScheme.secondary),
-                  const SizedBox(width: 6),
-                  Expanded(
-                    child: Text(
-                      installed
-                          ? '${AppLocalizations.of(context).castingToolStatusInstalled}${path.isNotEmpty ? ' • $path' : ''}'
-                          : AppLocalizations.of(context)
-                              .castingToolStatusNotInstalled,
-                      style: Theme.of(context).textTheme.bodySmall,
-                      overflow: TextOverflow.ellipsis,
-                    ),
-                  ),
-                  IconButton(
-                    tooltip: AppLocalizations.of(context).castingToolRefresh,
-                    onPressed: () =>
-                        const GetCastingStatusRequest().sendSignalToRust(),
-                    icon: const Icon(Icons.refresh, size: 18),
-                  ),
-                ],
+              Icon(
+                installed ? Icons.check_circle : Icons.info_outline,
+                size: 16,
+                color: installed
+                    ? theme.colorScheme.primary
+                    : theme.colorScheme.onSurfaceVariant,
               ),
-              const SizedBox(height: 6),
-              StreamBuilder(
-                stream: CastingDownloadProgress.rustSignalStream,
-                builder: (context, snap2) {
-                  final prog = snap2.data?.message;
-                  if (installed || prog == null) {
-                    return const SizedBox.shrink();
-                  }
-                  final total = prog.total?.toInt().toDouble();
-                  final received = prog.received.toInt().toDouble();
-                  final value = total == null || total == 0
-                      ? null
-                      : math.min(1.0, math.max(0.0, received / total));
-                  final percent = value == null ? null : (value * 100).round();
-                  final l10n = AppLocalizations.of(context);
-                  return Column(
-                    crossAxisAlignment: CrossAxisAlignment.start,
-                    children: [
-                      LinearProgressIndicator(value: value),
-                      const SizedBox(height: 4),
-                      Text(
-                        percent == null
-                            ? l10n.castingToolDownloading
-                            : '${l10n.castingToolDownloading} ($percent%)',
-                        style: Theme.of(context).textTheme.bodySmall,
-                      ),
-                    ],
-                  );
-                },
+              const SizedBox(width: 6),
+              Expanded(
+                child: Text(
+                  installed
+                      ? '${l10n.castingToolStatusInstalled}${path.isNotEmpty ? ' • $path' : ''}'
+                      : l10n.castingToolStatusNotInstalled,
+                  overflow: TextOverflow.ellipsis,
+                ),
               ),
             ],
-          );
-        },
-      ),
+          ),
+          trailing: IconButton(
+            tooltip: l10n.castingToolRefresh,
+            onPressed: () => const GetCastingStatusRequest().sendSignalToRust(),
+            icon: const Icon(Icons.refresh, size: 20),
+          ),
+          content: Align(
+            alignment: Alignment.centerLeft,
+            child: FilledButton.tonalIcon(
+              onPressed: _confirmCastingToolDownload,
+              icon: const Icon(Icons.download, size: 18),
+              label: Text(l10n.castingToolDownloadUpdate),
+            ),
+          ),
+          footer: StreamBuilder(
+            stream: CastingDownloadProgress.rustSignalStream,
+            builder: (context, snap2) {
+              final prog = snap2.data?.message;
+              if (installed || prog == null) {
+                return const SizedBox.shrink();
+              }
+              final total = prog.total?.toInt().toDouble();
+              final received = prog.received.toInt().toDouble();
+              final value = total == null || total == 0
+                  ? null
+                  : math.min(1.0, math.max(0.0, received / total));
+              final percent = value == null ? null : (value * 100).round();
+              return Column(
+                crossAxisAlignment: CrossAxisAlignment.start,
+                children: [
+                  LinearProgressIndicator(value: value),
+                  const SizedBox(height: 6),
+                  Text(
+                    percent == null
+                        ? l10n.castingToolDownloading
+                        : '${l10n.castingToolDownloading} ($percent%)',
+                    style: theme.textTheme.bodySmall,
+                  ),
+                ],
+              );
+            },
+          ),
+        );
+      },
     );
   }
 
-  Widget _buildDownloaderInitBanner(
+  Future<void> _confirmCastingToolDownload() async {
+    final l10n = AppLocalizations.of(context);
+    final confirmed = await showDialog<bool>(
+      context: context,
+      builder: (ctx) => AlertDialog(
+        title: Text(l10n.castingToolInstallUpdateTitle),
+        content: Text(l10n.castingToolInstallUpdateDesc),
+        actions: [
+          TextButton(
+            onPressed: () => Navigator.pop(ctx, false),
+            child: Text(l10n.commonCancel),
+          ),
+          FilledButton(
+            onPressed: () => Navigator.pop(ctx, true),
+            child: Text(l10n.commonDownload),
+          ),
+        ],
+      ),
+    );
+    if (confirmed != true) return;
+    const DownloadCastingBundleRequest().sendSignalToRust();
+    if (!mounted) return;
+    ScaffoldMessenger.of(context).showSnackBar(
+      SnackBar(content: Text(l10n.castingToolDownloading)),
+    );
+  }
+
+  Widget _buildDownloaderInitTile(
     AppLocalizations l10n,
     SettingsState settingsState,
   ) {
-    return SettingRow(
-      label: l10n.preparingDownloader,
+    return SettingTile(
+      icon: Icons.downloading,
+      title: l10n.preparingDownloader,
       description: settingsState.isDownloaderInitDownloadActive
           ? Text(l10n.downloadingRcloneFiles)
           : null,
-      compact: true,
-      control: const SizedBox(
+      trailing: const SizedBox(
         width: 20,
         height: 20,
         child: CircularProgressIndicator(strokeWidth: 2),
@@ -991,34 +967,50 @@ class _SettingsScreenState extends State<SettingsScreen> {
     AppLocalizations l10n,
     String error,
   ) {
+    final colors = Theme.of(context).colorScheme;
     return Padding(
-      padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 14),
-      child: Column(
-        crossAxisAlignment: CrossAxisAlignment.stretch,
-        children: [
-          _statusText(
-            icon: Icons.error_outline,
-            color: Theme.of(context).colorScheme.error,
-            text: error,
-            copyable: true,
-          ),
-          const SizedBox(height: 8),
-          Align(
-            alignment: Alignment.centerRight,
-            child: TextButton.icon(
-              onPressed: () =>
-                  const RetryDownloaderInitRequest().sendSignalToRust(),
-              icon: const Icon(Icons.refresh, size: 18),
-              label: Text(l10n.retry),
+      padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 8),
+      child: Container(
+        padding: const EdgeInsets.fromLTRB(16, 14, 8, 8),
+        decoration: BoxDecoration(
+          color: colors.errorContainer,
+          borderRadius: BorderRadius.circular(12),
+        ),
+        child: Column(
+          crossAxisAlignment: CrossAxisAlignment.stretch,
+          children: [
+            Row(
+              children: [
+                Icon(Icons.error_outline,
+                    size: 20, color: colors.onErrorContainer),
+                const SizedBox(width: 10),
+                Flexible(
+                  child: buildCopyableText(
+                    context,
+                    error,
+                    style: TextStyle(color: colors.onErrorContainer),
+                  ),
+                ),
+              ],
             ),
-          ),
-        ],
+            Align(
+              alignment: Alignment.centerRight,
+              child: TextButton.icon(
+                onPressed: () =>
+                    const RetryDownloaderInitRequest().sendSignalToRust(),
+                icon: const Icon(Icons.refresh, size: 18),
+                label: Text(l10n.retry),
+              ),
+            ),
+          ],
+        ),
       ),
     );
   }
 
   Widget _buildPathSetting({
     required SettingTextField field,
+    required IconData icon,
     required String label,
     required bool isDirectory,
     required String currentValue,
@@ -1026,81 +1018,51 @@ class _SettingsScreenState extends State<SettingsScreen> {
     final l10n = AppLocalizations.of(context);
     return _buildTextSetting(
       field: field,
+      icon: icon,
       label: label,
-      fullWidth: true,
-      trailing: TextButton.icon(
-        icon: const Icon(Icons.folder_open, size: 18),
+      suffixIcon: IconButton(
+        icon: const Icon(Icons.folder_open, size: 20),
+        tooltip: l10n.settingsBrowse,
         onPressed: () => _pickPath(field, isDirectory, currentValue, label),
-        label: Text(l10n.settingsBrowse),
       ),
     );
   }
 
   Widget _buildTextSetting({
     required SettingTextField field,
+    required IconData icon,
     required String label,
-    Widget? trailing,
-    Widget? helper,
-    bool fullWidth = false,
+    Widget? description,
+    Widget? suffixIcon,
   }) {
-    return SettingRow(
-      label: label,
-      description: helper,
-      fullWidth: fullWidth,
-      control: Row(
-        children: [
-          Expanded(
-            child: Semantics(
-              label: label,
-              child: TextField(
-                controller: _textControllers[field],
-                decoration: _controlDecoration(),
-                onChanged: (value) => _updateSetting(field, value),
-              ),
-            ),
-          ),
-          if (trailing != null) ...[
-            const SizedBox(width: SettingsConstants.verticalSpacing),
-            trailing,
-          ],
-        ],
-      ),
-    );
-  }
-
-  Widget _buildDropdownSetting<T>({
-    required String label,
-    required T value,
-    required List<DropdownMenuItem<T>> items,
-    required ValueChanged<T?>? onChanged,
-    String? description,
-  }) {
-    return SettingRow(
-      label: label,
-      description: description == null ? null : Text(description),
-      enabled: onChanged != null,
-      control: SettingDropdown<T>(
+    return SettingTile(
+      icon: icon,
+      title: label,
+      description: description,
+      content: Semantics(
         label: label,
-        initialValue: value,
-        items: items,
-        onChanged: onChanged,
+        child: TextField(
+          controller: _textControllers[field],
+          decoration: settingsInputDecoration(context, suffixIcon: suffixIcon),
+          onChanged: (value) => _updateSetting(field, value),
+        ),
       ),
     );
   }
 
   Widget _buildDownloadModeSetting(AppLocalizations l10n) {
-    return _buildDropdownSetting<DownloadMode>(
-      label: l10n.settingsDownloadMode,
+    return SettingChoiceTile<DownloadMode>(
+      icon: Icons.sync_alt,
+      title: l10n.settingsDownloadMode,
       description: l10n.settingsDownloadModeHelp,
       value: _currentFormSettings.downloadMode,
-      items: DownloadMode.values.map((mode) {
-        return DropdownMenuItem(
-          value: mode,
-          child: Text(_formatDownloadMode(l10n, mode)),
-        );
-      }).toList(),
+      choices: DownloadMode.values
+          .map((mode) => SettingChoice(
+                value: mode,
+                label: _formatDownloadMode(l10n, mode),
+              ))
+          .toList(),
       onChanged: (value) {
-        if (value == null) return;
         setState(() => _currentFormSettings =
             _currentFormSettings.copyWith(downloadMode: value));
         _checkForChanges();
@@ -1112,65 +1074,52 @@ class _SettingsScreenState extends State<SettingsScreen> {
     final settingsState = _settingsState!;
     final remotes = settingsState.rcloneRemotes;
     final currentRemote = _currentFormSettings.rcloneRemoteName;
-    final dropdownValue =
-        remotes.contains(currentRemote) ? currentRemote : null;
     final error = settingsState.remotesError;
+    final colors = Theme.of(context).colorScheme;
 
-    return SettingRow(
-      label: l10n.settingsRcloneRemote,
-      control: Row(
-        children: [
-          Expanded(
-            child: SettingDropdown<String>(
-              label: l10n.settingsRcloneRemote,
-              initialValue: dropdownValue,
-              hint: currentRemote.isEmpty ? null : Text(currentRemote),
-              items: remotes
-                  .map((remote) => DropdownMenuItem(
-                        value: remote,
-                        child: Text(remote),
-                      ))
-                  .toList(),
-              onChanged: settingsState.isRemotesLoading || remotes.isEmpty
-                  ? null
-                  : (value) {
-                      if (value == null) return;
-                      _updateSetting(SettingTextField.rcloneRemoteName, value,
-                          updateController: true);
-                    },
+    return SettingChoiceTile<String>(
+      icon: Icons.cloud_queue,
+      title: l10n.settingsRcloneRemote,
+      value: remotes.contains(currentRemote) ? currentRemote : null,
+      placeholder: currentRemote.isEmpty ? null : currentRemote,
+      choices: remotes
+          .map((remote) => SettingChoice(value: remote, label: remote))
+          .toList(),
+      onChanged: settingsState.isRemotesLoading || remotes.isEmpty
+          ? null
+          : (value) => _updateSetting(
+                SettingTextField.rcloneRemoteName,
+                value,
+                updateController: true,
+              ),
+      trailing: settingsState.isRemotesLoading
+          ? const SizedBox(
+              width: 36,
+              height: 36,
+              child: Center(
+                child: SizedBox(
+                  width: 18,
+                  height: 18,
+                  child: CircularProgressIndicator(strokeWidth: 2),
+                ),
+              ),
+            )
+          : IconButton(
+              onPressed: settingsState.refreshRcloneRemotes,
+              tooltip: l10n.refresh,
+              icon: const Icon(Icons.refresh, size: 20),
             ),
-          ),
-          const SizedBox(width: 8),
-          SizedBox(
-            width: 40,
-            height: 40,
-            child: settingsState.isRemotesLoading
-                ? const Center(
-                    child: SizedBox(
-                      width: 18,
-                      height: 18,
-                      child: CircularProgressIndicator(strokeWidth: 2),
-                    ),
-                  )
-                : IconButton(
-                    onPressed: settingsState.refreshRcloneRemotes,
-                    tooltip: l10n.refresh,
-                    icon: const Icon(Icons.refresh, size: 20),
-                  ),
-          ),
-        ],
-      ),
       footer: error != null
           ? _statusText(
               icon: Icons.error_outline,
-              color: Theme.of(context).colorScheme.error,
+              color: colors.error,
               text: '${l10n.settingsFailedToLoadRemotes}: $error',
               copyable: true,
             )
           : !settingsState.isRemotesLoading && remotes.isEmpty
               ? _statusText(
                   icon: Icons.info_outline,
-                  color: Theme.of(context).colorScheme.onSurfaceVariant,
+                  color: colors.onSurfaceVariant,
                   text: l10n.settingsNoRemotesFound,
                 )
               : null,
@@ -1182,24 +1131,20 @@ class _SettingsScreenState extends State<SettingsScreen> {
     SettingsState settingsState,
   ) {
     final selectedSource = settingsState.activeDownloaderConfig;
-    return SettingRow(
-      label: l10n.settingsDownloaderSource,
-      description: Column(
-        crossAxisAlignment: CrossAxisAlignment.start,
-        children: [
-          Text(selectedSource?.displayName ?? l10n.downloaderSourceNoSelection),
-          if (selectedSource != null &&
-              selectedSource.description.isNotEmpty) ...[
-            const SizedBox(height: 4),
-            SelectableLinkText(text: selectedSource.description),
-          ],
-        ],
-      ),
-      control: Align(
-        alignment: Alignment.centerRight,
-        child: TextButton(
+    return SettingTile(
+      icon: Icons.cloud_download_outlined,
+      title: l10n.settingsDownloaderSource,
+      value: selectedSource?.displayName ?? l10n.downloaderSourceNoSelection,
+      description:
+          selectedSource != null && selectedSource.description.isNotEmpty
+              ? SelectableLinkText(text: selectedSource.description)
+              : null,
+      content: Align(
+        alignment: Alignment.centerLeft,
+        child: FilledButton.tonalIcon(
           onPressed: _showDownloaderSourcesDialog,
-          child: Text(l10n.installDownloaderConfigFromUrl),
+          icon: const Icon(Icons.link, size: 18),
+          label: Text(l10n.installDownloaderConfigFromUrl),
         ),
       ),
       footer: settingsState.downloaderSourcesError == null
@@ -1215,134 +1160,101 @@ class _SettingsScreenState extends State<SettingsScreen> {
 
   Widget _buildSeedColorSelector(
       AppLocalizations l10n, SettingsState settingsState) {
-    final customValue = app_theme.kCustomColorKey;
     final currentKey = _currentFormSettings.seedColorKey;
     final isCustomColor = app_theme.isHexColor(currentKey);
     final shouldUseCustom = _seedColorCustom || isCustomColor;
-    final dropdownValue = shouldUseCustom ? customValue : currentKey;
+    final enabled = !settingsState.settings.useSystemColor;
 
     // Initialize custom color text field if needed
     if (isCustomColor && !_seedColorCustom) {
       final hex = currentKey.substring(app_theme.kCustomColorKey.length);
       _customColorController.text = hex.toUpperCase();
       WidgetsBinding.instance.addPostFrameCallback((_) {
+        if (!mounted) return;
         setState(() {
           _seedColorCustom = true;
         });
       });
     }
 
-    final items = <DropdownMenuItem<String>>[
-      ...app_theme.kSeedColorPalette.keys.map((key) {
-        final color = app_theme.seedFromKey(key);
-        return DropdownMenuItem(
-          value: key,
-          child: Row(
-            children: [
-              Container(
-                width: 16,
-                height: 16,
-                decoration: BoxDecoration(
-                  color: color,
-                  shape: BoxShape.circle,
-                  border: Border.all(color: Colors.black12),
-                ),
-              ),
-              const SizedBox(width: 8),
-              Flexible(child: Text(app_theme.seedLabel(l10n, key))),
-            ],
-          ),
-        );
-      }),
-      DropdownMenuItem(
-        value: customValue,
-        child: Row(
-          children: [
-            Container(
-              width: 16,
-              height: 16,
-              decoration: BoxDecoration(
-                color: isCustomColor
-                    ? app_theme.seedFromKey(currentKey)
-                    : Colors.grey,
-                shape: BoxShape.circle,
-                border: Border.all(color: Colors.black12),
-              ),
-            ),
-            const SizedBox(width: 8),
-            Flexible(child: Text(l10n.settingsCustomInput)),
-          ],
+    void applySeedKey(String key) {
+      settingsState.setSeedColorKey(key);
+      setState(() {
+        _currentFormSettings = _currentFormSettings.copyWith(seedColorKey: key);
+        _hasChanges = false;
+      });
+    }
+
+    final swatches = <Widget>[
+      for (final key in app_theme.kSeedColorPalette.keys)
+        _ColorSwatchButton(
+          color: app_theme.seedFromKey(key),
+          tooltip: app_theme.seedLabel(l10n, key),
+          selected: !shouldUseCustom && currentKey == key,
+          enabled: enabled,
+          onPressed: () {
+            setState(() => _seedColorCustom = false);
+            applySeedKey(key);
+          },
         ),
+      _ColorSwatchButton(
+        color: isCustomColor ? app_theme.seedFromKey(currentKey) : null,
+        icon: Icons.colorize,
+        tooltip: l10n.settingsCustomInput,
+        selected: shouldUseCustom,
+        enabled: enabled,
+        onPressed: () => setState(() => _seedColorCustom = true),
       ),
     ];
 
-    return Column(
-      crossAxisAlignment: CrossAxisAlignment.start,
-      children: [
-        _buildDropdownSetting<String>(
-          label: l10n.settingsSeedColor,
-          value: dropdownValue,
-          items: items,
-          onChanged: settingsState.settings.useSystemColor
-              ? null
-              : (value) {
-                  if (value == null) return;
-                  if (value == customValue) {
-                    setState(() {
-                      _seedColorCustom = true;
-                    });
-                  } else {
-                    setState(() {
-                      _seedColorCustom = false;
-                    });
-                    settingsState.setSeedColorKey(value);
-                    setState(() {
-                      _currentFormSettings =
-                          _currentFormSettings.copyWith(seedColorKey: value);
-                      _hasChanges = false;
-                    });
-                  }
-                },
-        ),
-        if (shouldUseCustom)
-          SettingRow(
-            label: l10n.settingsCustomInput,
-            description: Text(l10n.settingsCustomColorHint),
-            enabled: !settingsState.settings.useSystemColor,
-            control: Semantics(
-              label: l10n.settingsCustomInput,
-              child: TextField(
-                controller: _customColorController,
-                enabled: !settingsState.settings.useSystemColor,
-                decoration: _controlDecoration(hintText: 'FF5733').copyWith(
-                  prefixText: '#',
-                  errorMaxLines: 2,
-                  errorText: _customColorController.text.isNotEmpty &&
-                          app_theme
-                                  .parseHexColor(_customColorController.text) ==
-                              null
-                      ? l10n.settingsInvalidHexColor
-                      : null,
+    final hexInvalid = _customColorController.text.isNotEmpty &&
+        app_theme.parseHexColor(_customColorController.text) == null;
+
+    return SettingTile(
+      icon: Icons.color_lens_outlined,
+      title: l10n.settingsSeedColor,
+      enabled: enabled,
+      content: Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          Wrap(spacing: 10, runSpacing: 10, children: swatches),
+          if (shouldUseCustom) ...[
+            const SizedBox(height: 14),
+            SizedBox(
+              width: 220,
+              child: Semantics(
+                label: l10n.settingsCustomInput,
+                child: TextField(
+                  controller: _customColorController,
+                  enabled: enabled,
+                  decoration: settingsInputDecoration(
+                    context,
+                    hintText: 'FF5733',
+                    prefixText: '#',
+                    errorText: hexInvalid ? l10n.settingsInvalidHexColor : null,
+                  ),
+                  onChanged: (value) {
+                    final normalized =
+                        value.replaceAll('#', '').trim().toUpperCase();
+                    if (app_theme.parseHexColor(normalized) != null) {
+                      applySeedKey('${app_theme.kCustomColorKey}$normalized');
+                    } else {
+                      setState(() {});
+                    }
+                  },
                 ),
-                onChanged: (value) {
-                  final normalized =
-                      value.replaceAll('#', '').trim().toUpperCase();
-                  if (app_theme.parseHexColor(normalized) != null) {
-                    final customKey = '${app_theme.kCustomColorKey}$normalized';
-                    settingsState.setSeedColorKey(customKey);
-                    setState(() {
-                      _currentFormSettings = _currentFormSettings.copyWith(
-                          seedColorKey: customKey);
-                      _hasChanges = false;
-                    });
-                  } else {
-                    setState(() {});
-                  }
-                },
               ),
             ),
-          ),
-      ],
+            const SizedBox(height: 6),
+            Text(
+              l10n.settingsCustomColorHint,
+              style: Theme.of(context).textTheme.bodySmall?.copyWith(
+                    color: Theme.of(context).colorScheme.onSurfaceVariant,
+                  ),
+            ),
+          ],
+        ],
+      ),
     );
   }
 
@@ -1367,6 +1279,65 @@ class _SettingsScreenState extends State<SettingsScreen> {
               : Text(text, style: style),
         ),
       ],
+    );
+  }
+}
+
+/// A circular color option used by the accent color picker.
+class _ColorSwatchButton extends StatelessWidget {
+  const _ColorSwatchButton({
+    required this.selected,
+    required this.enabled,
+    required this.onPressed,
+    required this.tooltip,
+    this.color,
+    this.icon,
+  });
+
+  final Color? color;
+  final IconData? icon;
+  final String tooltip;
+  final bool selected;
+  final bool enabled;
+  final VoidCallback onPressed;
+
+  @override
+  Widget build(BuildContext context) {
+    final colors = Theme.of(context).colorScheme;
+    final swatchColor = color ?? colors.surfaceContainerHighest;
+    final contentColor =
+        ThemeData.estimateBrightnessForColor(swatchColor) == Brightness.dark
+            ? Colors.white
+            : Colors.black;
+
+    return Tooltip(
+      message: tooltip,
+      child: Opacity(
+        opacity: enabled ? 1 : 0.4,
+        child: Material(
+          color: swatchColor,
+          shape: CircleBorder(
+            side: selected
+                ? BorderSide(color: colors.onSurface, width: 2)
+                : BorderSide(color: colors.outlineVariant, width: 1),
+          ),
+          clipBehavior: Clip.antiAlias,
+          child: InkWell(
+            onTap: enabled ? onPressed : null,
+            child: SizedBox(
+              width: 36,
+              height: 36,
+              child: Center(
+                child: selected
+                    ? Icon(Icons.check, size: 20, color: contentColor)
+                    : icon == null
+                        ? null
+                        : Icon(icon, size: 18, color: contentColor),
+              ),
+            ),
+          ),
+        ),
+      ),
     );
   }
 }

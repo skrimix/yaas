@@ -33,7 +33,8 @@
     "settingsTitle": "Settings",
     "settingsErrorLoading": "Error loading settings",
     "settingsResetToDefaults": "Reset to Defaults",
-    "settingsRevertChangesTooltip": "Revert Changes\n(Shift+Click to reset to defaults)",
+    "settingsRevertChanges": "Revert Changes",
+    "settingsUnsavedChanges": "You have unsaved changes",
     "settingsSaveChanges": "Save Changes",
     "settingsSaveError": "Failed to save settings: {error}",
     "@settingsSaveError": {
@@ -807,6 +808,7 @@
     "clearLogsTitle": "Clear Logs",
     "clearLogsMessage": "This will clear all current session logs. This action cannot be undone.",
     "commonClear": "Clear",
+    "commonMoreActions": "More actions",
     "logsCopied": "{count} logs copied to clipboard",
     "@logsCopied": {
         "placeholders": {

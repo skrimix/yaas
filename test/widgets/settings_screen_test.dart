@@ -4,7 +4,7 @@ import 'package:provider/provider.dart';
 import 'package:yaas/providers/settings_state.dart';
 import 'package:yaas/src/bindings/bindings.dart';
 import 'package:yaas/src/l10n/app_localizations.dart';
-import 'package:yaas/widgets/common/setting_row.dart';
+import 'package:yaas/widgets/common/settings_tiles.dart';
 import 'package:yaas/widgets/screens/settings_screen.dart';
 
 class _SettingsState extends SettingsState {
@@ -76,6 +76,45 @@ Future<void> _pumpSettings(
   await tester.pumpAndSettle();
 }
 
+/// Finds the tile that shows [label] as its title.
+Finder _tile(String label) => find.ancestor(
+      of: find.text(label),
+      matching: find.byType(SettingTile),
+    );
+
+Finder _switchOf(String label) =>
+    find.descendant(of: _tile(label), matching: find.byType(Switch));
+
+Future<void> _selectChoice<T>(WidgetTester tester, String label) async {
+  final dropdown = find.byType(DropdownMenu<T>);
+  await tester.ensureVisible(dropdown);
+  await tester.pumpAndSettle();
+  await tester.tap(dropdown);
+  await tester.pumpAndSettle();
+  final entry = find.widgetWithText(MenuItemButton, label).last;
+  await tester.ensureVisible(entry);
+  await tester.pumpAndSettle();
+  await tester.tap(entry);
+  await tester.pumpAndSettle();
+}
+
+T? _choiceValue<T>(WidgetTester tester) => tester
+    .widget<SettingChoiceTile<T>>(find.byType(SettingChoiceTile<T>))
+    .value;
+
+Future<void> _revert(WidgetTester tester, AppLocalizations l10n) async {
+  final button =
+      find.widgetWithText(TextButton, l10n.settingsRevertChanges).first;
+  await tester.tap(button);
+  await tester.pumpAndSettle();
+}
+
+Future<void> _save(WidgetTester tester, AppLocalizations l10n) async {
+  await tester
+      .tap(find.widgetWithText(FilledButton, l10n.settingsSaveChanges).first);
+  await tester.pumpAndSettle();
+}
+
 void main() {
   for (final locale in ['en', 'ru']) {
     testWidgets('$locale uninstall backup setting saves and reverts',
@@ -84,11 +123,7 @@ void main() {
       final context = tester.element(find.byType(SettingsScreen));
       final l10n = AppLocalizations.of(context);
       final state = context.read<SettingsState>() as _SettingsState;
-      final row = find.ancestor(
-        of: find.text(l10n.settingsAutoBackupOnUninstall),
-        matching: find.byType(SettingRow),
-      );
-      final toggle = find.descendant(of: row, matching: find.byType(Switch));
+      final toggle = _switchOf(l10n.settingsAutoBackupOnUninstall);
 
       await tester.ensureVisible(toggle);
       await tester.pumpAndSettle();
@@ -96,16 +131,13 @@ void main() {
       await tester.tap(toggle);
       await tester.pumpAndSettle();
       expect(tester.widget<Switch>(toggle).value, isFalse);
-      await tester.tap(find.byTooltip(l10n.settingsRevertChangesTooltip));
-      await tester.pumpAndSettle();
+      await _revert(tester, l10n);
       expect(tester.widget<Switch>(toggle).value, isTrue);
 
       await tester.ensureVisible(toggle);
       await tester.tap(toggle);
       await tester.pumpAndSettle();
-      await tester
-          .tap(find.widgetWithText(FilledButton, l10n.settingsSaveChanges));
-      await tester.pumpAndSettle();
+      await _save(tester, l10n);
       expect(state.savedSettings?.autoBackupOnUninstall, isFalse);
       expect(tester.takeException(), isNull);
     });
@@ -131,17 +163,10 @@ void main() {
           await tester.pumpAndSettle();
           expect(tester.takeException(), isNull);
 
-          final row = find.ancestor(
-            of: find.text(l10n.settingsDownloadsCleanup),
-            matching: find.byType(SettingRow),
-          );
-          await tester.ensureVisible(row);
+          final menu = find.byType(DropdownMenu<DownloadCleanupPolicy>);
+          await tester.ensureVisible(menu);
           await tester.pumpAndSettle();
-          await tester.tap(find.descendant(
-            of: row,
-            matching:
-                find.byType(DropdownButtonFormField<DownloadCleanupPolicy>),
-          ));
+          await tester.tap(menu);
           await tester.pumpAndSettle();
           expect(tester.takeException(), isNull);
         });
@@ -157,55 +182,41 @@ void main() {
       final l10n = AppLocalizations.of(context);
       final state =
           Provider.of<SettingsState>(context, listen: false) as _SettingsState;
-      final policy =
-          find.byType(DropdownButtonFormField<DownloadCleanupPolicy>);
-      final timing =
-          find.byType(DropdownButtonFormField<DownloadCleanupTiming>);
-
-      Future<void> selectPolicy(String label) async {
-        await tester.ensureVisible(policy);
-        await tester.tap(policy);
-        await tester.pumpAndSettle();
-        await tester.tap(find.text(label).last);
-        await tester.pumpAndSettle();
-      }
+      final timing = find.byType(SettingChoiceTile<DownloadCleanupTiming>);
 
       expect(timing, findsNothing);
-      await selectPolicy(l10n.settingsCleanupKeepOneVersion);
+      await _selectChoice<DownloadCleanupPolicy>(
+          tester, l10n.settingsCleanupKeepOneVersion);
       expect(timing, findsOneWidget);
-      expect(tester.state<FormFieldState<DownloadCleanupTiming>>(timing).value,
+      expect(_choiceValue<DownloadCleanupTiming>(tester),
           DownloadCleanupTiming.afterInstall);
-      await tester.ensureVisible(timing);
-      await tester.tap(timing);
-      await tester.pumpAndSettle();
-      await tester.tap(find.text(l10n.settingsCleanupAfterDownload).last);
-      await tester.pumpAndSettle();
-      await selectPolicy(l10n.settingsCleanupKeepTwoVersions);
-      expect(tester.state<FormFieldState<DownloadCleanupTiming>>(timing).value,
+      await _selectChoice<DownloadCleanupTiming>(
+          tester, l10n.settingsCleanupAfterDownload);
+      await _selectChoice<DownloadCleanupPolicy>(
+          tester, l10n.settingsCleanupKeepTwoVersions);
+      expect(_choiceValue<DownloadCleanupTiming>(tester),
           DownloadCleanupTiming.afterDownload);
 
-      await selectPolicy(l10n.settingsCleanupKeepAllVersions);
+      await _selectChoice<DownloadCleanupPolicy>(
+          tester, l10n.settingsCleanupKeepAllVersions);
       expect(timing, findsNothing);
-      await selectPolicy(l10n.settingsCleanupDeleteAfterInstall);
+      await _selectChoice<DownloadCleanupPolicy>(
+          tester, l10n.settingsCleanupDeleteAfterInstall);
       expect(timing, findsNothing);
-      await selectPolicy(l10n.settingsCleanupKeepOneVersion);
-      expect(tester.state<FormFieldState<DownloadCleanupTiming>>(timing).value,
+      await _selectChoice<DownloadCleanupPolicy>(
+          tester, l10n.settingsCleanupKeepOneVersion);
+      expect(_choiceValue<DownloadCleanupTiming>(tester),
           DownloadCleanupTiming.afterDownload);
 
-      await tester.tap(find.byTooltip(l10n.settingsRevertChangesTooltip));
-      await tester.pumpAndSettle();
+      await _revert(tester, l10n);
       expect(timing, findsNothing);
-      await selectPolicy(l10n.settingsCleanupKeepTwoVersions);
-      expect(tester.state<FormFieldState<DownloadCleanupTiming>>(timing).value,
+      await _selectChoice<DownloadCleanupPolicy>(
+          tester, l10n.settingsCleanupKeepTwoVersions);
+      expect(_choiceValue<DownloadCleanupTiming>(tester),
           DownloadCleanupTiming.afterInstall);
-      await tester.ensureVisible(timing);
-      await tester.tap(timing);
-      await tester.pumpAndSettle();
-      await tester.tap(find.text(l10n.settingsCleanupAfterDownload).last);
-      await tester.pumpAndSettle();
-      await tester
-          .tap(find.widgetWithText(FilledButton, l10n.settingsSaveChanges));
-      await tester.pumpAndSettle();
+      await _selectChoice<DownloadCleanupTiming>(
+          tester, l10n.settingsCleanupAfterDownload);
+      await _save(tester, l10n);
       expect(state.savedSettings?.cleanupPolicy,
           DownloadCleanupPolicy.keepTwoVersions);
       expect(state.savedSettings?.cleanupTiming,
@@ -214,57 +225,43 @@ void main() {
     });
   }
 
-  testWidgets('revert restores dropdowns, text fields, and switches',
+  testWidgets('revert restores choices, text fields, and switches',
       (tester) async {
     await _pumpSettings(tester);
     final l10n =
         AppLocalizations.of(tester.element(find.byType(SettingsScreen)));
-    final dropdown =
-        find.byType(DropdownButtonFormField<NavigationRailLabelVisibility>);
-    await tester.ensureVisible(dropdown);
-    await tester.tap(dropdown);
-    await tester.pumpAndSettle();
-    await tester.tap(find.text(l10n.settingsNavigationRailLabelsAll).last);
-    await tester.pumpAndSettle();
 
-    final pathRow = find.ancestor(
-      of: find.text(l10n.settingsDownloadsLocation),
-      matching: find.byType(SettingRow),
-    );
+    await _selectChoice<NavigationRailLabelVisibility>(
+        tester, l10n.settingsNavigationRailLabelsAll);
+    expect(_choiceValue<NavigationRailLabelVisibility>(tester),
+        NavigationRailLabelVisibility.all);
+
     final pathInput = find.descendant(
-      of: pathRow,
+      of: _tile(l10n.settingsDownloadsLocation),
       matching: find.byType(TextField),
     );
     await tester.ensureVisible(pathInput);
     await tester.enterText(pathInput, '/tmp/downloads');
     await tester.pump();
-    final toggleRow = find.ancestor(
-      of: find.text(l10n.settingsMdnsAutoConnect),
-      matching: find.byType(SettingRow),
-    );
-    final toggle =
-        find.descendant(of: toggleRow, matching: find.byType(Switch));
-    await tester.ensureVisible(toggleRow);
+
+    final toggle = _switchOf(l10n.settingsMdnsAutoConnect);
+    await tester.ensureVisible(toggle);
     await tester.tap(find.text(l10n.settingsMdnsAutoConnect));
     await tester.pumpAndSettle();
     expect(tester.widget<Switch>(toggle).value, isFalse);
     expect(
       tester
-          .widget<FilledButton>(find.widgetWithText(
-            FilledButton,
-            l10n.settingsSaveChanges,
-          ))
+          .widget<FilledButton>(
+              find.widgetWithText(FilledButton, l10n.settingsSaveChanges).first)
           .onPressed,
       isNotNull,
     );
 
-    await tester.tap(find.byTooltip(l10n.settingsRevertChangesTooltip));
-    await tester.pumpAndSettle();
+    await _revert(tester, l10n);
     expect(tester.widget<TextField>(pathInput).controller!.text,
         '/home/user/Downloads/Android applications');
-    final fieldState =
-        tester.state<FormFieldState<NavigationRailLabelVisibility>>(dropdown);
-    expect(fieldState.value, NavigationRailLabelVisibility.selected);
+    expect(_choiceValue<NavigationRailLabelVisibility>(tester),
+        NavigationRailLabelVisibility.selected);
     expect(tester.widget<Switch>(toggle).value, isTrue);
     expect(tester.takeException(), isNull);
   });

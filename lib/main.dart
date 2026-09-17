@@ -36,7 +36,7 @@ import 'widgets/dialogs/active_tasks_close_dialog.dart';
 void main() async {
   WidgetsFlutterBinding.ensureInitialized();
   await FilePicker.skipEntitlementsChecks();
-  await DesktopWindow.setMinWindowSize(const Size(800, 600));
+  await DesktopWindow.setMinWindowSize(const Size(800, 650));
 
   VideoPlayerMediaKit.ensureInitialized(
     macOS: true,

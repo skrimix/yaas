@@ -51,6 +51,7 @@ final device = AdbDevice(
   trueSerial: '3A_DEMO_001',
   transportId: '1',
   isWireless: false,
+  wirelessAdbEnabled: false,
   batteryLevel: 76,
   isCharging: true,
   controllers: const HeadsetControllersInfo(

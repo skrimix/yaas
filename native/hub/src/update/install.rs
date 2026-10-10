@@ -397,16 +397,21 @@ mod tests {
                 .success(),
             "ad-hoc signing failed"
         );
+        // Packaged like the release workflow: `YAAS.app` at the archive root, symlinks
+        // stored as links. `zip` appends `.zip` to extensionless names, so rename after.
+        let archive = root.path().join("YAAS-macos.zip");
         assert!(
-            Command::new("/usr/bin/ditto")
-                .args(["-c", "-k"])
-                .arg(&source)
-                .arg(workspace.join("package"))
+            Command::new("/usr/bin/zip")
+                .arg("-yrq")
+                .arg(&archive)
+                .arg("YAAS.app")
+                .current_dir(source.parent().unwrap())
                 .status()
                 .unwrap()
                 .success(),
             "zip creation failed"
         );
+        fs::rename(&archive, workspace.join("package")).unwrap();
 
         // Staging (runs right after the download in the real flow): extraction + verification.
         stage(&workspace).unwrap();

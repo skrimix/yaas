@@ -142,11 +142,12 @@ fn sh_header(plan: &ScriptPlan) -> Vec<String> {
     lines
 }
 
-/// Shared tail for the POSIX scripts: cleans up and relaunches on success, or
-/// removes the partial copy at `$NEW` on failure.
-fn sh_finish(install: &str, relaunch: &str) -> Vec<String> {
-    vec![
-        format!("if {install}; then"),
+/// Shared tail for the POSIX scripts: runs `cleanup`, removes the workspace and
+/// relaunches on success, or removes the partial copy at `$NEW` on failure.
+fn sh_finish(install: &str, cleanup: &[&str], relaunch: &str) -> Vec<String> {
+    let mut lines = vec![format!("if {install}; then")];
+    lines.extend(cleanup.iter().map(|line| format!("    {line}")));
+    lines.extend([
         "    rm -rf \"$WORK\"".into(),
         "    rm -f \"$0\"".into(),
         "    echo \"[update] Starting new version\"".into(),
@@ -157,7 +158,8 @@ fn sh_finish(install: &str, relaunch: &str) -> Vec<String> {
         "    exit 1".into(),
         "fi".into(),
         String::new(),
-    ]
+    ]);
+    lines
 }
 
 fn render_linux(plan: &ScriptPlan) -> String {
@@ -166,16 +168,22 @@ fn render_linux(plan: &ScriptPlan) -> String {
     // The staged AppImage already carries the installed AppImage's permissions.
     lines.extend(sh_finish(
         "cp -p \"$STAGED\" \"$NEW\" && mv -f \"$NEW\" \"$TARGET\"",
+        &[],
         &format!("nohup \"$TARGET\"{portable} </dev/null >/dev/null 2>&1 &"),
     ));
     lines.join("\n")
 }
 
+/// The installed bundle is moved aside to `$OLD` and restored if the new one
+/// cannot be moved into place, so a failure never leaves no app at `$TARGET`.
 fn render_macos(plan: &ScriptPlan) -> String {
     let mut lines = sh_header(plan);
-    lines.push("rm -rf \"$NEW\"".to_string());
+    lines.push("OLD=\"$TARGET.yaas-old\"".to_string());
+    lines.push("rm -rf \"$NEW\" \"$OLD\"".to_string());
     lines.extend(sh_finish(
-        "ditto \"$STAGED\" \"$NEW\" && rm -rf \"$TARGET\" && mv \"$NEW\" \"$TARGET\"",
+        "ditto \"$STAGED\" \"$NEW\" && mv \"$TARGET\" \"$OLD\" && { mv \"$NEW\" \"$TARGET\" || { \
+         mv \"$OLD\" \"$TARGET\"; false; }; }",
+        &["rm -rf \"$OLD\""],
         "open \"$TARGET\"",
     ));
     lines.join("\n")
@@ -254,8 +262,11 @@ mod tests {
         };
         let script = render(ScriptKind::MacOs, &plan);
         assert!(script.contains(
-            "ditto \"$STAGED\" \"$NEW\" && rm -rf \"$TARGET\" && mv \"$NEW\" \"$TARGET\""
+            "ditto \"$STAGED\" \"$NEW\" && mv \"$TARGET\" \"$OLD\" && { mv \"$NEW\" \"$TARGET\" \
+             || { mv \"$OLD\" \"$TARGET\"; false; }; }"
         ));
+        assert!(script.contains("    rm -rf \"$OLD\"\n    rm -rf \"$WORK\""));
+        assert!(!script.contains("rm -rf \"$TARGET\""));
         assert!(script.contains("open \"$TARGET\""));
         assert!(!script.contains("--portable"));
     }

@@ -24,7 +24,7 @@ The snapshot includes download progress, release notes/link, installation availa
 
 ## Releases
 
-Each GitHub release carries a `release.json` (written by `scripts/release.py`) with the build identity and each package's name, size, and SHA-256. The stable channel reads `releases/latest`; nightly reads the `nightly` tag. The package is downloaded by its GitHub asset ID, so a replaced nightly asset fails instead of mixing builds, and its size and SHA-256 must match `release.json`.
+Each GitHub release carries a `release.json` (written by `scripts/release.py`) with the build identity and each package's name, size, and SHA-256. The stable channel reads `releases/latest`; nightly reads the `nightly` tag. The package is downloaded by its GitHub asset ID, so a replaced nightly asset fails instead of mixing builds, and its size and SHA-256 must match `release.json`. A `release.json` whose SHA-256 is not 64 hex characters is rejected, since the checksum names the update workspace.
 
 ## Installation
 
@@ -41,7 +41,7 @@ On exit with an install request, Windows builds also stop the ADB server if its 
 
 - Windows copies the staged files over the install directory with `robocopy` (no purge: `_portable_data` and files absent from the package are preserved, including obsolete application files). On failure the script opens `update.log` in Notepad.
 - Linux copies the AppImage next to the installed one with the installed permission bits, moves it into place atomically, and restarts it.
-- macOS copies the staged bundle next to the installed one, then replaces the installed bundle and opens it.
+- macOS copies the staged bundle next to the installed one, moves the installed bundle aside, moves the new one into place (restoring the old one if that fails), then removes the old bundle and opens the new one.
 
 Read-only or translocated installations require moving or reinstalling the application first. No privileges are elevated. There are no backups or rollback; a failed replacement may require a manual reinstall, and `update.log` remains for diagnosis. The relaunched app keeps only the `--portable` flag; other arguments and the working directory are not preserved.
 

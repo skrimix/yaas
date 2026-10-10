@@ -367,12 +367,27 @@ mod tests {
             use std::os::unix::fs::PermissionsExt;
             fs::set_permissions(macos.join("YAAS"), fs::Permissions::from_mode(0o755)).unwrap();
         }
-        // A framework symlink, to verify ditto preserves links.
+        // A versioned framework, to verify ditto preserves its symlinks. `codesign --deep`
+        // rejects frameworks without `Resources/Info.plist`, so the layout must be complete.
         let framework = source.join("Contents/Frameworks/F.framework");
-        fs::create_dir_all(framework.join("Versions/A")).unwrap();
-        fs::write(framework.join("Versions/A/F"), "lib").unwrap();
+        fs::create_dir_all(framework.join("Versions/A/Resources")).unwrap();
+        fs::copy("/usr/bin/true", framework.join("Versions/A/F")).unwrap();
+        fs::write(
+            framework.join("Versions/A/Resources/Info.plist"),
+            concat!(
+                r#"<?xml version="1.0" encoding="UTF-8"?>"#,
+                r#"<plist version="1.0"><dict>"#,
+                r#"<key>CFBundleExecutable</key><string>F</string>"#,
+                r#"<key>CFBundleIdentifier</key><string>io.github.skrimix.yaas.test.F</string>"#,
+                r#"<key>CFBundlePackageType</key><string>FMWK</string>"#,
+                r#"</dict></plist>"#,
+            ),
+        )
+        .unwrap();
         std::os::unix::fs::symlink("A", framework.join("Versions/Current")).unwrap();
         std::os::unix::fs::symlink("Versions/Current/F", framework.join("F")).unwrap();
+        std::os::unix::fs::symlink("Versions/Current/Resources", framework.join("Resources"))
+            .unwrap();
         assert!(
             Command::new("/usr/bin/codesign")
                 .args(["--force", "--deep", "-s", "-"])
@@ -427,6 +442,7 @@ mod tests {
         assert!(!target.join("stale-file").exists(), "old bundle must be fully replaced");
         assert!(target.join("Contents/Frameworks/F.framework/F").exists());
         assert!(!root.path().join("Applications/YAAS.app.yaas-update").exists());
+        assert!(!root.path().join("Applications/YAAS.app.yaas-old").exists());
         assert!(!workspace.exists(), "workspace not cleaned up");
         assert!(!script.exists(), "script did not delete itself");
     }

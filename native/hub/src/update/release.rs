@@ -99,6 +99,11 @@ pub(super) async fn check(
         .into_iter()
         .find(|a| a.name == name)
         .with_context(|| format!("release.json does not list {name}"))?;
+    // The checksum names the update workspace directory, so it must be plain hex.
+    ensure!(
+        asset.sha256.len() == 64 && asset.sha256.bytes().all(|b| b.is_ascii_hexdigit()),
+        "release.json lists an invalid SHA-256 for {name}"
+    );
     let remote = find_asset(&release.assets, name)?;
     if !manifest.identity.newer_than(installed)? {
         return Ok(None);
@@ -273,6 +278,27 @@ mod tests {
                 .err()
                 .unwrap();
         assert!(format!("{error:#}").contains("does not list"));
+    }
+    #[tokio::test]
+    async fn rejects_checksums_unusable_as_workspace_names() {
+        for sha256 in ["", "../../../../../../..", "/home", &"g".repeat(64), &"a".repeat(63)] {
+            let server = MockServer::start().await;
+            let mut invalid = manifest();
+            for asset in &mut invalid.assets {
+                asset.sha256 = sha256.into();
+            }
+            publish(&server, &invalid, "Notes").await;
+            let error = check(
+                &client().unwrap(),
+                &server.uri(),
+                UpdateChannel::Stable,
+                &installed("stable"),
+            )
+            .await
+            .err()
+            .unwrap();
+            assert!(format!("{error:#}").contains("invalid SHA-256"), "{sha256}");
+        }
     }
     #[tokio::test]
     async fn reports_up_to_date_and_missing_release() {

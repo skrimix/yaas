@@ -1,9 +1,17 @@
-//! Manual application updates and the handoff to the installation helper.
+//! Manual application updates and the handoff to a generated install script.
 
 mod install;
+mod manifest;
+mod package;
 mod release;
+mod script;
 
-use std::{path::PathBuf, sync::Arc};
+use std::{
+    fs,
+    path::{Path, PathBuf},
+    sync::Arc,
+    time::{Duration, SystemTime},
+};
 
 use anyhow::{Context, Result, ensure};
 pub(crate) use install::Prepared;
@@ -37,6 +45,8 @@ struct Operation {
 
 struct Manager {
     root: PathBuf,
+    /// Relaunch the updated app with `--portable`.
+    portable: bool,
     channel: UpdateChannel,
     phase: AppUpdatePhase,
     received_bytes: u64,
@@ -51,12 +61,17 @@ struct Manager {
 }
 
 impl UpdateManager {
-    pub(crate) fn start(root: PathBuf, settings: watch::Receiver<Settings>) -> Arc<Self> {
+    pub(crate) fn start(
+        root: PathBuf,
+        portable: bool,
+        settings: watch::Receiver<Settings>,
+    ) -> Arc<Self> {
         let (sender, receiver) = mpsc::unbounded_channel();
         let (progress_tx, progress_rx) = mpsc::unbounded_channel();
         let channel = settings.borrow().update_channel;
         let manager = Manager {
             root: root.join("updates"),
+            portable,
             channel,
             phase: AppUpdatePhase::Idle,
             received_bytes: 0,
@@ -237,10 +252,12 @@ impl Manager {
             self.installation_unavailable_reason = Some(reason.clone());
             return Err(release::failure(AppUpdateErrorKind::Installation, reason));
         }
+        let root = self.root.clone();
         let download = self.download_dir();
         let candidate = self.candidate.as_ref().unwrap().clone();
+        let portable = self.portable;
         let task = tokio::spawn(async move {
-            Ok(Outcome::Prepared(install::prepare(download, candidate).await?))
+            Ok(Outcome::Prepared(install::prepare(root, download, candidate, portable).await?))
         });
         self.operation = Some(Operation { task, cancel: CancellationToken::new() });
         self.clear_error();
@@ -298,9 +315,7 @@ impl Manager {
         let download_rx = DownloadAppUpdateRequest::get_dart_signal_receiver();
         let install_rx = InstallAppUpdateRequest::get_dart_signal_receiver();
         let cancel_rx = CancelAppUpdateRequest::get_dart_signal_receiver();
-        if let Err(error) = app_update::install::cleanup() {
-            tracing::warn!(%error, "Could not clean leftover update helpers");
-        }
+        sweep_stale_update_files(&self.root);
         self.publish();
         loop {
             tokio::select! {
@@ -386,11 +401,40 @@ impl Manager {
     }
 }
 
+/// Removes staging directories and scripts left by failed or interrupted
+/// installs. Artifacts younger than a day are kept for diagnosis.
+fn sweep_stale_update_files(root: &Path) {
+    sweep_update_files_before(root, SystemTime::now() - Duration::from_secs(24 * 60 * 60));
+}
+
+fn sweep_update_files_before(root: &Path, cutoff: SystemTime) {
+    let Ok(entries) = fs::read_dir(root) else { return };
+    for entry in entries.flatten() {
+        let name = entry.file_name();
+        let name = name.to_string_lossy();
+        let is_staging = name.starts_with("staging-");
+        let is_script =
+            name.starts_with("update-") && (name.ends_with(".sh") || name.ends_with(".bat"));
+        if !is_staging && !is_script {
+            continue;
+        }
+        let Ok(metadata) = entry.metadata() else { continue };
+        let Ok(modified) = metadata.modified() else { continue };
+        if modified >= cutoff {
+            continue;
+        }
+        let path = entry.path();
+        if metadata.is_dir() {
+            let _ = fs::remove_dir_all(path);
+        } else {
+            let _ = fs::remove_file(path);
+        }
+    }
+}
+
 #[cfg(test)]
 mod tests {
-    use app_update::{Asset, Identity};
-
-    use super::*;
+    use super::{manifest::Asset, *};
 
     fn manager(root: PathBuf) -> Manager {
         let info = AppUpdateRelease {
@@ -407,14 +451,6 @@ mod tests {
         };
         let candidate = Candidate {
             info: info.clone(),
-            identity: Identity {
-                version: info.version.clone(),
-                build_number: 1,
-                channel: "stable".into(),
-                commit: info.commit.clone(),
-                run_number: 2,
-                run_attempt: 1,
-            },
             asset: Asset {
                 name: "package".into(),
                 os: "linux".into(),
@@ -426,6 +462,7 @@ mod tests {
         };
         Manager {
             root,
+            portable: false,
             channel: UpdateChannel::Stable,
             phase: AppUpdatePhase::Available,
             received_bytes: 0,
@@ -485,5 +522,26 @@ mod tests {
         assert_eq!(manager.phase, AppUpdatePhase::Ready);
         assert_eq!(manager.received_bytes, 7);
         assert!(manager.valid_exit("candidate").is_err());
+    }
+
+    #[test]
+    fn sweep_removes_only_stale_update_artifacts() {
+        let dir = tempfile::tempdir().unwrap();
+        let root = dir.path();
+        let staging = root.join("staging-old");
+        fs::create_dir_all(&staging).unwrap();
+        let script = root.join("update-old.sh");
+        fs::write(&script, "x").unwrap();
+        let download = root.join("downloads");
+        fs::create_dir_all(download.join("id")).unwrap();
+        fs::write(root.join("updater-notes.txt"), "keep").unwrap();
+        // Nothing fresh is removed, and unrelated entries are never touched.
+        sweep_update_files_before(root, SystemTime::now() - Duration::from_secs(1));
+        assert!(staging.exists() && script.exists());
+        // With the cutoff in the future, matching artifacts are removed.
+        sweep_update_files_before(root, SystemTime::now() + Duration::from_secs(1));
+        assert!(!staging.exists() && !script.exists());
+        assert!(download.join("id").exists());
+        assert!(root.join("updater-notes.txt").exists());
     }
 }

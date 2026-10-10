@@ -218,21 +218,6 @@ dependencies = [
 ]
 
 [[package]]
-name = "app-update"
-version = "0.1.0"
-dependencies = [
- "anyhow",
- "const-hex",
- "dirs",
- "serde",
- "serde_json",
- "sha2",
- "sysinfo",
- "tempfile",
- "zip",
-]
-
-[[package]]
 name = "arrayvec"
 version = "0.7.8"
 source = "registry+https://github.com/rust-lang/crates.io-index"
@@ -940,6 +925,12 @@ dependencies = [
 ]
 
 [[package]]
+name = "dunce"
+version = "1.0.5"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "92773504d58c093f6de2459af4af33faa518c13451eb8f2b5698ed3d36e7c813"
+
+[[package]]
 name = "either"
 version = "1.18.0"
 source = "registry+https://github.com/rust-lang/crates.io-index"
@@ -1360,7 +1351,6 @@ version = "0.1.0"
 dependencies = [
  "anyhow",
  "apk-info",
- "app-update",
  "async-trait",
  "bitflags 2.13.1",
  "built",
@@ -1369,6 +1359,7 @@ dependencies = [
  "csv-async",
  "derive_more",
  "dirs",
+ "dunce",
  "forensic-adb",
  "fs-err",
  "fs4",
@@ -1389,6 +1380,7 @@ dependencies = [
  "serde_json",
  "sha2",
  "sha2-const-stable",
+ "sysinfo",
  "sysproxy",
  "tempfile",
  "test-log",

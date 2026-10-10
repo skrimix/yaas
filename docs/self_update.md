@@ -25,24 +25,24 @@ The snapshot includes download progress, release notes/link, installation availa
 
 ## Installation
 
-The app verifies the package's size and SHA-256 against the release manifest. It prepares an update request, confirms exit, and gives casting and tasks up to ten seconds to stop. It then starts a separate updater and exits.
+The app verifies the package's size and SHA-256 against the release manifest, then stages the update while still running, so extraction or signature problems surface as ordinary errors. It confirms exit and gives casting and tasks up to ten seconds to stop. The app stops its ADB tasks, then kills every other process whose executable lives inside the installation (the install directory on Windows, the AppImage mount on Linux, the bundle on macOS): a bundled ADB server, leftover archive tools or rclone, and other YAAS instances from the same installation. This keeps them from locking files or keeping an old AppImage mount alive; ADB servers started from other adb binaries are left running. The app then starts a small generated script, detached, and exits.
 
-Only one updater runs per OS user, across normal and portable installations. The updater waits up to five seconds for YAAS processes from the target installation to exit, then terminates remaining YAAS and bundled helper processes. It identifies bundled ADB by its executable path; external ADB servers are left running. If matching processes remain after another five seconds, installation stops.
+Staging lives in `updates/staging-<candidate-id>` under the app data directory (the portable data directory in portable mode), and the script is `updates/update-<candidate-id>.bat` or `.sh`. The script waits up to about 30 seconds for the app process to exit (then kills it), creates an install lock directory with `mkdir`, replaces the installation, removes the lock, restarts YAAS, and removes the staging directory, the downloaded package, and itself:
 
-The updater extracts and checks the package before changing installed files, then installs it and starts YAAS with its previous arguments and working directory:
+The lock is `.yaas-update.lock` inside the install directory on Windows and `<AppImage or bundle>.yaas-update.lock` next to the target elsewhere, so only one script replaces a given installation at a time. If the lock already exists, the script exits without installing. Staging also fails while a lock younger than 30 minutes exists; older locks are left by interrupted scripts and are removed.
 
-- Windows overwrites files from the package. It preserves `_portable_data` and files absent from the package, including obsolete application files.
-- Linux replaces the original AppImage and preserves its executable permissions.
-- macOS replaces the complete bundle, preserving framework links and checking its signature.
+- Windows extracts the ZIP during staging, then the script copies the staged files over the install directory with `robocopy` (no purge: `_portable_data` and files absent from the package are preserved, including obsolete application files). On failure the script opens its `update.log` in Notepad and leaves the staging directory in place.
+- Linux needs no extraction: the package is the AppImage. The script copies it over the installed AppImage atomically (sibling file with the installed AppImage's permission bits, `mv`) and restarts it.
+- macOS extracts the ZIP with `ditto` during staging (preserving framework symlinks) and verifies the staged bundle with `codesign --verify --deep --strict`. The script replaces the whole bundle (`rm -rf` + `ditto`) and opens it.
 
 Read-only or translocated installations require moving or reinstalling the application first. No privileges are elevated.
 
-There are no backups, rollback, or startup acknowledgements. A failed or interrupted replacement may require a manual reinstall. Launching the new process finishes the update; the updater does not wait for the new app to initialize.
+There are no backups or rollback. A failed or interrupted replacement may require a manual reinstall; the script's `update.log` and staging directory remain for diagnosis. Launching the new process finishes the update; the script does not wait for the new app to initialize. The relaunched app keeps only the `--portable` flag; other arguments and the working directory are not preserved.
 
-Requests and `updater.log` files live in `updates/requests` under YAAS's normal user data directory, including in portable mode. Failed requests and downloads remain available for diagnosis or retry. Successful runs remove their request and downloaded package; a later app launch cleans leftover updater copies. Old transaction directories are left untouched.
+If staging itself fails, the staging directory and script are removed right away. Staging directories and scripts left behind by failed or interrupted installs are removed at startup once they are a day old.
 
 ## Validation
 
-`cargo test -p app-update` checks extraction, file replacement, process matching, and the real updater using fixture application processes. Core tests cover release discovery, pinned downloads, checksums, cancellation, and channel changes. Flutter tests cover startup checks, preference saves, update controls, banners, release notes, and exit confirmation. Package CI runs updater tests on Linux, Windows, and macOS.
+`cargo test -p hub update` covers release discovery, pinned downloads, checksums, cancellation, channel changes, package extraction checks, and script rendering for all platforms; on Linux, Windows, and macOS it also runs a real generated script against a fixture installation (package CI runs this on all three). Flutter tests cover startup checks, preference saves, update controls, banners, release notes, and exit confirmation.
 
-Before publishing installation support, test two packaged releases on each OS: download/install/relaunch, cancellation with active tasks, portable data, read-only destinations, and a failed launch. On Windows, include a running bundled ADB server. On macOS, include framework symlinks and both CPU architectures. On Linux, include multiple AppImage mounts and paths containing spaces. Fixture tests do not replace these packaged checks.
+Before publishing installation support, test two packaged releases on each OS: download/install/relaunch (including portable mode), cancellation with active tasks, read-only destinations, and a failed launch. On Windows, include a running bundled ADB server. On macOS, include framework symlinks and both CPU architectures. On Linux, include multiple AppImage mounts and paths containing spaces. Fixture tests do not replace these packaged checks.

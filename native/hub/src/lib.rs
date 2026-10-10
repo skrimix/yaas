@@ -103,7 +103,7 @@ fn main() {
         runtime.block_on(async move {
             let init_start = Instant::now();
             // Initialize everything
-            let (task_manager, native_casting, updater) =
+            let (task_manager, native_casting, adb_service, updater) =
                 timeout(Duration::from_secs(10), init(portable_mode))
                     .await
                     .expect("Core initialization timed out");
@@ -160,9 +160,15 @@ fn main() {
                             _ = panic_notify.notified() => None,
                         };
                         if let Some(shutdown_result) = shutdown_result {
-                            let update_error = prepared.and_then(|prepared| {
-                                prepared.launch().err().map(|error| format!("{error:#}"))
-                            });
+                            let mut update_error = None;
+                            if let Some(prepared) = prepared {
+                                // Keep ADB from restarting a bundled server that the
+                                // handoff stops along with other installation processes.
+                                adb_service.stop_for_update().await;
+                                if let Err(error) = prepared.launch().await {
+                                    update_error = Some(format!("{error:#}"));
+                                }
+                            }
                             if let Some(error) = &update_error {
                                 error!(
                                     error,
@@ -210,7 +216,7 @@ async fn prepare_shutdown(
 #[instrument]
 async fn init(
     portable_mode: bool,
-) -> (Arc<TaskManager>, Arc<NativeCastingManager>, Arc<update::UpdateManager>) {
+) -> (Arc<TaskManager>, Arc<NativeCastingManager>, Arc<AdbService>, Arc<update::UpdateManager>) {
     let app_dir = resolve_app_dir(portable_mode);
     init_in_dir(app_dir, portable_mode).await
 }
@@ -218,7 +224,7 @@ async fn init(
 async fn init_in_dir(
     app_dir: PathBuf,
     portable_mode: bool,
-) -> (Arc<TaskManager>, Arc<NativeCastingManager>, Arc<update::UpdateManager>) {
+) -> (Arc<TaskManager>, Arc<NativeCastingManager>, Arc<AdbService>, Arc<update::UpdateManager>) {
     if !app_dir.exists() {
         std::fs::create_dir_all(&app_dir).expect("Failed to create app directory");
     }
@@ -314,8 +320,9 @@ async fn init_in_dir(
     debug!("Starting signal layer request handler");
     SignalLayer::start_request_handler(app_dir.join("logs"));
 
-    let updater = update::UpdateManager::start(app_dir, settings_handler.subscribe());
-    (task_manager, native_casting, updater)
+    let updater =
+        update::UpdateManager::start(app_dir, portable_mode, settings_handler.subscribe());
+    (task_manager, native_casting, adb_service, updater)
 }
 
 fn setup_logging(app_dir: &Path) -> Result<()> {

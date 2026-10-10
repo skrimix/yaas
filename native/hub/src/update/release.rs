@@ -4,7 +4,6 @@ use std::{
 };
 
 use anyhow::{Context, Result, ensure};
-use app_update::{Asset, Identity, Manifest};
 use futures::StreamExt;
 use reqwest::{Client, StatusCode};
 use serde::Deserialize;
@@ -12,6 +11,7 @@ use sha2::{Digest, Sha256};
 use tokio::io::AsyncWriteExt;
 use tokio_util::sync::CancellationToken;
 
+use super::manifest::{Asset, Identity, Manifest};
 use crate::models::{
     UpdateChannel,
     signals::update::{AppUpdateErrorKind, AppUpdateRelease},
@@ -34,7 +34,6 @@ pub(super) fn failure(kind: AppUpdateErrorKind, message: impl Into<String>) -> a
 #[derive(Clone)]
 pub(super) struct Candidate {
     pub info: AppUpdateRelease,
-    pub identity: Identity,
     pub asset: Asset,
     pub asset_id: u64,
 }
@@ -146,17 +145,16 @@ pub(super) async fn check(
     Ok(Some(Candidate {
         info: AppUpdateRelease {
             candidate_id: uuid::Uuid::new_v4().to_string(),
-            version: identity.version.clone(),
+            version: identity.version,
             build_number: identity.build_number.into(),
             channel,
-            commit: identity.commit.clone(),
+            commit: identity.commit,
             run_number: identity.run_number,
             run_attempt: identity.run_attempt,
             notes: release.body.unwrap_or_default(),
             release_url: release.html_url,
             package_size: asset.size,
         },
-        identity,
         asset,
         asset_id: remote.id,
     }))

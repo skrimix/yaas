@@ -12,7 +12,6 @@ edition = "2024"
 crate-type = ["lib", "cdylib", "staticlib"]
 
 [dependencies]
-app-update = { path = "../app_update" }
 sha2 = "0.11"
 anyhow = { version = "1.0.104", features = ["backtrace"] }
 bitflags = "2.13.1"
@@ -76,6 +75,8 @@ const_format = "0.2.36"
 apk-info = "1.0.12"
 yarc = { path = "../yarc" }
 magic-cast = { path = "../magic_cast" }
+dunce = "1.0.5"
+sysinfo = { version = "0.39.6", default-features = false, features = ["system"] }
 
 [build-dependencies]
 built = { version = "0.8.1", features = ["git2", "chrono"] }

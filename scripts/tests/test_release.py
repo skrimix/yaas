@@ -139,7 +139,6 @@ class ReleaseTests(unittest.TestCase):
             "lib/libflutter_linux_gtk.so",
             "usr/bin/adb",
             "usr/bin/7zzs",
-            "usr/bin/yaas-updater",
         ]:
             path = self.root / name
             path.parent.mkdir(parents=True, exist_ok=True)
@@ -153,22 +152,20 @@ class ReleaseTests(unittest.TestCase):
         artifacts = self.root / "artifacts"
         windows = artifacts / "build-windows"
         windows.mkdir(parents=True)
-        for name in ["yaas.exe", "hub.dll", "adb.exe", "7za.exe", "yaas-updater.exe"]:
+        for name in ["yaas.exe", "hub.dll", "adb.exe", "7za.exe"]:
             (windows / name).write_bytes(pe())
         (windows / "launch_portable.bat").write_text("yaas.exe --portable")
         (artifacts / "build-linux").mkdir()
         (artifacts / "build-linux/yaas.AppImage").write_bytes(elf())
         (artifacts / "build-macos").mkdir()
         with zipfile.ZipFile(artifacts / "build-macos/YAAS-macos.zip", "w") as archive:
-            for name in ["YAAS", "adb", "7zz", "yaas-updater"]:
+            for name in ["YAAS", "adb", "7zz"]:
                 archive.writestr(f"YAAS.app/Contents/MacOS/{name}", universal())
         identity = {
             **release.build_identity("stable", SHA, ENV),
             "version": "1.0.0",
             "build_number": 1,
         }
-        with zipfile.ZipFile(artifacts / "build-macos/YAAS-macos.zip", "a") as archive:
-            archive.writestr("YAAS.app/Contents/Resources/yaas-build.json", json.dumps(identity))
         for platform in ["windows", "linux", "macos"]:
             (artifacts / f"build-{platform}/build-identity.json").write_text(
                 json.dumps(identity)
@@ -191,7 +188,7 @@ class ReleaseTests(unittest.TestCase):
         with zipfile.ZipFile(output / "YAAS-windows-x64.zip") as archive:
             self.assertNotIn("yaas-package.json", archive.namelist())
             self.assertNotIn("build-identity.json", archive.namelist())
-            self.assertIn("yaas-updater.exe", archive.namelist())
+            self.assertIn("adb.exe", archive.namelist())
         with (
             patch.object(release, "app_version", return_value=("1.0.0", 1)),
             patch.object(release, "run", return_value=SHA),

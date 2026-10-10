@@ -5,7 +5,10 @@ use std::{
     future::Future,
     net::SocketAddr,
     path::{Path, PathBuf},
-    sync::Arc,
+    sync::{
+        Arc,
+        atomic::{AtomicBool, Ordering},
+    },
     time::Duration,
 };
 
@@ -184,6 +187,8 @@ pub(crate) struct AdbService {
     adb_host: forensic_adb::Host,
     /// ADB server check/start mutex
     adb_server_mutex: Mutex<()>,
+    /// Set once the server is stopped for a self-update; prevents restarts.
+    server_start_blocked: AtomicBool,
     /// ADB binary path
     adb_path: RwLock<Option<String>>,
     /// ADB service state
@@ -237,6 +242,7 @@ impl AdbService {
                 forensic_adb::Host::default()
             },
             adb_server_mutex: Mutex::new(()),
+            server_start_blocked: AtomicBool::new(false),
             adb_path: RwLock::new(adb_path),
             adb_state: RwLock::new(AdbState::default()),
             device: None.into(),
@@ -452,6 +458,14 @@ impl AdbService {
         }
         self.refresh_adb_state().await;
         Ok(())
+    }
+
+    /// Stops ADB tasks and prevents this service from starting an ADB server
+    /// again. Used before a self-update so a bundled server stays stopped.
+    pub(crate) async fn stop_for_update(&self) {
+        self.cancel_token.read().await.cancel();
+        let _guard = self.adb_server_mutex.lock().await;
+        self.server_start_blocked.store(true, Ordering::SeqCst);
     }
 
     /// Runs the device tracking loop that monitors for device connections and disconnections
@@ -1971,6 +1985,10 @@ impl AdbService {
     #[instrument(level = "debug", skip(self), /* fields(adb_host = ?self.adb_host) */, err)]
     async fn ensure_server_running(&self) -> Result<()> {
         let _guard = self.adb_server_mutex.lock().await;
+        ensure!(
+            !self.server_start_blocked.load(Ordering::SeqCst),
+            "ADB server was stopped for an update"
+        );
         if !self.is_server_running().await {
             info!("ADB server not running, attempting to start it");
             self.set_adb_state(AdbState::ServerStarting).await;

@@ -1,8 +1,4 @@
-//! Release metadata, package extraction, and the standalone update installer.
-
-pub mod install;
-pub mod package;
-pub mod processes;
+//! Release metadata and package verification.
 
 use std::{fs::File, io::Read, path::Path};
 
@@ -11,7 +7,7 @@ use serde::{Deserialize, Serialize};
 use sha2::{Digest, Sha256};
 
 #[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
-pub struct Identity {
+pub(crate) struct Identity {
     pub version: String,
     pub build_number: u16,
     pub channel: String,
@@ -24,14 +20,8 @@ impl Identity {
     pub fn validate(&self) -> Result<()> {
         version(&self.version)?;
         ensure!(self.build_number > 0, "Invalid build number");
-        ensure!(
-            matches!(self.channel.as_str(), "stable" | "nightly"),
-            "Invalid channel"
-        );
-        ensure!(
-            self.run_number > 0 && self.run_attempt > 0,
-            "Missing CI identity"
-        );
+        ensure!(matches!(self.channel.as_str(), "stable" | "nightly"), "Invalid channel");
+        ensure!(self.run_number > 0 && self.run_attempt > 0, "Missing CI identity");
         ensure!(
             self.commit.len() == 40 && self.commit.bytes().all(|c| c.is_ascii_hexdigit()),
             "Invalid commit"
@@ -67,13 +57,11 @@ pub fn version(value: &str) -> Result<[u16; 3]> {
             part.parse::<u16>().context("Invalid version")
         })
         .collect::<Result<Vec<_>>>()?;
-    parts
-        .try_into()
-        .map_err(|_| anyhow::anyhow!("Expected MAJOR.MINOR.PATCH"))
+    parts.try_into().map_err(|_| anyhow::anyhow!("Expected MAJOR.MINOR.PATCH"))
 }
 
 #[derive(Debug, Clone, Serialize, Deserialize)]
-pub struct Asset {
+pub(crate) struct Asset {
     pub name: String,
     pub os: String,
     pub architectures: Vec<String>,
@@ -82,7 +70,7 @@ pub struct Asset {
 }
 
 #[derive(Debug, Clone, Serialize, Deserialize)]
-pub struct Manifest {
+pub(crate) struct Manifest {
     pub schema_version: u32,
     #[serde(flatten)]
     pub identity: Identity,
@@ -92,15 +80,9 @@ pub struct Manifest {
 
 impl Manifest {
     pub fn validate(&self, channel: &str, tag: &str) -> Result<()> {
-        ensure!(
-            self.schema_version == 1,
-            "Unsupported release metadata schema"
-        );
+        ensure!(self.schema_version == 1, "Unsupported release metadata schema");
         self.identity.validate()?;
-        ensure!(
-            self.identity.channel == channel && self.tag == tag,
-            "Release identity mismatch"
-        );
+        ensure!(self.identity.channel == channel && self.tag == tag, "Release identity mismatch");
         let expected_tag = if channel == "stable" {
             format!("v{}", self.identity.version)
         } else {
@@ -142,10 +124,7 @@ impl Manifest {
 
 pub fn verify_file(path: &Path, asset: &Asset) -> Result<()> {
     let mut file = File::open(path).context("Cannot open update package")?;
-    ensure!(
-        file.metadata()?.len() == asset.size,
-        "Package size mismatch"
-    );
+    ensure!(file.metadata()?.len() == asset.size, "Package size mismatch");
     let mut hash = Sha256::new();
     let mut buffer = [0u8; 128 * 1024];
     loop {
@@ -180,35 +159,15 @@ mod tests {
     #[test]
     fn ordering_and_channel_switches() {
         let stable = identity("stable", "1.9.0", 20, 50, 1);
-        assert!(
-            identity("stable", "1.10.0", 1, 1, 1)
-                .newer_than(&stable)
-                .unwrap()
-        );
-        assert!(
-            !identity("stable", "1.8.0", 100, 100, 1)
-                .newer_than(&stable)
-                .unwrap()
-        );
-        assert!(
-            identity("stable", "1.9.0", 21, 1, 1)
-                .newer_than(&stable)
-                .unwrap()
-        );
+        assert!(identity("stable", "1.10.0", 1, 1, 1).newer_than(&stable).unwrap());
+        assert!(!identity("stable", "1.8.0", 100, 100, 1).newer_than(&stable).unwrap());
+        assert!(identity("stable", "1.9.0", 21, 1, 1).newer_than(&stable).unwrap());
         assert!(!stable.newer_than(&stable).unwrap());
         let nightly = identity("nightly", "1.0.0", 1, 50, 2);
         assert!(nightly.newer_than(&stable).unwrap());
         assert!(stable.newer_than(&nightly).unwrap());
-        assert!(
-            nightly
-                .newer_than(&identity("nightly", "9.0.0", 1, 50, 1))
-                .unwrap()
-        );
-        assert!(
-            !nightly
-                .newer_than(&identity("nightly", "0.1.0", 1, 51, 1))
-                .unwrap()
-        );
+        assert!(nightly.newer_than(&identity("nightly", "9.0.0", 1, 50, 1)).unwrap());
+        assert!(!nightly.newer_than(&identity("nightly", "0.1.0", 1, 51, 1)).unwrap());
     }
 
     #[test]

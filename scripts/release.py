@@ -136,12 +136,11 @@ def verify_bundle(platform, root):
         return found == expected
 
     required = {
-        "windows": ["yaas.exe", "hub.dll", "adb.exe", "7za.exe", "yaas-updater.exe"],
+        "windows": ["yaas.exe", "hub.dll", "adb.exe", "7za.exe"],
         "macos": [
             "Contents/MacOS/YAAS",
             "Contents/MacOS/adb",
             "Contents/MacOS/7zz",
-            "Contents/MacOS/yaas-updater",
         ],
         "linux": [
             "yaas",
@@ -149,7 +148,6 @@ def verify_bundle(platform, root):
             "lib/libflutter_linux_gtk.so",
             "usr/bin/adb",
             "usr/bin/7zzs",
-            "usr/bin/yaas-updater",
         ],
     }[platform]
     for name in required:
@@ -252,7 +250,7 @@ def package(sha, artifacts=Path("artifacts"), output=Path("release")):
     require(macos.is_file(), "Missing macOS ZIP")
     with zipfile.ZipFile(macos) as archive:
         require(archive.testzip() is None, "Corrupt macOS ZIP")
-        for binary in ("YAAS", "adb", "7zz", "yaas-updater"):
+        for binary in ("YAAS", "adb", "7zz"):
             name = f"YAAS.app/Contents/MacOS/{binary}"
             require(name in archive.namelist(), f"Missing macOS binary: {binary}")
             with archive.open(name) as stream:
@@ -260,13 +258,6 @@ def package(sha, artifacts=Path("artifacts"), output=Path("release")):
                     architectures(stream.read(65536)) == {"aarch64", "x86_64"},
                     f"Non-universal macOS binary: {binary}",
                 )
-        bundle_identity = json.loads(
-            archive.read("YAAS.app/Contents/Resources/yaas-build.json")
-        )
-        require(
-            bundle_identity == {**identity, "version": version, "build_number": build},
-            "macOS bundle identity differs from release",
-        )
         for name in archive.namelist():
             if name.endswith("/"):
                 continue

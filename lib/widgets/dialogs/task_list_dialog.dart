@@ -4,6 +4,7 @@ import '../../src/bindings/bindings.dart';
 import '../../providers/task_state.dart';
 import '../../src/l10n/app_localizations.dart';
 import '../../utils/utils.dart';
+import '../common/status_chip.dart';
 
 class TaskListDialog extends StatefulWidget {
   final int initialTabIndex;
@@ -88,18 +89,18 @@ class _TaskListDialogState extends State<TaskListDialog>
     }
   }
 
-  Color _getStatusColor(TaskStatus status) {
+  StatusTone _getStatusTone(TaskStatus status) {
     switch (status) {
       case TaskStatus.waiting:
-        return Colors.orange;
+        return StatusTone.neutral;
       case TaskStatus.running:
-        return Colors.blue;
+        return StatusTone.primary;
       case TaskStatus.completed:
-        return Colors.green;
+        return StatusTone.success;
       case TaskStatus.failed:
-        return Colors.red;
+        return StatusTone.error;
       case TaskStatus.cancelled:
-        return Colors.grey;
+        return StatusTone.neutral;
     }
   }
 
@@ -171,22 +172,9 @@ class _TaskListDialogState extends State<TaskListDialog>
             ),
             const SizedBox(width: 8),
           ],
-          Container(
-            padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 2),
-            decoration: BoxDecoration(
-              color: _getStatusColor(task.status).withValues(alpha: 0.1),
-              border: Border.all(
-                color: _getStatusColor(task.status).withValues(alpha: 0.5),
-              ),
-              borderRadius: BorderRadius.circular(4),
-            ),
-            child: Text(
-              _getStatusString(task.status),
-              style: TextStyle(
-                color: _getStatusColor(task.status),
-                fontSize: 12,
-              ),
-            ),
+          StatusChip(
+            label: _getStatusString(task.status),
+            tone: _getStatusTone(task.status),
           ),
         ],
       ),
@@ -238,7 +226,6 @@ class _TaskListDialogState extends State<TaskListDialog>
           if (!task.isFinished)
             LinearProgressIndicator(
               value: task.stepProgress, // null -> indeterminate
-              backgroundColor: Colors.grey.withValues(alpha: 0.1),
             ),
         ],
       ),

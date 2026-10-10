@@ -19,6 +19,7 @@ import 'package:yaas/providers/settings_state.dart';
 import 'package:yaas/providers/task_state.dart';
 import 'package:yaas/src/bindings/bindings.dart';
 import 'package:yaas/src/l10n/app_localizations.dart';
+import 'package:yaas/utils/theme_utils.dart';
 import 'package:yaas/widgets/cloud_apps/cloud_app_details_dialog.dart';
 import 'package:yaas/widgets/cloud_apps/cloud_app_list.dart';
 import 'package:yaas/widgets/dialogs/task_list_dialog.dart';
@@ -213,11 +214,8 @@ void main() {
               locale: const Locale('en'),
               localizationsDelegates: AppLocalizations.localizationsDelegates,
               supportedLocales: AppLocalizations.supportedLocales,
-              theme: ThemeData(
-                useMaterial3: true,
-                colorScheme: ColorScheme.fromSeed(
-                    seedColor: Colors.deepPurple, brightness: Brightness.dark),
-              ),
+              theme: buildAppTheme(ColorScheme.fromSeed(
+                  seedColor: Colors.deepPurple, brightness: Brightness.dark)),
               home: const SinglePage(),
             ),
           ),

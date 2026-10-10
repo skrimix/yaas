@@ -197,8 +197,8 @@ class _YAASAppState extends State<YAASApp> {
             ],
             supportedLocales: AppLocalizations.supportedLocales,
             themeMode: themeMode,
-            theme: ThemeData(colorScheme: lightScheme, useMaterial3: true),
-            darkTheme: ThemeData(colorScheme: darkScheme, useMaterial3: true),
+            theme: app_theme.buildAppTheme(lightScheme),
+            darkTheme: app_theme.buildAppTheme(darkScheme),
             home: Consumer<AppState>(
               builder: (context, appState, child) {
                 if (appState.panicMessage != null) {

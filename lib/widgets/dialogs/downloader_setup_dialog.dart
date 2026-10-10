@@ -34,13 +34,11 @@ class _DownloaderSetupDialogState extends State<DownloaderSetupDialog> {
     if (errorText == null || errorText.isEmpty) {
       return InputDecoration(
         labelText: l10n.downloaderConfigUrlLabel,
-        border: const OutlineInputBorder(),
       );
     }
 
     final decoration = InputDecoration(
       labelText: l10n.downloaderConfigUrlLabel,
-      border: const OutlineInputBorder(),
       errorMaxLines: 4,
     );
 

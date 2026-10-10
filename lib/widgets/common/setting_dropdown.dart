@@ -1,6 +1,6 @@
 import 'package:flutter/material.dart';
 
-/// A filled dropdown with the same padding and focus border as settings fields.
+/// A dropdown with the same padding as settings fields.
 class SettingDropdown<T> extends StatelessWidget {
   const SettingDropdown({
     super.key,
@@ -19,12 +19,6 @@ class SettingDropdown<T> extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    final colors = Theme.of(context).colorScheme;
-    final border = OutlineInputBorder(
-      borderRadius: BorderRadius.circular(8),
-      borderSide: BorderSide.none,
-    );
-
     return Semantics(
       label: label,
       child: DropdownButtonFormField<T>(
@@ -44,20 +38,11 @@ class SettingDropdown<T> extends StatelessWidget {
                 ))
             .toList(),
         onChanged: onChanged,
-        decoration: InputDecoration(
-          filled: true,
-          fillColor: colors.surfaceContainerHighest.withValues(alpha: 0.55),
+        decoration: const InputDecoration(
           isDense: true,
-          contentPadding:
-              const EdgeInsets.symmetric(horizontal: 12, vertical: 12),
-          border: border,
-          enabledBorder: border,
-          disabledBorder: border,
-          focusedBorder: border.copyWith(
-            borderSide: BorderSide(color: colors.primary, width: 2),
-          ),
+          contentPadding: EdgeInsets.symmetric(horizontal: 12, vertical: 12),
         ),
-        borderRadius: BorderRadius.circular(8),
+        borderRadius: BorderRadius.circular(12),
       ),
     );
   }

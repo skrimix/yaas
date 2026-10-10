@@ -8,10 +8,12 @@ import '../../src/l10n/app_localizations.dart';
 import '../device/device_actions.dart';
 import '../common/card_header.dart';
 import '../common/no_device_connected_indicator.dart';
+import '../common/page_scaffold.dart';
 
 /// Radii and gaps shared by the home screen cards.
 class _HomeMetrics {
   static const double gap = 16;
+  static const double maxContentWidth = 1200;
   static const double heroRadius = 28;
   static const double cardRadius = 20;
   static const double cardPadding = 20;
@@ -28,59 +30,69 @@ class HomeScreen extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     final device = context.watch<DeviceState>();
-    if (!device.isConnected) return const NoDeviceConnectedIndicator();
+    final title = AppLocalizations.of(context).navHome;
+    if (!device.isConnected) {
+      return PageScaffold(
+        title: title,
+        body: const NoDeviceConnectedIndicator(),
+      );
+    }
 
-    return SingleChildScrollView(
-      padding: const EdgeInsets.fromLTRB(24, 16, 24, 32),
-      child: Align(
-        alignment: Alignment.topCenter,
-        child: ConstrainedBox(
-          constraints: const BoxConstraints(maxWidth: 1200),
-          child: LayoutBuilder(
-            builder: (context, constraints) {
-              final overview = Column(
-                crossAxisAlignment: CrossAxisAlignment.stretch,
-                children: [
-                  _DeviceHeroCard(device: device),
-                  const SizedBox(height: _HomeMetrics.gap),
-                  _BatteryCard(device: device),
-                ],
-              );
-              final controls = Column(
-                crossAxisAlignment: CrossAxisAlignment.stretch,
-                children: [
-                  const DeviceActionsCard(),
-                  const SizedBox(height: _HomeMetrics.gap),
-                  _StorageCard(device: device),
-                ],
-              );
+    return PageScaffold(
+      title: title,
+      maxWidth: _HomeMetrics.maxContentWidth,
+      body: SingleChildScrollView(
+        padding: const EdgeInsets.fromLTRB(
+          PageLayout.horizontalPadding,
+          0,
+          PageLayout.horizontalPadding,
+          32,
+        ),
+        child: Align(
+          alignment: Alignment.topCenter,
+          child: ConstrainedBox(
+            constraints:
+                const BoxConstraints(maxWidth: _HomeMetrics.maxContentWidth),
+            child: LayoutBuilder(
+              builder: (context, constraints) {
+                final overview = Column(
+                  crossAxisAlignment: CrossAxisAlignment.stretch,
+                  children: [
+                    _DeviceHeroCard(device: device),
+                    const SizedBox(height: _HomeMetrics.gap),
+                    _BatteryCard(device: device),
+                  ],
+                );
+                final controls = Column(
+                  crossAxisAlignment: CrossAxisAlignment.stretch,
+                  children: [
+                    const DeviceActionsCard(),
+                    const SizedBox(height: _HomeMetrics.gap),
+                    _StorageCard(device: device),
+                  ],
+                );
 
-              return Column(
-                crossAxisAlignment: CrossAxisAlignment.start,
-                children: [
-                  Padding(
-                    padding: const EdgeInsets.only(left: 4, bottom: 16),
-                    child: Text(AppLocalizations.of(context).navHome,
-                        style: Theme.of(context).textTheme.headlineMedium),
-                  ),
-                  if (constraints.maxWidth >= _HomeMetrics.wideBreakpoint)
-                    Row(
-                      crossAxisAlignment: CrossAxisAlignment.start,
-                      children: [
-                        Expanded(child: overview),
-                        const SizedBox(width: _HomeMetrics.gap),
-                        SizedBox(
-                            width: _HomeMetrics.controlsWidth, child: controls),
-                      ],
-                    )
-                  else ...[
+                if (constraints.maxWidth >= _HomeMetrics.wideBreakpoint) {
+                  return Row(
+                    crossAxisAlignment: CrossAxisAlignment.start,
+                    children: [
+                      Expanded(child: overview),
+                      const SizedBox(width: _HomeMetrics.gap),
+                      SizedBox(
+                          width: _HomeMetrics.controlsWidth, child: controls),
+                    ],
+                  );
+                }
+                return Column(
+                  crossAxisAlignment: CrossAxisAlignment.stretch,
+                  children: [
                     overview,
                     const SizedBox(height: _HomeMetrics.gap),
                     controls,
                   ],
-                ],
-              );
-            },
+                );
+              },
+            ),
           ),
         ),
       ),

@@ -9,6 +9,8 @@ import '../../src/bindings/bindings.dart';
 import '../../utils/utils.dart';
 import '../common/context_menu_region.dart';
 import '../common/no_device_connected_indicator.dart';
+import '../common/page_scaffold.dart';
+import '../common/status_chip.dart';
 
 const _cardPadding = EdgeInsets.symmetric(horizontal: 16.0, vertical: 4.0);
 const _listPadding = EdgeInsets.only(bottom: 24);
@@ -230,19 +232,11 @@ class _DonateAppsScreenState extends State<DonateAppsScreen> {
                           // Show status chip for non-filtered apps
                           if (!filteredApp.isFiltered &&
                               filteredApp.status != null)
-                            Chip(
-                              label: Text(
-                                _getStatusText(filteredApp.status!, l10n),
-                                style: textTheme.bodySmall,
-                              ),
-                              backgroundColor:
-                                  filteredApp.status == DonationStatus.newApp
-                                      ? Colors.green.withValues(alpha: 0.2)
-                                      : Colors.blue.withValues(alpha: 0.2),
-                              visualDensity: VisualDensity.compact,
-                              padding: EdgeInsets.zero,
-                              materialTapTargetSize:
-                                  MaterialTapTargetSize.shrinkWrap,
+                            StatusChip(
+                              label: _getStatusText(filteredApp.status!, l10n),
+                              tone: filteredApp.status == DonationStatus.newApp
+                                  ? StatusTone.success
+                                  : StatusTone.primary,
                             ),
                         ],
                       ),
@@ -250,18 +244,11 @@ class _DonateAppsScreenState extends State<DonateAppsScreen> {
                     // Show status chip for non-filtered apps when not showing filtered
                     if (!showFiltered && filteredApp.status != null) ...[
                       const SizedBox(height: 4),
-                      Chip(
-                        label: Text(
-                          _getStatusText(filteredApp.status!, l10n),
-                          style: textTheme.bodySmall,
-                        ),
-                        backgroundColor:
-                            filteredApp.status == DonationStatus.newApp
-                                ? Colors.green.withValues(alpha: 0.2)
-                                : Colors.blue.withValues(alpha: 0.2),
-                        visualDensity: VisualDensity.compact,
-                        padding: EdgeInsets.zero,
-                        materialTapTargetSize: MaterialTapTargetSize.shrinkWrap,
+                      StatusChip(
+                        label: _getStatusText(filteredApp.status!, l10n),
+                        tone: filteredApp.status == DonationStatus.newApp
+                            ? StatusTone.success
+                            : StatusTone.primary,
                       ),
                     ],
                   ],
@@ -290,7 +277,10 @@ class _DonateAppsScreenState extends State<DonateAppsScreen> {
         final l10n = AppLocalizations.of(context);
 
         if (!deviceState.isConnected) {
-          return const NoDeviceConnectedIndicator();
+          return PageScaffold(
+            title: l10n.navDonate,
+            body: const NoDeviceConnectedIndicator(),
+          );
         }
 
         Widget? placeholder;
@@ -309,12 +299,9 @@ class _DonateAppsScreenState extends State<DonateAppsScreen> {
         }
 
         if (placeholder != null) {
-          return Scaffold(
-            body: SafeArea(
-              child: Center(
-                child: placeholder,
-              ),
-            ),
+          return PageScaffold(
+            title: l10n.navDonate,
+            body: Center(child: placeholder),
           );
         }
 
@@ -326,42 +313,30 @@ class _DonateAppsScreenState extends State<DonateAppsScreen> {
 
         final showFiltered = appState.donateShowFiltered;
 
-        return Scaffold(
-          body: SafeArea(
-            child: Column(
-              children: [
-                Padding(
-                  padding: const EdgeInsets.all(16.0),
-                  child: Row(
-                    children: [
-                      Expanded(
-                        child: Text(
-                          l10n.donateAppsDescription,
-                          style: Theme.of(context).textTheme.bodyLarge,
-                        ),
-                      ),
-                      const SizedBox(width: 16),
-                      FilterChip(
-                          label: Text(
-                            showFiltered
-                                ? l10n.donateHideFiltered
-                                : l10n.donateShowFiltered,
-                          ),
-                          selected: showFiltered,
-                          showCheckmark: false,
-                          onSelected: (value) {
-                            appState.setDonateShowFiltered(value);
-                          },
-                          avatar: const Icon(Icons.visibility_off, size: 18)),
-                    ],
-                  ),
-                ),
-                Expanded(
-                  child: _buildAppList(filteredApps, l10n, showFiltered),
-                ),
-              ],
+        return PageScaffold(
+          title: l10n.navDonate,
+          actions: [
+            FilterChip(
+              label: Text(
+                showFiltered
+                    ? l10n.donateHideFiltered
+                    : l10n.donateShowFiltered,
+              ),
+              selected: showFiltered,
+              showCheckmark: false,
+              onSelected: (value) {
+                appState.setDonateShowFiltered(value);
+              },
+              avatar: const Icon(Icons.visibility_off, size: 18),
             ),
+          ],
+          headerBottom: Text(
+            l10n.donateAppsDescription,
+            style: Theme.of(context).textTheme.bodyMedium?.copyWith(
+                  color: Theme.of(context).colorScheme.onSurfaceVariant,
+                ),
           ),
+          body: _buildAppList(filteredApps, l10n, showFiltered),
         );
       },
     );

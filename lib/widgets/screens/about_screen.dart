@@ -6,6 +6,7 @@ import '../../providers/app_state.dart';
 import '../../src/l10n/app_localizations.dart';
 import '../../utils/utils.dart';
 import '../common/app_update_section.dart';
+import '../common/page_scaffold.dart';
 
 class AboutScreen extends StatefulWidget {
   const AboutScreen({super.key});
@@ -38,66 +39,73 @@ class _AboutScreenState extends State<AboutScreen> {
         ? l10n.ciBuildIdentity(core!.runNumber!, core.runAttempt!)
         : null;
 
-    return SingleChildScrollView(
-      padding: const EdgeInsets.all(16.0),
-      child: Column(
-        crossAxisAlignment: CrossAxisAlignment.start,
-        children: [
-          Text(l10n.navAbout, style: Theme.of(context).textTheme.headlineSmall),
-          const SizedBox(height: 8),
-          FutureBuilder<PackageInfo>(
-            future: _pkgInfo,
-            builder: (context, snapshot) {
-              final version = core?.appVersion ??
-                  snapshot.data?.version ??
-                  l10n.aboutUnknown;
-              final build =
-                  core?.buildNumber ?? snapshot.data?.buildNumber ?? '';
-              return Text('YAAS $version${build.isNotEmpty ? "+$build" : ''}');
-            },
-          ),
-          const SizedBox(height: 4),
-          if (core != null) ...[
-            Text(ciBuild == null ? channel : '$channel · $ciBuild'),
-            const SizedBox(height: 4),
-            Row(
-              children: [
-                Text('${l10n.aboutCommit} '),
-                if (commitHash.isNotEmpty)
-                  Flexible(
-                    child: buildCopyableText(
-                      context,
-                      '${core.gitCommitHashShort ?? commitHash}$dirtySuffix',
-                      copyText: '$commitHash$dirtySuffix',
-                      tooltipMessage: l10n.clickToCopyFullSha,
-                      style: const TextStyle(fontFamily: 'monospace'),
-                      maxLines: 1,
-                      overflow: TextOverflow.ellipsis,
-                    ),
-                  )
-                else
-                  Text(l10n.aboutUnknown,
-                      style: const TextStyle(fontFamily: 'monospace')),
-              ],
+    return PageScaffold(
+      title: l10n.navAbout,
+      body: SingleChildScrollView(
+        padding: const EdgeInsets.fromLTRB(
+          PageLayout.horizontalPadding,
+          0,
+          PageLayout.horizontalPadding,
+          16,
+        ),
+        child: Column(
+          crossAxisAlignment: CrossAxisAlignment.start,
+          children: [
+            FutureBuilder<PackageInfo>(
+              future: _pkgInfo,
+              builder: (context, snapshot) {
+                final version = core?.appVersion ??
+                    snapshot.data?.version ??
+                    l10n.aboutUnknown;
+                final build =
+                    core?.buildNumber ?? snapshot.data?.buildNumber ?? '';
+                return Text(
+                    'YAAS $version${build.isNotEmpty ? "+$build" : ''}');
+              },
             ),
-          ] else
-            Text(l10n.aboutBuildInfoLoading),
-          if (core?.releaseChannel == 'development') ...[
-            const SizedBox(height: 16),
-            const AppUpdateSection(),
-          ],
-          if (core != null) ...[
-            const SizedBox(height: 16),
-            Text(l10n.aboutCoreDetails,
-                style: Theme.of(context).textTheme.titleSmall),
-            const SizedBox(height: 8),
-            Text(l10n.aboutBuiltAt(core.builtTimeUtc)),
             const SizedBox(height: 4),
-            Text(l10n.aboutBuildProfile(core.profile)),
-            const SizedBox(height: 4),
-            Text(l10n.aboutCompiler(core.rustcVersion)),
+            if (core != null) ...[
+              Text(ciBuild == null ? channel : '$channel · $ciBuild'),
+              const SizedBox(height: 4),
+              Row(
+                children: [
+                  Text('${l10n.aboutCommit} '),
+                  if (commitHash.isNotEmpty)
+                    Flexible(
+                      child: buildCopyableText(
+                        context,
+                        '${core.gitCommitHashShort ?? commitHash}$dirtySuffix',
+                        copyText: '$commitHash$dirtySuffix',
+                        tooltipMessage: l10n.clickToCopyFullSha,
+                        style: const TextStyle(fontFamily: 'monospace'),
+                        maxLines: 1,
+                        overflow: TextOverflow.ellipsis,
+                      ),
+                    )
+                  else
+                    Text(l10n.aboutUnknown,
+                        style: const TextStyle(fontFamily: 'monospace')),
+                ],
+              ),
+            ] else
+              Text(l10n.aboutBuildInfoLoading),
+            if (core?.releaseChannel == 'development') ...[
+              const SizedBox(height: 16),
+              const AppUpdateSection(),
+            ],
+            if (core != null) ...[
+              const SizedBox(height: 16),
+              Text(l10n.aboutCoreDetails,
+                  style: Theme.of(context).textTheme.titleSmall),
+              const SizedBox(height: 8),
+              Text(l10n.aboutBuiltAt(core.builtTimeUtc)),
+              const SizedBox(height: 4),
+              Text(l10n.aboutBuildProfile(core.profile)),
+              const SizedBox(height: 4),
+              Text(l10n.aboutCompiler(core.rustcVersion)),
+            ],
           ],
-        ],
+        ),
       ),
     );
   }

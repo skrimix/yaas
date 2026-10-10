@@ -9,6 +9,9 @@ import '../../utils/sideload_utils.dart';
 import '../../providers/app_state.dart';
 import '../../src/l10n/app_localizations.dart';
 import '../common/no_device_connected_indicator.dart';
+import '../common/page_scaffold.dart';
+
+const double _maxContentWidth = 610;
 
 class LocalSideloadScreen extends StatefulWidget {
   const LocalSideloadScreen({super.key});
@@ -121,27 +124,33 @@ class _LocalSideloadScreenState extends State<LocalSideloadScreen> {
       builder: (context, deviceState, _) {
         final l10n = AppLocalizations.of(context);
         if (!deviceState.isConnected) {
-          return const NoDeviceConnectedIndicator();
+          return PageScaffold(
+            title: l10n.navSideload,
+            body: const NoDeviceConnectedIndicator(),
+          );
         }
 
-        return Scaffold(
-          body: SafeArea(
+        return PageScaffold(
+          title: l10n.navSideload,
+          maxWidth: _maxContentWidth,
+          body: SingleChildScrollView(
+            padding: const EdgeInsets.fromLTRB(
+              PageLayout.horizontalPadding,
+              0,
+              PageLayout.horizontalPadding,
+              24,
+            ),
             child: Center(
               child: ConstrainedBox(
-                constraints: const BoxConstraints(maxWidth: 610),
+                constraints: const BoxConstraints(maxWidth: _maxContentWidth),
                 child: Card(
+                  margin: EdgeInsets.zero,
                   child: Padding(
                     padding: const EdgeInsets.all(24.0),
                     child: Column(
                       mainAxisSize: MainAxisSize.min,
                       crossAxisAlignment: CrossAxisAlignment.stretch,
                       children: [
-                        Text(
-                          l10n.navSideload,
-                          style: Theme.of(context).textTheme.headlineMedium,
-                          textAlign: TextAlign.center,
-                        ),
-                        const SizedBox(height: 24),
                         SegmentedButton<bool>(
                           segments: [
                             ButtonSegment(
@@ -178,7 +187,6 @@ class _LocalSideloadScreenState extends State<LocalSideloadScreen> {
                                   hintText: _isDirectory
                                       ? l10n.pathHintDirectory
                                       : l10n.pathHintApk,
-                                  border: const OutlineInputBorder(),
                                 ),
                               ),
                             ),

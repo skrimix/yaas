@@ -10,6 +10,8 @@ import '../../providers/device_state.dart';
 import '../../providers/cloud_apps_state.dart';
 import '../../providers/app_state.dart';
 import '../../utils/utils.dart';
+import '../common/page_scaffold.dart';
+import '../common/status_chip.dart';
 
 const _listPadding = EdgeInsets.only(bottom: 24);
 const _cardMargin = EdgeInsets.symmetric(horizontal: 16, vertical: 2);
@@ -217,65 +219,45 @@ class _DownloadsScreenState extends State<DownloadsScreen> {
   Widget build(BuildContext context) {
     final l10n = AppLocalizations.of(context);
     final entries = _sortedEntries();
-    return Scaffold(
-      body: SafeArea(
-        child: Column(
-          children: [
-            Padding(
-              padding: const EdgeInsets.all(16.0),
-              child: Row(
-                children: [
-                  Text(
-                    l10n.downloadsTitle,
-                    style: Theme.of(context).textTheme.titleLarge,
-                  ),
-                  const Spacer(),
-                  IconButton(
-                    tooltip: l10n.deleteAllDownloads,
-                    onPressed: _confirmDeleteAllDownloads,
-                    icon: const Icon(Icons.delete_sweep),
-                  ),
-                  IconButton(
-                    tooltip: l10n.openDownloadsFolder,
-                    onPressed: _openDownloadsRoot,
-                    icon: const Icon(Icons.folder_open),
-                  ),
-                  _buildSortButton(),
-                  IconButton(
-                    tooltip: l10n.refresh,
-                    onPressed: _refresh,
-                    icon: const Icon(Icons.refresh),
-                  ),
-                ],
-              ),
-            ),
-            Expanded(
-              child: _loading
-                  ? const Center(child: CircularProgressIndicator())
-                  : _error != null
-                      ? Center(child: Text(_error!))
-                      : _entries.isEmpty
-                          ? Center(child: Text(l10n.noDownloadsFound))
-                          : ListView.builder(
-                              controller: _scrollController,
-                              padding: _listPadding,
-                              itemCount: entries.length,
-                              itemBuilder: (context, index) => _DownloadTile(
-                                entry: entries[index],
-                                newestDownloadedForPackage:
-                                    _latestDownloadedByPackage[
-                                        entries[index].packageName ?? ''],
-                                onInstall: () => _installEntry(entries[index]),
-                                onOpenFolder: () =>
-                                    _openFolder(entries[index].path),
-                                onDelete: () =>
-                                    _confirmAndDelete(entries[index]),
-                              ),
-                            ),
-            ),
-          ],
+    return PageScaffold(
+      title: l10n.downloadsTitle,
+      actions: [
+        IconButton(
+          tooltip: l10n.deleteAllDownloads,
+          onPressed: _confirmDeleteAllDownloads,
+          icon: const Icon(Icons.delete_sweep),
         ),
-      ),
+        IconButton(
+          tooltip: l10n.openDownloadsFolder,
+          onPressed: _openDownloadsRoot,
+          icon: const Icon(Icons.folder_open),
+        ),
+        _buildSortButton(),
+        IconButton(
+          tooltip: l10n.refresh,
+          onPressed: _refresh,
+          icon: const Icon(Icons.refresh),
+        ),
+      ],
+      body: _loading
+          ? const Center(child: CircularProgressIndicator())
+          : _error != null
+              ? Center(child: Text(_error!))
+              : _entries.isEmpty
+                  ? Center(child: Text(l10n.noDownloadsFound))
+                  : ListView.builder(
+                      controller: _scrollController,
+                      padding: _listPadding,
+                      itemCount: entries.length,
+                      itemBuilder: (context, index) => _DownloadTile(
+                        entry: entries[index],
+                        newestDownloadedForPackage: _latestDownloadedByPackage[
+                            entries[index].packageName ?? ''],
+                        onInstall: () => _installEntry(entries[index]),
+                        onOpenFolder: () => _openFolder(entries[index].path),
+                        onDelete: () => _confirmAndDelete(entries[index]),
+                      ),
+                    ),
     );
   }
 
@@ -587,66 +569,36 @@ class _InstalledDownloadBadge extends StatelessWidget {
           return const SizedBox.shrink();
         }
 
-        final theme = Theme.of(context);
-        final scheme = theme.colorScheme;
         final l10n = AppLocalizations.of(context);
-
         final int installedCode = installed.versionCode.toInt();
         final int? downloadCode = entry.versionCode;
 
-        late final String label;
-        late final IconData icon;
-        late final Color fg;
-        late final Color border;
-
-        if (downloadCode != null) {
-          if (downloadCode > installedCode) {
-            label = l10n.downloadedStatusInstalledOlder;
-            icon = Icons.arrow_upward_rounded;
-            fg = scheme.primary;
-            border = scheme.primary;
-          } else if (downloadCode < installedCode) {
-            label = l10n.downloadedStatusInstalledNewer;
-            icon = Icons.arrow_downward_rounded;
-            fg = scheme.secondary;
-            border = scheme.secondary;
-          } else {
-            label = l10n.downloadedStatusInstalled;
-            icon = Icons.check_rounded;
-            fg = theme.colorScheme.onSurfaceVariant;
-            border = theme.colorScheme.outline;
-          }
-        } else {
-          label = l10n.cloudStatusInstalled;
-          icon = Icons.check_rounded;
-          fg = theme.colorScheme.onSurfaceVariant;
-          border = theme.colorScheme.outline;
-        }
+        final (label, icon, tone) = switch (downloadCode) {
+          null => (
+              l10n.cloudStatusInstalled,
+              Icons.check_rounded,
+              StatusTone.neutral
+            ),
+          final code when code > installedCode => (
+              l10n.downloadedStatusInstalledOlder,
+              Icons.arrow_upward_rounded,
+              StatusTone.primary
+            ),
+          final code when code < installedCode => (
+              l10n.downloadedStatusInstalledNewer,
+              Icons.arrow_downward_rounded,
+              StatusTone.secondary
+            ),
+          _ => (
+              l10n.downloadedStatusInstalled,
+              Icons.check_rounded,
+              StatusTone.neutral
+            ),
+        };
 
         return Padding(
           padding: const EdgeInsets.only(top: 6),
-          child: Container(
-            padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 4),
-            decoration: BoxDecoration(
-              color: Colors.transparent,
-              borderRadius: BorderRadius.circular(999),
-              border: Border.all(color: border.withValues(alpha: 0.7)),
-            ),
-            child: Row(
-              mainAxisSize: MainAxisSize.min,
-              children: [
-                Icon(icon, size: 14, color: fg),
-                const SizedBox(width: 6),
-                Text(
-                  label,
-                  style: Theme.of(context)
-                      .textTheme
-                      .labelSmall
-                      ?.copyWith(color: fg),
-                ),
-              ],
-            ),
-          ),
+          child: StatusChip(label: label, icon: icon, tone: tone),
         );
       },
     );
@@ -675,49 +627,20 @@ class _DownloadedNewerBadge extends StatelessWidget {
       final int downloadedCode = newestDownloadedForPackage ?? code;
       if (cloudCode <= downloadedCode) return const SizedBox.shrink();
 
-      final theme = Theme.of(context);
-      final scheme = theme.colorScheme;
       final l10n = AppLocalizations.of(context);
 
-      return Tooltip(
-        message: l10n.downloadedStatusToolTip,
-        waitDuration: const Duration(milliseconds: 300),
-        child: Padding(
-          padding: const EdgeInsets.only(top: 6),
-          child: Material(
-            color: Colors.transparent,
-            borderRadius: BorderRadius.circular(999),
-            clipBehavior: Clip.antiAlias,
-            child: InkWell(
-              borderRadius: BorderRadius.circular(999),
-              onTap: () {
-                final appState = context.read<AppState>();
-                appState.setDownloadSearchQuery(pkg);
-                appState.requestNavigationTo('download');
-              },
-              child: Container(
-                padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 4),
-                decoration: BoxDecoration(
-                  borderRadius: BorderRadius.circular(999),
-                  border: Border.all(
-                      color: scheme.secondary.withValues(alpha: 0.7)),
-                ),
-                child: Row(
-                  mainAxisSize: MainAxisSize.min,
-                  children: [
-                    Icon(Icons.arrow_upward_rounded,
-                        size: 14, color: scheme.secondary),
-                    const SizedBox(width: 6),
-                    Text(
-                      l10n.downloadedStatusNewerVersion,
-                      style: theme.textTheme.labelSmall
-                          ?.copyWith(color: scheme.secondary),
-                    ),
-                  ],
-                ),
-              ),
-            ),
-          ),
+      return Padding(
+        padding: const EdgeInsets.only(top: 6),
+        child: StatusChip(
+          label: l10n.downloadedStatusNewerVersion,
+          icon: Icons.arrow_upward_rounded,
+          tone: StatusTone.secondary,
+          tooltip: l10n.downloadedStatusToolTip,
+          onTap: () {
+            final appState = context.read<AppState>();
+            appState.setDownloadSearchQuery(pkg);
+            appState.requestNavigationTo('download');
+          },
         ),
       );
     });

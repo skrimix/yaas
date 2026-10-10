@@ -586,6 +586,7 @@
     "errorLoadingApps": "Ошибка загрузки списка",
     "retry": "Повторить",
     "availableApps": "Доступные приложения",
+    "installedAppsTitle": "Установленные приложения",
     "underConstruction": "В разработке",
     "multiSelect": "Множественный выбор",
     "refresh": "Обновить",

@@ -72,7 +72,7 @@ void main() {
             body: Column(
               children: [
                 StatusBar(),
-                Expanded(child: SingleChildScrollView(child: HomeScreen())),
+                Expanded(child: HomeScreen()),
               ],
             ),
           ),

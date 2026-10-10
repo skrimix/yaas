@@ -9,6 +9,7 @@ import '../../utils/sideload_utils.dart';
 import '../../src/l10n/app_localizations.dart';
 import '../../providers/device_state.dart';
 import '../../utils/utils.dart';
+import '../common/page_scaffold.dart';
 
 const _listPadding = EdgeInsets.only(bottom: 24);
 const _cardMargin = EdgeInsets.symmetric(horizontal: 16, vertical: 2);
@@ -41,58 +42,38 @@ class _BackupsScreenState extends State<BackupsScreen> {
 
   @override
   Widget build(BuildContext context) {
-    return Scaffold(
-      body: SafeArea(
-        child: Column(
-          children: [
-            Padding(
-              padding: const EdgeInsets.all(16.0),
-              child: Row(
-                children: [
-                  Text(
-                    AppLocalizations.of(context).backupsTitle,
-                    style: Theme.of(context).textTheme.titleLarge,
-                  ),
-                  const Spacer(),
-                  IconButton(
-                    tooltip: AppLocalizations.of(context).openBackupsFolder,
-                    onPressed: _openBackupsRoot,
-                    icon: const Icon(Icons.folder_open),
-                  ),
-                  IconButton(
-                    tooltip: AppLocalizations.of(context).refresh,
-                    onPressed: _refresh,
-                    icon: const Icon(Icons.refresh),
-                  ),
-                ],
-              ),
-            ),
-            Expanded(
-              child: _loading
-                  ? const Center(child: CircularProgressIndicator())
-                  : _error != null
-                      ? Center(child: Text(_error!))
-                      : _entries.isEmpty
-                          ? Center(
-                              child: Text(
-                                  AppLocalizations.of(context).noBackupsFound))
-                          : ListView.builder(
-                              padding: _listPadding,
-                              itemCount: _entries.length,
-                              itemBuilder: (context, index) => _BackupTile(
-                                entry: _entries[index],
-                                onRestore: () => SideloadUtils.restoreBackup(
-                                    _entries[index].path),
-                                onOpenFolder: () =>
-                                    _openFolder(_entries[index].path),
-                                onDelete: () =>
-                                    _confirmAndDelete(_entries[index]),
-                              ),
-                            ),
-            ),
-          ],
+    final l10n = AppLocalizations.of(context);
+    return PageScaffold(
+      title: l10n.backupsTitle,
+      actions: [
+        IconButton(
+          tooltip: l10n.openBackupsFolder,
+          onPressed: _openBackupsRoot,
+          icon: const Icon(Icons.folder_open),
         ),
-      ),
+        IconButton(
+          tooltip: l10n.refresh,
+          onPressed: _refresh,
+          icon: const Icon(Icons.refresh),
+        ),
+      ],
+      body: _loading
+          ? const Center(child: CircularProgressIndicator())
+          : _error != null
+              ? Center(child: Text(_error!))
+              : _entries.isEmpty
+                  ? Center(child: Text(l10n.noBackupsFound))
+                  : ListView.builder(
+                      padding: _listPadding,
+                      itemCount: _entries.length,
+                      itemBuilder: (context, index) => _BackupTile(
+                        entry: _entries[index],
+                        onRestore: () =>
+                            SideloadUtils.restoreBackup(_entries[index].path),
+                        onOpenFolder: () => _openFolder(_entries[index].path),
+                        onDelete: () => _confirmAndDelete(_entries[index]),
+                      ),
+                    ),
     );
   }
 

@@ -2222,6 +2222,12 @@ abstract class AppLocalizations {
   /// **'Available Apps'**
   String get availableApps;
 
+  /// No description provided for @installedAppsTitle.
+  ///
+  /// In en, this message translates to:
+  /// **'Installed Apps'**
+  String get installedAppsTitle;
+
   /// No description provided for @underConstruction.
   ///
   /// In en, this message translates to:

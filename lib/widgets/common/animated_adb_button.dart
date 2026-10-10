@@ -3,6 +3,7 @@ import 'dart:async';
 import 'package:flutter/material.dart';
 import 'package:rinf/rinf.dart';
 import '../../src/bindings/bindings.dart';
+import '../../utils/theme_utils.dart';
 
 class AnimatedAdbButton extends StatefulWidget {
   final IconData icon;
@@ -120,7 +121,7 @@ class _AnimatedAdbButtonState extends State<AnimatedAdbButton>
               ? Icon(
                   Icons.check,
                   key: const Key('success'),
-                  color: Colors.green,
+                  color: StatusColors.of(context).success,
                 )
               : _isProcessing
                   ? SizedBox(

@@ -5,22 +5,25 @@ import '../../providers/device_state.dart';
 import '../../providers/settings_state.dart';
 import '../../src/bindings/bindings.dart';
 import '../../src/l10n/app_localizations.dart';
+import '../../utils/theme_utils.dart';
 
 enum _DiagLevel { ok, warn, error, info }
 
 class ConnectionDiagnosticsDialog extends StatelessWidget {
   const ConnectionDiagnosticsDialog({super.key});
 
-  Color _levelColor(_DiagLevel level) {
+  Color _levelColor(BuildContext context, _DiagLevel level) {
+    final scheme = Theme.of(context).colorScheme;
+    final status = StatusColors.of(context);
     switch (level) {
       case _DiagLevel.ok:
-        return Colors.green;
+        return status.success;
       case _DiagLevel.warn:
-        return Colors.amber;
+        return status.warning;
       case _DiagLevel.error:
-        return Colors.red;
+        return scheme.error;
       case _DiagLevel.info:
-        return Colors.grey;
+        return scheme.onSurfaceVariant;
     }
   }
 
@@ -68,7 +71,7 @@ class ConnectionDiagnosticsDialog extends StatelessWidget {
     Widget? trailing,
     Widget? additionalContent,
   }) {
-    final color = _levelColor(level);
+    final color = _levelColor(context, level);
     return ListTile(
       leading: Icon(_levelIcon(level), color: color),
       title: Text(title),

@@ -592,6 +592,7 @@
     "errorLoadingApps": "Error loading apps",
     "retry": "Retry",
     "availableApps": "Available Apps",
+    "installedAppsTitle": "Installed Apps",
     "underConstruction": "Under construction",
     "multiSelect": "Multi-select",
     "refresh": "Refresh",

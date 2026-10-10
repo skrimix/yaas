@@ -7,6 +7,7 @@ import 'package:yaas/providers/app_state.dart';
 import 'package:yaas/providers/app_update_state.dart';
 import 'package:yaas/src/bindings/bindings.dart';
 import 'package:yaas/src/l10n/app_localizations.dart';
+import 'package:yaas/utils/theme_utils.dart';
 import 'package:yaas/widgets/common/app_update_banner.dart';
 import 'package:yaas/widgets/common/app_update_section.dart';
 
@@ -32,8 +33,7 @@ Future<AppLocalizations> pumpUpdates(
       locale: Locale(locale),
       localizationsDelegates: AppLocalizations.localizationsDelegates,
       supportedLocales: AppLocalizations.supportedLocales,
-      theme: ThemeData(
-          colorScheme: ColorScheme.fromSeed(
+      theme: buildAppTheme(ColorScheme.fromSeed(
         seedColor: Colors.deepPurple,
         brightness: width < 600 ? Brightness.dark : Brightness.light,
       )),

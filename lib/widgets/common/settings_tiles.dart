@@ -383,10 +383,6 @@ class _SettingDropdown<T> extends StatelessWidget {
   Widget build(BuildContext context) {
     final theme = Theme.of(context);
     final colors = theme.colorScheme;
-    final border = OutlineInputBorder(
-      borderRadius: BorderRadius.circular(12),
-      borderSide: BorderSide.none,
-    );
 
     return Semantics(
       label: label,
@@ -399,22 +395,12 @@ class _SettingDropdown<T> extends StatelessWidget {
         leadingIcon: selected?.leading,
         hintText: placeholder,
         textStyle: theme.textTheme.bodyMedium,
-        inputDecorationTheme: InputDecorationThemeData(
-          filled: true,
-          fillColor: enabled
-              ? colors.surfaceContainerHighest.withValues(alpha: 0.7)
-              : colors.surfaceContainerHighest.withValues(alpha: 0.35),
+        inputDecorationTheme: theme.inputDecorationTheme.copyWith(
           isDense: true,
           contentPadding: const EdgeInsets.symmetric(horizontal: 14),
           constraints: const BoxConstraints(minHeight: 44),
           hintStyle: theme.textTheme.bodyMedium
               ?.copyWith(color: colors.onSurfaceVariant),
-          border: border,
-          enabledBorder: border,
-          disabledBorder: border,
-          focusedBorder: border.copyWith(
-            borderSide: BorderSide(color: colors.primary, width: 2),
-          ),
         ),
         menuStyle: MenuStyle(
           shape: WidgetStatePropertyAll(
@@ -438,7 +424,7 @@ class _SettingDropdown<T> extends StatelessWidget {
   }
 }
 
-/// Filled input decoration used by settings text fields.
+/// Input decoration used by settings text fields.
 InputDecoration settingsInputDecoration(
   BuildContext context, {
   String? hintText,
@@ -446,26 +432,13 @@ InputDecoration settingsInputDecoration(
   String? prefixText,
   Widget? suffixIcon,
 }) {
-  final colors = Theme.of(context).colorScheme;
-  final border = OutlineInputBorder(
-    borderRadius: BorderRadius.circular(12),
-    borderSide: BorderSide.none,
-  );
   return InputDecoration(
     hintText: hintText,
     errorText: errorText,
     errorMaxLines: 2,
     prefixText: prefixText,
     suffixIcon: suffixIcon,
-    filled: true,
-    fillColor: colors.surfaceContainerHighest.withValues(alpha: 0.7),
     isDense: true,
     contentPadding: const EdgeInsets.symmetric(horizontal: 14, vertical: 14),
-    border: border,
-    enabledBorder: border,
-    disabledBorder: border,
-    focusedBorder: border.copyWith(
-      borderSide: BorderSide(color: colors.primary, width: 2),
-    ),
   );
 }

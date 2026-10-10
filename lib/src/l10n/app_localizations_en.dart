@@ -1190,6 +1190,9 @@ class AppLocalizationsEn extends AppLocalizations {
   String get availableApps => 'Available Apps';
 
   @override
+  String get installedAppsTitle => 'Installed Apps';
+
+  @override
   String get underConstruction => 'Under construction';
 
   @override

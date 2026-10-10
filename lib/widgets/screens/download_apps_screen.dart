@@ -13,6 +13,7 @@ import '../../utils/utils.dart';
 import '../../utils/sideload_utils.dart';
 import '../cloud_apps/cloud_app_list.dart';
 import '../dialogs/downloader_setup_dialog.dart';
+import '../common/page_scaffold.dart';
 
 enum SortOption {
   name,
@@ -540,8 +541,7 @@ class _DownloadAppsScreenState extends State<DownloadAppsScreen> {
                 decoration: InputDecoration(
                   hintText: AppLocalizations.of(context).searchAppsHint,
                   contentPadding:
-                      const EdgeInsets.symmetric(horizontal: 8, vertical: 8),
-                  border: const OutlineInputBorder(),
+                      const EdgeInsets.symmetric(horizontal: 12, vertical: 8),
                   suffixIcon: _searchQuery.isNotEmpty
                       ? IconButton(
                           icon: const Icon(Icons.close),
@@ -943,26 +943,29 @@ class _DownloadAppsScreenState extends State<DownloadAppsScreen> {
             cloudAppsState.apps.isEmpty &&
             !showDownloaderInit &&
             !showDownloaderError) {
-          return Center(
-            child: Column(
-              mainAxisSize: MainAxisSize.min,
-              children: [
-                const CircularProgressIndicator(),
-                const SizedBox(height: 12),
-                Text(l10n.loadingApps),
-                if (showSlowHint) ...[
+          return PageScaffold(
+            title: l10n.availableApps,
+            body: Center(
+              child: Column(
+                mainAxisSize: MainAxisSize.min,
+                children: [
+                  const CircularProgressIndicator(),
                   const SizedBox(height: 12),
-                  Text(
-                    l10n.loadingAppsSlowHint,
-                    style: Theme.of(context).textTheme.bodySmall?.copyWith(
-                          color: Theme.of(context).colorScheme.outline,
-                        ),
-                    textAlign: TextAlign.center,
-                  ),
-                  const SizedBox(height: 8),
-                  _buildSlowLoadingRemoteButton(settingsState),
+                  Text(l10n.loadingApps),
+                  if (showSlowHint) ...[
+                    const SizedBox(height: 12),
+                    Text(
+                      l10n.loadingAppsSlowHint,
+                      style: Theme.of(context).textTheme.bodySmall?.copyWith(
+                            color: Theme.of(context).colorScheme.outline,
+                          ),
+                      textAlign: TextAlign.center,
+                    ),
+                    const SizedBox(height: 8),
+                    _buildSlowLoadingRemoteButton(settingsState),
+                  ],
                 ],
-              ],
+              ),
             ),
           );
         }
@@ -971,23 +974,26 @@ class _DownloadAppsScreenState extends State<DownloadAppsScreen> {
             cloudAppsState.apps.isEmpty &&
             !showDownloaderInit &&
             !showDownloaderError) {
-          return Center(
-            child: Column(
-              mainAxisSize: MainAxisSize.min,
-              children: [
-                Text(
-                  l10n.errorLoadingApps,
-                  style: Theme.of(context).textTheme.titleLarge,
-                ),
-                const SizedBox(height: 8),
-                Text(cloudAppsState.error!),
-                const SizedBox(height: 16),
-                FilledButton.icon(
-                  onPressed: () => cloudAppsState.refresh(),
-                  icon: const Icon(Icons.refresh),
-                  label: Text(l10n.retry),
-                ),
-              ],
+          return PageScaffold(
+            title: l10n.availableApps,
+            body: Center(
+              child: Column(
+                mainAxisSize: MainAxisSize.min,
+                children: [
+                  Text(
+                    l10n.errorLoadingApps,
+                    style: Theme.of(context).textTheme.titleLarge,
+                  ),
+                  const SizedBox(height: 8),
+                  Text(cloudAppsState.error!),
+                  const SizedBox(height: 16),
+                  FilledButton.icon(
+                    onPressed: () => cloudAppsState.refresh(),
+                    icon: const Icon(Icons.refresh),
+                    label: Text(l10n.retry),
+                  ),
+                ],
+              ),
             ),
           );
         }
@@ -1000,167 +1006,144 @@ class _DownloadAppsScreenState extends State<DownloadAppsScreen> {
               .toList();
         }
 
-        return Scaffold(
-          body: SafeArea(
-            child: Column(
-              children: [
-                if (cloudAppsState.isLoading) const LinearProgressIndicator(),
-                if (showSlowHint && cloudAppsState.apps.isNotEmpty)
-                  MaterialBanner(
-                    content: Text(l10n.loadingAppsSlowHint),
-                    actions: [
-                      Padding(
-                        padding: const EdgeInsets.all(8),
-                        child: _buildSlowLoadingRemoteButton(settingsState),
+        final showHeaderActions =
+            hasDownloader && !showDownloaderInit && !showDownloaderError;
+        return PageScaffold(
+          title: l10n.availableApps,
+          actions: [
+            if (showHeaderActions) ...[
+              if (!_showOnlySelected) Expanded(child: _buildSearchButton()),
+              if (_showCheckboxes) _buildFilterButton(),
+              IconButton(
+                icon: Icon(
+                  _showOnlyFavorites ? Icons.star : Icons.star_border,
+                ),
+                tooltip: _showOnlyFavorites
+                    ? l10n.showAllItems
+                    : l10n.showFavoritesOnly,
+                onPressed: _toggleShowOnlyFavorites,
+              ),
+              IconButton(
+                icon: Icon(_showCheckboxes
+                    ? Icons.check_box
+                    : Icons.check_box_outline_blank),
+                tooltip: l10n.multiSelect,
+                onPressed: _toggleCheckboxVisibility,
+              ),
+              _buildPopularityRangeButton(),
+              _buildSortButton(isSearchMode: _searchQuery.isNotEmpty),
+              IconButton(
+                icon: const Icon(Icons.refresh),
+                tooltip: l10n.refresh,
+                onPressed:
+                    cloudAppsState.isLoading ? null : cloudAppsState.refresh,
+              ),
+            ],
+          ],
+          body: Column(
+            children: [
+              if (cloudAppsState.isLoading) const LinearProgressIndicator(),
+              if (showSlowHint && cloudAppsState.apps.isNotEmpty)
+                MaterialBanner(
+                  content: Text(l10n.loadingAppsSlowHint),
+                  actions: [
+                    Padding(
+                      padding: const EdgeInsets.all(8),
+                      child: _buildSlowLoadingRemoteButton(settingsState),
+                    ),
+                  ],
+                ),
+              if (cloudAppsState.error != null &&
+                  cloudAppsState.apps.isNotEmpty)
+                MaterialBanner(
+                  content:
+                      Text('${l10n.errorLoadingApps}: ${cloudAppsState.error}'),
+                  actions: [
+                    TextButton.icon(
+                      onPressed: cloudAppsState.isLoading
+                          ? null
+                          : cloudAppsState.refresh,
+                      icon: const Icon(Icons.refresh),
+                      label: Text(l10n.retry),
+                    ),
+                  ],
+                ),
+              if (settingsState.downloaderNeedsSetup)
+                Padding(
+                  padding: const EdgeInsets.fromLTRB(16, 0, 16, 8),
+                  child: _buildDownloaderConfigCallout(
+                    context,
+                    settingsState,
+                  ),
+                ),
+              if (showDownloaderInit)
+                Padding(
+                  padding: const EdgeInsets.fromLTRB(16, 0, 16, 8),
+                  child: _buildInitBanner(settingsState),
+                ),
+              if (!showDownloaderInit && showDownloaderError)
+                Padding(
+                  padding: const EdgeInsets.fromLTRB(16, 0, 16, 8),
+                  child: _buildErrorBanner(settingsState.downloaderError!),
+                ),
+              if (_showOnlySelected && _selectedFullNames.isNotEmpty)
+                Padding(
+                  padding: const EdgeInsets.fromLTRB(16, 0, 16, 8),
+                  child: Row(
+                    children: [
+                      Icon(
+                        Icons.filter_list,
+                        size: 16,
+                        color: Theme.of(context).colorScheme.primary,
+                      ),
+                      const SizedBox(width: 8),
+                      Text(
+                        l10n.showingSelectedOnly,
+                        style: Theme.of(context).textTheme.bodyMedium?.copyWith(
+                              color: Theme.of(context).colorScheme.primary,
+                            ),
                       ),
                     ],
                   ),
-                if (cloudAppsState.error != null &&
-                    cloudAppsState.apps.isNotEmpty)
-                  MaterialBanner(
-                    content: Text(
-                        '${l10n.errorLoadingApps}: ${cloudAppsState.error}'),
-                    actions: [
-                      TextButton.icon(
-                        onPressed: cloudAppsState.isLoading
-                            ? null
-                            : cloudAppsState.refresh,
-                        icon: const Icon(Icons.refresh),
-                        label: Text(l10n.retry),
+                ),
+              if (_showOnlyFavorites &&
+                  !showDownloaderInit &&
+                  !showDownloaderError)
+                Padding(
+                  padding: const EdgeInsets.fromLTRB(16, 0, 16, 8),
+                  child: Row(
+                    children: [
+                      Icon(
+                        Icons.star,
+                        size: 16,
+                        color: Theme.of(context).colorScheme.tertiary,
+                      ),
+                      const SizedBox(width: 8),
+                      Text(
+                        l10n.showingFavoritesOnly,
+                        style: Theme.of(context).textTheme.bodyMedium?.copyWith(
+                              color: Theme.of(context).colorScheme.tertiary,
+                            ),
                       ),
                     ],
                   ),
-                if (settingsState.downloaderNeedsSetup)
-                  Padding(
-                    padding: const EdgeInsets.fromLTRB(16, 16, 16, 8),
-                    child: _buildDownloaderConfigCallout(
-                      context,
-                      settingsState,
-                    ),
+                ),
+              if (hasDownloader && !showDownloaderInit && !showDownloaderError)
+                Expanded(
+                  child: CloudAppList(
+                    apps: filteredAndSortedApps,
+                    showCheckboxes: _showCheckboxes,
+                    selectedFullNames: _selectedFullNames,
+                    scrollController: _scrollController,
+                    isSearching: _searchQuery.isNotEmpty,
+                    onSelectionChanged: _toggleSelection,
+                    onDownload: _download,
+                    onInstall: _install,
                   ),
-                if (hasDownloader &&
-                    !showDownloaderInit &&
-                    !showDownloaderError)
-                  Padding(
-                    padding: const EdgeInsets.all(16.0),
-                    child: Row(
-                      children: [
-                        Text(
-                          l10n.availableApps,
-                          style: Theme.of(context).textTheme.titleLarge,
-                        ),
-                        if (!_showOnlySelected)
-                          Expanded(child: _buildSearchButton())
-                        else
-                          const Spacer(),
-                        if (_showCheckboxes) _buildFilterButton(),
-                        IconButton(
-                          icon: Icon(
-                            _showOnlyFavorites ? Icons.star : Icons.star_border,
-                          ),
-                          tooltip: _showOnlyFavorites
-                              ? l10n.showAllItems
-                              : l10n.showFavoritesOnly,
-                          onPressed: _toggleShowOnlyFavorites,
-                        ),
-                        IconButton(
-                          icon: Icon(_showCheckboxes
-                              ? Icons.check_box
-                              : Icons.check_box_outline_blank),
-                          tooltip: l10n.multiSelect,
-                          onPressed: _toggleCheckboxVisibility,
-                        ),
-                        _buildPopularityRangeButton(),
-                        _buildSortButton(isSearchMode: _searchQuery.isNotEmpty),
-                        IconButton(
-                          icon: const Icon(Icons.refresh),
-                          tooltip: l10n.refresh,
-                          onPressed: cloudAppsState.isLoading
-                              ? null
-                              : cloudAppsState.refresh,
-                        ),
-                      ],
-                    ),
-                  ),
-                if (showDownloaderInit)
-                  Padding(
-                    padding: const EdgeInsets.fromLTRB(16, 0, 16, 8),
-                    child: _buildInitBanner(settingsState),
-                  ),
-                if (!showDownloaderInit && showDownloaderError)
-                  Padding(
-                    padding: const EdgeInsets.fromLTRB(16, 0, 16, 8),
-                    child: _buildErrorBanner(settingsState.downloaderError!),
-                  ),
-                if (_showOnlySelected && _selectedFullNames.isNotEmpty)
-                  Padding(
-                    padding: const EdgeInsets.fromLTRB(16, 0, 16, 8),
-                    child: Row(
-                      children: [
-                        Icon(
-                          Icons.filter_list,
-                          size: 16,
-                          color: Theme.of(context).colorScheme.primary,
-                        ),
-                        const SizedBox(width: 8),
-                        Text(
-                          l10n.showingSelectedOnly,
-                          style: Theme.of(context)
-                              .textTheme
-                              .bodyMedium
-                              ?.copyWith(
-                                color: Theme.of(context).colorScheme.primary,
-                              ),
-                        ),
-                      ],
-                    ),
-                  ),
-                if (_showOnlyFavorites &&
-                    !showDownloaderInit &&
-                    !showDownloaderError)
-                  Padding(
-                    padding: const EdgeInsets.fromLTRB(16, 0, 16, 8),
-                    child: Row(
-                      children: [
-                        Icon(
-                          Icons.star,
-                          size: 16,
-                          color: Theme.of(context).colorScheme.tertiary,
-                        ),
-                        const SizedBox(width: 8),
-                        Text(
-                          l10n.showingFavoritesOnly,
-                          style: Theme.of(context)
-                              .textTheme
-                              .bodyMedium
-                              ?.copyWith(
-                                color: Theme.of(context).colorScheme.tertiary,
-                              ),
-                        ),
-                      ],
-                    ),
-                  ),
-                if (hasDownloader &&
-                    !showDownloaderInit &&
-                    !showDownloaderError)
-                  Expanded(
-                    child: CloudAppList(
-                      apps: filteredAndSortedApps,
-                      showCheckboxes: _showCheckboxes,
-                      selectedFullNames: _selectedFullNames,
-                      scrollController: _scrollController,
-                      isSearching: _searchQuery.isNotEmpty,
-                      onSelectionChanged: _toggleSelection,
-                      onDownload: _download,
-                      onInstall: _install,
-                    ),
-                  ),
-                if (hasDownloader &&
-                    !showDownloaderInit &&
-                    !showDownloaderError)
-                  _buildSelectionSummary(_sortApps(cloudAppsState.apps)),
-              ],
-            ),
+                ),
+              if (hasDownloader && !showDownloaderInit && !showDownloaderError)
+                _buildSelectionSummary(_sortApps(cloudAppsState.apps)),
+            ],
           ),
         );
       },
@@ -1202,22 +1185,28 @@ class _DownloadAppsScreenState extends State<DownloadAppsScreen> {
   }
 
   Widget _buildErrorBanner(String error) {
+    final scheme = Theme.of(context).colorScheme;
     return Card(
-      color: Colors.red.withValues(alpha: 0.08),
+      color: scheme.errorContainer,
       child: Padding(
         padding: const EdgeInsets.all(12.0),
         child: Row(
           children: [
-            const Icon(Icons.error_outline, color: Colors.red),
+            Icon(Icons.error_outline, color: scheme.onErrorContainer),
             const SizedBox(width: 8),
-            Expanded(child: Text(error)),
+            Expanded(
+              child: Text(
+                error,
+                style: TextStyle(color: scheme.onErrorContainer),
+              ),
+            ),
             const SizedBox(width: 12),
             FilledButton.tonalIcon(
               onPressed: () {
                 const RetryDownloaderInitRequest().sendSignalToRust();
               },
               icon: const Icon(Icons.refresh),
-              label: const Text('Retry'),
+              label: Text(AppLocalizations.of(context).retry),
             ),
           ],
         ),

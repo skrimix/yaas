@@ -1210,6 +1210,9 @@ class AppLocalizationsRu extends AppLocalizations {
   String get availableApps => 'Доступные приложения';
 
   @override
+  String get installedAppsTitle => 'Установленные приложения';
+
+  @override
   String get underConstruction => 'В разработке';
 
   @override

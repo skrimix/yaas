@@ -6,6 +6,7 @@ import '../../providers/settings_state.dart';
 import '../../src/l10n/app_localizations.dart';
 import '../../utils/utils.dart';
 import '../common/context_menu_region.dart';
+import '../common/status_chip.dart';
 import 'cloud_app_details_dialog.dart';
 
 class CachedAppData {
@@ -291,65 +292,36 @@ class _InstalledStatusBadge extends StatelessWidget {
         return const SizedBox.shrink();
       }
 
-      final theme = Theme.of(context);
-      final scheme = theme.colorScheme;
       final l10n = AppLocalizations.of(context);
 
       final int installedCode = installed.versionCode.toInt();
       final int cloudCode = app.versionCode;
 
-      late final String label;
-      late final IconData icon;
-      late final Color fg;
-      late final Color border;
-
-      if (cloudCode > installedCode) {
-        // Cloud is newer than installed: update available
-        label = l10n.cloudStatusNewerVersion;
-        icon = Icons.arrow_upward_rounded;
-        fg = scheme.primary;
-        border = scheme.primary;
-      } else if (cloudCode < installedCode) {
-        // Installed is newer than cloud
-        label = l10n.cloudStatusOlderVersion;
-        icon = Icons.arrow_downward_rounded;
-        fg = scheme.secondary;
-        border = scheme.secondary;
-      } else {
-        // Same version
-        label = l10n.cloudStatusInstalled;
-        icon = Icons.check_rounded;
-        fg = theme.colorScheme.onSurfaceVariant;
-        border = theme.colorScheme.outline;
-      }
-
-      final tooltip = l10n.cloudStatusTooltip(
-        '${installed.versionCode}',
-        '${app.versionCode}',
-      );
-
-      return Tooltip(
-        message: tooltip,
-        waitDuration: const Duration(milliseconds: 300),
-        child: Container(
-          padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 4),
-          decoration: BoxDecoration(
-            color: Colors.transparent,
-            borderRadius: BorderRadius.circular(999),
-            border: Border.all(color: border.withValues(alpha: 0.7)),
+      final (label, icon, tone) = switch (cloudCode.compareTo(installedCode)) {
+        > 0 => (
+            l10n.cloudStatusNewerVersion,
+            Icons.arrow_upward_rounded,
+            StatusTone.primary
           ),
-          child: Row(
-            mainAxisSize: MainAxisSize.min,
-            children: [
-              Icon(icon, size: 14, color: fg),
-              const SizedBox(width: 6),
-              Text(
-                label,
-                style:
-                    Theme.of(context).textTheme.labelSmall?.copyWith(color: fg),
-              ),
-            ],
+        < 0 => (
+            l10n.cloudStatusOlderVersion,
+            Icons.arrow_downward_rounded,
+            StatusTone.secondary
           ),
+        _ => (
+            l10n.cloudStatusInstalled,
+            Icons.check_rounded,
+            StatusTone.neutral
+          ),
+      };
+
+      return StatusChip(
+        label: label,
+        icon: icon,
+        tone: tone,
+        tooltip: l10n.cloudStatusTooltip(
+          '${installed.versionCode}',
+          '${app.versionCode}',
         ),
       );
     });

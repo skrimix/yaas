@@ -3,6 +3,7 @@ import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 import 'package:intl/intl.dart';
 import 'package:provider/provider.dart';
+import '../common/page_scaffold.dart';
 import '../../providers/log_state.dart';
 import '../../src/bindings/bindings.dart';
 import '../../src/l10n/app_localizations.dart';
@@ -76,41 +77,27 @@ class _LogsScreenState extends State<LogsScreen> {
 
   @override
   Widget build(BuildContext context) {
-    return Scaffold(
-      body: Column(
-        children: [
-          _buildHeader(),
-          Expanded(child: _buildLogViewer()),
-          _buildFooter(),
-        ],
-      ),
-    );
-  }
-
-  Widget _buildHeader() {
-    return Container(
-      padding: const EdgeInsets.all(12.0),
-      decoration: BoxDecoration(
-        color: Theme.of(context).colorScheme.surfaceContainer,
-        border: Border(
-          bottom: BorderSide(
-            color: Theme.of(context).colorScheme.outline.withValues(alpha: 0.2),
+    return PageScaffold(
+      title: AppLocalizations.of(context).navLogs,
+      actions: [
+        Expanded(
+          child: Align(
+            alignment: Alignment.centerRight,
+            child: ConstrainedBox(
+              constraints: const BoxConstraints(maxWidth: 400),
+              child: _buildSearchField(),
+            ),
           ),
         ),
-      ),
-      child: Column(
+        const SizedBox(width: 8),
+        _buildControlButtons(),
+      ],
+      headerBottom: _buildFilterChips(),
+      body: Column(
         children: [
-          // Top row
-          Row(
-            children: [
-              Expanded(child: _buildSearchField()),
-              const SizedBox(width: 8),
-              _buildControlButtons(),
-            ],
-          ),
-          const SizedBox(height: 8),
-          // Bottom row
-          _buildFilterChips(),
+          const Divider(height: 1),
+          Expanded(child: _buildLogViewer()),
+          _buildFooter(),
         ],
       ),
     );
@@ -126,7 +113,10 @@ class _LogsScreenState extends State<LogsScreen> {
             controller: _searchController,
             decoration: InputDecoration(
               hintText: l10n.logsSearchHint,
-              prefixIcon: const Icon(Icons.search),
+              isDense: true,
+              prefixIcon: const Icon(Icons.search, size: 20),
+              prefixIconConstraints:
+                  const BoxConstraints(minWidth: 40, minHeight: 40),
               suffixIcon: _searchController.text.isNotEmpty
                   ? IconButton(
                       icon: const Icon(Icons.clear),
@@ -136,7 +126,8 @@ class _LogsScreenState extends State<LogsScreen> {
                       },
                     )
                   : null,
-              border: const OutlineInputBorder(),
+              suffixIconConstraints:
+                  const BoxConstraints(minWidth: 40, minHeight: 40),
               contentPadding:
                   const EdgeInsets.symmetric(horizontal: 12, vertical: 8),
             ),

@@ -1,6 +1,137 @@
 import 'dart:io' show File, Platform, Process;
+import 'package:dynamic_color/dynamic_color.dart';
 import 'package:flutter/material.dart';
 import '../src/l10n/app_localizations.dart';
+
+/// Builds the app theme with shared component styles for [scheme].
+ThemeData buildAppTheme(ColorScheme scheme) {
+  final inputBorder = OutlineInputBorder(
+    borderRadius: BorderRadius.circular(12),
+    borderSide: BorderSide.none,
+  );
+  return ThemeData(
+    colorScheme: scheme,
+    useMaterial3: true,
+    cardTheme: CardThemeData(
+      elevation: 0,
+      color: scheme.surfaceContainerLow,
+      shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(16)),
+    ),
+    inputDecorationTheme: InputDecorationThemeData(
+      filled: true,
+      fillColor: WidgetStateColor.resolveWith(
+        (states) => scheme.surfaceContainerHighest.withValues(
+          alpha: states.contains(WidgetState.disabled) ? 0.35 : 0.7,
+        ),
+      ),
+      border: inputBorder,
+      enabledBorder: inputBorder,
+      disabledBorder: inputBorder,
+      focusedBorder: inputBorder.copyWith(
+        borderSide: BorderSide(color: scheme.primary, width: 2),
+      ),
+      errorBorder: inputBorder.copyWith(
+        borderSide: BorderSide(color: scheme.error),
+      ),
+      focusedErrorBorder: inputBorder.copyWith(
+        borderSide: BorderSide(color: scheme.error, width: 2),
+      ),
+    ),
+    extensions: [StatusColors.harmonized(scheme)],
+  );
+}
+
+/// Success and warning colors harmonized with the active color scheme.
+@immutable
+class StatusColors extends ThemeExtension<StatusColors> {
+  const StatusColors({
+    required this.success,
+    required this.onSuccess,
+    required this.successContainer,
+    required this.onSuccessContainer,
+    required this.warning,
+    required this.onWarning,
+    required this.warningContainer,
+    required this.onWarningContainer,
+  });
+
+  factory StatusColors.harmonized(ColorScheme scheme) {
+    ColorScheme tonal(Color source) => ColorScheme.fromSeed(
+          seedColor: source.harmonizeWith(scheme.primary),
+          brightness: scheme.brightness,
+          dynamicSchemeVariant: DynamicSchemeVariant.fidelity,
+        );
+    final success = tonal(const Color(0xFF2E7D32));
+    final warning = tonal(const Color(0xFFF9A825));
+    return StatusColors(
+      success: success.primary,
+      onSuccess: success.onPrimary,
+      successContainer: success.primaryContainer,
+      onSuccessContainer: success.onPrimaryContainer,
+      warning: warning.primary,
+      onWarning: warning.onPrimary,
+      warningContainer: warning.primaryContainer,
+      onWarningContainer: warning.onPrimaryContainer,
+    );
+  }
+
+  static StatusColors of(BuildContext context) {
+    final theme = Theme.of(context);
+    return theme.extension<StatusColors>() ??
+        StatusColors.harmonized(theme.colorScheme);
+  }
+
+  final Color success;
+  final Color onSuccess;
+  final Color successContainer;
+  final Color onSuccessContainer;
+  final Color warning;
+  final Color onWarning;
+  final Color warningContainer;
+  final Color onWarningContainer;
+
+  @override
+  StatusColors copyWith({
+    Color? success,
+    Color? onSuccess,
+    Color? successContainer,
+    Color? onSuccessContainer,
+    Color? warning,
+    Color? onWarning,
+    Color? warningContainer,
+    Color? onWarningContainer,
+  }) {
+    return StatusColors(
+      success: success ?? this.success,
+      onSuccess: onSuccess ?? this.onSuccess,
+      successContainer: successContainer ?? this.successContainer,
+      onSuccessContainer: onSuccessContainer ?? this.onSuccessContainer,
+      warning: warning ?? this.warning,
+      onWarning: onWarning ?? this.onWarning,
+      warningContainer: warningContainer ?? this.warningContainer,
+      onWarningContainer: onWarningContainer ?? this.onWarningContainer,
+    );
+  }
+
+  @override
+  StatusColors lerp(StatusColors? other, double t) {
+    if (other == null) return this;
+    return StatusColors(
+      success: Color.lerp(success, other.success, t)!,
+      onSuccess: Color.lerp(onSuccess, other.onSuccess, t)!,
+      successContainer:
+          Color.lerp(successContainer, other.successContainer, t)!,
+      onSuccessContainer:
+          Color.lerp(onSuccessContainer, other.onSuccessContainer, t)!,
+      warning: Color.lerp(warning, other.warning, t)!,
+      onWarning: Color.lerp(onWarning, other.onWarning, t)!,
+      warningContainer:
+          Color.lerp(warningContainer, other.warningContainer, t)!,
+      onWarningContainer:
+          Color.lerp(onWarningContainer, other.onWarningContainer, t)!,
+    );
+  }
+}
 
 const Map<String, MaterialColor> kSeedColorPalette = {
   'deep_purple': Colors.deepPurple,

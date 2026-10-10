@@ -6,10 +6,12 @@ import '../../providers/device_state.dart';
 import '../../providers/cloud_apps_state.dart';
 import '../../providers/app_state.dart';
 import '../../src/bindings/bindings.dart';
+import '../../utils/theme_utils.dart';
 import '../../utils/utils.dart';
 import '../common/animated_adb_button.dart';
 import '../common/animated_refresh_button.dart';
 import '../common/no_device_connected_indicator.dart';
+import '../common/page_scaffold.dart';
 import '../dialogs/animated_uninstall_dialog.dart';
 import '../dialogs/backup_options_dialog.dart';
 import '../../utils/sideload_utils.dart';
@@ -17,7 +19,6 @@ import '../../utils/sideload_utils.dart';
 const _animationDuration = Duration(milliseconds: 200);
 const _cardPadding = EdgeInsets.symmetric(horizontal: 16.0, vertical: 4.0);
 const _listPadding = EdgeInsets.only(bottom: 24);
-const _segmentPadding = EdgeInsets.symmetric(horizontal: 16, vertical: 8);
 const _buttonPadding = EdgeInsets.symmetric(horizontal: 12, vertical: 8);
 
 class ManageAppsScreen extends StatefulWidget {
@@ -483,10 +484,10 @@ class _ManageAppsScreenState extends State<ManageAppsScreen> {
                                     : l10n.olderVersion,
                             style: TextStyle(
                               color: isNewer
-                                  ? Colors.green
+                                  ? StatusColors.of(context).success
                                   : isSameVersion
-                                      ? Colors.blue
-                                      : Colors.red,
+                                      ? Theme.of(context).colorScheme.primary
+                                      : Theme.of(context).colorScheme.error,
                               fontWeight: FontWeight.bold,
                             ),
                           ),
@@ -615,9 +616,9 @@ class _ManageAppsScreenState extends State<ManageAppsScreen> {
                 }
 
                 final Color? iconColor = hasNewerVersion
-                    ? Colors.green
+                    ? StatusColors.of(context).success
                     : (isOlder && isShiftPressed)
-                        ? Colors.red
+                        ? Theme.of(context).colorScheme.error
                         : null;
 
                 return IconButton(
@@ -801,7 +802,10 @@ class _ManageAppsScreenState extends State<ManageAppsScreen> {
       builder: (context, deviceState, cloudAppsState, _) {
         final l10n = AppLocalizations.of(context);
         if (!deviceState.isConnected) {
-          return const NoDeviceConnectedIndicator();
+          return PageScaffold(
+            title: l10n.installedAppsTitle,
+            body: const NoDeviceConnectedIndicator(),
+          );
         }
 
         _updateCachedLists(deviceState.device?.installedPackages);
@@ -816,94 +820,78 @@ class _ManageAppsScreenState extends State<ManageAppsScreen> {
           cloudAppsState,
         );
 
-        return Scaffold(
-          body: SafeArea(
-            child: Column(
-              children: [
-                Padding(
-                  padding: _segmentPadding,
-                  child: Wrap(
-                    alignment: WrapAlignment.center,
-                    crossAxisAlignment: WrapCrossAlignment.center,
-                    spacing: 8,
-                    runSpacing: 8,
-                    children: [
-                      SegmentedButton<AppCategory>(
-                        segments: [
-                          ButtonSegment(
-                            value: AppCategory.vr,
-                            label: Text(
-                                l10n.segmentVrApps(_cachedVrApps?.length ?? 0)),
-                          ),
-                          ButtonSegment(
-                            value: AppCategory.other,
-                            label: Text(l10n.segmentOtherApps(
-                                _cachedOtherApps?.length ?? 0)),
-                          ),
-                          ButtonSegment(
-                            value: AppCategory.system,
-                            label: Text(l10n.segmentSystemApps(
-                                _cachedSystemApps?.length ?? 0)),
-                          ),
-                        ],
-                        selected: {_selectedCategory},
-                        onSelectionChanged: (Set<AppCategory> newSelection) {
-                          setState(() {
-                            _selectedCategory = newSelection.first;
-                          });
-                          // Persist selected category
-                          final idx =
-                              AppCategory.values.indexOf(_selectedCategory);
-                          final appState = context.read<AppState>();
-                          appState.setManageAppsCategoryIndex(idx);
-                          // Restore saved scroll for the newly selected category
-                          WidgetsBinding.instance.addPostFrameCallback((_) {
-                            final controller =
-                                _scrollControllers[_selectedCategory]!;
-                            if (controller.hasClients) {
-                              final target =
-                                  appState.getManageScrollOffset(idx);
-                              final max = controller.position.maxScrollExtent;
-                              controller.jumpTo(target.clamp(0.0, max));
-                            }
-                          });
-                        },
-                        style: ButtonStyle(
-                          visualDensity: VisualDensity.compact,
-                          padding: WidgetStateProperty.all<EdgeInsets>(
-                            _buttonPadding,
-                          ),
-                        ),
-                      ),
-                      AnimatedRefreshButton(
-                        tooltip: l10n.refreshAppsList,
-                        command: const AdbCommandRefreshPackages(),
-                        commandType: AdbCommandKind.refreshPackages,
-                        commandKey: 'refresh-packages',
-                        size: 40,
-                        iconSize: 24,
-                      ),
-                      _buildUpdatesFirstChip(),
-                      _buildSortButton(),
-                    ],
-                  ),
+        return PageScaffold(
+          title: l10n.installedAppsTitle,
+          actions: [
+            _buildUpdatesFirstChip(),
+            const SizedBox(width: 8),
+            _buildSortButton(),
+            AnimatedRefreshButton(
+              tooltip: l10n.refreshAppsList,
+              command: const AdbCommandRefreshPackages(),
+              commandType: AdbCommandKind.refreshPackages,
+              commandKey: 'refresh-packages',
+              size: 40,
+              iconSize: 24,
+            ),
+          ],
+          headerBottom: Align(
+            alignment: Alignment.centerLeft,
+            child: SegmentedButton<AppCategory>(
+              segments: [
+                ButtonSegment(
+                  value: AppCategory.vr,
+                  label: Text(l10n.segmentVrApps(_cachedVrApps?.length ?? 0)),
                 ),
-                Expanded(
-                  child: AnimatedSwitcher(
-                    duration: _animationDuration,
-                    transitionBuilder: (child, animation) {
-                      return FadeTransition(
-                        opacity: animation,
-                        child: child,
-                      );
-                    },
-                    child: Container(
-                      key: ValueKey<AppCategory>(_selectedCategory),
-                      child: _buildAppList(currentApps),
-                    ),
-                  ),
+                ButtonSegment(
+                  value: AppCategory.other,
+                  label: Text(
+                      l10n.segmentOtherApps(_cachedOtherApps?.length ?? 0)),
+                ),
+                ButtonSegment(
+                  value: AppCategory.system,
+                  label: Text(
+                      l10n.segmentSystemApps(_cachedSystemApps?.length ?? 0)),
                 ),
               ],
+              selected: {_selectedCategory},
+              onSelectionChanged: (Set<AppCategory> newSelection) {
+                setState(() {
+                  _selectedCategory = newSelection.first;
+                });
+                // Persist selected category
+                final idx = AppCategory.values.indexOf(_selectedCategory);
+                final appState = context.read<AppState>();
+                appState.setManageAppsCategoryIndex(idx);
+                // Restore saved scroll for the newly selected category
+                WidgetsBinding.instance.addPostFrameCallback((_) {
+                  final controller = _scrollControllers[_selectedCategory]!;
+                  if (controller.hasClients) {
+                    final target = appState.getManageScrollOffset(idx);
+                    final max = controller.position.maxScrollExtent;
+                    controller.jumpTo(target.clamp(0.0, max));
+                  }
+                });
+              },
+              style: ButtonStyle(
+                visualDensity: VisualDensity.compact,
+                padding: WidgetStateProperty.all<EdgeInsets>(
+                  _buttonPadding,
+                ),
+              ),
+            ),
+          ),
+          body: AnimatedSwitcher(
+            duration: _animationDuration,
+            transitionBuilder: (child, animation) {
+              return FadeTransition(
+                opacity: animation,
+                child: child,
+              );
+            },
+            child: Container(
+              key: ValueKey<AppCategory>(_selectedCategory),
+              child: _buildAppList(currentApps),
             ),
           ),
         );

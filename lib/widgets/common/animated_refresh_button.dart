@@ -4,6 +4,7 @@ import 'package:flutter/material.dart';
 import 'package:rinf/rinf.dart';
 
 import '../../src/bindings/bindings.dart';
+import '../../utils/theme_utils.dart';
 
 /// An animated refresh button that shows a spinning icon while refreshing
 /// and a checkmark when the device state updates.
@@ -172,7 +173,7 @@ class _AnimatedRefreshButtonState extends State<AnimatedRefreshButton>
                     scale: _checkmarkScale,
                     child: Icon(
                       Icons.check,
-                      color: Colors.green,
+                      color: StatusColors.of(context).success,
                       size: widget.iconSize,
                     ),
                   )

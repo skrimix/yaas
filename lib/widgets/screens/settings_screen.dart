@@ -12,6 +12,7 @@ import '../../navigation.dart';
 import '../../src/l10n/app_localizations.dart';
 import '../../utils/utils.dart';
 import '../../utils/sideload_utils.dart';
+import '../common/page_scaffold.dart';
 import '../common/selectable_link_text.dart';
 import '../common/settings_tiles.dart';
 import '../dialogs/downloader_setup_dialog.dart';
@@ -304,55 +305,47 @@ class _SettingsScreenState extends State<SettingsScreen> {
     final error = settingsState.error;
 
     if (error != null) {
-      return _buildErrorView(l10n, error);
+      return PageScaffold(
+        title: l10n.settingsTitle,
+        body: _buildErrorView(l10n, error),
+      );
     }
 
     if (settingsState.isLoading) {
-      return const Center(child: CircularProgressIndicator());
+      return PageScaffold(
+        title: l10n.settingsTitle,
+        body: const Center(child: CircularProgressIndicator()),
+      );
     }
 
-    return Scaffold(
-      backgroundColor: Colors.transparent,
-      bottomNavigationBar: _buildSaveBar(l10n),
-      body: LayoutBuilder(
-        builder: (context, constraints) {
-          final side =
-              math.max(16.0, (constraints.maxWidth - _maxContentWidth) / 2);
-          final titleInset = math.max(0.0, side - 16);
-          final sections = _buildSettingsSections(l10n, settingsState);
-
-          return CustomScrollView(
-            slivers: [
-              SliverAppBar.large(
-                pinned: true,
-                title: Padding(
-                  padding: EdgeInsets.only(left: titleInset),
-                  child: Text(l10n.settingsTitle),
-                ),
-                actions: [
-                  _buildOverflowMenu(l10n),
-                  SizedBox(width: titleInset),
+    final sections = _buildSettingsSections(l10n, settingsState);
+    return PageScaffold(
+      title: l10n.settingsTitle,
+      maxWidth: _maxContentWidth,
+      actions: [_buildOverflowMenu(l10n)],
+      bottomBar: _buildSaveBar(l10n),
+      body: SingleChildScrollView(
+        padding: const EdgeInsets.fromLTRB(
+          PageLayout.horizontalPadding,
+          0,
+          PageLayout.horizontalPadding,
+          24,
+        ),
+        child: Center(
+          child: ConstrainedBox(
+            constraints: const BoxConstraints(maxWidth: _maxContentWidth),
+            child: Column(
+              crossAxisAlignment: CrossAxisAlignment.stretch,
+              children: [
+                for (var i = 0; i < sections.length; i++) ...[
+                  if (i > 0)
+                    const SizedBox(height: SettingsMetrics.sectionSpacing),
+                  sections[i],
                 ],
-              ),
-              SliverPadding(
-                padding: EdgeInsets.only(left: side, right: side, bottom: 24),
-                sliver: SliverToBoxAdapter(
-                  child: Column(
-                    crossAxisAlignment: CrossAxisAlignment.stretch,
-                    children: [
-                      for (var i = 0; i < sections.length; i++) ...[
-                        if (i > 0)
-                          const SizedBox(
-                              height: SettingsMetrics.sectionSpacing),
-                        sections[i],
-                      ],
-                    ],
-                  ),
-                ),
-              ),
-            ],
-          );
-        },
+              ],
+            ),
+          ),
+        ),
       ),
     );
   }

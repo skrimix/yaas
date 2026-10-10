@@ -1,6 +1,8 @@
 import 'dart:async';
+import 'dart:ui';
 
 import 'package:flutter/foundation.dart';
+import 'package:flutter/services.dart';
 import 'package:rinf/rinf.dart';
 
 import '../src/bindings/bindings.dart';
@@ -13,20 +15,19 @@ class AppUpdateState extends ChangeNotifier {
     Stream<RustSignalPack<AppUpdateStateChanged>>? events,
     VoidCallback? requestSnapshot,
     VoidCallback? check,
-    void Function(String)? download,
-    void Function(String)? install,
+    VoidCallback? download,
     VoidCallback? cancel,
+    Future<AppExitResponse> Function()? requestExit,
   })  : _settings = settings,
         _check =
             check ?? (() => const CheckAppUpdateRequest().sendSignalToRust()),
         _download = download ??
-            ((id) =>
-                DownloadAppUpdateRequest(candidateId: id).sendSignalToRust()),
-        _install = install ??
-            ((id) =>
-                InstallAppUpdateRequest(candidateId: id).sendSignalToRust()),
-        _cancel = cancel ??
-            (() => const CancelAppUpdateRequest().sendSignalToRust()) {
+            (() => const DownloadAppUpdateRequest().sendSignalToRust()),
+        _cancel =
+            cancel ?? (() => const CancelAppUpdateRequest().sendSignalToRust()),
+        _requestExit = requestExit ??
+            (() => ServicesBinding.instance
+                .exitApplication(AppExitType.cancelable)) {
     _subscription = (events ?? AppUpdateStateChanged.rustSignalStream)
         .listen((event) => _receive(event.message));
     _settings.addListener(_settingsChanged);
@@ -42,39 +43,39 @@ class AppUpdateState extends ChangeNotifier {
 
   final SettingsState _settings;
   final VoidCallback _check;
-  final void Function(String) _download;
-  final void Function(String) _install;
+  final VoidCallback _download;
   final VoidCallback _cancel;
+  final Future<AppExitResponse> Function() _requestExit;
   late final StreamSubscription<RustSignalPack<AppUpdateStateChanged>>
       _subscription;
   late final VoidCallback _removeSaveErrorListener;
   AppUpdateStateChanged? _snapshot;
-  AppUpdatePhase? _pendingPhase;
-  bool _cancelling = false;
+
+  /// Set after sending a request until the next snapshot arrives.
+  bool _requestPending = false;
+  bool _installOnExit = false;
   bool _startupHandled = false;
   Settings? _pendingSettings;
   String? _saveError;
-  String? _dismissedCandidateId;
+  bool _bannerDismissed = false;
 
   AppUpdateStateChanged? get snapshot => _snapshot;
   String? get saveError => _saveError;
   bool get savingPreferences => _pendingSettings != null;
   UpdateChannel get channel => _settings.settings.updateChannel;
   bool get checkUpdatesOnStartup => _settings.settings.checkUpdatesOnStartup;
-  bool get requestPending => _pendingPhase != null || _cancelling;
+
+  /// Whether the app is exiting to install the ready update.
+  bool get installOnExit => _installOnExit;
+  bool get requestPending => _requestPending || _installOnExit;
   bool get synchronized =>
       _settings.hasLoaded &&
       _snapshot != null &&
       _snapshot!.channel == channel &&
       !savingPreferences;
-  bool get canChangePreferences =>
-      synchronized &&
-      !requestPending &&
-      _snapshot!.phase != AppUpdatePhase.preparing &&
-      _snapshot!.phase != AppUpdatePhase.awaitingExit;
-  bool get _canAct => synchronized && !requestPending;
+  bool get canChangePreferences => synchronized && !requestPending;
   bool get canCheck =>
-      _canAct &&
+      canChangePreferences &&
       switch (_snapshot!.phase) {
         AppUpdatePhase.idle ||
         AppUpdatePhase.upToDate ||
@@ -84,45 +85,28 @@ class AppUpdateState extends ChangeNotifier {
         _ => false,
       };
   bool get canDownload =>
-      _canAct &&
+      canChangePreferences &&
       _snapshot!.phase == AppUpdatePhase.available &&
       _snapshot!.release != null;
   bool get canInstall =>
-      _canAct &&
+      canChangePreferences &&
       _snapshot!.phase == AppUpdatePhase.ready &&
       _snapshot!.release != null &&
       _snapshot!.installationUnavailableReason == null;
   bool get canCancel =>
-      _canAct &&
-      switch (_snapshot!.phase) {
-        AppUpdatePhase.checking ||
-        AppUpdatePhase.downloading ||
-        AppUpdatePhase.preparing =>
-          true,
-        _ => false,
-      };
+      canChangePreferences &&
+      (_snapshot!.phase == AppUpdatePhase.checking ||
+          _snapshot!.phase == AppUpdatePhase.downloading);
   bool get showBanner =>
       synchronized &&
+      !_bannerDismissed &&
       _snapshot!.release != null &&
-      _dismissedCandidateId != _snapshot!.release!.candidateId &&
       (_snapshot!.phase == AppUpdatePhase.available ||
           _snapshot!.phase == AppUpdatePhase.ready);
 
   void _receive(AppUpdateStateChanged value) {
-    final previous = _snapshot;
     _snapshot = value;
-    if (value.phase == _pendingPhase ||
-        value.error != null ||
-        (previous != null && previous.channel != value.channel)) {
-      _pendingPhase = null;
-    }
-    if (_cancelling &&
-        value.phase != AppUpdatePhase.checking &&
-        value.phase != AppUpdatePhase.downloading &&
-        value.phase != AppUpdatePhase.preparing &&
-        value.phase != AppUpdatePhase.awaitingExit) {
-      _cancelling = false;
-    }
+    _requestPending = false;
     _maybeCheckOnStartup();
     notifyListeners();
   }
@@ -151,40 +135,44 @@ class AppUpdateState extends ChangeNotifier {
         _snapshot!.phase == AppUpdatePhase.idle &&
         _snapshot!.error == null &&
         canCheck) {
-      _pendingPhase = AppUpdatePhase.checking;
+      _requestPending = true;
       _check();
     }
+  }
+
+  void _send(VoidCallback request) {
+    _requestPending = true;
+    notifyListeners();
+    request();
   }
 
   void check() {
     if (!canCheck) return;
     _startupHandled = true;
-    _pendingPhase = AppUpdatePhase.checking;
-    notifyListeners();
-    _check();
+    _send(_check);
   }
 
   void download() {
-    if (!canDownload) return;
-    final id = _snapshot!.release!.candidateId;
-    _pendingPhase = AppUpdatePhase.downloading;
-    notifyListeners();
-    _download(id);
-  }
-
-  void install() {
-    if (!canInstall) return;
-    final id = _snapshot!.release!.candidateId;
-    _pendingPhase = AppUpdatePhase.preparing;
-    notifyListeners();
-    _install(id);
+    if (canDownload) _send(_download);
   }
 
   void cancel() {
-    if (!canCancel) return;
-    _cancelling = true;
+    if (canCancel) _send(_cancel);
+  }
+
+  /// Requests the usual cancellable app exit; the backend installs the update
+  /// while shutting down.
+  Future<void> install() async {
+    if (!canInstall) return;
+    _installOnExit = true;
     notifyListeners();
-    _cancel();
+    try {
+      if (await _requestExit() == AppExitResponse.exit) return;
+    } catch (error) {
+      debugPrint('[Update] Exit request failed: $error');
+    }
+    _installOnExit = false;
+    notifyListeners();
   }
 
   void savePreferences({UpdateChannel? channel, bool? checkOnStartup}) {
@@ -201,10 +189,9 @@ class AppUpdateState extends ChangeNotifier {
     _settings.save(settings);
   }
 
+  /// Hides the update banner for this session.
   void dismissBanner() {
-    final id = _snapshot?.release?.candidateId;
-    if (id == null) return;
-    _dismissedCandidateId = id;
+    _bannerDismissed = true;
     notifyListeners();
   }
 

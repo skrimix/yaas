@@ -5,7 +5,7 @@ import '../../src/l10n/app_localizations.dart';
 Future<bool> showActiveTasksCloseDialog({
   required BuildContext context,
   required int activeTaskCount,
-  required Future<bool> Function() prepareShutdown,
+  required Future<void> Function() prepareShutdown,
 }) async {
   final result = await showDialog<bool>(
     context: context,
@@ -26,7 +26,7 @@ class ActiveTasksCloseDialog extends StatefulWidget {
   });
 
   final int activeTaskCount;
-  final Future<bool> Function() prepareShutdown;
+  final Future<void> Function() prepareShutdown;
 
   @override
   State<ActiveTasksCloseDialog> createState() => _ActiveTasksCloseDialogState();
@@ -39,9 +39,9 @@ class _ActiveTasksCloseDialogState extends State<ActiveTasksCloseDialog> {
     if (_isClosing) return;
     setState(() => _isClosing = true);
 
-    final shouldExit = await widget.prepareShutdown();
+    await widget.prepareShutdown();
     if (mounted) {
-      Navigator.of(context).pop(shouldExit);
+      Navigator.of(context).pop(true);
     }
   }
 

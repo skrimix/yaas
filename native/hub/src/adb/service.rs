@@ -5,10 +5,7 @@ use std::{
     future::Future,
     net::SocketAddr,
     path::{Path, PathBuf},
-    sync::{
-        Arc,
-        atomic::{AtomicBool, Ordering},
-    },
+    sync::Arc,
     time::Duration,
 };
 
@@ -187,8 +184,6 @@ pub(crate) struct AdbService {
     adb_host: forensic_adb::Host,
     /// ADB server check/start mutex
     adb_server_mutex: Mutex<()>,
-    /// Set once the server is stopped for a self-update; prevents restarts.
-    server_start_blocked: AtomicBool,
     /// ADB binary path
     adb_path: RwLock<Option<String>>,
     /// ADB service state
@@ -242,7 +237,6 @@ impl AdbService {
                 forensic_adb::Host::default()
             },
             adb_server_mutex: Mutex::new(()),
-            server_start_blocked: AtomicBool::new(false),
             adb_path: RwLock::new(adb_path),
             adb_state: RwLock::new(AdbState::default()),
             device: None.into(),
@@ -460,12 +454,16 @@ impl AdbService {
         Ok(())
     }
 
-    /// Stops ADB tasks and prevents this service from starting an ADB server
-    /// again. Used before a self-update so a bundled server stays stopped.
-    pub(crate) async fn stop_for_update(&self) {
+    /// Stops ADB tasks and, if the ADB binary is bundled next to the app, its
+    /// server, so it doesn't lock installation files during a self-update.
+    pub(crate) async fn stop_bundled_server(&self) {
         self.cancel_token.read().await.cancel();
-        let _guard = self.adb_server_mutex.lock().await;
-        self.server_start_blocked.store(true, Ordering::SeqCst);
+        let adb_path = self.adb_path.read().await.clone();
+        let bundled = resolve_binary_path(adb_path.as_deref(), "adb")
+            .is_ok_and(|adb| std::env::current_exe().is_ok_and(|exe| adb.parent() == exe.parent()));
+        if bundled {
+            let _ = self.kill_adb_server().await;
+        }
     }
 
     /// Runs the device tracking loop that monitors for device connections and disconnections
@@ -1985,10 +1983,6 @@ impl AdbService {
     #[instrument(level = "debug", skip(self), /* fields(adb_host = ?self.adb_host) */, err)]
     async fn ensure_server_running(&self) -> Result<()> {
         let _guard = self.adb_server_mutex.lock().await;
-        ensure!(
-            !self.server_start_blocked.load(Ordering::SeqCst),
-            "ADB server was stopped for an update"
-        );
         if !self.is_server_running().await {
             info!("ADB server not running, attempting to start it");
             self.set_adb_state(AdbState::ServerStarting).await;

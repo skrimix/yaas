@@ -3477,18 +3477,6 @@ abstract class AppLocalizations {
   /// **'Update ready to install'**
   String get updatesReady;
 
-  /// No description provided for @updatesPreparing.
-  ///
-  /// In en, this message translates to:
-  /// **'Preparing update…'**
-  String get updatesPreparing;
-
-  /// No description provided for @updatesAwaitingExit.
-  ///
-  /// In en, this message translates to:
-  /// **'Waiting to restart…'**
-  String get updatesAwaitingExit;
-
   /// No description provided for @updatesCheck.
   ///
   /// In en, this message translates to:
@@ -3555,59 +3543,11 @@ abstract class AppLocalizations {
   /// **'Dismiss update notification'**
   String get updatesDismiss;
 
-  /// No description provided for @updatesNetworkError.
-  ///
-  /// In en, this message translates to:
-  /// **'Could not reach the update server. Try again later.'**
-  String get updatesNetworkError;
-
-  /// No description provided for @updatesNoReleaseError.
-  ///
-  /// In en, this message translates to:
-  /// **'No release is available on this channel yet.'**
-  String get updatesNoReleaseError;
-
-  /// No description provided for @updatesIncompleteReleaseError.
-  ///
-  /// In en, this message translates to:
-  /// **'This release is still being published. Check again later.'**
-  String get updatesIncompleteReleaseError;
-
-  /// No description provided for @updatesInvalidMetadataError.
-  ///
-  /// In en, this message translates to:
-  /// **'The release information could not be verified. Check again later.'**
-  String get updatesInvalidMetadataError;
-
-  /// No description provided for @updatesNoPackageError.
-  ///
-  /// In en, this message translates to:
-  /// **'This release has no package for your platform.'**
-  String get updatesNoPackageError;
-
-  /// No description provided for @updatesIntegrityError.
-  ///
-  /// In en, this message translates to:
-  /// **'The download failed verification. Check again and download a fresh copy.'**
-  String get updatesIntegrityError;
-
-  /// No description provided for @updatesInstallationError.
-  ///
-  /// In en, this message translates to:
-  /// **'The update could not be installed.'**
-  String get updatesInstallationError;
-
-  /// No description provided for @updatesInvalidRequestError.
-  ///
-  /// In en, this message translates to:
-  /// **'The update is no longer ready for this action. Check its current status.'**
-  String get updatesInvalidRequestError;
-
-  /// No description provided for @updatesUnknownError.
+  /// No description provided for @updatesError.
   ///
   /// In en, this message translates to:
   /// **'The update could not be completed.'**
-  String get updatesUnknownError;
+  String get updatesError;
 
   /// No description provided for @updatesSaving.
   ///

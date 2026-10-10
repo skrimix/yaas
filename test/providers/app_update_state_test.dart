@@ -2,7 +2,6 @@ import 'dart:ui';
 
 import 'package:flutter_test/flutter_test.dart';
 import 'package:yaas/src/bindings/bindings.dart';
-import 'package:yaas/utils/app_update_exit.dart';
 
 import '../support/app_update_fixture.dart';
 
@@ -65,64 +64,49 @@ void main() {
     fixture.state.check();
     fixture.state.check();
     expect(fixture.commands, ['snapshot', 'check']);
-    fixture.emit(updateSnapshot(AppUpdatePhase.idle));
-    expect(fixture.state.canCheck, isFalse,
-        reason: 'Old snapshot is not an acknowledgement');
     fixture.emit(updateSnapshot(AppUpdatePhase.checking));
     expect(fixture.state.canCancel, isTrue);
     fixture.emit(updateSnapshot(AppUpdatePhase.available));
     expect(fixture.state.canDownload, isTrue);
   });
 
-  test('download and install send current IDs and ignore duplicate actions',
-      () {
+  test('download and cancel are sent once per backend acknowledgement', () {
     fixture.emit(updateSnapshot(AppUpdatePhase.available));
     fixture.state.download();
     fixture.state.download();
     fixture.emit(updateSnapshot(AppUpdatePhase.downloading));
-    fixture.emit(updateSnapshot(AppUpdatePhase.ready));
-    fixture.state.install();
-    fixture.state.install();
-    fixture.emit(updateSnapshot(AppUpdatePhase.preparing));
-    expect(fixture.state.canChangePreferences, isFalse);
-    fixture.emit(updateSnapshot(AppUpdatePhase.awaitingExit));
-    expect(fixture.state.canCancel, isFalse);
-    expect(fixture.commands,
-        ['snapshot', 'download:candidate-123', 'install:candidate-123']);
-  });
-
-  test(
-      'cancel waits for backend and preserves downloaded release after exit cancellation',
-      () async {
-    fixture.emit(updateSnapshot(AppUpdatePhase.downloading));
     fixture.state.cancel();
     fixture.state.cancel();
-    expect(fixture.commands, ['snapshot', 'cancel']);
-    fixture.emit(updateSnapshot(AppUpdatePhase.downloading));
     expect(fixture.state.canCancel, isFalse);
     fixture.emit(updateSnapshot(AppUpdatePhase.available));
     expect(fixture.state.canDownload, isTrue);
-    fixture.emit(updateSnapshot(AppUpdatePhase.awaitingExit));
-    final exit = AppUpdateExit(
-      requestExit: () async => AppExitResponse.cancel,
-      cancelUpdate: () {
-        fixture.commands.add('exit-cancel');
-        fixture.emit(updateSnapshot(AppUpdatePhase.ready));
-      },
-      isExiting: () => false,
-    );
-    await exit.request(updateRelease.candidateId);
-    expect(fixture.state.canInstall, isTrue);
-    expect(fixture.state.snapshot!.release!.candidateId,
-        updateRelease.candidateId);
-    expect(fixture.commands.last, 'exit-cancel');
+    expect(fixture.commands, ['snapshot', 'download', 'cancel']);
   });
 
-  test('installation failure retains verified download and permits retry', () {
+  test(
+      'install exits with the install flag and resets it when exit is cancelled',
+      () async {
     fixture.emit(updateSnapshot(AppUpdatePhase.ready));
+    final install = fixture.state.install();
+    expect(fixture.state.installOnExit, isTrue);
+    expect(fixture.state.canInstall, isFalse);
+    expect(fixture.state.canChangePreferences, isFalse);
     fixture.state.install();
-    fixture.emit(updateSnapshot(AppUpdatePhase.ready,
-        errorKind: AppUpdateErrorKind.installation, error: 'Disk full'));
+    await install;
+    expect(fixture.commands, ['snapshot', 'exit']);
+    expect(fixture.state.installOnExit, isFalse);
+    expect(fixture.state.canInstall, isTrue);
+  });
+
+  test('install keeps the flag while the app exits', () async {
+    fixture.exitResponse = AppExitResponse.exit;
+    fixture.emit(updateSnapshot(AppUpdatePhase.ready));
+    await fixture.state.install();
+    expect(fixture.state.installOnExit, isTrue);
+  });
+
+  test('errors keep a staged download installable unless unavailable', () {
+    fixture.emit(updateSnapshot(AppUpdatePhase.ready, error: 'Offline'));
     expect(fixture.state.canInstall, isTrue);
     expect(fixture.state.snapshot!.release, updateRelease);
     fixture.emit(updateSnapshot(AppUpdatePhase.ready,
@@ -171,16 +155,12 @@ void main() {
     expect(fixture.state.savingPreferences, isFalse);
   });
 
-  test('banner dismissal persists for candidate, but not other candidates', () {
+  test('banner dismissal lasts for the session', () {
     fixture.emit(updateSnapshot(AppUpdatePhase.available));
     expect(fixture.state.showBanner, isTrue);
     fixture.state.dismissBanner();
     fixture.emit(updateSnapshot(AppUpdatePhase.ready));
     expect(fixture.state.showBanner, isFalse);
-    fixture.emit(updateSnapshot(AppUpdatePhase.available).copyWith(
-      release: () => updateRelease.copyWith(candidateId: 'next-candidate'),
-    ));
-    expect(fixture.state.showBanner, isTrue);
   });
 
   test('dispose removes stream and settings listeners', () async {

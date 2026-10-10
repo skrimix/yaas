@@ -8,14 +8,8 @@ pub(crate) struct GetAppUpdateStateRequest {}
 #[derive(Serialize, Deserialize, DartSignal)]
 pub(crate) struct CheckAppUpdateRequest {}
 #[derive(Serialize, Deserialize, DartSignal)]
-pub(crate) struct DownloadAppUpdateRequest {
-    pub candidate_id: String,
-}
-#[derive(Serialize, Deserialize, DartSignal)]
-pub(crate) struct InstallAppUpdateRequest {
-    pub candidate_id: String,
-}
-/// Cancels a check, download, or pending exit. Installation cannot be cancelled after shutdown begins.
+pub(crate) struct DownloadAppUpdateRequest {}
+/// Cancels a check or download.
 #[derive(Serialize, Deserialize, DartSignal)]
 pub(crate) struct CancelAppUpdateRequest {}
 
@@ -25,27 +19,14 @@ pub(crate) enum AppUpdatePhase {
     Checking,
     Available,
     UpToDate,
+    /// Downloading, verifying, and staging the package.
     Downloading,
+    /// Staged; installed when the app exits with `AppShutdownRequest::install_update`.
     Ready,
-    Preparing,
-    AwaitingExit,
-}
-
-#[derive(Debug, Clone, Copy, Serialize, Deserialize, SignalPiece)]
-pub(crate) enum AppUpdateErrorKind {
-    Network,
-    NoRelease,
-    IncompleteRelease,
-    InvalidMetadata,
-    NoPackage,
-    Integrity,
-    Installation,
-    InvalidRequest,
 }
 
 #[derive(Debug, Clone, Serialize, Deserialize, SignalPiece)]
 pub(crate) struct AppUpdateRelease {
-    pub candidate_id: String,
     pub version: String,
     pub build_number: u32,
     pub channel: UpdateChannel,
@@ -65,12 +46,5 @@ pub(crate) struct AppUpdateStateChanged {
     pub release: Option<AppUpdateRelease>,
     pub received_bytes: u64,
     pub installation_unavailable_reason: Option<String>,
-    pub error_kind: Option<AppUpdateErrorKind>,
     pub error: Option<String>,
-}
-
-/// Flutter should request a cancellable application exit using this candidate ID.
-#[derive(Serialize, Deserialize, RustSignal)]
-pub(crate) struct AppUpdateExitRequested {
-    pub candidate_id: String,
 }

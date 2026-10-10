@@ -48,14 +48,10 @@ class AppUpdateSection extends StatelessWidget {
       AppUpdatePhase.upToDate => l10n.updatesUpToDate,
       AppUpdatePhase.downloading => l10n.updatesDownloading,
       AppUpdatePhase.ready => l10n.updatesReady,
-      AppUpdatePhase.preparing => l10n.updatesPreparing,
-      AppUpdatePhase.awaitingExit => l10n.updatesAwaitingExit,
     };
     final busy = phase == null ||
         phase == AppUpdatePhase.checking ||
         phase == AppUpdatePhase.downloading ||
-        phase == AppUpdatePhase.preparing ||
-        phase == AppUpdatePhase.awaitingExit ||
         update.requestPending;
     final total = release?.packageSize.toInt() ?? 0;
     final received = state?.receivedBytes.toInt() ?? 0;
@@ -149,7 +145,6 @@ class AppUpdateSection extends StatelessWidget {
                   ),
                   if (release.notes.trim().isNotEmpty)
                     _UpdateDetails(
-                      key: ValueKey(release.candidateId),
                       label: l10n.updatesReleaseNotes,
                       icon: Icons.notes_rounded,
                       child: MarkdownBody(
@@ -173,18 +168,16 @@ class AppUpdateSection extends StatelessWidget {
                       style: theme.textTheme.bodyMedium?.copyWith(
                           color: theme.colorScheme.onSurfaceVariant)),
                 ],
-                if (state?.error != null || state?.errorKind != null) ...[
+                if (state?.error != null) ...[
                   const SizedBox(height: 16),
-                  Text(_errorSummary(l10n, state!.errorKind),
+                  Text(l10n.updatesError,
                       style: TextStyle(color: theme.colorScheme.error)),
-                  if (state.error != null) ...[
-                    const SizedBox(height: 8),
-                    _UpdateDetails(
-                      label: l10n.updatesErrorDetails,
-                      icon: Icons.info_outline_rounded,
-                      child: SelectableText(state.error!),
-                    ),
-                  ],
+                  const SizedBox(height: 8),
+                  _UpdateDetails(
+                    label: l10n.updatesErrorDetails,
+                    icon: Icons.info_outline_rounded,
+                    child: SelectableText(state!.error!),
+                  ),
                 ],
                 if (phase == AppUpdatePhase.ready) ...[
                   const SizedBox(height: 16),
@@ -221,8 +214,7 @@ class AppUpdateSection extends StatelessWidget {
                         label: Text(l10n.updatesInstall),
                       ),
                     if (phase == AppUpdatePhase.checking ||
-                        phase == AppUpdatePhase.downloading ||
-                        phase == AppUpdatePhase.preparing)
+                        phase == AppUpdatePhase.downloading)
                       OutlinedButton(
                         onPressed: update.canCancel ? update.cancel : null,
                         child: Text(l10n.commonCancel),
@@ -236,25 +228,10 @@ class AppUpdateSection extends StatelessWidget {
       ),
     );
   }
-
-  String _errorSummary(AppLocalizations l10n, AppUpdateErrorKind? kind) =>
-      switch (kind) {
-        AppUpdateErrorKind.network => l10n.updatesNetworkError,
-        AppUpdateErrorKind.noRelease => l10n.updatesNoReleaseError,
-        AppUpdateErrorKind.incompleteRelease =>
-          l10n.updatesIncompleteReleaseError,
-        AppUpdateErrorKind.invalidMetadata => l10n.updatesInvalidMetadataError,
-        AppUpdateErrorKind.noPackage => l10n.updatesNoPackageError,
-        AppUpdateErrorKind.integrity => l10n.updatesIntegrityError,
-        AppUpdateErrorKind.installation => l10n.updatesInstallationError,
-        AppUpdateErrorKind.invalidRequest => l10n.updatesInvalidRequestError,
-        null => l10n.updatesUnknownError,
-      };
 }
 
 class _UpdateDetails extends StatefulWidget {
   const _UpdateDetails({
-    super.key,
     required this.label,
     required this.icon,
     required this.child,

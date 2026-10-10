@@ -76,7 +76,6 @@ apk-info = "1.0.12"
 yarc = { path = "../yarc" }
 magic-cast = { path = "../magic_cast" }
 dunce = "1.0.5"
-sysinfo = { version = "0.39.6", default-features = false, features = ["system"] }
 
 [build-dependencies]
 built = { version = "0.8.1", features = ["git2", "chrono"] }

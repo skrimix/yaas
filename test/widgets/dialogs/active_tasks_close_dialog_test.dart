@@ -9,7 +9,7 @@ import 'package:yaas/widgets/dialogs/active_tasks_close_dialog.dart';
 void main() {
   Future<void> pumpDialogLauncher(
     WidgetTester tester, {
-    required Future<bool> Function() prepareShutdown,
+    required Future<void> Function() prepareShutdown,
     required ValueChanged<bool> onResult,
   }) async {
     await tester.pumpWidget(
@@ -47,7 +47,6 @@ void main() {
       tester,
       prepareShutdown: () async {
         shutdownRequests++;
-        return true;
       },
       onResult: (value) => result = value,
     );
@@ -62,7 +61,7 @@ void main() {
 
   testWidgets('confirm requests shutdown once and shows progress',
       (tester) async {
-    final shutdown = Completer<bool>();
+    final shutdown = Completer<void>();
     var shutdownRequests = 0;
     bool? result;
     await pumpDialogLauncher(
@@ -82,31 +81,16 @@ void main() {
     expect(find.byKey(const ValueKey('activeTasksCloseConfirm')), findsNothing);
     expect(result, isNull);
 
-    shutdown.complete(true);
+    shutdown.complete();
     await tester.pumpAndSettle();
 
     expect(result, isTrue);
     expect(find.byType(AlertDialog), findsNothing);
   });
 
-  testWidgets('a rejected shutdown cancels exit', (tester) async {
-    bool? result;
-    await pumpDialogLauncher(
-      tester,
-      prepareShutdown: () async => false,
-      onResult: (value) => result = value,
-    );
-
-    await tester.tap(find.byKey(const ValueKey('activeTasksCloseConfirm')));
-    await tester.pumpAndSettle();
-
-    expect(result, isFalse);
-    expect(find.byType(AlertDialog), findsNothing);
-  });
-
   testWidgets('dialog cannot be dismissed while shutdown is pending',
       (tester) async {
-    final shutdown = Completer<bool>();
+    final shutdown = Completer<void>();
     await pumpDialogLauncher(
       tester,
       prepareShutdown: () => shutdown.future,
@@ -121,7 +105,7 @@ void main() {
     expect(find.byType(AlertDialog), findsOneWidget);
     expect(find.byType(CircularProgressIndicator), findsOneWidget);
 
-    shutdown.complete(true);
+    shutdown.complete();
     await tester.pumpAndSettle();
   });
 }

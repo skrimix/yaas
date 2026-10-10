@@ -112,90 +112,71 @@ fn main() {
             let shutdown_request_receiver = AppShutdownRequest::get_dart_signal_receiver();
             enum ShutdownSource {
                 Dart,
-                Request(Option<String>),
+                /// Whether to install the ready application update.
+                Request(bool),
                 Panic,
             }
 
-            loop {
-                let source = tokio::select! {
-                    _ = rinf::dart_shutdown() => ShutdownSource::Dart,
-                    request = shutdown_request_receiver.recv() => {
-                        if let Some(request) = request {
-                            ShutdownSource::Request(request.message.update_candidate_id)
-                        } else {
-                            ShutdownSource::Dart
-                        }
-                    },
-                    _ = panic_notify.notified() => ShutdownSource::Panic,
-                };
+            let source = tokio::select! {
+                _ = rinf::dart_shutdown() => ShutdownSource::Dart,
+                request = shutdown_request_receiver.recv() => {
+                    if let Some(request) = request {
+                        ShutdownSource::Request(request.message.install_update)
+                    } else {
+                        ShutdownSource::Dart
+                    }
+                },
+                _ = panic_notify.notified() => ShutdownSource::Panic,
+            };
 
-                match source {
-                    ShutdownSource::Panic => {}
-                    ShutdownSource::Dart => {
+            match source {
+                ShutdownSource::Panic => {}
+                ShutdownSource::Dart => {
+                    tokio::select! {
+                        _ = prepare_shutdown(&task_manager, &native_casting) => {},
+                        _ = panic_notify.notified() => {},
+                    }
+                }
+                ShutdownSource::Request(install_update) => {
+                    let shutdown_result = tokio::select! {
+                        result = prepare_shutdown(&task_manager, &native_casting) => Some(result),
+                        _ = panic_notify.notified() => None,
+                    };
+                    if let Some(shutdown_result) = shutdown_result {
+                        if install_update {
+                            launch_update(&updater, &adb_service).await;
+                        }
+                        AppShutdownReady {
+                            timed_out: shutdown_result.timed_out,
+                            remaining_tasks: shutdown_result.remaining_tasks as u32,
+                        }
+                        .send_signal_to_dart();
                         tokio::select! {
-                            _ = prepare_shutdown(&task_manager, &native_casting) => {},
+                            _ = rinf::dart_shutdown() => {},
                             _ = panic_notify.notified() => {},
                         }
                     }
-                    ShutdownSource::Request(update_id) => {
-                        let prepared = if let Some(id) = update_id {
-                            match updater.take_install(id).await {
-                                Ok(prepared) => Some(prepared),
-                                Err(error) => {
-                                    AppShutdownReady {
-                                        timed_out: false,
-                                        remaining_tasks: 0,
-                                        shutdown_cancelled: true,
-                                        update_error: Some(format!("{error:#}")),
-                                    }
-                                    .send_signal_to_dart();
-                                    continue;
-                                }
-                            }
-                        } else {
-                            None
-                        };
-                        let shutdown_result = tokio::select! {
-                            result = prepare_shutdown(&task_manager, &native_casting) => Some(result),
-                            _ = panic_notify.notified() => None,
-                        };
-                        if let Some(shutdown_result) = shutdown_result {
-                            let mut update_error = None;
-                            if let Some(prepared) = prepared {
-                                // Keep ADB from restarting a bundled server that the
-                                // handoff stops along with other installation processes.
-                                adb_service.stop_for_update().await;
-                                if let Err(error) = prepared.launch().await {
-                                    update_error = Some(format!("{error:#}"));
-                                }
-                            }
-                            if let Some(error) = &update_error {
-                                error!(
-                                    error,
-                                    "Update handoff failed; closing without installation"
-                                );
-                            }
-                            AppShutdownReady {
-                                update_error,
-                                shutdown_cancelled: false,
-                                timed_out: shutdown_result.timed_out,
-                                remaining_tasks: shutdown_result.remaining_tasks as u32,
-                            }
-                            .send_signal_to_dart();
-                            tokio::select! {
-                                _ = rinf::dart_shutdown() => {},
-                                _ = panic_notify.notified() => {},
-                            }
-                        }
-                    }
                 }
-                updater.stop().await;
-                break;
             }
         })
     });
 
     runtime.shutdown_timeout(Duration::from_secs(3));
+}
+
+/// Starts installing the ready update, if any; the app exits right after.
+async fn launch_update(updater: &update::UpdateManager, adb_service: &AdbService) {
+    let Some(ready) = updater.ready() else {
+        error!("No update is ready to install");
+        return;
+    };
+    if cfg!(windows) {
+        // A running bundled ADB server would lock files in the install directory.
+        adb_service.stop_bundled_server().await;
+    }
+    if let Err(error) = ready.launch() {
+        error!(error = format!("{error:#}"), "Cannot start update installation");
+    }
 }
 
 async fn prepare_shutdown(

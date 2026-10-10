@@ -1861,12 +1861,6 @@ class AppLocalizationsEn extends AppLocalizations {
   String get updatesReady => 'Update ready to install';
 
   @override
-  String get updatesPreparing => 'Preparing update…';
-
-  @override
-  String get updatesAwaitingExit => 'Waiting to restart…';
-
-  @override
   String get updatesCheck => 'Check for updates';
 
   @override
@@ -1901,38 +1895,7 @@ class AppLocalizationsEn extends AppLocalizations {
   String get updatesDismiss => 'Dismiss update notification';
 
   @override
-  String get updatesNetworkError =>
-      'Could not reach the update server. Try again later.';
-
-  @override
-  String get updatesNoReleaseError =>
-      'No release is available on this channel yet.';
-
-  @override
-  String get updatesIncompleteReleaseError =>
-      'This release is still being published. Check again later.';
-
-  @override
-  String get updatesInvalidMetadataError =>
-      'The release information could not be verified. Check again later.';
-
-  @override
-  String get updatesNoPackageError =>
-      'This release has no package for your platform.';
-
-  @override
-  String get updatesIntegrityError =>
-      'The download failed verification. Check again and download a fresh copy.';
-
-  @override
-  String get updatesInstallationError => 'The update could not be installed.';
-
-  @override
-  String get updatesInvalidRequestError =>
-      'The update is no longer ready for this action. Check its current status.';
-
-  @override
-  String get updatesUnknownError => 'The update could not be completed.';
+  String get updatesError => 'The update could not be completed.';
 
   @override
   String get updatesSaving => 'Saving update preferences…';

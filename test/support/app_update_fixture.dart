@@ -1,5 +1,6 @@
 import 'dart:async';
 import 'dart:typed_data';
+import 'dart:ui';
 
 import 'package:rinf/rinf.dart';
 import 'package:yaas/providers/app_update_state.dart';
@@ -9,7 +10,6 @@ import 'package:yaas/src/bindings/bindings.dart';
 Uint64 uint64(int value) => Uint64.fromBigInt(BigInt.from(value));
 
 final updateRelease = AppUpdateRelease(
-  candidateId: 'candidate-123',
   version: '1.2.3',
   buildNumber: 4,
   channel: UpdateChannel.stable,
@@ -26,7 +26,6 @@ AppUpdateStateChanged updateSnapshot(
   AppUpdatePhase phase, {
   UpdateChannel channel = UpdateChannel.stable,
   String? unavailable,
-  AppUpdateErrorKind? errorKind,
   String? error,
 }) =>
     AppUpdateStateChanged(
@@ -42,7 +41,6 @@ AppUpdateStateChanged updateSnapshot(
       receivedBytes:
           uint64(phase == AppUpdatePhase.ready ? 100000000 : 25000000),
       installationUnavailableReason: unavailable,
-      errorKind: errorKind,
       error: error,
     );
 
@@ -91,14 +89,18 @@ class UpdateFixture {
       events: events.stream,
       requestSnapshot: () => commands.add('snapshot'),
       check: () => commands.add('check'),
-      download: (id) => commands.add('download:$id'),
-      install: (id) => commands.add('install:$id'),
+      download: () => commands.add('download'),
       cancel: () => commands.add('cancel'),
+      requestExit: () async {
+        commands.add('exit');
+        return exitResponse;
+      },
     );
   }
   final events =
       StreamController<RustSignalPack<AppUpdateStateChanged>>(sync: true);
   final commands = <String>[];
+  AppExitResponse exitResponse = AppExitResponse.cancel;
   late final UpdateTestSettings settings;
   late final AppUpdateState state;
   void emit(AppUpdateStateChanged value) =>

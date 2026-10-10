@@ -1885,12 +1885,6 @@ class AppLocalizationsRu extends AppLocalizations {
   String get updatesReady => 'Обновление готово к установке';
 
   @override
-  String get updatesPreparing => 'Подготовка обновления…';
-
-  @override
-  String get updatesAwaitingExit => 'Ожидание перезапуска…';
-
-  @override
   String get updatesCheck => 'Проверить обновления';
 
   @override
@@ -1925,37 +1919,7 @@ class AppLocalizationsRu extends AppLocalizations {
   String get updatesDismiss => 'Скрыть уведомление об обновлении';
 
   @override
-  String get updatesNetworkError =>
-      'Не удалось связаться с сервером обновлений. Повторите попытку позже.';
-
-  @override
-  String get updatesNoReleaseError => 'В этом канале пока нет релизов.';
-
-  @override
-  String get updatesIncompleteReleaseError =>
-      'Публикация релиза ещё не завершена. Проверьте позже.';
-
-  @override
-  String get updatesInvalidMetadataError =>
-      'Не удалось проверить сведения о релизе. Проверьте позже.';
-
-  @override
-  String get updatesNoPackageError =>
-      'В этом релизе нет пакета для вашей платформы.';
-
-  @override
-  String get updatesIntegrityError =>
-      'Загруженный файл не прошёл проверку. Проверьте обновления и скачайте его заново.';
-
-  @override
-  String get updatesInstallationError => 'Не удалось установить обновление.';
-
-  @override
-  String get updatesInvalidRequestError =>
-      'Обновление больше не готово к этому действию. Проверьте его текущее состояние.';
-
-  @override
-  String get updatesUnknownError => 'Не удалось завершить обновление.';
+  String get updatesError => 'Не удалось завершить обновление.';
 
   @override
   String get updatesSaving => 'Сохранение настроек обновлений…';

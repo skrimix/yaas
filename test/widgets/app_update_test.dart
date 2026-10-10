@@ -71,8 +71,6 @@ void main() {
             AppUpdatePhase.upToDate => l10n.updatesUpToDate,
             AppUpdatePhase.downloading => l10n.updatesDownloading,
             AppUpdatePhase.ready => l10n.updatesReady,
-            AppUpdatePhase.preparing => l10n.updatesPreparing,
-            AppUpdatePhase.awaitingExit => l10n.updatesAwaitingExit,
           };
           expect(find.text(expected), findsOneWidget);
           if (phase == AppUpdatePhase.downloading) {
@@ -112,7 +110,7 @@ void main() {
         isNull);
   });
 
-  testWidgets('download, cancel and install buttons use current candidate',
+  testWidgets('download, cancel and install buttons send requests',
       (tester) async {
     fixture.emit(updateSnapshot(AppUpdatePhase.available));
     final l10n = await pumpUpdates(tester, fixture);
@@ -127,12 +125,7 @@ void main() {
     await tester.pump();
     await tester.ensureVisible(find.text(l10n.updatesInstall));
     await tester.tap(find.text(l10n.updatesInstall));
-    expect(fixture.commands, [
-      'snapshot',
-      'download:candidate-123',
-      'cancel',
-      'install:candidate-123'
-    ]);
+    expect(fixture.commands, ['snapshot', 'download', 'cancel', 'exit']);
   });
 
   testWidgets('channel field responds across its padding and shows focus',
@@ -213,19 +206,19 @@ void main() {
         isNotNull);
   });
 
-  testWidgets(
-      'integrity failure can be recovered by checking and downloading again',
+  testWidgets('failed download can be retried after checking again',
       (tester) async {
-    fixture.emit(updateSnapshot(AppUpdatePhase.ready));
+    fixture.emit(updateSnapshot(AppUpdatePhase.available,
+        error: 'Package size or SHA-256 checksum mismatch'));
     final l10n = await pumpUpdates(tester, fixture);
-    await tester.ensureVisible(find.text(l10n.updatesInstall));
-    await tester.tap(find.text(l10n.updatesInstall));
-    fixture.emit(updateSnapshot(AppUpdatePhase.preparing));
-    await tester.pump();
-    fixture.emit(updateSnapshot(AppUpdatePhase.ready,
-        errorKind: AppUpdateErrorKind.integrity, error: 'Checksum mismatch'));
-    await tester.pump();
-    expect(find.text(l10n.updatesIntegrityError), findsOneWidget);
+    expect(find.text(l10n.updatesError), findsOneWidget);
+    await tester.ensureVisible(find.text(l10n.updatesErrorDetails));
+    await tester.tap(find.text(l10n.updatesErrorDetails));
+    await tester.pumpAndSettle();
+    expect(
+        find.widgetWithText(
+            SelectableText, 'Package size or SHA-256 checksum mismatch'),
+        findsOneWidget);
     await tester.ensureVisible(find.text(l10n.updatesCheckAgain));
     await tester.tap(find.text(l10n.updatesCheckAgain));
     await tester.pump();
@@ -237,47 +230,12 @@ void main() {
         isNull);
     fixture.emit(updateSnapshot(AppUpdatePhase.checking));
     await tester.pump();
-    fixture.emit(updateSnapshot(AppUpdatePhase.available).copyWith(
-      release: () => updateRelease.copyWith(candidateId: 'fresh-candidate'),
-    ));
+    fixture.emit(updateSnapshot(AppUpdatePhase.available));
     await tester.pump();
-    expect(find.text(l10n.updatesIntegrityError), findsNothing);
+    expect(find.text(l10n.updatesError), findsNothing);
     await tester.ensureVisible(find.text(l10n.updatesDownload));
     await tester.tap(find.text(l10n.updatesDownload));
-    expect(fixture.commands, [
-      'snapshot',
-      'install:candidate-123',
-      'check',
-      'download:fresh-candidate',
-    ]);
-  });
-
-  testWidgets('all error categories have a summary and selectable details',
-      (tester) async {
-    final l10n = await pumpUpdates(tester, fixture);
-    for (final kind in AppUpdateErrorKind.values) {
-      fixture.emit(updateSnapshot(AppUpdatePhase.ready,
-          errorKind: kind, error: 'Technical details'));
-      await tester.pump();
-      final summary = switch (kind) {
-        AppUpdateErrorKind.network => l10n.updatesNetworkError,
-        AppUpdateErrorKind.noRelease => l10n.updatesNoReleaseError,
-        AppUpdateErrorKind.incompleteRelease =>
-          l10n.updatesIncompleteReleaseError,
-        AppUpdateErrorKind.invalidMetadata => l10n.updatesInvalidMetadataError,
-        AppUpdateErrorKind.noPackage => l10n.updatesNoPackageError,
-        AppUpdateErrorKind.integrity => l10n.updatesIntegrityError,
-        AppUpdateErrorKind.installation => l10n.updatesInstallationError,
-        AppUpdateErrorKind.invalidRequest => l10n.updatesInvalidRequestError,
-      };
-      expect(find.text(summary), findsOneWidget);
-      expect(find.text(l10n.updatesInstall), findsOneWidget);
-    }
-    await tester.ensureVisible(find.text(l10n.updatesErrorDetails));
-    await tester.tap(find.text(l10n.updatesErrorDetails));
-    await tester.pumpAndSettle();
-    expect(find.widgetWithText(SelectableText, 'Technical details'),
-        findsOneWidget);
+    expect(fixture.commands, ['snapshot', 'check', 'download']);
   });
 
   testWidgets('Markdown links open externally and failures show a snackbar',

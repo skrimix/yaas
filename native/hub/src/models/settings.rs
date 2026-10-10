@@ -94,15 +94,6 @@ impl Default for UpdateChannel {
     }
 }
 
-impl UpdateChannel {
-    pub(crate) fn as_str(self) -> &'static str {
-        match self {
-            Self::Stable => "stable",
-            Self::Nightly => "nightly",
-        }
-    }
-}
-
 #[derive(Debug, Clone, Serialize, Deserialize, PartialEq, Eq, SignalPiece)]
 #[serde(default)]
 pub(crate) struct Settings {

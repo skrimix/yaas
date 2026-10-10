@@ -11,14 +11,13 @@ pub(crate) struct RustPanic {
 
 #[derive(Serialize, Deserialize, DartSignal)]
 pub(crate) struct AppShutdownRequest {
-    pub update_candidate_id: Option<String>,
+    /// Install the ready application update after shutting down.
+    pub install_update: bool,
 }
 
 #[derive(Serialize, Deserialize, RustSignal)]
 pub(crate) struct AppShutdownReady {
     pub timed_out: bool,
-    pub update_error: Option<String>,
-    pub shutdown_cancelled: bool,
     pub remaining_tasks: u32,
 }
 

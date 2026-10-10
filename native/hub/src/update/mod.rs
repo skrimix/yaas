@@ -10,33 +10,45 @@ use std::{
     fs,
     path::{Path, PathBuf},
     sync::Arc,
-    time::{Duration, SystemTime},
+    time::Duration,
 };
 
-use anyhow::{Context, Result, ensure};
-pub(crate) use install::Prepared;
-use release::{Candidate, Failure};
+use anyhow::{Result, ensure};
+use release::Candidate;
 use rinf::{DartSignal, RustSignal};
 use tokio::{
-    sync::{mpsc, oneshot, watch},
+    sync::{mpsc, watch},
     task::JoinHandle,
 };
 use tokio_util::sync::CancellationToken;
 
 use crate::models::{Settings, UpdateChannel, signals::update::*};
 
+/// Output of the last install script; kept when workspaces are cleared.
+const LOG_NAME: &str = "update.log";
+
 pub(crate) struct UpdateManager {
-    sender: mpsc::UnboundedSender<ShutdownCommand>,
+    ready: watch::Receiver<Option<ReadyUpdate>>,
 }
-enum ShutdownCommand {
-    Take(String, oneshot::Sender<Result<Prepared>>),
-    Stop(oneshot::Sender<()>),
+
+/// A staged update that [`ReadyUpdate::launch`] installs once the app exits.
+#[derive(Clone)]
+pub(crate) struct ReadyUpdate {
+    root: PathBuf,
+    workspace: PathBuf,
+    portable: bool,
+}
+
+impl ReadyUpdate {
+    /// Starts the install script, detached. The app must exit right after.
+    pub(crate) fn launch(&self) -> Result<()> {
+        install::launch(&self.root, &self.workspace, self.portable)
+    }
 }
 
 enum Outcome {
     Checked(Option<Box<Candidate>>),
     Downloaded,
-    Prepared(Prepared),
 }
 struct Operation {
     task: JoinHandle<Result<Outcome>>,
@@ -44,6 +56,7 @@ struct Operation {
 }
 
 struct Manager {
+    /// The `updates` directory: candidate workspaces, the install script, and its log.
     root: PathBuf,
     /// Relaunch the updated app with `--portable`.
     portable: bool,
@@ -51,13 +64,11 @@ struct Manager {
     phase: AppUpdatePhase,
     received_bytes: u64,
     installation_unavailable_reason: Option<String>,
-    error_kind: Option<AppUpdateErrorKind>,
     error: Option<String>,
     candidate: Option<Candidate>,
     operation: Option<Operation>,
-    prepared: Option<Prepared>,
-    exiting: bool,
     progress_tx: mpsc::UnboundedSender<u64>,
+    ready_tx: watch::Sender<Option<ReadyUpdate>>,
 }
 
 impl UpdateManager {
@@ -66,8 +77,8 @@ impl UpdateManager {
         portable: bool,
         settings: watch::Receiver<Settings>,
     ) -> Arc<Self> {
-        let (sender, receiver) = mpsc::unbounded_channel();
         let (progress_tx, progress_rx) = mpsc::unbounded_channel();
+        let (ready_tx, ready) = watch::channel(None);
         let channel = settings.borrow().update_channel;
         let manager = Manager {
             root: root.join("updates"),
@@ -76,112 +87,98 @@ impl UpdateManager {
             phase: AppUpdatePhase::Idle,
             received_bytes: 0,
             installation_unavailable_reason: install::unavailable_reason(),
-            error_kind: None,
             error: None,
             candidate: None,
             operation: None,
-            prepared: None,
-            exiting: false,
             progress_tx,
+            ready_tx,
         };
-        tokio::spawn(manager.run(settings, receiver, progress_rx));
-        Arc::new(Self { sender })
+        tokio::spawn(manager.run(settings, progress_rx));
+        Arc::new(Self { ready })
     }
 
-    pub(crate) async fn take_install(&self, id: String) -> Result<Prepared> {
-        let (tx, rx) = oneshot::channel();
-        self.sender.send(ShutdownCommand::Take(id, tx)).context("Update manager stopped")?;
-        rx.await.context("Update manager stopped")?
+    /// The staged update, if one is ready to install.
+    pub(crate) fn ready(&self) -> Option<ReadyUpdate> {
+        self.ready.borrow().clone()
     }
-    pub(crate) async fn stop(&self) {
-        let (tx, rx) = oneshot::channel();
-        if self.sender.send(ShutdownCommand::Stop(tx)).is_ok() {
-            let _ = rx.await;
+}
+
+/// Workspace for a package, keyed by its checksum so a repeated check keeps a
+/// finished download.
+fn workspace(root: &Path, sha256: &str) -> PathBuf {
+    root.join(sha256.chars().take(16).collect::<String>().to_ascii_lowercase())
+}
+
+/// Removes everything in `root` except the script log and `keep`.
+fn clear_workspaces(root: &Path, keep: Option<&Path>) {
+    let Ok(entries) = fs::read_dir(root) else { return };
+    for entry in entries.flatten() {
+        let path = entry.path();
+        if entry.file_name() == LOG_NAME || keep == Some(path.as_path()) {
+            continue;
+        }
+        if entry.file_type().is_ok_and(|t| t.is_dir()) {
+            let _ = fs::remove_dir_all(path);
+        } else {
+            let _ = fs::remove_file(path);
         }
     }
 }
 
 impl Manager {
     fn publish(&self) {
+        self.ready_tx.send_replace((self.phase == AppUpdatePhase::Ready).then(|| ReadyUpdate {
+            root: self.root.clone(),
+            workspace: self.workspace().unwrap(),
+            portable: self.portable,
+        }));
         AppUpdateStateChanged {
             channel: self.channel,
             phase: self.phase,
             release: self.candidate.as_ref().map(|c| c.info.clone()),
             received_bytes: self.received_bytes,
             installation_unavailable_reason: self.installation_unavailable_reason.clone(),
-            error_kind: self.error_kind,
             error: self.error.clone(),
         }
         .send_signal_to_dart();
     }
-    fn clear_error(&mut self) {
-        self.error = None;
-        self.error_kind = None;
-    }
-    fn set_error(&mut self, error: anyhow::Error, default: AppUpdateErrorKind) {
-        self.error_kind = Some(error.downcast_ref::<Failure>().map(|f| f.0).unwrap_or(default));
+    fn set_error(&mut self, error: anyhow::Error) {
         self.error = Some(format!("{error:#}"));
     }
-    fn download_dir(&self) -> PathBuf {
-        self.root.join("downloads").join(&self.candidate.as_ref().unwrap().info.candidate_id)
+    fn workspace(&self) -> Option<PathBuf> {
+        self.candidate.as_ref().map(|c| workspace(&self.root, &c.asset.sha256))
     }
-    fn valid_candidate(&self, id: &str) -> bool {
-        self.candidate.as_ref().is_some_and(|c| c.info.candidate_id == id)
-    }
-    fn valid_exit(&self, id: &str) -> Result<()> {
-        ensure!(
-            self.valid_candidate(id)
-                && self.prepared.is_some()
-                && self.phase == AppUpdatePhase::AwaitingExit,
-            "The prepared update is no longer available"
-        );
-        Ok(())
-    }
-    fn idle_phase(&self) -> AppUpdatePhase {
-        if self.candidate.is_none() {
-            AppUpdatePhase::Idle
-        } else if self.download_dir().join("package").is_file() {
-            AppUpdatePhase::Ready
-        } else {
-            AppUpdatePhase::Available
-        }
+    /// Sets the phase from the candidate and its workspace when nothing is running.
+    fn settle(&mut self) {
+        self.phase = match self.workspace() {
+            None => AppUpdatePhase::Idle,
+            Some(workspace) if install::staged_path(&workspace).exists() => AppUpdatePhase::Ready,
+            Some(_) => AppUpdatePhase::Available,
+        };
+        self.received_bytes = match (&self.candidate, self.phase) {
+            (Some(candidate), AppUpdatePhase::Ready) => candidate.info.package_size,
+            _ => 0,
+        };
     }
     async fn cancel(&mut self) {
         if let Some(operation) = self.operation.take() {
             operation.cancel.cancel();
-            // File preparation runs on the blocking pool; wait before cleaning its workspace.
-            if let Ok(Ok(Outcome::Prepared(prepared))) = operation.task.await {
-                prepared.cancel().await;
-            }
+            // Staging can't be interrupted; wait so the workspace is consistent.
+            let _ = operation.task.await;
         }
-        if let Some(prepared) = self.prepared.take() {
-            prepared.cancel().await;
-        }
-        self.phase = self.idle_phase();
-        self.received_bytes = if self.phase == AppUpdatePhase::Ready {
-            self.candidate.as_ref().unwrap().info.package_size
-        } else {
-            0
-        };
+        self.settle();
     }
     async fn reset(&mut self, channel: UpdateChannel) {
         self.cancel().await;
-        if self.candidate.is_some() {
-            let _ = tokio::fs::remove_dir_all(self.download_dir()).await;
-        }
         self.candidate = None;
-        self.received_bytes = 0;
-        self.phase = AppUpdatePhase::Idle;
         self.channel = channel;
-        self.clear_error();
+        self.error = None;
+        self.settle();
+        clear_workspaces(&self.root, None);
     }
 
-    async fn begin_check(&mut self) -> Result<()> {
-        ensure!(
-            self.operation.is_none() && self.prepared.is_none(),
-            "An update operation is already active"
-        );
-        self.reset(self.channel).await;
+    fn begin_check(&mut self) -> Result<()> {
+        ensure!(self.operation.is_none(), "An update operation is already active");
         let channel = self.channel;
         let cancel = CancellationToken::new();
         let token = cancel.clone();
@@ -190,7 +187,7 @@ impl Manager {
                 .run_until_cancelled(async {
                     let client = release::client()?;
                     let candidate = tokio::time::timeout(
-                        std::time::Duration::from_secs(60),
+                        Duration::from_secs(60),
                         release::check(
                             &client,
                             release::API,
@@ -205,147 +202,83 @@ impl Manager {
                 .unwrap_or_else(|| Err(anyhow::anyhow!("Check cancelled")))
         });
         self.operation = Some(Operation { task, cancel });
+        self.error = None;
         self.phase = AppUpdatePhase::Checking;
         Ok(())
     }
 
-    fn require_candidate(&self, id: &str, phase: AppUpdatePhase) -> Result<()> {
+    /// Downloads, verifies, and stages the candidate. A failed or cancelled
+    /// download removes its workspace.
+    fn begin_download(&mut self) -> Result<()> {
         ensure!(
-            self.operation.is_none()
-                && self.prepared.is_none()
-                && self.valid_candidate(id)
-                && self.phase == phase,
-            "No matching update is ready for this operation"
+            self.operation.is_none() && self.phase == AppUpdatePhase::Available,
+            "No update is available to download"
         );
-        Ok(())
-    }
-
-    fn begin_download(&mut self, id: &str) -> Result<()> {
-        self.require_candidate(id, AppUpdatePhase::Available)?;
-        let candidate = self.candidate.as_ref().unwrap().clone();
-        let directory = self.download_dir();
+        let candidate = self.candidate.clone().unwrap();
+        let workspace = self.workspace().unwrap();
         let progress = self.progress_tx.clone();
         let cancel = CancellationToken::new();
         let token = cancel.clone();
         let task = tokio::spawn(async move {
-            release::download(
-                &release::client()?,
-                release::API,
-                &candidate,
-                &directory,
-                &token,
-                progress,
-            )
-            .await?;
-            Ok(Outcome::Downloaded)
+            let result = async {
+                let client = release::client()?;
+                release::download(&client, release::API, &candidate, &workspace, &token, progress)
+                    .await?;
+                ensure!(!token.is_cancelled(), "Download cancelled");
+                let directory = workspace.clone();
+                tokio::task::spawn_blocking(move || install::stage(&directory)).await?
+            }
+            .await;
+            if result.is_err() {
+                let _ = tokio::fs::remove_dir_all(&workspace).await;
+            }
+            result.map(|()| Outcome::Downloaded)
         });
         self.operation = Some(Operation { task, cancel });
-        self.clear_error();
+        self.error = None;
         self.received_bytes = 0;
         self.phase = AppUpdatePhase::Downloading;
         Ok(())
     }
 
-    fn begin_install(&mut self, id: &str) -> Result<()> {
-        self.require_candidate(id, AppUpdatePhase::Ready)?;
-        if let Some(reason) = install::unavailable_reason() {
-            self.installation_unavailable_reason = Some(reason.clone());
-            return Err(release::failure(AppUpdateErrorKind::Installation, reason));
-        }
-        let root = self.root.clone();
-        let download = self.download_dir();
-        let candidate = self.candidate.as_ref().unwrap().clone();
-        let portable = self.portable;
-        let task = tokio::spawn(async move {
-            Ok(Outcome::Prepared(install::prepare(root, download, candidate, portable).await?))
-        });
-        self.operation = Some(Operation { task, cancel: CancellationToken::new() });
-        self.clear_error();
-        self.phase = AppUpdatePhase::Preparing;
-        Ok(())
-    }
-
     fn completed(&mut self, result: Result<Outcome>) {
         self.operation = None;
-        if result.is_ok() {
-            self.clear_error();
-        }
         match result {
             Ok(Outcome::Checked(candidate)) => {
-                self.phase = if candidate.is_some() {
-                    AppUpdatePhase::Available
-                } else {
-                    AppUpdatePhase::UpToDate
-                };
+                self.error = None;
                 self.candidate = candidate.map(|candidate| *candidate);
+                clear_workspaces(&self.root, self.workspace().as_deref());
+                self.settle();
+                if self.candidate.is_none() {
+                    self.phase = AppUpdatePhase::UpToDate;
+                }
             }
             Ok(Outcome::Downloaded) => {
-                self.phase = AppUpdatePhase::Ready;
-                self.received_bytes = self.candidate.as_ref().unwrap().info.package_size;
-            }
-            Ok(Outcome::Prepared(prepared)) => {
-                self.prepared = Some(prepared);
-                self.phase = AppUpdatePhase::AwaitingExit;
-                AppUpdateExitRequested {
-                    candidate_id: self.candidate.as_ref().unwrap().info.candidate_id.clone(),
-                }
-                .send_signal_to_dart();
+                self.error = None;
+                self.settle();
             }
             Err(error) => {
-                let kind = if self.phase == AppUpdatePhase::Preparing {
-                    AppUpdateErrorKind::Installation
-                } else {
-                    AppUpdateErrorKind::Network
-                };
-                self.phase = self.idle_phase();
-                self.set_error(error, kind);
+                self.settle();
+                self.set_error(error);
             }
         }
-        self.publish();
     }
 
     async fn run(
         mut self,
         mut settings: watch::Receiver<Settings>,
-        mut shutdown: mpsc::UnboundedReceiver<ShutdownCommand>,
         mut progress: mpsc::UnboundedReceiver<u64>,
     ) {
         let state_rx = GetAppUpdateStateRequest::get_dart_signal_receiver();
         let check_rx = CheckAppUpdateRequest::get_dart_signal_receiver();
         let download_rx = DownloadAppUpdateRequest::get_dart_signal_receiver();
-        let install_rx = InstallAppUpdateRequest::get_dart_signal_receiver();
         let cancel_rx = CancelAppUpdateRequest::get_dart_signal_receiver();
-        sweep_stale_update_files(&self.root);
+        // Downloads don't survive restarts; drop leftovers from earlier sessions.
+        clear_workspaces(&self.root, None);
         self.publish();
         loop {
             tokio::select! {
-                command = shutdown.recv() => {
-                    match command {
-                        Some(ShutdownCommand::Take(id, reply)) => {
-                            let result = self.valid_exit(&id).map(|()| {
-                                self.exiting = true;
-                                self.prepared.take().unwrap()
-                            });
-                            if let Err(error) = &result {
-                                self.error = Some(format!("{error:#}"));
-                                self.error_kind = Some(AppUpdateErrorKind::Installation);
-                                self.cancel().await;
-                                self.publish();
-                            }
-                            if let Err(Ok(prepared)) = reply.send(result) {
-                                prepared.cancel().await;
-                                self.exiting = false;
-                            }
-                        }
-                        Some(ShutdownCommand::Stop(reply)) => {
-                            self.cancel().await;
-                            let _ = reply.send(());
-                            break;
-                        }
-                        None => break,
-                    }
-                }
-                changed = settings.changed(), if !self.exiting => {
+                changed = settings.changed() => {
                     if changed.is_err() { break; }
                     let channel = settings.borrow_and_update().update_channel;
                     if channel != self.channel {
@@ -357,32 +290,25 @@ impl Manager {
                     if request.is_none() { break; }
                     self.publish();
                 }
-                request = cancel_rx.recv(), if !self.exiting => {
+                request = cancel_rx.recv() => {
                     if request.is_none() { break; }
                     self.cancel().await;
                     while progress.try_recv().is_ok() {}
-                    self.clear_error();
+                    self.error = None;
                     self.publish();
                 }
-                request = check_rx.recv(), if !self.exiting => {
+                request = check_rx.recv() => {
                     if request.is_none() { break; }
-                    if let Err(error) = self.begin_check().await {
-                        self.set_error(error, AppUpdateErrorKind::InvalidRequest);
+                    if let Err(error) = self.begin_check() {
+                        self.set_error(error);
                     }
                     self.publish();
                 }
-                request = download_rx.recv(), if !self.exiting => {
-                    let Some(request) = request else { break; };
+                request = download_rx.recv() => {
+                    if request.is_none() { break; }
                     while progress.try_recv().is_ok() {}
-                    if let Err(error) = self.begin_download(&request.message.candidate_id) {
-                        self.set_error(error, AppUpdateErrorKind::InvalidRequest);
-                    }
-                    self.publish();
-                }
-                request = install_rx.recv(), if !self.exiting => {
-                    let Some(request) = request else { break; };
-                    if let Err(error) = self.begin_install(&request.message.candidate_id) {
-                        self.set_error(error, AppUpdateErrorKind::InvalidRequest);
+                    if let Err(error) = self.begin_download() {
+                        self.set_error(error);
                     }
                     self.publish();
                 }
@@ -393,41 +319,10 @@ impl Manager {
                     }
                 }
                 result = async { (&mut self.operation.as_mut().unwrap().task).await }, if self.operation.is_some() => {
-                    self.completed(result.context("Update task stopped").and_then(|r| r));
+                    self.completed(result.map_err(anyhow::Error::from).and_then(|r| r));
+                    self.publish();
                 }
             }
-        }
-        self.cancel().await;
-    }
-}
-
-/// Removes staging directories and scripts left by failed or interrupted
-/// installs. Artifacts younger than a day are kept for diagnosis.
-fn sweep_stale_update_files(root: &Path) {
-    sweep_update_files_before(root, SystemTime::now() - Duration::from_secs(24 * 60 * 60));
-}
-
-fn sweep_update_files_before(root: &Path, cutoff: SystemTime) {
-    let Ok(entries) = fs::read_dir(root) else { return };
-    for entry in entries.flatten() {
-        let name = entry.file_name();
-        let name = name.to_string_lossy();
-        let is_staging = name.starts_with("staging-");
-        let is_script =
-            name.starts_with("update-") && (name.ends_with(".sh") || name.ends_with(".bat"));
-        if !is_staging && !is_script {
-            continue;
-        }
-        let Ok(metadata) = entry.metadata() else { continue };
-        let Ok(modified) = metadata.modified() else { continue };
-        if modified >= cutoff {
-            continue;
-        }
-        let path = entry.path();
-        if metadata.is_dir() {
-            let _ = fs::remove_dir_all(path);
-        } else {
-            let _ = fs::remove_file(path);
         }
     }
 }
@@ -436,30 +331,25 @@ fn sweep_update_files_before(root: &Path, cutoff: SystemTime) {
 mod tests {
     use super::{manifest::Asset, *};
 
-    fn manager(root: PathBuf) -> Manager {
-        let info = AppUpdateRelease {
-            candidate_id: "candidate".into(),
-            version: "2.0.0".into(),
-            build_number: 1,
-            channel: UpdateChannel::Stable,
-            commit: "a".repeat(40),
-            run_number: 2,
-            run_attempt: 1,
-            notes: String::new(),
-            release_url: String::new(),
-            package_size: 7,
-        };
-        let candidate = Candidate {
-            info: info.clone(),
-            asset: Asset {
-                name: "package".into(),
-                os: "linux".into(),
-                architectures: vec!["x86_64".into()],
-                size: 7,
-                sha256: "a".repeat(64),
+    fn candidate(sha256: &str) -> Candidate {
+        Candidate {
+            info: AppUpdateRelease {
+                version: "2.0.0".into(),
+                build_number: 1,
+                channel: UpdateChannel::Stable,
+                commit: "a".repeat(40),
+                run_number: 2,
+                run_attempt: 1,
+                notes: String::new(),
+                release_url: String::new(),
+                package_size: 7,
             },
+            asset: Asset { name: "package".into(), size: 7, sha256: sha256.into() },
             asset_id: 1,
-        };
+        }
+    }
+
+    fn manager(root: PathBuf) -> Manager {
         Manager {
             root,
             portable: false,
@@ -467,21 +357,27 @@ mod tests {
             phase: AppUpdatePhase::Available,
             received_bytes: 0,
             installation_unavailable_reason: None,
-            error_kind: None,
             error: None,
-            candidate: Some(candidate),
+            candidate: Some(candidate(&"a".repeat(64))),
             operation: None,
-            prepared: None,
-            exiting: false,
             progress_tx: mpsc::unbounded_channel().0,
+            ready_tx: watch::channel(None).0,
         }
     }
+
+    /// Creates a staged payload for the manager's candidate.
+    fn stage(manager: &Manager) -> PathBuf {
+        let workspace = manager.workspace().unwrap();
+        let staged = install::staged_path(&workspace);
+        fs::create_dir_all(staged.parent().unwrap()).unwrap();
+        fs::write(&staged, "package").unwrap();
+        workspace
+    }
+
     #[tokio::test]
-    async fn rejects_stale_candidates_and_concurrent_operations() {
+    async fn rejects_concurrent_operations() {
         let dir = tempfile::tempdir().unwrap();
         let mut manager = manager(dir.path().into());
-        assert!(manager.begin_download("stale").is_err());
-        assert!(manager.begin_install("candidate").is_err());
         let cancel = CancellationToken::new();
         let token = cancel.clone();
         manager.operation = Some(Operation {
@@ -491,57 +387,70 @@ mod tests {
                 Err(anyhow::anyhow!("cancelled"))
             }),
         });
-        assert!(manager.begin_check().await.is_err());
-        assert!(manager.begin_download("candidate").is_err());
+        assert!(manager.begin_check().is_err());
+        assert!(manager.begin_download().is_err());
         manager.cancel().await;
         assert!(manager.operation.is_none());
         assert_eq!(manager.phase, AppUpdatePhase::Available);
     }
+
     #[tokio::test]
-    async fn changing_channel_invalidates_candidate_and_staged_download() {
+    async fn repeated_check_keeps_staged_download() {
         let dir = tempfile::tempdir().unwrap();
         let mut manager = manager(dir.path().into());
-        let download = manager.download_dir();
-        std::fs::create_dir_all(&download).unwrap();
-        std::fs::write(download.join("package"), "package").unwrap();
-        manager.phase = AppUpdatePhase::Ready;
+        let workspace = stage(&manager);
+        manager.settle();
+        assert_eq!(manager.phase, AppUpdatePhase::Ready);
+
+        let same = candidate(&"a".repeat(64));
+        manager.completed(Ok(Outcome::Checked(Some(Box::new(same)))));
+        assert_eq!(manager.phase, AppUpdatePhase::Ready);
+        assert_eq!(manager.received_bytes, 7);
+        assert!(workspace.exists());
+
+        let newer = candidate(&"b".repeat(64));
+        manager.completed(Ok(Outcome::Checked(Some(Box::new(newer)))));
+        assert_eq!(manager.phase, AppUpdatePhase::Available);
+        assert!(!workspace.exists());
+    }
+
+    #[tokio::test]
+    async fn failed_check_keeps_staged_download() {
+        let dir = tempfile::tempdir().unwrap();
+        let mut manager = manager(dir.path().into());
+        stage(&manager);
+        manager.completed(Err(anyhow::anyhow!("offline")));
+        assert_eq!(manager.phase, AppUpdatePhase::Ready);
+        assert_eq!(manager.error.as_deref(), Some("offline"));
+    }
+
+    #[tokio::test]
+    async fn changing_channel_clears_candidate_and_workspace() {
+        let dir = tempfile::tempdir().unwrap();
+        let mut manager = manager(dir.path().into());
+        let workspace = stage(&manager);
         manager.reset(UpdateChannel::Nightly).await;
         assert_eq!(manager.channel, UpdateChannel::Nightly);
         assert_eq!(manager.phase, AppUpdatePhase::Idle);
-        assert!(!manager.valid_candidate("candidate"));
-        assert!(!download.exists());
-    }
-    #[tokio::test]
-    async fn cancellation_keeps_a_verified_package_for_retry() {
-        let dir = tempfile::tempdir().unwrap();
-        let mut manager = manager(dir.path().into());
-        std::fs::create_dir_all(manager.download_dir()).unwrap();
-        std::fs::write(manager.download_dir().join("package"), "package").unwrap();
-        manager.phase = AppUpdatePhase::Preparing;
-        manager.cancel().await;
-        assert_eq!(manager.phase, AppUpdatePhase::Ready);
-        assert_eq!(manager.received_bytes, 7);
-        assert!(manager.valid_exit("candidate").is_err());
+        assert!(manager.candidate.is_none());
+        assert!(!workspace.exists());
     }
 
     #[test]
-    fn sweep_removes_only_stale_update_artifacts() {
+    fn clearing_workspaces_keeps_log_and_current_workspace() {
         let dir = tempfile::tempdir().unwrap();
         let root = dir.path();
-        let staging = root.join("staging-old");
-        fs::create_dir_all(&staging).unwrap();
-        let script = root.join("update-old.sh");
-        fs::write(&script, "x").unwrap();
-        let download = root.join("downloads");
-        fs::create_dir_all(download.join("id")).unwrap();
-        fs::write(root.join("updater-notes.txt"), "keep").unwrap();
-        // Nothing fresh is removed, and unrelated entries are never touched.
-        sweep_update_files_before(root, SystemTime::now() - Duration::from_secs(1));
-        assert!(staging.exists() && script.exists());
-        // With the cutoff in the future, matching artifacts are removed.
-        sweep_update_files_before(root, SystemTime::now() + Duration::from_secs(1));
-        assert!(!staging.exists() && !script.exists());
-        assert!(download.join("id").exists());
-        assert!(root.join("updater-notes.txt").exists());
+        for name in ["old", "current", "downloads/id"] {
+            fs::create_dir_all(root.join(name)).unwrap();
+        }
+        fs::write(root.join(LOG_NAME), "log").unwrap();
+        fs::write(root.join("update.sh"), "script").unwrap();
+        clear_workspaces(root, Some(&root.join("current")));
+        let mut left: Vec<_> = fs::read_dir(root)
+            .unwrap()
+            .map(|e| e.unwrap().file_name().into_string().unwrap())
+            .collect();
+        left.sort();
+        assert_eq!(left, ["current", LOG_NAME]);
     }
 }

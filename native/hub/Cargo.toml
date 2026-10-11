@@ -31,7 +31,6 @@ mimalloc = "0.1.52"
 rinf = { version = "=8.10.1", features = ["show-backtrace"] }
 serde = { version = "1.0.229", features = ["derive"] }
 serde_json = { version = "1.0.151", features = ["preserve_order"] }
-sysproxy = { git = "https://github.com/zzzgydi/sysproxy-rs" }
 test-log = { version = "0.2.21", features = ["trace"] }
 tokio = { version = "1.53.1", features = [
     "macros",
@@ -59,6 +58,7 @@ sanitize-filename = "0.6.0"
 reqwest = { version = "0.12.28", default-features = false, features = [
     "json",
     "rustls-tls",
+    "socks",
     "stream",
 ] } # stay on 0.12 for compatibility
 zip = "8.6.0"
@@ -76,6 +76,9 @@ apk-info = "1.0.12"
 yarc = { path = "../yarc" }
 magic-cast = { path = "../magic_cast" }
 dunce = "1.0.5"
+
+[target.'cfg(windows)'.dependencies]
+winreg = "0.56.0"
 
 [build-dependencies]
 built = { version = "0.8.1", features = ["git2", "chrono"] }

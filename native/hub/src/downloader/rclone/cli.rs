@@ -19,7 +19,8 @@ use tracing::{Span, error, instrument, trace, warn};
 
 use crate::{
     downloader::{TransferSpeedTracker, TransferStats},
-    utils::{get_sys_proxy, resolve_binary_path},
+    sys_proxy::get_sys_proxy,
+    utils::resolve_binary_path,
 };
 
 static CONNECTION_TIMEOUT: &str = "5s";

@@ -51,7 +51,7 @@ async fn download_casting_bundle(app_dir: &Path) -> Result<()> {
 
     let client = {
         let mut builder = reqwest::Client::builder().use_rustls_tls().user_agent(crate::USER_AGENT);
-        if let Some(proxy) = crate::utils::get_sys_proxy() {
+        if let Some(proxy) = crate::sys_proxy::get_sys_proxy() {
             builder = builder.proxy(reqwest::Proxy::all(&proxy)?);
         }
         builder.build()?

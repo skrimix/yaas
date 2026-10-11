@@ -59,6 +59,7 @@ pub(crate) mod downloader;
 pub(crate) mod logging;
 pub(crate) mod models;
 pub(crate) mod settings;
+pub(crate) mod sys_proxy;
 pub(crate) mod task;
 pub(crate) mod update;
 pub(crate) mod utils;

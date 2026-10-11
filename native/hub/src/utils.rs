@@ -1,31 +1,11 @@
 use std::{
     env,
-    error::Error,
     path::{Path, PathBuf},
 };
 
 use anyhow::Result;
-use sysproxy::Sysproxy;
 use tokio::fs;
-use tracing::{debug, instrument, trace, warn};
-
-#[instrument(level = "debug")]
-pub(crate) fn get_sys_proxy() -> Option<String> {
-    let proxy = Sysproxy::get_system_proxy();
-    match proxy {
-        Ok(proxy) => {
-            if proxy.enable {
-                let result = format!("http://{}:{}", proxy.host, proxy.port);
-                debug!(proxy = &result, "Got system proxy");
-                return Some(result);
-            }
-        }
-        Err(e) => {
-            warn!(error = &e as &dyn Error, "Failed to get system proxy");
-        }
-    }
-    None
-}
+use tracing::{instrument, trace, warn};
 
 /// Resolve an executable path by consulting (in order):
 /// - a custom path (file or directory)

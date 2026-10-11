@@ -326,6 +326,7 @@ mod tests {
         // The script self-deletes on success; poll for completion.
         wait_for(|| !script.exists(), Duration::from_secs(90));
         let _ = child.kill();
+        let _ = child.wait();
         assert!(!script.exists(), "script did not delete itself");
         assert!(!workspace.exists(), "workspace not cleaned up");
         assert!(updates.join("update.log").exists());

@@ -411,9 +411,7 @@ mod tests {
     };
 
     use super::*;
-    use crate::downloader::config::{
-        Backend, DownloaderConfig, FfaConfig, NewRepoConfig, RclonePath,
-    };
+    use crate::downloader::config::{Backend, DownloaderConfig, NewRepoConfig};
 
     async fn fixture(url: &str) -> (tempfile::TempDir, Arc<DownloaderSession>) {
         let dir = tempfile::tempdir().unwrap();
@@ -565,6 +563,8 @@ mod tests {
     #[tokio::test]
     async fn ffa_bandwidth_changes_preserve_catalog_and_remote_feedback_does_not_reload() {
         use std::os::unix::fs::PermissionsExt;
+
+        use crate::downloader::config::{FfaConfig, RclonePath};
         let (dir, session) = fixture("http://127.0.0.1:1").await;
         let binary = dir.path().join("rclone");
         let config_path = dir.path().join("rclone.conf");

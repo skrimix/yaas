@@ -66,4 +66,4 @@ create-icons:
 # Run cargo check with windows target
 check-windows:
     command -v x86_64-w64-mingw32-gcc > /dev/null || (echo "x86_64-w64-mingw32-gcc tool not installed" && exit 1)
-    cargo check --target x86_64-pc-windows-gnu
+    cargo clippy --target x86_64-pc-windows-gnu --all-targets

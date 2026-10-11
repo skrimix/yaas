@@ -554,6 +554,18 @@ abstract class AppLocalizations {
   /// **'Please enter a valid http(s) URL'**
   String get downloaderConfigUrlInvalid;
 
+  /// No description provided for @downloaderConfigUrlShow.
+  ///
+  /// In en, this message translates to:
+  /// **'Show full URL'**
+  String get downloaderConfigUrlShow;
+
+  /// No description provided for @downloaderConfigUrlHide.
+  ///
+  /// In en, this message translates to:
+  /// **'Hide sensitive URL parts'**
+  String get downloaderConfigUrlHide;
+
   /// No description provided for @downloaderConfigVrgRusTestButton.
   ///
   /// In en, this message translates to:

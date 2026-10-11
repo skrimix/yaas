@@ -10,6 +10,63 @@ import '../../src/l10n/app_localizations.dart';
 import '../../utils/utils.dart';
 import '../common/selectable_link_text.dart';
 
+/// Renders userinfo, query and fragment of the URL as bullets unless
+/// [revealed], so pasted credentials don't show up in screenshots.
+class _SensitiveUrlController extends TextEditingController {
+  static const _mask = '\u2022';
+
+  bool _revealed = false;
+
+  bool get revealed => _revealed;
+
+  set revealed(bool value) {
+    if (_revealed == value) return;
+    _revealed = value;
+    notifyListeners();
+  }
+
+  @override
+  TextSpan buildTextSpan({
+    required BuildContext context,
+    TextStyle? style,
+    required bool withComposing,
+  }) {
+    final ranges = _revealed ? const <(int, int)>[] : _sensitiveRanges(text);
+    if (ranges.isEmpty) {
+      return super.buildTextSpan(
+        context: context,
+        style: style,
+        withComposing: withComposing,
+      );
+    }
+    final buffer = StringBuffer();
+    var pos = 0;
+    for (final (start, end) in ranges) {
+      buffer
+        ..write(text.substring(pos, start))
+        ..write(_mask * (end - start));
+      pos = end;
+    }
+    buffer.write(text.substring(pos));
+    return TextSpan(style: style, text: buffer.toString());
+  }
+
+  static List<(int, int)> _sensitiveRanges(String text) {
+    final ranges = <(int, int)>[];
+    final schemeEnd = text.indexOf('://');
+    final authorityStart = schemeEnd < 0 ? 0 : schemeEnd + 3;
+    var authorityEnd = text.indexOf(RegExp(r'[/?#]'), authorityStart);
+    if (authorityEnd < 0) authorityEnd = text.length;
+    final at = text.substring(authorityStart, authorityEnd).lastIndexOf('@');
+    if (at > 0) ranges.add((authorityStart, authorityStart + at));
+    final tailStart = text.indexOf(RegExp(r'[?#]'), authorityStart);
+    if (tailStart >= 0 && tailStart + 1 < text.length) {
+      ranges.add((tailStart + 1, text.length));
+    }
+    return ranges;
+  }
+}
+
 class DownloaderSetupDialog extends StatefulWidget {
   const DownloaderSetupDialog({super.key});
 
@@ -18,7 +75,7 @@ class DownloaderSetupDialog extends StatefulWidget {
 }
 
 class _DownloaderSetupDialogState extends State<DownloaderSetupDialog> {
-  final TextEditingController _urlController = TextEditingController();
+  final _SensitiveUrlController _urlController = _SensitiveUrlController();
   StreamSubscription<RustSignalPack<DownloaderConfigInstallResult>>?
       _installSub;
   StreamSubscription<RustSignalPack<DownloaderSourceRemovedResult>>? _removeSub;
@@ -30,15 +87,29 @@ class _DownloaderSetupDialogState extends State<DownloaderSetupDialog> {
 
   InputDecoration _buildUrlInputDecoration(AppLocalizations l10n) {
     final errorText = _errorText;
+    final revealed = _urlController.revealed;
+    final revealToggle = IconButton(
+      tooltip: revealed
+          ? l10n.downloaderConfigUrlHide
+          : l10n.downloaderConfigUrlShow,
+      onPressed: () {
+        setState(() {
+          _urlController.revealed = !revealed;
+        });
+      },
+      icon: Icon(revealed ? Icons.visibility_off : Icons.visibility),
+    );
 
     if (errorText == null || errorText.isEmpty) {
       return InputDecoration(
         labelText: l10n.downloaderConfigUrlLabel,
+        suffixIcon: revealToggle,
       );
     }
 
     final decoration = InputDecoration(
       labelText: l10n.downloaderConfigUrlLabel,
+      suffixIcon: revealToggle,
       errorMaxLines: 4,
     );
 
@@ -106,6 +177,7 @@ class _DownloaderSetupDialogState extends State<DownloaderSetupDialog> {
     setState(() {
       _isAdding = true;
       _errorText = null;
+      _urlController.revealed = false;
     });
     InstallDownloaderConfigFromUrlRequest(url: url).sendSignalToRust();
   }

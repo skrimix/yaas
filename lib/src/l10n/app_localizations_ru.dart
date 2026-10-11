@@ -262,6 +262,12 @@ class AppLocalizationsRu extends AppLocalizations {
       'Введите корректный URL, начинающийся с http(s)';
 
   @override
+  String get downloaderConfigUrlShow => 'Показать полный URL';
+
+  @override
+  String get downloaderConfigUrlHide => 'Скрыть чувствительные части URL';
+
+  @override
   String get downloaderConfigVrgRusTestButton => 'Проверить доступ';
 
   @override

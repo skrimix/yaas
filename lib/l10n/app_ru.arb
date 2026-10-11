@@ -114,6 +114,8 @@
   "downloaderConfigTemplateCustom": "Произвольный URL",
   "downloaderConfigUrlLabel": "URL конфигурации",
   "downloaderConfigUrlInvalid": "Введите корректный URL, начинающийся с http(s)",
+  "downloaderConfigUrlShow": "Показать полный URL",
+  "downloaderConfigUrlHide": "Скрыть чувствительные части URL",
   "downloaderConfigVrgRusTestButton": "Проверить доступ",
   "downloaderConfigVrgRusTestOk": "Доступ ОК.",
   "downloaderConfigVrgRusTestError": "Ошибка ({code}): {error}",

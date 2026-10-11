@@ -114,6 +114,8 @@
   "downloaderConfigTemplateCustom": "Custom URL",
   "downloaderConfigUrlLabel": "Config URL",
   "downloaderConfigUrlInvalid": "Please enter a valid http(s) URL",
+  "downloaderConfigUrlShow": "Show full URL",
+  "downloaderConfigUrlHide": "Hide sensitive URL parts",
   "downloaderConfigVrgRusTestButton": "Test access",
   "downloaderConfigVrgRusTestOk": "Access looks OK.",
   "downloaderConfigVrgRusTestError": "Error ({code}): {error}",

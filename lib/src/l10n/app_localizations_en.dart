@@ -259,6 +259,12 @@ class AppLocalizationsEn extends AppLocalizations {
   String get downloaderConfigUrlInvalid => 'Please enter a valid http(s) URL';
 
   @override
+  String get downloaderConfigUrlShow => 'Show full URL';
+
+  @override
+  String get downloaderConfigUrlHide => 'Hide sensitive URL parts';
+
+  @override
   String get downloaderConfigVrgRusTestButton => 'Test access';
 
   @override

@@ -1,18 +1,121 @@
-use std::{collections::HashMap, time::Duration};
+use std::{collections::HashMap, error::Error, time::Duration};
 
 use anyhow::{Context, Result, ensure};
 use reqwest::header::{ACCEPT, HeaderMap, HeaderValue};
+use rinf::{DartSignal, RustSignal};
 use serde::Deserialize;
 use serde_json::json;
-use tracing::{debug, instrument};
+use tracing::{debug, error, instrument};
 
 use crate::{
     adb::PackageName,
-    models::{AppApiResponse, CloudApp, Popularity, signals::cloud_apps::reviews::AppReview},
+    models::{
+        AppApiResponse, CloudApp, Popularity,
+        signals::cloud_apps::{
+            details::{AppDetailsResponse, GetAppDetailsRequest},
+            reviews::{AppReview, AppReviewsResponse, GetAppReviewsRequest},
+        },
+    },
 };
 
+/// Spawns tasks answering app details and reviews requests from Dart.
+pub(crate) fn start_request_handlers() {
+    let client = reqwest::Client::builder()
+        .user_agent(crate::USER_AGENT)
+        .build()
+        .unwrap_or_else(|_| reqwest::Client::new());
+
+    tokio::spawn({
+        let client = client.clone();
+        async move {
+            let receiver = GetAppDetailsRequest::get_dart_signal_receiver();
+            while let Some(request) = receiver.recv().await {
+                tokio::spawn(send_app_details(client.clone(), request.message.package_name));
+            }
+        }
+    });
+    tokio::spawn(async move {
+        let receiver = GetAppReviewsRequest::get_dart_signal_receiver();
+        while let Some(request) = receiver.recv().await {
+            tokio::spawn(send_app_reviews(client.clone(), request.message));
+        }
+    });
+}
+
+async fn send_app_details(client: reqwest::Client, package_name: String) {
+    debug!(%package_name, "Received GetAppDetailsRequest");
+    let package = match PackageName::parse(&package_name) {
+        Ok(package) => package,
+        Err(e) => {
+            error!(error = e.as_ref() as &dyn Error, "Invalid package name");
+            AppDetailsResponse::default_error(package_name, format!("Invalid package name: {e:#}"))
+                .send_signal_to_dart();
+            return;
+        }
+    };
+
+    match fetch_app_details(&client, package).await {
+        Ok(Some(api)) => {
+            let AppApiResponse {
+                id,
+                display_name,
+                description,
+                quality_rating_aggregate,
+                rating_count,
+            } = api;
+            AppDetailsResponse {
+                package_name,
+                app_id: id,
+                display_name,
+                description,
+                rating_average: quality_rating_aggregate,
+                rating_count,
+                not_found: false,
+                error: None,
+            }
+            .send_signal_to_dart();
+        }
+        Ok(None) => AppDetailsResponse::default_not_found(package_name).send_signal_to_dart(),
+        Err(e) => {
+            error!(error = e.as_ref() as &dyn Error, "Failed to fetch app details");
+            AppDetailsResponse::default_error(
+                package_name,
+                format!("Failed to fetch app details: {e:#}"),
+            )
+            .send_signal_to_dart();
+        }
+    }
+}
+
+async fn send_app_reviews(client: reqwest::Client, request: GetAppReviewsRequest) {
+    let app_id = request.app_id;
+    let limit = request.limit.unwrap_or(5);
+    let offset = request.offset.unwrap_or(0);
+    let sort_by = request.sort_by.unwrap_or_else(|| "helpful".to_string());
+    debug!(%app_id, "Received GetAppReviewsRequest");
+
+    let response = match fetch_app_reviews(&client, &app_id, limit, offset, &sort_by).await {
+        Ok(reviews) => AppReviewsResponse {
+            app_id,
+            total: Some(reviews.total),
+            reviews: reviews.reviews,
+            error: None,
+        },
+        Err(e) => {
+            error!(error = e.as_ref() as &dyn Error, "Failed to fetch app reviews");
+            AppReviewsResponse {
+                app_id,
+                total: None,
+                reviews: Vec::new(),
+                error: Some(format!("Failed to fetch reviews: {e:#}")),
+            }
+        }
+    };
+    response.send_signal_to_dart();
+}
+
 #[instrument(level = "debug", skip(client), err)]
-pub(super) async fn fetch_app_details(
+async fn fetch_app_details(
     client: &reqwest::Client,
     package: PackageName,
 ) -> Result<Option<AppApiResponse>> {
@@ -30,7 +133,7 @@ pub(super) async fn fetch_app_details(
 }
 
 #[derive(serde::Deserialize)]
-pub(super) struct ReviewsResponse {
+struct ReviewsResponse {
     #[serde(default)]
     pub reviews: Vec<AppReview>,
     #[serde(default)]
@@ -38,7 +141,7 @@ pub(super) struct ReviewsResponse {
 }
 
 #[instrument(level = "debug", skip(client), err)]
-pub(super) async fn fetch_app_reviews(
+async fn fetch_app_reviews(
     client: &reqwest::Client,
     app_id: &str,
     limit: u32,

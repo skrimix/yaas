@@ -3,7 +3,6 @@ use std::{error::Error, sync::Arc};
 use anyhow::Result;
 use rinf::{DartSignal, RustSignal};
 use tokio::sync::Mutex;
-use tokio_stream::wrappers::WatchStream;
 use tokio_util::sync::CancellationToken;
 use tracing::{debug, warn};
 
@@ -180,22 +179,15 @@ impl DownloaderController {
                 state = controller.state.lock() => state,
             };
             let result = async {
-                let (mut repo, remote) = result?;
+                let (repo, remote) = result?;
                 if let Some(remote) = remote {
                     controller
                         .settings_handler
                         .update_downloader_remote(&settings.rclone_remote_name, &remote)?;
                 }
-                // Settings may have changed while preparing runtime files.
-                let current = controller.settings_handler.subscribe().borrow().clone();
-                repo.set_bandwidth_limit(current.bandwidth_limit.clone());
-                let session = DownloaderSession::new(
-                    repo,
-                    cache_dir,
-                    controller.settings_handler.clone(),
-                    WatchStream::new(controller.settings_handler.subscribe()),
-                )
-                .await?;
+                // The session applies settings changed while preparing runtime files.
+                let session =
+                    DownloaderSession::new(repo, cache_dir, controller.settings_handler.clone());
                 controller.manager.replace(session).await;
                 Ok::<_, anyhow::Error>(())
             }

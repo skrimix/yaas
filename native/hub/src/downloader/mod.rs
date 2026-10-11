@@ -1,6 +1,6 @@
 mod progress;
 pub(crate) use progress::{TransferSpeedTracker, TransferStats};
-mod cloud_api;
+pub(crate) mod cloud_api;
 pub(crate) mod config;
 pub(crate) mod controller;
 pub(crate) mod download_metadata;

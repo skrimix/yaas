@@ -33,7 +33,7 @@ use crate::{
     casting::CastingManager,
     casting_native::NativeCastingManager,
     downloader::{
-        controller::DownloaderController, downloads_catalog::DownloadsCatalog,
+        cloud_api, controller::DownloaderController, downloads_catalog::DownloadsCatalog,
         manager::DownloaderManager,
     },
 };
@@ -284,6 +284,7 @@ async fn init_in_dir(
         settings_handler.clone(),
     )
     .start();
+    cloud_api::start_request_handlers();
 
     // Backups-related requests
     debug!("Creating backups catalog");

@@ -1,28 +1,23 @@
 use std::{
     error::Error,
     path::{Path, PathBuf},
-    sync::{Arc, Mutex as StdMutex},
+    sync::Arc,
     time::Duration,
 };
 
 use anyhow::Result;
 use rinf::{DartSignal, RustSignal};
-use tokio::sync::{Mutex, RwLock, mpsc::UnboundedSender};
-use tokio_stream::{StreamExt, wrappers::WatchStream};
-use tokio_util::sync::CancellationToken;
+use tokio::sync::{Mutex, RwLock, mpsc::UnboundedSender, watch};
+use tokio_util::{sync::CancellationToken, task::TaskTracker};
 use tracing::{Instrument, debug, error, info, info_span, instrument, warn};
 
 use crate::{
     adb::PackageName,
     downloader::{AppDownloadProgress, TransferStats, cloud_api, download_metadata, repo},
     models::{
-        CloudApp, DownloadMode, Settings,
+        CloudApp, Settings,
         signals::{
-            cloud_apps::{
-                details::{AppDetailsResponse, GetAppDetailsRequest},
-                list::{CloudAppsChangedEvent, LoadCloudAppsRequest},
-                reviews::{AppReviewsResponse, GetAppReviewsRequest},
-            },
+            cloud_apps::list::{CloudAppsChangedEvent, LoadCloudAppsRequest},
             downloads_local::DownloadsChanged,
             storage::remotes::{GetRcloneRemotesRequest, RcloneRemotesChanged},
             system::Toast,
@@ -36,13 +31,11 @@ pub(crate) struct DownloaderSession {
     cache_dir: PathBuf,
     catalog: Mutex<Catalog>,
     load_task: Mutex<Option<CatalogLoad>>,
-    tasks: StdMutex<Vec<tokio::task::JoinHandle<()>>>,
-    download_dir: RwLock<PathBuf>,
-    write_legacy_release_json: RwLock<bool>,
-    download_mode: RwLock<DownloadMode>,
+    tasks: TaskTracker,
+    settings_handler: Arc<SettingsHandler>,
+    settings: watch::Receiver<Settings>,
     cancel_token: CancellationToken,
     http_client: reqwest::Client,
-    installation_id: String,
 }
 
 #[derive(Default)]
@@ -64,119 +57,76 @@ struct CatalogLoad {
 }
 
 impl DownloaderSession {
-    #[instrument(level = "debug", skip(repo, settings_handler, settings_stream))]
-    pub(super) async fn new(
+    #[instrument(level = "debug", skip(repo, settings_handler))]
+    pub(super) fn new(
         repo: repo::Repo,
         cache_dir: PathBuf,
         settings_handler: Arc<SettingsHandler>,
-        mut settings_stream: WatchStream<Settings>,
-    ) -> Result<Arc<Self>> {
-        let settings =
-            settings_stream.next().await.expect("Settings stream closed on downloader init");
-
+    ) -> Arc<Self> {
         let http_client = reqwest::Client::builder()
             .user_agent(crate::USER_AGENT)
             .build()
             .unwrap_or_else(|_| reqwest::Client::new());
-
-        let cancel_token = CancellationToken::new();
 
         let handle = Arc::new(Self {
             repo: RwLock::new(repo),
             cache_dir,
             catalog: Mutex::new(Catalog::default()),
             load_task: Mutex::new(None),
-            tasks: StdMutex::new(Vec::new()),
-            download_dir: RwLock::new(settings.downloads_location()),
-            write_legacy_release_json: RwLock::new(settings.write_legacy_release_json),
-            download_mode: RwLock::new(settings.download_mode),
-            cancel_token,
+            tasks: TaskTracker::new(),
+            settings: settings_handler.subscribe(),
+            settings_handler,
+            cancel_token: CancellationToken::new(),
             http_client,
-            installation_id: settings.installation_id.clone(),
         });
 
-        // Observe a remote change made during initialization on the first stream update.
-        let mut previous = settings.clone();
-        previous.rclone_remote_name =
-            handle.repo.read().await.remote().unwrap_or(&settings.rclone_remote_name).to_string();
-        handle.spawn_tasks(&previous, settings_stream, &settings_handler);
-
-        Ok(handle)
-    }
-
-    fn spawn_tasks(
-        self: &Arc<Self>,
-        settings: &Settings,
-        settings_stream: WatchStream<Settings>,
-        settings_handler: &Arc<SettingsHandler>,
-    ) {
-        let handle = self.clone();
-        let settings = settings.clone();
-        let settings_handler = settings_handler.clone();
-        let task = tokio::spawn(async move {
-            handle
-                .cancel_token
-                .run_until_cancelled(handle.receive_commands(
-                    settings,
-                    settings_stream,
-                    settings_handler,
-                ))
-                .await;
+        let session = handle.clone();
+        handle.tasks.spawn(async move {
+            session.cancel_token.run_until_cancelled(session.receive_commands()).await;
         });
-        self.tasks.lock().unwrap().push(task);
+
+        handle
     }
 
-    async fn apply_settings(
-        self: &Arc<Self>,
-        settings: &Settings,
-        previous: &mut Settings,
-        settings_handler: &SettingsHandler,
-    ) {
-        *self.download_dir.write().await = settings.downloads_location();
-        *self.write_legacy_release_json.write().await = settings.write_legacy_release_json;
-        *self.download_mode.write().await = settings.download_mode;
+    /// Brings the repository in line with `settings`.
+    ///
+    /// Compares against the repository state rather than earlier settings, so a remote selected
+    /// during initialization or written back after a fallback does not trigger another reload.
+    async fn apply_settings(self: &Arc<Self>, settings: &Settings) {
+        self.repo.write().await.set_bandwidth_limit(settings.bandwidth_limit.clone());
 
-        if settings.bandwidth_limit != previous.bandwidth_limit {
-            self.repo.write().await.set_bandwidth_limit(settings.bandwidth_limit.clone());
+        let old_remote = self.repo.read().await.remote().map(str::to_string);
+        if old_remote.as_ref().is_none_or(|remote| *remote == settings.rclone_remote_name) {
+            return;
         }
-        if settings.rclone_remote_name != previous.rclone_remote_name
-            && self
-                .repo
-                .read()
-                .await
-                .remote()
-                .is_some_and(|remote| remote != settings.rclone_remote_name)
-        {
-            let mut repo = self.repo.read().await.clone();
-            let old_remote = repo.remote().map(str::to_string);
-            match repo.select_remote(&settings.rclone_remote_name).await {
-                Ok(remote) => {
-                    let changed = remote != old_remote;
-                    if let Some(remote) = remote
-                        && let Err(e) = settings_handler
-                            .update_downloader_remote(&settings.rclone_remote_name, &remote)
-                    {
-                        warn!(error = %e, "Failed to persist selected remote");
-                    }
-                    if changed {
-                        self.cancel_load().await;
-                        *self.repo.write().await = repo;
-                        *self.catalog.lock().await = Catalog::default();
-                        send_catalog_event(
-                            true,
-                            Some(repo::RepoAppList {
-                                apps: Vec::new(),
-                                donation_blacklist: Vec::new(),
-                            }),
-                            None,
-                        );
-                        self.request_load(true).await;
-                    }
+        let mut repo = self.repo.read().await.clone();
+        match repo.select_remote(&settings.rclone_remote_name).await {
+            Ok(remote) => {
+                let changed = remote != old_remote;
+                if let Some(remote) = remote
+                    && let Err(e) = self
+                        .settings_handler
+                        .update_downloader_remote(&settings.rclone_remote_name, &remote)
+                {
+                    warn!(error = %e, "Failed to persist selected remote");
                 }
-                Err(e) => error!(error = %e, "Failed to select downloader remote"),
+                if changed {
+                    self.cancel_load().await;
+                    *self.repo.write().await = repo;
+                    *self.catalog.lock().await = Catalog::default();
+                    send_catalog_event(
+                        true,
+                        Some(repo::RepoAppList {
+                            apps: Vec::new(),
+                            donation_blacklist: Vec::new(),
+                        }),
+                        None,
+                    );
+                    self.request_load(true).await;
+                }
             }
+            Err(e) => error!(error = %e, "Failed to select downloader remote"),
         }
-        *previous = settings.clone();
     }
 
     async fn send_remotes(&self) {
@@ -218,28 +168,22 @@ impl DownloaderSession {
     }
 
     #[instrument(level = "debug", skip_all)]
-    async fn receive_commands(
-        self: &Arc<Self>,
-        mut previous: Settings,
-        mut settings_stream: WatchStream<Settings>,
-        settings_handler: Arc<SettingsHandler>,
-    ) {
-        let current = settings_handler.subscribe().borrow().clone();
-        self.apply_settings(&current, &mut previous, &settings_handler).await;
+    async fn receive_commands(self: &Arc<Self>) {
+        let mut settings = self.settings.clone();
+        let current = settings.borrow_and_update().clone();
+        self.apply_settings(&current).await;
         self.send_remotes().await;
         let load_cloud_apps_receiver = LoadCloudAppsRequest::get_dart_signal_receiver();
         let get_rclone_remotes_receiver = GetRcloneRemotesRequest::get_dart_signal_receiver();
-        let get_app_details_receiver = GetAppDetailsRequest::get_dart_signal_receiver();
-        let get_app_reviews_receiver = GetAppReviewsRequest::get_dart_signal_receiver();
         loop {
             tokio::select! {
-                _ = self.cancel_token.cancelled() => {
-                    info!("Downloader command loop cancelled, exiting");
-                    return;
-                }
-                settings = settings_stream.next() => {
-                    let Some(settings) = settings else { return };
-                    self.apply_settings(&settings, &mut previous, &settings_handler).await;
+                changed = settings.changed() => {
+                    if changed.is_err() {
+                        info!("Settings channel closed, shutting down downloader command loop");
+                        return;
+                    }
+                    let current = settings.borrow_and_update().clone();
+                    self.apply_settings(&current).await;
                 }
                 request = load_cloud_apps_receiver.recv() => {
                     if let Some(request) = request {
@@ -259,106 +203,14 @@ impl DownloaderSession {
                         return;
                     }
                 }
-                request = get_app_details_receiver.recv() => {
-                    if let Some(request) = request {
-                        let package_name = request.message.package_name;
-                        debug!(%package_name, "Received GetAppDetailsRequest");
-                        let client = self.http_client.clone();
-                        let token = self.cancel_token.clone();
-                        let task = tokio::spawn(async move {
-                            token.run_until_cancelled(async move {
-                            let package = match PackageName::parse(&package_name) {
-                                Ok(p) => p,
-                                Err(e) => {
-                                    error!(error = e.as_ref() as &dyn Error, "Invalid package name");
-                                    AppDetailsResponse::default_error(package_name, format!("Invalid package name: {:#}", e)).send_signal_to_dart();
-                                    return;
-                                }
-                            };
-
-                            match cloud_api::fetch_app_details(&client, package).await {
-                                Ok(Some(api)) => {
-                                    let crate::models::AppApiResponse {
-                                        id,
-                                        display_name,
-                                        description,
-                                        quality_rating_aggregate,
-                                        rating_count,
-                                    } = api;
-                                    AppDetailsResponse {
-                                        package_name,
-                                        app_id: id,
-                                        display_name,
-                                        description,
-                                        rating_average: quality_rating_aggregate,
-                                        rating_count,
-                                        not_found: false,
-                                        error: None,
-                                    }.send_signal_to_dart();
-                                }
-                                Ok(None) => {
-                                    AppDetailsResponse::default_not_found(package_name).send_signal_to_dart();
-                                }
-                                Err(e) => {
-                                    error!(error = e.as_ref() as &dyn Error, "Failed to fetch app details");
-                                    AppDetailsResponse::default_error(package_name, format!("Failed to fetch app details: {:#}", e)).send_signal_to_dart();
-                                }
-                            }
-                            }).await;
-                        });
-                        let mut tasks = self.tasks.lock().unwrap();
-                        tasks.retain(|task| !task.is_finished());
-                        tasks.push(task);
-                    } else {
-                        info!("GetAppDetailsRequest receiver closed, shutting down downloader command loop");
-                        return;
-                    }
-                }
-                request = get_app_reviews_receiver.recv() => {
-                    if let Some(request) = request {
-                        let app_id = request.message.app_id;
-                        let limit = request.message.limit.unwrap_or(5);
-                        let offset = request.message.offset.unwrap_or(0);
-                        let sort_by = request.message.sort_by.unwrap_or_else(|| "helpful".to_string());
-                        debug!(%app_id, "Received GetAppReviewsRequest");
-                        let client = self.http_client.clone();
-                        let token = self.cancel_token.clone();
-                        let task = tokio::spawn(async move {
-                            token.run_until_cancelled(async move {
-                            match cloud_api::fetch_app_reviews(&client, &app_id, limit, offset, &sort_by).await {
-                                Ok(reviews) => {
-                                    AppReviewsResponse { app_id, total: Some(reviews.total), reviews: reviews.reviews, error: None }.send_signal_to_dart();
-                                }
-                                Err(e) => {
-                                    error!(error = e.as_ref() as &dyn Error, "Failed to fetch app reviews");
-                                    AppReviewsResponse { app_id, total: None, reviews: Vec::new(), error: Some(format!("Failed to fetch reviews: {:#}", e)) }.send_signal_to_dart();
-                                }
-                            }
-                            }).await;
-                        });
-                        let mut tasks = self.tasks.lock().unwrap();
-                        tasks.retain(|task| !task.is_finished());
-                        tasks.push(task);
-                    } else {
-                        info!("GetAppReviewsRequest receiver closed, shutting down downloader command loop");
-                        return;
-                    }
-                }
             }
         }
     }
 
     pub(crate) async fn stop(&self) {
         self.cancel_token.cancel();
-        loop {
-            let tasks = std::mem::take(&mut *self.tasks.lock().unwrap());
-            if tasks.is_empty() {
-                break;
-            }
-            for task in tasks {
-                let _ = task.await;
-            }
-        }
+        self.tasks.close();
+        self.tasks.wait().await;
         self.cancel_load().await;
     }
 
@@ -458,12 +310,14 @@ impl DownloaderSession {
         progress_tx: UnboundedSender<AppDownloadProgress>,
         cancellation_token: CancellationToken,
     ) -> Result<String> {
-        let dst_dir = self.download_dir.read().await.join(&app_full_name);
+        let (dst_dir, download_mode) = {
+            let settings = self.settings.borrow();
+            (settings.downloads_location().join(&app_full_name), settings.download_mode)
+        };
         info!(app = %app_full_name, dest = %dst_dir.display(), "Starting app download");
         let _ = progress_tx.send(AppDownloadProgress::Status("Preparing download...".to_string()));
 
         let repo = self.repo.read().await.clone();
-        let download_mode = *self.download_mode.read().await;
         let download_result = match repo
             .download_app(
                 &app_full_name,
@@ -495,7 +349,7 @@ impl DownloaderSession {
         };
 
         if !download_result.skipped {
-            let installation_id = self.installation_id.clone();
+            let installation_id = self.settings.borrow().installation_id.clone();
             tokio::spawn({
                 let http_client = self.http_client.clone();
                 async move {
@@ -515,7 +369,7 @@ impl DownloaderSession {
 
         // Prepare metadata inputs without holding long locks
         let cached = self.get_app_by_full_name(&app_full_name).await;
-        let write_legacy = *self.write_legacy_release_json.read().await;
+        let write_legacy = self.settings.borrow().write_legacy_release_json;
         let _ = progress_tx.send(AppDownloadProgress::Status("Writing metadata...".to_string()));
 
         if let Err(e) = download_metadata::write_metadata(
@@ -567,7 +421,8 @@ mod tests {
             backend: Backend::NewRepo(NewRepoConfig { base_url: url.to_string() }),
             ..Default::default()
         };
-        let settings = Settings::new(true);
+        let settings_handler = SettingsHandler::new(dir.path().to_path_buf(), true).unwrap();
+        let settings = settings_handler.subscribe().borrow().clone();
         let (repo, _) = repo::Repo::new(&config, dir.path(), &settings, &CancellationToken::new())
             .await
             .unwrap();
@@ -576,13 +431,11 @@ mod tests {
             cache_dir: dir.path().to_path_buf(),
             catalog: Mutex::new(Catalog::default()),
             load_task: Mutex::new(None),
-            tasks: StdMutex::new(Vec::new()),
-            download_dir: RwLock::new(dir.path().to_path_buf()),
-            write_legacy_release_json: RwLock::new(false),
-            download_mode: RwLock::new(settings.download_mode),
+            tasks: TaskTracker::new(),
+            settings: settings_handler.subscribe(),
+            settings_handler,
             cancel_token: CancellationToken::new(),
             http_client: reqwest::Client::new(),
-            installation_id: settings.installation_id,
         });
         (dir, session)
     }
@@ -736,29 +589,27 @@ esac
             }),
             ..Default::default()
         };
-        let settings = SettingsHandler::new(dir.path().to_path_buf(), true).unwrap();
-        let mut previous = settings.subscribe().borrow().clone();
-        previous.rclone_remote_name = "one".into();
+        let settings = session.settings_handler.clone();
+        let mut next = settings.subscribe().borrow().clone();
+        next.rclone_remote_name = "one".into();
+        settings.save_settings(&next).unwrap();
         let (backend, _) =
-            repo::Repo::new(&config, dir.path(), &previous, &CancellationToken::new())
-                .await
-                .unwrap();
+            repo::Repo::new(&config, dir.path(), &next, &CancellationToken::new()).await.unwrap();
         let old_backend = backend.clone();
         *session.repo.write().await = backend;
         session.publish_catalog(catalog()).await;
         let calls = || std::fs::read_to_string(config_path.with_extension("conf.calls")).unwrap();
         let initial_calls = calls();
-        let mut next = previous.clone();
         next.bandwidth_limit = "10M".into();
         settings.save_settings(&next).unwrap();
-        session.apply_settings(&next, &mut previous, &settings).await;
+        session.apply_settings(&next).await;
         assert_eq!(calls(), initial_calls);
         assert!(session.load_task.lock().await.is_none());
         assert!(session.catalog.lock().await.result.is_some());
 
         next.rclone_remote_name = "two".into();
         settings.save_settings(&next).unwrap();
-        session.apply_settings(&next, &mut previous, &settings).await;
+        session.apply_settings(&next).await;
         finish_load(&session).await;
         assert!(session.catalog.lock().await.result.is_none());
         assert_eq!(session.repo.read().await.remote(), Some("two"));
@@ -766,26 +617,24 @@ esac
 
         next.rclone_remote_name = "missing".into();
         settings.save_settings(&next).unwrap();
-        session.apply_settings(&next, &mut previous, &settings).await;
+        session.apply_settings(&next).await;
         finish_load(&session).await;
         let feedback = settings.subscribe().borrow().clone();
         assert_eq!(feedback.rclone_remote_name, "one");
         let before_feedback = calls();
-        session.apply_settings(&feedback, &mut previous, &settings).await;
+        session.apply_settings(&feedback).await;
         assert_eq!(calls(), before_feedback);
         assert!(session.load_task.lock().await.is_none());
     }
 
     #[tokio::test]
     async fn newrepo_ignores_remote_and_bandwidth_changes() {
-        let (dir, session) = fixture("http://127.0.0.1:1").await;
+        let (_dir, session) = fixture("http://127.0.0.1:1").await;
         session.publish_catalog(catalog()).await;
-        let settings = SettingsHandler::new(dir.path().to_path_buf(), true).unwrap();
-        let mut previous = settings.subscribe().borrow().clone();
-        let mut next = previous.clone();
+        let mut next = session.settings.borrow().clone();
         next.rclone_remote_name = "other".into();
         next.bandwidth_limit = "10M".into();
-        session.apply_settings(&next, &mut previous, &settings).await;
+        session.apply_settings(&next).await;
         assert!(session.load_task.lock().await.is_none());
         assert_eq!(
             session.catalog.lock().await.result.as_ref().unwrap().apps[0].full_name,

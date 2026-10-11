@@ -25,7 +25,9 @@ jobs:
         with:
           flutter-version: "3.47.0"
           cache: true
-      - uses: actions-rust-lang/setup-rust-toolchain@v1
+      - uses: actions-rust-lang/setup-rust-toolchain@v2
+        with:
+          build-warnings: ""
       - uses: baptiste0928/cargo-install@v3
         with:
           crate: rinf_cli
@@ -88,9 +90,10 @@ jobs:
           cache: true
 
       - name: Setup Rust toolchain
-        uses: actions-rust-lang/setup-rust-toolchain@v1
+        uses: actions-rust-lang/setup-rust-toolchain@v2
         with:
           components: rustfmt, clippy
+          build-warnings: ""
 
       - name: Setup sccache
         uses: Mozilla-Actions/sccache-action@v0.0.9

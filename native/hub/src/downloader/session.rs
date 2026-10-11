@@ -14,10 +14,7 @@ use tracing::{Instrument, debug, error, info, info_span, instrument, warn};
 
 use crate::{
     adb::PackageName,
-    downloader::{
-        AppDownloadProgress, TransferStats, cloud_api, config::DownloaderConfig, download_metadata,
-        repo,
-    },
+    downloader::{AppDownloadProgress, TransferStats, cloud_api, download_metadata, repo},
     models::{
         CloudApp, DownloadMode, Settings,
         signals::{
@@ -69,7 +66,6 @@ struct CatalogLoad {
 impl DownloaderSession {
     #[instrument(level = "debug", skip(repo, settings_handler, settings_stream))]
     pub(super) async fn new(
-        config: Arc<DownloaderConfig>,
         repo: repo::Repo,
         cache_dir: PathBuf,
         settings_handler: Arc<SettingsHandler>,
@@ -82,19 +78,6 @@ impl DownloaderSession {
             .user_agent(crate::USER_AGENT)
             .build()
             .unwrap_or_else(|_| reqwest::Client::new());
-
-        let repo_capabilities = repo::capabilities(config.layout);
-        let donation_remote_configured = repo_capabilities.supports_donation_upload
-            && (config.donation_remote_name.as_deref().map(|s| !s.is_empty()).unwrap_or(false)
-                || config.donation_remote_path.as_deref().map(|s| !s.is_empty()).unwrap_or(false));
-        let blacklist_path_configured = repo_capabilities.supports_donation_upload
-            && config.donation_blacklist_path.as_deref().map(|s| !s.is_empty()).unwrap_or(false);
-        if donation_remote_configured && !blacklist_path_configured {
-            warn!(
-                "App donation remote is configured but `donation_blacklist_path` is missing; \
-                 donation blacklist will be disabled"
-            );
-        }
 
         let cancel_token = CancellationToken::new();
 
@@ -222,8 +205,7 @@ impl DownloaderSession {
 
     /// Upload a prepared archive used for app donation.
     ///
-    /// This uses optional `donation_remote_name` and `donation_remote_path` from DownloaderConfig.
-    /// If either is missing or empty, the call fails with a configuration error.
+    /// This uses the optional donation remote of the FFA layout and fails if it is not configured.
     #[instrument(skip(self, stats_tx, cancellation_token))]
     pub(crate) async fn upload_donation_archive(
         &self,
@@ -575,15 +557,16 @@ mod tests {
     };
 
     use super::*;
-    use crate::downloader::config::RepoLayoutKind;
+    use crate::downloader::config::{
+        Backend, DownloaderConfig, FfaConfig, NewRepoConfig, RclonePath,
+    };
 
     async fn fixture(url: &str) -> (tempfile::TempDir, Arc<DownloaderSession>) {
         let dir = tempfile::tempdir().unwrap();
-        let config = Arc::new(DownloaderConfig {
-            layout: RepoLayoutKind::NewRepo,
-            base_url: Some(url.to_string()),
+        let config = DownloaderConfig {
+            backend: Backend::NewRepo(NewRepoConfig { base_url: url.to_string() }),
             ..Default::default()
-        });
+        };
         let settings = Settings::new(true);
         let (repo, _) = repo::Repo::new(&config, dir.path(), &settings, &CancellationToken::new())
             .await
@@ -744,14 +727,15 @@ esac
         )
         .unwrap();
         std::fs::set_permissions(&binary, std::fs::Permissions::from_mode(0o755)).unwrap();
-        let config = Arc::new(DownloaderConfig {
-            rclone_path: Some(crate::downloader::config::RclonePath::Single(
-                binary.display().to_string(),
-            )),
-            rclone_config_path: Some(config_path.display().to_string()),
-            disable_randomize_remote: true,
+        let config = DownloaderConfig {
+            backend: Backend::Ffa(FfaConfig {
+                rclone_path: RclonePath::Single(binary.display().to_string()),
+                rclone_config_path: config_path.display().to_string(),
+                disable_randomize_remote: true,
+                ..Default::default()
+            }),
             ..Default::default()
-        });
+        };
         let settings = SettingsHandler::new(dir.path().to_path_buf(), true).unwrap();
         let mut previous = settings.subscribe().borrow().clone();
         previous.rclone_remote_name = "one".into();

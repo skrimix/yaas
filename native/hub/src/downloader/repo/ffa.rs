@@ -1,6 +1,6 @@
 use std::{collections::HashSet, error::Error, path::Path};
 
-use anyhow::{Context, Result, anyhow, bail, ensure};
+use anyhow::{Context, Result, bail, ensure};
 use derive_more::Debug;
 use futures::StreamExt as _;
 use rand::seq::IndexedRandom;
@@ -15,7 +15,7 @@ use super::{RepoAppList, RepoCapabilities, RepoDownloadResult};
 use crate::{
     downloader::{
         AppDownloadProgress, TransferStats,
-        config::DownloaderConfig,
+        config::FfaConfig,
         rclone::{self, RcloneStorage},
     },
     models::{CloudApp, Settings},
@@ -24,17 +24,23 @@ use crate::{
 /// FFA layout – direct files and list under a configurable remote/root.
 #[derive(Debug, Clone)]
 pub(in crate::downloader) struct FFARepo {
-    config: DownloaderConfig,
+    config: FfaConfig,
     storage: RcloneStorage,
 }
 
 impl FFARepo {
     pub(super) async fn new(
-        cfg: &DownloaderConfig,
+        cfg: &FfaConfig,
         cache_dir: &Path,
         settings: &Settings,
         cancel: &CancellationToken,
     ) -> Result<(Self, Option<String>)> {
+        if cfg.donation_target().is_some() && cfg.donation_blacklist_path().is_none() {
+            warn!(
+                "App donation remote is configured but `donation_blacklist_path` is missing; \
+                 donation blacklist will be disabled"
+            );
+        }
         let (rclone_path, rclone_config_path) =
             rclone::prepare_rclone_files(cache_dir, cfg, cancel).await?;
         let remote = cancel
@@ -103,9 +109,7 @@ impl FFARepo {
     ) -> Result<RepoAppList> {
         let storage = &self.storage;
         let blacklist = async {
-            if let Some(path) =
-                self.config.donation_blacklist_path.as_deref().filter(|p| !p.is_empty())
-            {
+            if let Some(path) = self.config.donation_blacklist_path() {
                 load_blacklist_from_remote(storage, path, cache_dir, cancellation_token.clone())
                     .await
             } else {
@@ -188,14 +192,10 @@ impl FFARepo {
         cancellation_token: CancellationToken,
     ) -> Result<()> {
         let storage = &self.storage;
-        let remote =
-            self.config.donation_remote_name.as_deref().filter(|s| !s.is_empty()).ok_or_else(
-                || anyhow!("App donation remote is not configured in downloader.json"),
-            )?;
-        let remote_path =
-            self.config.donation_remote_path.as_deref().filter(|s| !s.is_empty()).ok_or_else(
-                || anyhow!("App donation remote path is not configured in downloader.json"),
-            )?;
+        let (remote, remote_path) = self
+            .config
+            .donation_target()
+            .context("App donation remote is not configured for this downloader source")?;
 
         ensure!(
             archive_path.is_file(),

@@ -4,7 +4,7 @@ use std::{
     time::Duration,
 };
 
-use anyhow::{Context, Result, bail, ensure};
+use anyhow::{Context, Result, ensure};
 use rinf::RustSignal;
 use tokio::fs;
 use tokio_util::sync::CancellationToken;
@@ -13,7 +13,7 @@ use tracing::{debug, info, instrument, warn};
 use super::super::http_cache::{self, DownloadResult};
 use crate::{
     archive::{extract_single_from_archive, list_archive_file_paths},
-    downloader::{config::DownloaderConfig, http_cache::compute_md5_file, is_http_url},
+    downloader::{config::FfaConfig, http_cache::compute_md5_file, is_http_url},
     models::signals::downloader::progress::DownloaderInitProgress,
 };
 
@@ -26,34 +26,15 @@ fn is_zip_url(value: &str) -> bool {
 #[instrument(skip(cache_dir, cfg), fields(cache_dir = %cache_dir.display()))]
 pub(crate) async fn prepare_rclone_files(
     cache_dir: &Path,
-    cfg: &DownloaderConfig,
+    cfg: &FfaConfig,
     cancel: &CancellationToken,
 ) -> Result<(PathBuf, PathBuf)> {
     ensure!(!cancel.is_cancelled(), "Downloader initialization cancelled");
-    let bin_source = cfg
-        .rclone_path
-        .as_ref()
-        .ok_or_else(|| anyhow::anyhow!("rclone_path is required for this repository layout"))?
-        .resolve_for_current_platform()?;
-    let maybe_config_source = cfg.rclone_config_path.as_deref();
+    let bin_source = cfg.rclone_path.resolve_for_current_platform()?;
+    let config_source = cfg.rclone_config_path.as_str();
 
-    let bin_is_url = is_http_url(&bin_source);
-    let config_is_url = maybe_config_source.map(is_http_url).unwrap_or(false);
-
-    let config_source = match maybe_config_source {
-        Some(v) => v,
-        None => {
-            // TODO: extract validation to config parser
-            bail!("rclone_config_path is required for this repository layout")
-        }
-    };
-    // TODO: extract validation to config parser
-    ensure!(
-        bin_is_url == config_is_url,
-        "rclone_path and rclone_config_path must both be local or both be URLs"
-    );
-
-    if !bin_is_url {
+    // Validation guarantees both sources are URLs or both are local.
+    if !is_http_url(&bin_source) {
         info!("Using local rclone binary and config");
         return Ok((PathBuf::from(bin_source), PathBuf::from(config_source)));
     }
@@ -297,10 +278,10 @@ mod tests {
     use super::*;
     use crate::downloader::config::RclonePath;
 
-    fn cfg_local(bin: &str, conf: &str) -> DownloaderConfig {
-        DownloaderConfig {
-            rclone_path: Some(RclonePath::Single(bin.to_string())),
-            rclone_config_path: Some(conf.to_string()),
+    fn cfg_local(bin: &str, conf: &str) -> FfaConfig {
+        FfaConfig {
+            rclone_path: RclonePath::Single(bin.to_string()),
+            rclone_config_path: conf.to_string(),
             disable_randomize_remote: true,
             ..Default::default()
         }
@@ -315,22 +296,6 @@ mod tests {
             .expect("Prepare files failed");
         assert_eq!(bin, PathBuf::from("/bin/echo"));
         assert_eq!(conf, PathBuf::from("/tmp/rclone.conf"));
-    }
-
-    #[tokio::test(flavor = "multi_thread")]
-    async fn prepare_files_errors_when_mixed_url_and_local() {
-        let dir = tempdir().unwrap();
-        let cfg = DownloaderConfig {
-            rclone_path: Some(RclonePath::Single("http://127.0.0.1/rclone".to_string())),
-            rclone_config_path: Some("/tmp/rclone.conf".to_string()),
-            disable_randomize_remote: true,
-            ..Default::default()
-        };
-        let err = prepare_rclone_files(dir.path(), &cfg, &CancellationToken::new())
-            .await
-            .expect_err("Prepare files should fail");
-        let msg = format!("{:#}", err);
-        assert!(msg.contains("must both be local or both be URLs"));
     }
 
     #[tokio::test(flavor = "multi_thread")]
@@ -383,9 +348,9 @@ mod tests {
             .mount(&server)
             .await;
 
-        let cfg = DownloaderConfig {
-            rclone_path: Some(RclonePath::Single(format!("{}{}", server.uri(), bin_path))),
-            rclone_config_path: Some(format!("{}{}", server.uri(), conf_path)),
+        let cfg = FfaConfig {
+            rclone_path: RclonePath::Single(format!("{}{}", server.uri(), bin_path)),
+            rclone_config_path: format!("{}{}", server.uri(), conf_path),
             disable_randomize_remote: true,
             ..Default::default()
         };

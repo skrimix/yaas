@@ -30,10 +30,7 @@ use yarc::{
 
 use super::{RepoAppList, RepoCapabilities, RepoDownloadResult};
 use crate::{
-    downloader::{
-        AppDownloadProgress, TransferSpeedTracker, TransferStats, config::DownloaderConfig,
-        http_cache,
-    },
+    downloader::{AppDownloadProgress, TransferSpeedTracker, TransferStats, http_cache},
     models::{CloudApp, DownloadMode},
 };
 
@@ -58,7 +55,7 @@ pub(in crate::downloader) struct NewRepo {
 }
 
 impl NewRepo {
-    fn new(base_url: String) -> Self {
+    pub(super) fn new(base_url: String) -> Self {
         Self { base_url, runtime: Arc::new(Mutex::new(NewRepoRuntime::default())) }
     }
 
@@ -94,16 +91,6 @@ impl NewRepo {
 }
 
 impl NewRepo {
-    pub(super) fn from_config(cfg: &DownloaderConfig) -> Self {
-        Self::new(
-            cfg.base_url
-                .as_deref()
-                .expect("validated new-repo base_url")
-                .trim_end_matches('/')
-                .to_string(),
-        )
-    }
-
     fn id(&self) -> &'static str {
         "new-repo"
     }

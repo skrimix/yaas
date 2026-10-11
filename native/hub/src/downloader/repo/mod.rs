@@ -7,7 +7,7 @@ use tokio_util::sync::CancellationToken;
 use self::{ffa::FFARepo, newrepo::NewRepo};
 use super::{AppDownloadProgress, TransferStats};
 use crate::{
-    downloader::config::{DownloaderConfig, RepoLayoutKind},
+    downloader::config::{Backend, DownloaderConfig},
     models::{
         CloudApp, DownloadMode, Settings, signals::downloader::availability::RepoCapabilities,
     },
@@ -35,10 +35,10 @@ pub(super) enum Repo {
     NewRepo(NewRepo),
 }
 
-pub(super) fn capabilities(layout: RepoLayoutKind) -> RepoCapabilities {
-    match layout {
-        RepoLayoutKind::Ffa => FFARepo::capabilities(),
-        RepoLayoutKind::NewRepo => NewRepo::capabilities(),
+pub(super) fn capabilities(backend: &Backend) -> RepoCapabilities {
+    match backend {
+        Backend::Ffa(_) => FFARepo::capabilities(),
+        Backend::NewRepo(_) => NewRepo::capabilities(),
     }
 }
 
@@ -49,12 +49,14 @@ impl Repo {
         settings: &Settings,
         cancel: &CancellationToken,
     ) -> Result<(Self, Option<String>)> {
-        match cfg.layout {
-            RepoLayoutKind::Ffa => {
-                let (repo, remote) = FFARepo::new(cfg, cache_dir, settings, cancel).await?;
+        match &cfg.backend {
+            Backend::Ffa(ffa) => {
+                let (repo, remote) = FFARepo::new(ffa, cache_dir, settings, cancel).await?;
                 Ok((Self::Ffa(Box::new(repo)), remote))
             }
-            RepoLayoutKind::NewRepo => Ok((Self::NewRepo(NewRepo::from_config(cfg)), None)),
+            Backend::NewRepo(repo) => {
+                Ok((Self::NewRepo(NewRepo::new(repo.base_url.clone())), None))
+            }
         }
     }
 

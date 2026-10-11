@@ -1,6 +1,6 @@
-use std::{collections::HashMap, error::Error, sync::Arc};
+use std::{error::Error, sync::Arc};
 
-use anyhow::{Context, Result};
+use anyhow::Result;
 use rinf::{DartSignal, RustSignal};
 use tokio::sync::Mutex;
 use tokio_stream::wrappers::WatchStream;
@@ -10,7 +10,7 @@ use tracing::{debug, warn};
 use crate::{
     downloader::{
         DownloaderSession, SensitiveUrl,
-        config::{DownloaderConfig, RepoLayoutKind},
+        config::{Backend, DownloaderConfig},
         manager::DownloaderManager,
         repo,
         sources::{
@@ -43,20 +43,14 @@ pub(crate) struct DownloaderController {
 
 #[derive(Default)]
 struct ControllerState {
-    revisions: HashMap<String, u64>,
     active: Option<DownloaderConfig>,
-    initialization: Option<tokio::task::JoinHandle<()>>,
-    initialization_cancel: CancellationToken,
-    generation: u64,
+    initialization: Option<Initialization>,
     refreshing: usize,
 }
 
-impl ControllerState {
-    fn advance(&mut self, id: &str) -> u64 {
-        let revision = self.revisions.entry(id.to_string()).or_default();
-        *revision += 1;
-        *revision
-    }
+struct Initialization {
+    cancel: CancellationToken,
+    task: tokio::task::JoinHandle<()>,
 }
 
 struct DownloaderAvailabilityReporter {
@@ -154,10 +148,10 @@ impl DownloaderController {
             }
             return persisted;
         }
-        state.generation += 1;
-        if let Some(task) = state.initialization.take() {
-            state.initialization_cancel.cancel();
-            let _ = task.await;
+        // The cancelled task cannot take the lock held here, so it never publishes a session.
+        if let Some(initialization) = state.initialization.take() {
+            initialization.cancel.cancel();
+            let _ = initialization.task.await;
         }
         self.manager.clear().await;
         state.active = active.clone();
@@ -166,14 +160,13 @@ impl DownloaderController {
                 .send_signal_to_dart();
             return persisted;
         };
-        let availability =
-            DownloaderAvailabilityReporter::new(&cfg, repo::capabilities(cfg.layout));
+        let availability = DownloaderAvailabilityReporter::new(&cfg);
         availability.send_initializing();
-        let generation = state.generation;
         let controller = self.clone();
         let cancel = CancellationToken::new();
-        state.initialization_cancel = cancel.clone();
-        state.initialization = Some(tokio::spawn(async move {
+        let task_cancel = cancel.clone();
+        let task = tokio::spawn(async move {
+            let cancel = task_cancel;
             let cache_dir = runtime_cache_dir(controller.sources.app_dir(), &cfg.id);
             let settings = controller.settings_handler.subscribe().borrow().clone();
             let result = async {
@@ -181,14 +174,11 @@ impl DownloaderController {
                 repo::Repo::new(&cfg, &cache_dir, &settings, &cancel).await
             }
             .await;
-            let state = tokio::select! {
+            let _state = tokio::select! {
                 biased;
                 _ = cancel.cancelled() => return,
                 state = controller.state.lock() => state,
             };
-            if state.generation != generation {
-                return;
-            }
             let result = async {
                 let (mut repo, remote) = result?;
                 if let Some(remote) = remote {
@@ -200,7 +190,6 @@ impl DownloaderController {
                 let current = controller.settings_handler.subscribe().borrow().clone();
                 repo.set_bandwidth_limit(current.bandwidth_limit.clone());
                 let session = DownloaderSession::new(
-                    Arc::new(cfg),
                     repo,
                     cache_dir,
                     controller.settings_handler.clone(),
@@ -215,7 +204,8 @@ impl DownloaderController {
                 Ok(()) => availability.send_available(),
                 Err(error) => availability.send_error("initialize downloader", &error),
             }
-        }));
+        });
+        state.initialization = Some(Initialization { cancel, task });
         persisted
     }
 
@@ -224,7 +214,6 @@ impl DownloaderController {
             let fetched = fetch_config(url, None).await?;
             let mut state = self.state.lock().await;
             let cfg = fetched.commit(self.sources.app_dir())?;
-            state.advance(&cfg.id);
             self.sources.select_active(&cfg.id)?;
             self.reconcile(&mut state, false, &[]).await?;
             Ok::<_, anyhow::Error>(cfg.id)
@@ -252,7 +241,6 @@ impl DownloaderController {
         let result = async {
             let mut state = self.state.lock().await;
             self.sources.remove(&config_id)?;
-            state.advance(&config_id);
             self.reconcile(&mut state, false, &[]).await
         }
         .await;
@@ -306,29 +294,19 @@ impl DownloaderController {
             if let Err(error) = &loaded {
                 report.failed.push(format!("Failed to load sources: {error:#}"));
             }
-            let mut pending = Vec::new();
-            if let Ok(loaded) = loaded {
-                send_sources_changed(&loaded, true, &[]);
-                for cfg in configs {
-                    if !loaded.configs.contains(&cfg) {
-                        continue;
-                    }
-                    let ticket = state.advance(&cfg.id);
-                    pending.push((cfg, ticket));
+            match loaded {
+                Ok(loaded) => {
+                    send_sources_changed(&loaded, true, &[]);
+                    configs.into_iter().filter(|cfg| loaded.configs.contains(cfg)).collect()
                 }
+                Err(_) => Vec::new(),
             }
-            pending
         };
-        for (cfg, ticket) in pending {
-            let result = async {
-                let url = cfg.config_update_url.as_deref().context("Missing config_update_url")?;
-                fetch_config(SensitiveUrl::new(url.trim()), Some(&cfg.id)).await
-            }
-            .await;
+        for cfg in pending {
+            let result =
+                fetch_config(SensitiveUrl::new(&cfg.config_update_url), Some(&cfg.id)).await;
             let mut state = self.state.lock().await;
-            if state.revisions.get(&cfg.id) != Some(&ticket) {
-                continue;
-            }
+            // A source mutation or another refresh committed during the fetch makes this result stale.
             let current = self.sources.load();
             if !current.as_ref().is_ok_and(|sources| sources.configs.contains(&cfg)) {
                 continue;
@@ -337,7 +315,7 @@ impl DownloaderController {
                 Ok(updated) => {
                     report.refreshed += 1;
                     // Runtime files can change without their URLs changing.
-                    let refresh_runtime = updated.layout == RepoLayoutKind::Ffa
+                    let refresh_runtime = matches!(updated.backend, Backend::Ffa(_))
                         && current.as_ref().unwrap().active_config_id.as_deref()
                             == Some(updated.id.as_str());
                     if let Err(error) = self.reconcile(&mut state, refresh_runtime, &[]).await {
@@ -412,13 +390,11 @@ impl DownloaderController {
 }
 
 impl DownloaderAvailabilityReporter {
-    fn new(cfg: &DownloaderConfig, capabilities: RepoCapabilities) -> Self {
+    fn new(cfg: &DownloaderConfig) -> Self {
         Self {
             config_id: cfg.id.clone(),
-            is_donation_configured: capabilities.supports_donation_upload
-                && cfg.donation_remote_name.is_some()
-                && cfg.donation_remote_path.is_some(),
-            capabilities,
+            is_donation_configured: cfg.donation_target().is_some(),
+            capabilities: repo::capabilities(&cfg.backend),
         }
     }
 
@@ -490,10 +466,7 @@ mod tests {
     };
 
     use super::*;
-    use crate::downloader::{
-        config::RepoLayoutKind,
-        sources::{managed_config_path, managed_configs_dir},
-    };
+    use crate::downloader::sources::{managed_config_path, managed_configs_dir};
 
     fn config_json(id: &str, update_url: &str, name: &str) -> String {
         serde_json::json!({"id": id, "layout": "new-repo", "base_url": "http://127.0.0.1:1", "config_update_url": update_url, "display_name": name}).to_string()
@@ -524,7 +497,7 @@ mod tests {
                     .await
                     .initialization
                     .as_ref()
-                    .is_none_or(|task| task.is_finished())
+                    .is_none_or(|initialization| initialization.task.is_finished())
                 {
                     break;
                 }
@@ -562,7 +535,7 @@ mod tests {
     }
 
     #[tokio::test]
-    async fn refresh_cannot_resurrect_removed_or_reinstalled_source() {
+    async fn refresh_cannot_resurrect_removed_or_overwrite_reinstalled_source() {
         for reinstall in [false, true] {
             let (_dir, controller) = fixture().await;
             let (url, entered, release, server) = delayed_config().await;
@@ -574,16 +547,16 @@ mod tests {
             entered.await.unwrap();
             controller.remove_source("a".into()).await;
             if reinstall {
-                let mut state = controller.state.lock().await;
-                install_fixture(&controller, "a", &url);
-                state.advance("a");
+                let _state = controller.state.lock().await;
+                let path = managed_config_path(controller.sources.app_dir(), "a");
+                std::fs::write(path, config_json("a", &url, "reinstalled")).unwrap();
             }
             release.send(config_json("a", &url, "stale")).unwrap();
             assert_eq!(refresh.await.unwrap().refreshed, 0);
             server.await.unwrap();
             let sources = controller.sources.load().unwrap();
             if reinstall {
-                assert_eq!(sources.configs[0].display_name.as_deref(), Some("a"));
+                assert_eq!(sources.configs[0].display_name.as_deref(), Some("reinstalled"));
             } else {
                 assert!(sources.configs.is_empty());
             }
@@ -697,10 +670,10 @@ mod tests {
         server.await.unwrap();
         settled(&controller).await;
         assert!(!Arc::ptr_eq(&previous, &controller.manager.require().await.unwrap()));
-        assert_eq!(
-            controller.state.lock().await.active.as_ref().unwrap().base_url.as_deref(),
-            Some("http://127.0.0.1:2")
-        );
+        assert!(matches!(
+            &controller.state.lock().await.active.as_ref().unwrap().backend,
+            Backend::NewRepo(repo) if repo.base_url == "http://127.0.0.1:2"
+        ));
         controller.manager.clear().await;
     }
 
@@ -745,12 +718,14 @@ mod tests {
         let (finish, cleanup) = oneshot::channel();
         {
             let mut state = controller.state.lock().await;
-            let cancel = state.initialization_cancel.clone();
-            state.initialization = Some(tokio::spawn(async move {
-                cancel.cancelled().await;
+            let cancel = CancellationToken::new();
+            let task_cancel = cancel.clone();
+            let task = tokio::spawn(async move {
+                task_cancel.cancelled().await;
                 cancelled.send(()).unwrap();
                 cleanup.await.unwrap();
-            }));
+            });
+            state.initialization = Some(Initialization { cancel, task });
         }
         let selection = tokio::spawn({
             let controller = controller.clone();
@@ -825,21 +800,5 @@ mod tests {
         );
         settled(&controller).await;
         controller.manager.clear().await;
-    }
-
-    #[test]
-    fn runtime_comparison_uses_only_backend_inputs() {
-        let cfg = DownloaderConfig {
-            layout: RepoLayoutKind::NewRepo,
-            base_url: Some("http://example.com".into()),
-            ..Default::default()
-        };
-        let mut changed = cfg.clone();
-        changed.display_name = Some("Name".into());
-        changed.root_dir = "unused".into();
-        changed.config_update_url = Some("http://example.com/new".into());
-        assert!(cfg.same_runtime(&changed));
-        changed.base_url = Some("http://other.example.com".into());
-        assert!(!cfg.same_runtime(&changed));
     }
 }

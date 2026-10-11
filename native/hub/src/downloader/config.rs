@@ -5,7 +5,7 @@ use const_format::concatcp;
 use serde::Deserialize;
 use tracing::error;
 
-use crate::downloader::SensitiveUrl;
+use crate::downloader::{SensitiveUrl, is_http_url};
 
 #[derive(Debug, Clone, Deserialize, PartialEq, Eq)]
 pub(crate) struct DownloaderConfig {
@@ -15,38 +15,50 @@ pub(crate) struct DownloaderConfig {
     pub display_name: Option<String>,
     #[serde(default)]
     pub description: Option<String>,
+    /// URL used to update this downloader configuration.
+    pub config_update_url: String,
+    /// Repository layout and its settings, selected by the `layout` field.
+    #[serde(flatten)]
+    pub backend: Backend,
+}
+
+#[derive(Debug, Clone, Deserialize, PartialEq, Eq)]
+#[serde(tag = "layout")]
+pub(crate) enum Backend {
+    #[serde(rename = "ffa")]
+    Ffa(FfaConfig),
+    #[serde(rename = "new-repo")]
+    NewRepo(NewRepoConfig),
+}
+
+#[derive(Debug, Clone, Deserialize, PartialEq, Eq)]
+pub(crate) struct FfaConfig {
     // TODO: should this be a URI?
-    #[serde(default)]
-    pub rclone_path: Option<RclonePath>,
-    #[serde(default)]
-    pub rclone_config_path: Option<String>,
+    pub rclone_path: RclonePath,
+    pub rclone_config_path: String,
     #[serde(default)]
     pub remote_name_filter_regex: Option<String>,
     #[serde(default)]
     pub disable_randomize_remote: bool,
-    /// Optional remote used for app donation uploads.
-    // TODO: check that this and the next field are both present or both absent during parsing
+    /// Optional remote used for app donation uploads. Set together with `donation_remote_path`.
     #[serde(default)]
     pub donation_remote_name: Option<String>,
     /// Optional path within the donation remote where uploaded archives are placed.
     #[serde(default)]
     pub donation_remote_path: Option<String>,
-    /// Optional path to a newline-separated donation blacklist.
-    ///
-    /// For FFA layout this is a path on the configured rclone remote.
+    /// Optional path on the configured rclone remote to a newline-separated donation blacklist.
     #[serde(default)]
     pub donation_blacklist_path: Option<String>,
-    /// Repository layout selector.
-    pub layout: RepoLayoutKind,
-    #[serde(default)]
-    pub base_url: Option<String>,
     #[serde(default = "default_root_dir")]
     pub root_dir: String,
     #[serde(default = "default_list_path")]
     pub list_path: String,
-    /// Optional URL used to update this downloader configuration.
-    #[serde(default)]
-    pub config_update_url: Option<String>,
+}
+
+#[derive(Debug, Clone, Deserialize, PartialEq, Eq)]
+pub(crate) struct NewRepoConfig {
+    /// Repository URL without a trailing slash.
+    pub base_url: String,
 }
 
 fn default_root_dir() -> String {
@@ -55,6 +67,10 @@ fn default_root_dir() -> String {
 
 fn default_list_path() -> String {
     "FFA.txt".to_string()
+}
+
+fn non_empty(value: &Option<String>) -> Option<&str> {
+    value.as_deref().map(str::trim).filter(|value| !value.is_empty())
 }
 
 impl DownloaderConfig {
@@ -66,11 +82,15 @@ impl DownloaderConfig {
     }
 
     pub(crate) fn parse(content: &str) -> Result<Self> {
-        let cfg: DownloaderConfig = serde_json::from_str(content)
+        let mut cfg: DownloaderConfig = serde_json::from_str(content)
             .context("Failed to parse downloader.json")
             .inspect_err(|e| {
                 error!("Failed to parse downloader.json: {:#}", e);
             })?;
+        cfg.config_update_url = cfg.config_update_url.trim().to_string();
+        if let Backend::NewRepo(repo) = &mut cfg.backend {
+            repo.base_url = repo.base_url.trim().trim_end_matches('/').to_string();
+        }
         cfg.validate()?;
         Ok(cfg)
     }
@@ -83,96 +103,41 @@ impl DownloaderConfig {
             !self.id.contains('/') && !self.id.contains('\\') && self.id != "." && self.id != "..",
             "downloader.id must be a safe file name"
         );
+        ensure_http_url("config_update_url", &self.config_update_url)?;
 
-        match self.layout {
-            RepoLayoutKind::Ffa => {
+        match &self.backend {
+            Backend::Ffa(ffa) => {
                 ensure!(
-                    self.rclone_path.is_some(),
-                    "rclone_path is required for the ffa repository layout"
+                    !ffa.rclone_config_path.trim().is_empty(),
+                    "rclone_config_path must not be empty"
+                );
+                let config_is_url = is_http_url(&ffa.rclone_config_path);
+                ensure!(
+                    ffa.rclone_path.candidates().all(|path| is_http_url(path) == config_is_url),
+                    "rclone_path and rclone_config_path must both be local or both be URLs"
                 );
                 ensure!(
-                    self.rclone_config_path
-                        .as_deref()
-                        .map(|value| !value.trim().is_empty())
-                        .unwrap_or(false),
-                    "rclone_config_path is required for the ffa repository layout"
-                );
-            }
-            RepoLayoutKind::NewRepo => {
-                let base_url = self.base_url.as_deref().map(str::trim).unwrap_or_default();
-                ensure!(
-                    !base_url.is_empty(),
-                    "base_url is required for the new-repo repository layout"
-                );
-                let parsed = reqwest::Url::parse(base_url)
-                    .with_context(|| format!("Invalid new-repo base_url: {base_url}"))?;
-                ensure!(
-                    parsed.scheme() == "http" || parsed.scheme() == "https",
-                    "new-repo base_url must use http or https"
+                    non_empty(&ffa.donation_remote_name).is_some()
+                        == non_empty(&ffa.donation_remote_path).is_some(),
+                    "donation_remote_name and donation_remote_path must be set together"
                 );
             }
+            Backend::NewRepo(repo) => ensure_http_url("base_url", &repo.base_url)?,
         }
 
         Ok(())
     }
 
-    pub(crate) fn validate_managed_remote(
-        &self,
-        source_url: Option<SensitiveUrl<'_>>,
-    ) -> Result<()> {
-        let update_url = self
-            .config_update_url
-            .as_deref()
-            .map(str::trim)
-            .filter(|value| !value.is_empty())
-            .context("config_update_url is required for managed downloader configs")?;
-
-        let update_url = SensitiveUrl::new(update_url);
-        let parsed = reqwest::Url::parse(update_url.as_str())
-            .with_context(|| format!("Invalid config_update_url: {update_url}"))?;
-        ensure!(
-            parsed.scheme() == "http" || parsed.scheme() == "https",
-            "config_update_url must use http or https"
-        );
-
-        if let Some(source_url) = source_url {
-            ensure!(
-                source_url.as_str().trim() == update_url.as_str(),
-                "Config update URL mismatch: expected {}, got {}",
-                source_url,
-                update_url
-            );
-        }
-
-        Ok(())
-    }
-
-    /// Compares the configuration used by a session on the current platform.
+    /// Compares the configuration used by a session.
     pub(crate) fn same_runtime(&self, other: &Self) -> bool {
-        if self.id != other.id || self.layout != other.layout {
-            return false;
-        }
-        match self.layout {
-            RepoLayoutKind::Ffa => {
-                let binary = |cfg: &Self| {
-                    cfg.rclone_path
-                        .as_ref()
-                        .and_then(|path| path.resolve_for_current_platform().ok())
-                };
-                binary(self) == binary(other)
-                    && self.rclone_config_path == other.rclone_config_path
-                    && self.remote_name_filter_regex == other.remote_name_filter_regex
-                    && self.disable_randomize_remote == other.disable_randomize_remote
-                    && self.root_dir == other.root_dir
-                    && self.list_path == other.list_path
-                    && self.donation_remote_name == other.donation_remote_name
-                    && self.donation_remote_path == other.donation_remote_path
-                    && self.donation_blacklist_path == other.donation_blacklist_path
-            }
-            RepoLayoutKind::NewRepo => {
-                self.base_url.as_deref().map(|url| url.trim_end_matches('/'))
-                    == other.base_url.as_deref().map(|url| url.trim_end_matches('/'))
-            }
+        self.id == other.id && self.backend == other.backend
+    }
+
+    /// Returns the remote and path for app donation uploads, if configured.
+    pub(crate) fn donation_target(&self) -> Option<(&str, &str)> {
+        match &self.backend {
+            Backend::Ffa(ffa) => ffa.donation_target(),
+            Backend::NewRepo(_) => None,
         }
     }
 
@@ -195,30 +160,25 @@ impl DownloaderConfig {
     }
 }
 
-#[cfg(test)]
-mod managed_remote_tests {
-    use super::*;
-
-    #[test]
-    fn validate_managed_remote_sanitizes_url_mismatch() {
-        let cfg = DownloaderConfig {
-            config_update_url: Some(
-                "https://example.com/downloader_config?downloaded-secret".into(),
-            ),
-            ..Default::default()
-        };
-
-        let err = cfg
-            .validate_managed_remote(Some(SensitiveUrl::new(
-                "https://example.com/downloader_config?entered-secret",
-            )))
-            .unwrap_err();
-        let message = format!("{err:#}");
-
-        assert!(message.contains("https://example.com/downloader_config?redacted"));
-        assert!(!message.contains("downloaded-secret"));
-        assert!(!message.contains("entered-secret"));
+impl FfaConfig {
+    pub(crate) fn donation_target(&self) -> Option<(&str, &str)> {
+        Some((non_empty(&self.donation_remote_name)?, non_empty(&self.donation_remote_path)?))
     }
+
+    pub(crate) fn donation_blacklist_path(&self) -> Option<&str> {
+        non_empty(&self.donation_blacklist_path)
+    }
+}
+
+fn ensure_http_url(field: &str, value: &str) -> Result<()> {
+    ensure!(!value.is_empty(), "{field} must not be empty");
+    let parsed = reqwest::Url::parse(value)
+        .with_context(|| format!("Invalid {field}: {}", SensitiveUrl::new(value)))?;
+    ensure!(
+        parsed.scheme() == "http" || parsed.scheme() == "https",
+        "{field} must use http or https"
+    );
+    Ok(())
 }
 
 #[cfg(test)]
@@ -228,29 +188,27 @@ impl Default for DownloaderConfig {
             id: "test".to_string(),
             display_name: None,
             description: None,
-            rclone_path: Some(RclonePath::Single("/bin/echo".to_string())),
-            rclone_config_path: None,
+            config_update_url: "https://example.com/config.json".to_string(),
+            backend: Backend::Ffa(FfaConfig::default()),
+        }
+    }
+}
+
+#[cfg(test)]
+impl Default for FfaConfig {
+    fn default() -> Self {
+        Self {
+            rclone_path: RclonePath::Single("/bin/echo".to_string()),
+            rclone_config_path: "/tmp/rclone.conf".to_string(),
             remote_name_filter_regex: None,
             disable_randomize_remote: false,
             donation_remote_name: None,
             donation_remote_path: None,
             donation_blacklist_path: None,
-            layout: RepoLayoutKind::Ffa,
-            base_url: None,
             root_dir: default_root_dir(),
             list_path: default_list_path(),
-            config_update_url: None,
         }
     }
-}
-
-#[derive(Debug, Clone, Copy, Deserialize, PartialEq, Eq)]
-#[serde(rename_all = "kebab-case")]
-pub(crate) enum RepoLayoutKind {
-    #[serde(rename = "ffa")]
-    Ffa,
-    #[serde(rename = "new-repo")]
-    NewRepo,
 }
 
 #[derive(Debug, Clone, Deserialize, PartialEq, Eq)]
@@ -274,6 +232,15 @@ const CURRENT_ARCH: &str = "arm";
 const CURRENT_PLATFORM_ARCH_KEY: &str = concatcp!(CURRENT_PLATFORM, "-", CURRENT_ARCH);
 
 impl RclonePath {
+    /// Returns the paths for all platforms.
+    fn candidates(&self) -> impl Iterator<Item = &str> {
+        let (single, map) = match self {
+            RclonePath::Single(s) => (Some(s.as_str()), None),
+            RclonePath::Map(map) => (None, Some(map.values().map(String::as_str))),
+        };
+        single.into_iter().chain(map.into_iter().flatten())
+    }
+
     pub(crate) fn resolve_for_current_platform(&self) -> Result<String> {
         match self {
             RclonePath::Single(s) => Ok(s.clone()),
@@ -332,18 +299,19 @@ mod tests {
                 "id": "test",
                 "layout": "ffa",
                 "rclone_path": "/bin/echo",
-                "rclone_config_path": "/tmp/rclone.conf"
+                "rclone_config_path": "/tmp/rclone.conf",
+                "config_update_url": " https://example.com/config.json "
             }"#,
         );
 
         let cfg = DownloaderConfig::load_from_path(&cfg_path).expect("load config");
-        match cfg.rclone_path {
-            Some(RclonePath::Single(ref s)) => assert_eq!(s, "/bin/echo"),
-            _ => panic!("expected Single path"),
-        }
-        assert_eq!(cfg.rclone_config_path.as_deref(), Some("/tmp/rclone.conf"));
-        // default_randomize_remote = false when omitted
-        assert!(!cfg.disable_randomize_remote);
+        assert_eq!(cfg.config_update_url, "https://example.com/config.json");
+        let Backend::Ffa(ffa) = cfg.backend else { panic!("expected ffa layout") };
+        assert_eq!(ffa.rclone_path, RclonePath::Single("/bin/echo".into()));
+        assert_eq!(ffa.rclone_config_path, "/tmp/rclone.conf");
+        assert!(!ffa.disable_randomize_remote);
+        assert_eq!(ffa.root_dir, "Quest Games");
+        assert_eq!(ffa.list_path, "FFA.txt");
     }
 
     #[test]
@@ -380,37 +348,90 @@ mod tests {
     }
 
     #[test]
-    fn newrepo_requires_base_url() {
-        let dir = tempdir().unwrap();
-        let cfg_path = dir.path().join("downloader.json");
-        write_file(
-            &cfg_path,
-            r#"{
-                "id": "new-repo",
-                "layout": "new-repo"
-            }"#,
-        );
-
-        let err = DownloaderConfig::load_from_path(&cfg_path).expect_err("missing base_url");
-        assert!(format!("{err:#}").contains("base_url is required"));
+    fn layout_specific_fields_are_required() {
+        for (config, error) in [
+            (
+                r#"{"id": "a", "layout": "new-repo", "config_update_url": "https://example.com"}"#,
+                "base_url",
+            ),
+            (
+                r#"{"id": "a", "layout": "ffa", "rclone_path": "/bin/echo", "config_update_url": "https://example.com"}"#,
+                "rclone_config_path",
+            ),
+            (
+                r#"{"id": "a", "layout": "new-repo", "base_url": "https://example.com"}"#,
+                "config_update_url",
+            ),
+        ] {
+            let err = DownloaderConfig::parse(config).expect_err(error);
+            assert!(format!("{err:#}").contains(error), "{err:#}");
+        }
     }
 
     #[test]
     fn newrepo_loads_without_rclone_fields() {
-        let dir = tempdir().unwrap();
-        let cfg_path = dir.path().join("downloader.json");
-        write_file(
-            &cfg_path,
+        let cfg = DownloaderConfig::parse(
             r#"{
                 "id": "new-repo",
                 "layout": "new-repo",
-                "base_url": "https://example.com/repo"
+                "base_url": "https://example.com/repo/",
+                "config_update_url": "https://example.com/config.json"
             }"#,
+        )
+        .expect("load config");
+        assert_eq!(
+            cfg.backend,
+            Backend::NewRepo(NewRepoConfig { base_url: "https://example.com/repo".into() })
         );
+    }
 
-        let cfg = DownloaderConfig::load_from_path(&cfg_path).expect("load config");
-        assert_eq!(cfg.layout, RepoLayoutKind::NewRepo);
-        assert!(cfg.rclone_path.is_none());
-        assert_eq!(cfg.base_url.as_deref(), Some("https://example.com/repo"));
+    #[test]
+    fn ffa_rejects_mixed_url_and_local_rclone_files() {
+        let mut map = HashMap::new();
+        map.insert(CURRENT_PLATFORM.to_string(), "/bin/rclone".to_string());
+        map.insert("other".to_string(), "https://example.com/rclone".to_string());
+        let cfg = DownloaderConfig {
+            backend: Backend::Ffa(FfaConfig {
+                rclone_path: RclonePath::Map(map),
+                ..Default::default()
+            }),
+            ..Default::default()
+        };
+        let err = cfg.validate().unwrap_err();
+        assert!(format!("{err:#}").contains("must both be local or both be URLs"));
+    }
+
+    #[test]
+    fn donation_remote_name_and_path_are_set_together() {
+        let ffa = |name: Option<&str>, path: Option<&str>| DownloaderConfig {
+            backend: Backend::Ffa(FfaConfig {
+                donation_remote_name: name.map(Into::into),
+                donation_remote_path: path.map(Into::into),
+                ..Default::default()
+            }),
+            ..Default::default()
+        };
+        assert!(ffa(Some("remote"), None).validate().is_err());
+        assert!(ffa(Some(" "), Some("path")).validate().is_err());
+        assert!(ffa(None, None).validate().is_ok());
+        let cfg = ffa(Some("remote"), Some("path"));
+        cfg.validate().unwrap();
+        assert_eq!(cfg.donation_target(), Some(("remote", "path")));
+    }
+
+    #[test]
+    fn runtime_comparison_ignores_metadata() {
+        let cfg = DownloaderConfig {
+            backend: Backend::NewRepo(NewRepoConfig { base_url: "http://example.com".into() }),
+            ..Default::default()
+        };
+        let mut changed = cfg.clone();
+        changed.display_name = Some("Name".into());
+        changed.description = Some("Description".into());
+        changed.config_update_url = "http://example.com/new".into();
+        assert!(cfg.same_runtime(&changed));
+        changed.backend =
+            Backend::NewRepo(NewRepoConfig { base_url: "http://other.example.com".into() });
+        assert!(!cfg.same_runtime(&changed));
     }
 }

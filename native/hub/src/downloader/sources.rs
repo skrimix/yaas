@@ -189,13 +189,17 @@ pub(super) async fn fetch_config(
         .with_context(|| format!("Failed to download downloader config from {url}"))?;
 
     let config = DownloaderConfig::parse(&content)?;
-    config.validate_managed_remote(expected_id.is_none().then_some(url))?;
-    if let Some(expected_id) = expected_id {
-        ensure!(
+    match expected_id {
+        Some(expected_id) => ensure!(
             config.id == expected_id,
             "Downloaded downloader config changed ID: expected {expected_id}, got {}",
             config.id
-        );
+        ),
+        None => ensure!(
+            config.config_update_url == url.as_str(),
+            "Config update URL mismatch: expected {url}, got {}",
+            SensitiveUrl::new(&config.config_update_url)
+        ),
     }
 
     Ok(FetchedConfig { config, content, is_install: expected_id.is_none() })
@@ -290,7 +294,6 @@ fn read_configs(app_dir: &Path) -> Result<ReadConfigs> {
         let id = path.file_stem().unwrap_or_default().to_string_lossy().into_owned();
 
         match DownloaderConfig::load_from_path(&path).and_then(|cfg| {
-            cfg.validate_managed_remote(None)?;
             ensure!(cfg.id == id, "Downloader config ID does not match its file name: {}", cfg.id);
             Ok(cfg)
         }) {
@@ -351,19 +354,13 @@ async fn migrate_legacy_config_if_needed(
 
     let migration_result = async {
         let legacy_cfg = DownloaderConfig::load_from_path(&legacy_path)?;
-        let update_url = legacy_cfg
-            .config_update_url
-            .as_deref()
-            .map(str::trim)
-            .filter(|value| !value.is_empty())
-            .context("Legacy downloader config has no usable config_update_url")?;
-
         let select_as_active = current_active_config_id(settings_handler).is_empty();
 
         let id = if managed_config_path(app_dir, &legacy_cfg.id).exists() {
             legacy_cfg.id
         } else {
-            fetch_config(SensitiveUrl::new(update_url), None).await?.commit(app_dir)?.id
+            let url = SensitiveUrl::new(&legacy_cfg.config_update_url);
+            fetch_config(url, None).await?.commit(app_dir)?.id
         };
         if select_as_active {
             save_active_config_id(settings_handler, Some(&id))?;
@@ -397,7 +394,6 @@ mod tests {
     };
 
     use super::*;
-    use crate::downloader::config::RepoLayoutKind;
 
     fn managed_config_json(id: &str, update_url: &str) -> String {
         format!(
@@ -437,18 +433,19 @@ mod tests {
         let server = MockServer::start().await;
         Mock::given(method("GET"))
             .and(path("/downloader.json"))
-            .respond_with(
-                ResponseTemplate::new(200).set_body_string(managed_config_json(
-                    "test",
-                    "https://other.example/config.json",
-                )),
-            )
+            .respond_with(ResponseTemplate::new(200).set_body_string(managed_config_json(
+                "test",
+                "https://other.example/config.json?downloaded-secret",
+            )))
             .mount(&server)
             .await;
 
-        let url = format!("{}/downloader.json", server.uri());
+        let url = format!("{}/downloader.json?entered-secret", server.uri());
         let err = fetch_config(SensitiveUrl::new(&url), None).await.err().unwrap();
-        assert!(format!("{:#}", err).contains("Config update URL mismatch"));
+        let message = format!("{err:#}");
+        assert!(message.contains("Config update URL mismatch"));
+        assert!(message.contains("https://other.example/config.json?redacted"));
+        assert!(!message.contains("secret"));
     }
 
     #[test]
@@ -477,7 +474,7 @@ mod tests {
                 "invalid",
                 legacy_config_json_without_update_url("invalid"),
                 "invalid.json",
-                "config_update_url is required",
+                "missing field `config_update_url`",
             ),
             (
                 "stored",
@@ -621,46 +618,8 @@ mod tests {
 
     #[test]
     fn resolve_active_config_id_falls_back_to_first_sorted_config() {
-        let configs = vec![
-            DownloaderConfig {
-                id: "b".into(),
-                display_name: None,
-                description: None,
-                rclone_path: Some(crate::downloader::config::RclonePath::Single(
-                    "/bin/echo".into(),
-                )),
-                rclone_config_path: Some("/tmp/rclone.conf".into()),
-                remote_name_filter_regex: None,
-                disable_randomize_remote: false,
-                donation_remote_name: None,
-                donation_remote_path: None,
-                donation_blacklist_path: None,
-                layout: RepoLayoutKind::Ffa,
-                base_url: None,
-                root_dir: "Quest Games".into(),
-                list_path: "FFA.txt".into(),
-                config_update_url: Some("https://example.com/b.json".into()),
-            },
-            DownloaderConfig {
-                id: "a".into(),
-                display_name: None,
-                description: None,
-                rclone_path: Some(crate::downloader::config::RclonePath::Single(
-                    "/bin/echo".into(),
-                )),
-                rclone_config_path: Some("/tmp/rclone.conf".into()),
-                remote_name_filter_regex: None,
-                disable_randomize_remote: false,
-                donation_remote_name: None,
-                donation_remote_path: None,
-                donation_blacklist_path: None,
-                layout: RepoLayoutKind::Ffa,
-                base_url: None,
-                root_dir: "Quest Games".into(),
-                list_path: "FFA.txt".into(),
-                config_update_url: Some("https://example.com/a.json".into()),
-            },
-        ];
+        let configs =
+            ["b", "a"].map(|id| DownloaderConfig { id: id.into(), ..Default::default() }).to_vec();
 
         assert_eq!(resolve_active_config_id(&configs, String::new()).as_deref(), Some("a"));
         assert_eq!(resolve_active_config_id(&configs, "missing".into()).as_deref(), Some("a"));

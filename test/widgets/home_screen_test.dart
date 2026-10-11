@@ -97,7 +97,7 @@ void main() {
     expect(controls.right, greaterThan(1100));
   });
 
-  for (final width in [800.0, 360.0]) {
+  for (final width in [1000.0, 800.0, 360.0]) {
     testWidgets('adapts and scrolls at $width with larger Russian text',
         (tester) async {
       await _pumpHome(tester,
@@ -108,7 +108,7 @@ void main() {
       expect(tester.takeException(), isNull);
       final device = tester.getRect(find.text('Oculus Quest 2'));
       final controls = tester.getRect(find.byType(DeviceActionsCard));
-      if (width == 800) {
+      if (width == 1000) {
         expect(controls.left, greaterThan(device.right));
       } else {
         expect(controls.top, greaterThan(device.bottom));
@@ -119,6 +119,21 @@ void main() {
       expect(find.text('Свободное место').hitTestable(), findsOneWidget);
     });
   }
+
+  testWidgets('hero and battery cards switch to stacked layouts together',
+      (tester) async {
+    for (final width in [360.0, 440.0, 480.0, 600.0, 800.0, 840.0, 1000.0]) {
+      await _pumpHome(tester, size: Size(width, 900));
+      expect(tester.takeException(), isNull);
+      final name = tester.getRect(find.text('Oculus Quest 2'));
+      final artwork = tester.getRect(find.byType(Image).first);
+      final headset = tester.getRect(find.text('Headset'));
+      final left = tester.getRect(find.text('Left Controller'));
+      final heroStacked = artwork.bottom <= name.top;
+      final batteryStacked = left.top > headset.bottom;
+      expect(batteryStacked, heroStacked, reason: 'at width $width');
+    }
+  });
 
   testWidgets('handles unavailable readings and disconnection', (tester) async {
     final events = await _pumpHome(tester);

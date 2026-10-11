@@ -18,8 +18,10 @@ class _HomeMetrics {
   static const double cardRadius = 20;
   static const double cardPadding = 20;
   static const double heroPadding = 24;
-  static const double heroContentBreakpoint = 400;
-  static const double minOverviewWidth = 360;
+
+  /// Narrowest hero and battery card width that still fits their side-by-side
+  /// layouts; narrower cards stack their content vertically.
+  static const double minOverviewWidth = 450;
   static const double controlsWidth = 360;
   static const double wideBreakpoint = minOverviewWidth + gap + controlsWidth;
 }
@@ -55,40 +57,41 @@ class HomeScreen extends StatelessWidget {
                 const BoxConstraints(maxWidth: _HomeMetrics.maxContentWidth),
             child: LayoutBuilder(
               builder: (context, constraints) {
-                final overview = Column(
-                  crossAxisAlignment: CrossAxisAlignment.stretch,
-                  children: [
-                    _DeviceHeroCard(device: device),
-                    const SizedBox(height: _HomeMetrics.gap),
-                    _BatteryCard(device: device),
-                  ],
-                );
-                final controls = Column(
-                  crossAxisAlignment: CrossAxisAlignment.stretch,
-                  children: [
-                    const DeviceActionsCard(),
-                    const SizedBox(height: _HomeMetrics.gap),
-                    _StorageCard(device: device),
-                  ],
-                );
+                final compact =
+                    constraints.maxWidth < _HomeMetrics.minOverviewWidth;
+                final hero = _DeviceHeroCard(device: device, compact: compact);
+                final battery = _BatteryCard(device: device, compact: compact);
+                const actions = DeviceActionsCard();
+                final storage = _StorageCard(device: device);
 
                 if (constraints.maxWidth >= _HomeMetrics.wideBreakpoint) {
-                  return Row(
-                    crossAxisAlignment: CrossAxisAlignment.start,
+                  return Column(
+                    crossAxisAlignment: CrossAxisAlignment.stretch,
                     children: [
-                      Expanded(child: overview),
-                      const SizedBox(width: _HomeMetrics.gap),
-                      SizedBox(
-                          width: _HomeMetrics.controlsWidth, child: controls),
+                      _MatchedHeightRow(
+                        endWidth: _HomeMetrics.controlsWidth,
+                        gap: _HomeMetrics.gap,
+                        children: [hero, actions],
+                      ),
+                      const SizedBox(height: _HomeMetrics.gap),
+                      _MatchedHeightRow(
+                        endWidth: _HomeMetrics.controlsWidth,
+                        gap: _HomeMetrics.gap,
+                        children: [battery, storage],
+                      ),
                     ],
                   );
                 }
                 return Column(
                   crossAxisAlignment: CrossAxisAlignment.stretch,
                   children: [
-                    overview,
+                    hero,
                     const SizedBox(height: _HomeMetrics.gap),
-                    controls,
+                    battery,
+                    const SizedBox(height: _HomeMetrics.gap),
+                    actions,
+                    const SizedBox(height: _HomeMetrics.gap),
+                    storage,
                   ],
                 );
               },
@@ -98,6 +101,32 @@ class HomeScreen extends StatelessWidget {
       ),
     );
   }
+}
+
+/// Lays out two children side by side, the second one at [endWidth], and
+/// stretches both to the height of the taller one so card edges line up.
+class _MatchedHeightRow extends StatelessWidget {
+  const _MatchedHeightRow({
+    required this.endWidth,
+    required this.gap,
+    required this.children,
+  }) : assert(children.length == 2);
+
+  final double endWidth;
+  final double gap;
+  final List<Widget> children;
+
+  @override
+  Widget build(BuildContext context) => IntrinsicHeight(
+        child: Row(
+          crossAxisAlignment: CrossAxisAlignment.stretch,
+          children: [
+            Expanded(child: children[0]),
+            SizedBox(width: gap),
+            SizedBox(width: endWidth, child: children[1]),
+          ],
+        ),
+      );
 }
 
 /// Small label pill used for connection details on the hero card.
@@ -143,9 +172,10 @@ class _InfoPill extends StatelessWidget {
 }
 
 class _DeviceHeroCard extends StatelessWidget {
-  const _DeviceHeroCard({required this.device});
+  const _DeviceHeroCard({required this.device, required this.compact});
 
   final DeviceState device;
+  final bool compact;
 
   @override
   Widget build(BuildContext context) {
@@ -161,6 +191,29 @@ class _DeviceHeroCard extends StatelessWidget {
             if (device.usbSpeed != null) device.usbSpeed!,
           ].join(' · ');
 
+    final details = Column(
+      crossAxisAlignment: CrossAxisAlignment.start,
+      children: [
+        Text(device.deviceName,
+            style: theme.textTheme.headlineMedium?.copyWith(color: onHero)),
+        const SizedBox(height: 16),
+        Text(l10n.homeSerialNumber,
+            style: theme.textTheme.labelMedium?.copyWith(color: mutedOnHero)),
+        SelectableText(
+          device.deviceTrueSerial,
+          style: theme.textTheme.bodyLarge?.copyWith(color: onHero),
+        ),
+        const SizedBox(height: 16),
+        _InfoPill(
+          icon: device.isWireless ? Icons.wifi : Icons.usb,
+          label: connection,
+          foreground: onHero,
+          background: scheme.surface.withValues(alpha: 0.45),
+        ),
+      ],
+    );
+    final artwork = _HeadsetArtwork(device: device);
+
     return Card.filled(
       margin: EdgeInsets.zero,
       color: scheme.secondaryContainer,
@@ -171,6 +224,7 @@ class _DeviceHeroCard extends StatelessWidget {
         padding: const EdgeInsets.all(_HomeMetrics.heroPadding),
         child: Column(
           crossAxisAlignment: CrossAxisAlignment.stretch,
+          mainAxisAlignment: MainAxisAlignment.spaceBetween,
           children: [
             Row(
               children: [
@@ -188,49 +242,20 @@ class _DeviceHeroCard extends StatelessWidget {
                 _DeviceMenuButton(color: onHero),
               ],
             ),
-            const SizedBox(height: 16),
-            LayoutBuilder(
-              builder: (context, constraints) {
-                final compact =
-                    constraints.maxWidth < _HomeMetrics.heroContentBreakpoint;
-                final details = Column(
-                  crossAxisAlignment: CrossAxisAlignment.start,
-                  children: [
-                    Text(device.deviceName,
-                        style: theme.textTheme.headlineMedium
-                            ?.copyWith(color: onHero)),
-                    const SizedBox(height: 16),
-                    Text(l10n.homeSerialNumber,
-                        style: theme.textTheme.labelMedium
-                            ?.copyWith(color: mutedOnHero)),
-                    SelectableText(
-                      device.deviceTrueSerial,
-                      style: theme.textTheme.bodyLarge?.copyWith(color: onHero),
+            Padding(
+              padding: const EdgeInsets.only(top: 16),
+              child: compact
+                  ? Column(
+                      crossAxisAlignment: CrossAxisAlignment.stretch,
+                      children: [artwork, const SizedBox(height: 16), details],
+                    )
+                  : Row(
+                      children: [
+                        Expanded(child: details),
+                        const SizedBox(width: _HomeMetrics.gap),
+                        Expanded(child: artwork),
+                      ],
                     ),
-                    const SizedBox(height: 16),
-                    _InfoPill(
-                      icon: device.isWireless ? Icons.wifi : Icons.usb,
-                      label: connection,
-                      foreground: onHero,
-                      background: scheme.surface.withValues(alpha: 0.45),
-                    ),
-                  ],
-                );
-                final artwork = _HeadsetArtwork(device: device);
-                if (compact) {
-                  return Column(
-                    crossAxisAlignment: CrossAxisAlignment.stretch,
-                    children: [artwork, const SizedBox(height: 16), details],
-                  );
-                }
-                return Row(
-                  children: [
-                    Expanded(child: details),
-                    const SizedBox(width: _HomeMetrics.gap),
-                    Expanded(child: artwork),
-                  ],
-                );
-              },
             ),
           ],
         ),
@@ -278,9 +303,10 @@ class _HeadsetArtwork extends StatelessWidget {
 
 /// Battery levels for the headset and both controllers, grouped in one card.
 class _BatteryCard extends StatelessWidget {
-  const _BatteryCard({required this.device});
+  const _BatteryCard({required this.device, required this.compact});
 
   final DeviceState device;
+  final bool compact;
 
   @override
   Widget build(BuildContext context) {
@@ -312,6 +338,18 @@ class _BatteryCard extends StatelessWidget {
       ),
     ];
 
+    final tiles = [
+      for (final entry in entries)
+        _BatteryTile(
+          title: entry.title,
+          asset: entry.asset,
+          level: entry.level,
+          status: entry.status,
+          isCharging: entry.isCharging,
+          isActive: entry.isActive,
+        ),
+    ];
+
     return Card(
       margin: EdgeInsets.zero,
       elevation: 0,
@@ -322,47 +360,33 @@ class _BatteryCard extends StatelessWidget {
         padding: const EdgeInsets.all(_HomeMetrics.cardPadding),
         child: Column(
           crossAxisAlignment: CrossAxisAlignment.stretch,
+          mainAxisAlignment: MainAxisAlignment.spaceBetween,
           children: [
             CardHeader(
                 icon: Icons.battery_full_rounded, title: l10n.batteryLabel),
-            const SizedBox(height: 16),
-            LayoutBuilder(
-              builder: (context, constraints) {
-                final sideBySide = constraints.maxWidth >= 410;
-                final tiles = [
-                  for (final entry in entries)
-                    _BatteryTile(
-                      title: entry.title,
-                      asset: entry.asset,
-                      level: entry.level,
-                      status: entry.status,
-                      isCharging: entry.isCharging,
-                      isActive: entry.isActive,
+            Padding(
+              padding: const EdgeInsets.only(top: 16),
+              child: compact
+                  ? Column(
+                      crossAxisAlignment: CrossAxisAlignment.stretch,
+                      children: [
+                        for (var i = 0; i < tiles.length; i++) ...[
+                          if (i > 0) const Divider(height: 24),
+                          tiles[i],
+                        ],
+                      ],
+                    )
+                  : IntrinsicHeight(
+                      child: Row(
+                        crossAxisAlignment: CrossAxisAlignment.stretch,
+                        children: [
+                          for (var i = 0; i < tiles.length; i++) ...[
+                            if (i > 0) const VerticalDivider(width: 17),
+                            Expanded(child: tiles[i]),
+                          ],
+                        ],
+                      ),
                     ),
-                ];
-                if (!sideBySide) {
-                  return Column(
-                    crossAxisAlignment: CrossAxisAlignment.stretch,
-                    children: [
-                      for (var i = 0; i < tiles.length; i++) ...[
-                        if (i > 0) const Divider(height: 24),
-                        tiles[i],
-                      ],
-                    ],
-                  );
-                }
-                return IntrinsicHeight(
-                  child: Row(
-                    crossAxisAlignment: CrossAxisAlignment.stretch,
-                    children: [
-                      for (var i = 0; i < tiles.length; i++) ...[
-                        if (i > 0) const VerticalDivider(width: 17),
-                        Expanded(child: tiles[i]),
-                      ],
-                    ],
-                  ),
-                );
-              },
             ),
           ],
         ),
@@ -501,45 +525,53 @@ class _StorageCard extends StatelessWidget {
         padding: const EdgeInsets.all(_HomeMetrics.cardPadding),
         child: Column(
           crossAxisAlignment: CrossAxisAlignment.start,
+          mainAxisAlignment: MainAxisAlignment.spaceBetween,
           children: [
             CardHeader(
                 icon: Icons.storage_rounded,
                 title: l10n.settingsSectionStorage),
-            const SizedBox(height: 20),
-            Wrap(
-              crossAxisAlignment: WrapCrossAlignment.end,
-              spacing: 8,
-              children: [
-                Text(
-                  total > 0 ? _formatSize(available) : '—',
-                  style: theme.textTheme.headlineLarge?.copyWith(
-                    color: isLow ? scheme.error : scheme.onSurface,
+            Padding(
+              padding: const EdgeInsets.only(top: 20),
+              child: Column(
+                crossAxisAlignment: CrossAxisAlignment.start,
+                children: [
+                  Wrap(
+                    crossAxisAlignment: WrapCrossAlignment.end,
+                    spacing: 8,
+                    children: [
+                      Text(
+                        total > 0 ? _formatSize(available) : '—',
+                        style: theme.textTheme.headlineLarge?.copyWith(
+                          color: isLow ? scheme.error : scheme.onSurface,
+                        ),
+                      ),
+                      Padding(
+                        padding: const EdgeInsets.only(bottom: 4),
+                        child: Text(l10n.homeFreeSpace,
+                            style: theme.textTheme.bodyMedium
+                                ?.copyWith(color: scheme.onSurfaceVariant)),
+                      ),
+                    ],
                   ),
-                ),
-                Padding(
-                  padding: const EdgeInsets.only(bottom: 4),
-                  child: Text(l10n.homeFreeSpace,
-                      style: theme.textTheme.bodyMedium
-                          ?.copyWith(color: scheme.onSurfaceVariant)),
-                ),
-              ],
-            ),
-            const SizedBox(height: 16),
-            LinearProgressIndicator(
-              value: usedFraction,
-              semanticsLabel: l10n.detailsStorageUsage,
-              minHeight: 8,
-              borderRadius: BorderRadius.circular(4),
-              color: isLow ? scheme.error : scheme.primary,
-              backgroundColor: scheme.surfaceContainerHighest,
-            ),
-            const SizedBox(height: 12),
-            Text(
-              total > 0
-                  ? '${l10n.detailsTotal} ${_formatSize(total)}'
-                  : l10n.deviceStorageStatusUnknown,
-              style: theme.textTheme.bodySmall
-                  ?.copyWith(color: scheme.onSurfaceVariant),
+                  const SizedBox(height: 16),
+                  LinearProgressIndicator(
+                    value: usedFraction,
+                    semanticsLabel: l10n.detailsStorageUsage,
+                    minHeight: 8,
+                    borderRadius: BorderRadius.circular(4),
+                    color: isLow ? scheme.error : scheme.primary,
+                    backgroundColor: scheme.surfaceContainerHighest,
+                  ),
+                  const SizedBox(height: 12),
+                  Text(
+                    total > 0
+                        ? '${l10n.detailsTotal} ${_formatSize(total)}'
+                        : l10n.deviceStorageStatusUnknown,
+                    style: theme.textTheme.bodySmall
+                        ?.copyWith(color: scheme.onSurfaceVariant),
+                  ),
+                ],
+              ),
             ),
           ],
         ),

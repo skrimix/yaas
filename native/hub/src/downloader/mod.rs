@@ -13,6 +13,11 @@ pub(crate) use session::DownloaderSession;
 pub(crate) mod downloads_catalog;
 pub(crate) mod sources;
 
+fn is_http_url(value: &str) -> bool {
+    let v = value.to_ascii_lowercase();
+    v.starts_with("http://") || v.starts_with("https://")
+}
+
 #[derive(Clone, Copy)]
 pub(crate) struct SensitiveUrl<'a>(&'a str);
 

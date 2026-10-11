@@ -1,14 +1,11 @@
-use std::{
-    collections::HashMap,
-    sync::{Arc, Weak},
-};
+use std::{collections::HashMap, error::Error, sync::Arc};
 
 use anyhow::{Context, Result};
 use rinf::{DartSignal, RustSignal};
 use tokio::sync::Mutex;
 use tokio_stream::wrappers::WatchStream;
 use tokio_util::sync::CancellationToken;
-use tracing::debug;
+use tracing::{debug, warn};
 
 use crate::{
     downloader::{
@@ -17,7 +14,7 @@ use crate::{
         manager::DownloaderManager,
         repo,
         sources::{
-            CacheLease, ConfigFetch, RefreshReport, SourceSnapshot, SourceStore, runtime_cache_dir,
+            RefreshReport, SourceSnapshot, SourceStore, fetch_config, runtime_cache_dir,
             warnings_to_message,
         },
     },
@@ -52,7 +49,6 @@ struct ControllerState {
     initialization_cancel: CancellationToken,
     generation: u64,
     refreshing: usize,
-    leases: Vec<(String, Weak<CacheLease>)>,
 }
 
 impl ControllerState {
@@ -90,7 +86,8 @@ impl DownloaderController {
     }
 
     async fn startup(self: Arc<Self>) {
-        // Migration precedes request handling, so it cannot race a source mutation.
+        // Migration and cache cleanup precede request handling and session creation,
+        // so they cannot race a source mutation or delete a cache that is in use.
         let mut warnings = self
             .sources
             .migrate_legacy_config_if_needed()
@@ -101,6 +98,12 @@ impl DownloaderController {
             })
             .into_iter()
             .collect::<Vec<_>>();
+        if let Err(error) = self.sources.remove_orphaned_caches() {
+            warn!(
+                error = error.as_ref() as &dyn Error,
+                "Failed to delete orphaned downloader caches"
+            );
+        }
         self.clone().start_request_handlers();
         let loaded = match self.sources.load() {
             Ok(loaded) => loaded,
@@ -178,7 +181,7 @@ impl DownloaderController {
                 repo::Repo::new(&cfg, &cache_dir, &settings, &cancel).await
             }
             .await;
-            let mut state = tokio::select! {
+            let state = tokio::select! {
                 biased;
                 _ = cancel.cancelled() => return,
                 state = controller.state.lock() => state,
@@ -196,14 +199,10 @@ impl DownloaderController {
                 // Settings may have changed while preparing runtime files.
                 let current = controller.settings_handler.subscribe().borrow().clone();
                 repo.set_bandwidth_limit(current.bandwidth_limit.clone());
-                let lease = Arc::new(CacheLease(Arc::new(tokio::sync::Notify::new())));
-                state.leases.retain(|(_, lease)| lease.strong_count() > 0);
-                state.leases.push((cfg.id.clone(), Arc::downgrade(&lease)));
                 let session = DownloaderSession::new(
                     Arc::new(cfg),
                     repo,
                     cache_dir,
-                    lease,
                     controller.settings_handler.clone(),
                     WatchStream::new(controller.settings_handler.subscribe()),
                 )
@@ -222,10 +221,9 @@ impl DownloaderController {
 
     async fn install_from_url(self: &Arc<Self>, url: SensitiveUrl<'_>) {
         let result = async {
-            let fetch =
-                ConfigFetch::new(self.sources.app_dir(), url.as_str(), None)?.fetch().await?;
+            let fetched = fetch_config(url, None).await?;
             let mut state = self.state.lock().await;
-            let cfg = fetch.commit(self.sources.app_dir())?;
+            let cfg = fetched.commit(self.sources.app_dir())?;
             state.advance(&cfg.id);
             self.sources.select_active(&cfg.id)?;
             self.reconcile(&mut state, false, &[]).await?;
@@ -254,20 +252,8 @@ impl DownloaderController {
         let result = async {
             let mut state = self.state.lock().await;
             self.sources.remove(&config_id)?;
-            let revision = state.advance(&config_id);
-            let reconciled = self.reconcile(&mut state, false, &[]).await;
-            let leases = state
-                .leases
-                .iter()
-                .filter(|(id, _)| id == &config_id)
-                .map(|(_, lease)| lease.clone())
-                .collect::<Vec<_>>();
-            let controller = self.clone();
-            let id = config_id.clone();
-            tokio::spawn(async move {
-                controller.cleanup_removed_source(id, revision, leases).await;
-            });
-            reconciled
+            state.advance(&config_id);
+            self.reconcile(&mut state, false, &[]).await
         }
         .await;
         let error = result.err().map(|error| format!("{error:#}"));
@@ -285,43 +271,6 @@ impl DownloaderController {
                 false,
                 None,
             ),
-        }
-    }
-
-    async fn cleanup_removed_source(
-        self: Arc<Self>,
-        id: String,
-        revision: u64,
-        leases: Vec<Weak<CacheLease>>,
-    ) {
-        for lease in leases {
-            if let Some(active) = lease.upgrade() {
-                let notify = active.0.clone();
-                drop(active);
-                loop {
-                    let released = notify.notified();
-                    tokio::pin!(released);
-                    released.as_mut().enable();
-                    if lease.strong_count() == 0 {
-                        break;
-                    }
-                    released.await;
-                }
-            }
-        }
-        let state = self.state.lock().await;
-        if state.revisions.get(&id) != Some(&revision) {
-            return;
-        }
-        if self
-            .sources
-            .load()
-            .map_or(true, |sources| sources.configs.iter().any(|cfg| cfg.id == id))
-        {
-            return;
-        }
-        if let Err(error) = self.sources.delete_cache_dir(&id) {
-            send_error_toast("Failed to clean downloader cache", &error);
         }
     }
 
@@ -365,22 +314,17 @@ impl DownloaderController {
                         continue;
                     }
                     let ticket = state.advance(&cfg.id);
-                    match cfg
-                        .config_update_url
-                        .as_deref()
-                        .context("Missing config_update_url")
-                        .and_then(|url| {
-                            ConfigFetch::new(self.sources.app_dir(), url.trim(), Some(&cfg.id))
-                        }) {
-                        Ok(fetch) => pending.push((cfg, ticket, fetch)),
-                        Err(error) => report.failed.push(format!("{}: {error:#}", cfg.id)),
-                    }
+                    pending.push((cfg, ticket));
                 }
             }
             pending
         };
-        for (cfg, ticket, fetch) in pending {
-            let result = fetch.fetch().await;
+        for (cfg, ticket) in pending {
+            let result = async {
+                let url = cfg.config_update_url.as_deref().context("Missing config_update_url")?;
+                fetch_config(SensitiveUrl::new(url.trim()), Some(&cfg.id)).await
+            }
+            .await;
             let mut state = self.state.lock().await;
             if state.revisions.get(&cfg.id) != Some(&ticket) {
                 continue;
@@ -389,7 +333,7 @@ impl DownloaderController {
             if !current.as_ref().is_ok_and(|sources| sources.configs.contains(&cfg)) {
                 continue;
             }
-            match result.and_then(|fetch| fetch.commit(self.sources.app_dir())) {
+            match result.and_then(|fetched| fetched.commit(self.sources.app_dir())) {
                 Ok(updated) => {
                     report.refreshed += 1;
                     // Runtime files can change without their URLs changing.
@@ -643,7 +587,6 @@ mod tests {
             } else {
                 assert!(sources.configs.is_empty());
             }
-            assert!(!runtime_cache_dir(controller.sources.app_dir(), "a").join("source").exists());
         }
     }
 
@@ -759,38 +702,6 @@ mod tests {
             Some("http://127.0.0.1:2")
         );
         controller.manager.clear().await;
-    }
-
-    #[tokio::test]
-    async fn removed_cache_waits_for_all_session_users_and_ignores_reinstallation() {
-        for reinstall in [false, true] {
-            let (_dir, controller) = fixture().await;
-            install_fixture(&controller, "a", "http://127.0.0.1:1/a");
-            controller.sync(false, vec![]).await.unwrap();
-            settled(&controller).await;
-            let session = controller.manager.require().await.unwrap();
-            let cache = runtime_cache_dir(controller.sources.app_dir(), "a");
-            std::fs::write(cache.join("sentinel"), "old").unwrap();
-            controller.remove_source("a".into()).await;
-            assert!(cache.join("sentinel").exists());
-            let state = controller.state.lock().await;
-            let revision = state.revisions["a"];
-            let leases = state.leases.iter().map(|(_, lease)| lease.clone()).collect();
-            drop(state);
-            if reinstall {
-                let mut state = controller.state.lock().await;
-                install_fixture(&controller, "a", "http://127.0.0.1:1/a");
-                state.advance("a");
-            }
-            drop(session);
-            tokio::time::timeout(
-                std::time::Duration::from_secs(5),
-                controller.clone().cleanup_removed_source("a".into(), revision, leases),
-            )
-            .await
-            .unwrap();
-            assert_eq!(cache.exists(), reinstall);
-        }
     }
 
     #[tokio::test]

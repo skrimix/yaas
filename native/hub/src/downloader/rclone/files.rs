@@ -13,14 +13,9 @@ use tracing::{debug, info, instrument, warn};
 use super::super::http_cache::{self, DownloadResult};
 use crate::{
     archive::{extract_single_from_archive, list_archive_file_paths},
-    downloader::{config::DownloaderConfig, http_cache::compute_md5_file},
+    downloader::{config::DownloaderConfig, http_cache::compute_md5_file, is_http_url},
     models::signals::downloader::progress::DownloaderInitProgress,
 };
-
-fn is_http_url(value: &str) -> bool {
-    let v = value.to_ascii_lowercase();
-    v.starts_with("http://") || v.starts_with("https://")
-}
 
 fn is_zip_url(value: &str) -> bool {
     let lower = value.to_ascii_lowercase();

@@ -35,7 +35,6 @@ use crate::{
 };
 
 pub(crate) struct DownloaderSession {
-    _cache_lease: Arc<crate::downloader::sources::CacheLease>,
     repo: RwLock<repo::Repo>,
     cache_dir: PathBuf,
     catalog: Mutex<Catalog>,
@@ -68,12 +67,11 @@ struct CatalogLoad {
 }
 
 impl DownloaderSession {
-    #[instrument(level = "debug", skip(repo, cache_lease, settings_handler, settings_stream))]
+    #[instrument(level = "debug", skip(repo, settings_handler, settings_stream))]
     pub(super) async fn new(
         config: Arc<DownloaderConfig>,
         repo: repo::Repo,
         cache_dir: PathBuf,
-        cache_lease: Arc<crate::downloader::sources::CacheLease>,
         settings_handler: Arc<SettingsHandler>,
         mut settings_stream: WatchStream<Settings>,
     ) -> Result<Arc<Self>> {
@@ -101,7 +99,6 @@ impl DownloaderSession {
         let cancel_token = CancellationToken::new();
 
         let handle = Arc::new(Self {
-            _cache_lease: cache_lease,
             repo: RwLock::new(repo),
             cache_dir,
             catalog: Mutex::new(Catalog::default()),
@@ -578,7 +575,7 @@ mod tests {
     };
 
     use super::*;
-    use crate::downloader::{config::RepoLayoutKind, sources::CacheLease};
+    use crate::downloader::config::RepoLayoutKind;
 
     async fn fixture(url: &str) -> (tempfile::TempDir, Arc<DownloaderSession>) {
         let dir = tempfile::tempdir().unwrap();
@@ -592,7 +589,6 @@ mod tests {
             .await
             .unwrap();
         let session = Arc::new(DownloaderSession {
-            _cache_lease: Arc::new(CacheLease(Arc::new(tokio::sync::Notify::new()))),
             repo: RwLock::new(repo),
             cache_dir: dir.path().to_path_buf(),
             catalog: Mutex::new(Catalog::default()),

@@ -62,7 +62,11 @@ impl DownloaderConfig {
         let path = path.as_ref();
         let content = fs::read_to_string(path)
             .with_context(|| format!("Failed to read {}", path.display()))?;
-        let cfg: DownloaderConfig = serde_json::from_str(&content)
+        Self::parse(&content)
+    }
+
+    pub(crate) fn parse(content: &str) -> Result<Self> {
+        let cfg: DownloaderConfig = serde_json::from_str(content)
             .context("Failed to parse downloader.json")
             .inspect_err(|e| {
                 error!("Failed to parse downloader.json: {:#}", e);

@@ -3,19 +3,21 @@ use std::{
     fs,
     path::{Path, PathBuf},
     sync::Arc,
+    time::Duration,
 };
 
 use anyhow::{Context, Result, anyhow, ensure};
 use tracing::{debug, info, warn};
 
 use crate::{
-    downloader::{SensitiveUrl, config::DownloaderConfig, http_cache},
+    downloader::{SensitiveUrl, config::DownloaderConfig, is_http_url},
     models::{InstalledDownloaderConfig, Settings},
     settings::SettingsHandler,
 };
 
 pub(crate) const LEGACY_CONFIG_FILENAME: &str = "downloader.json";
 const MANAGED_CONFIGS_DIR: &str = "downloader_configs";
+const RUNTIME_CACHES_DIR: &str = "downloader_cache";
 
 #[derive(Debug, Clone, Default)]
 pub(crate) struct SourceSnapshot {
@@ -122,95 +124,103 @@ impl SourceStore {
         migrate_legacy_config_if_needed(&self.app_dir, &self.settings_handler).await
     }
 
-    pub(crate) fn delete_cache_dir(&self, config_id: &str) -> Result<()> {
-        delete_config_cache_dir(&self.app_dir, config_id)
-    }
-}
+    /// Deletes runtime caches of sources that are no longer installed.
+    ///
+    /// Must run before any session starts, so that no session is using a deleted cache.
+    pub(crate) fn remove_orphaned_caches(&self) -> Result<()> {
+        let root = self.app_dir.join(RUNTIME_CACHES_DIR);
+        if !root.exists() {
+            return Ok(());
+        }
+        let installed = read_configs(&self.app_dir)?.installed_configs;
 
-/// Files owned by one configuration fetch until the controller accepts it.
-pub(super) struct ConfigFetch {
-    temp: tempfile::TempDir,
-    url: String,
-    expected_id: Option<String>,
-}
-
-impl ConfigFetch {
-    /// Called under the controller lock to snapshot the configuration cache.
-    pub(super) fn new(app_dir: &Path, url: &str, expected_id: Option<&str>) -> Result<Self> {
-        let temp = tempfile::tempdir()?;
-        if let Some(id) = expected_id {
-            let cache = runtime_cache_dir(app_dir, id).join("source");
-            for name in ["downloader_config.json", "meta.json"] {
-                let path = cache.join(name);
-                if path.exists() {
-                    fs::copy(path, temp.path().join(name))?;
-                }
+        for entry in
+            fs::read_dir(&root).with_context(|| format!("Failed to read {}", root.display()))?
+        {
+            let entry =
+                entry.with_context(|| format!("Failed to read entry in {}", root.display()))?;
+            if !entry.file_type()?.is_dir()
+                || installed.iter().any(|cfg| entry.file_name() == cfg.id.as_str())
+            {
+                continue;
+            }
+            let path = entry.path();
+            info!(path = %path.display(), "Deleting orphaned downloader cache");
+            if let Err(e) = fs::remove_dir_all(&path) {
+                warn!(
+                    error = &e as &dyn Error,
+                    path = %path.display(),
+                    "Failed to delete orphaned downloader cache"
+                );
             }
         }
-        Ok(Self { temp, url: url.to_string(), expected_id: expected_id.map(str::to_string) })
+
+        Ok(())
+    }
+}
+
+/// A downloaded and validated configuration that has not been installed yet.
+pub(super) struct FetchedConfig {
+    config: DownloaderConfig,
+    content: String,
+    is_install: bool,
+}
+
+/// Downloads a managed configuration.
+///
+/// With `expected_id`, this refreshes an installed source and the downloaded ID must match.
+/// Without it, this installs a new source and its `config_update_url` must match `url`.
+pub(super) async fn fetch_config(
+    url: SensitiveUrl<'_>,
+    expected_id: Option<&str>,
+) -> Result<FetchedConfig> {
+    ensure!(is_http_url(url.as_str()), "Config URL must start with http:// or https://");
+    debug!(%url, ?expected_id, "Downloading downloader config");
+
+    let client = reqwest::Client::builder()
+        .user_agent(crate::USER_AGENT)
+        .connect_timeout(Duration::from_secs(10))
+        .timeout(Duration::from_secs(60))
+        .build()
+        .context("Failed to build HTTP client for downloader config")?;
+    let content = async { client.get(url.as_str()).send().await?.error_for_status()?.text().await }
+        .await
+        .map_err(reqwest::Error::without_url)
+        .with_context(|| format!("Failed to download downloader config from {url}"))?;
+
+    let config = DownloaderConfig::parse(&content)?;
+    config.validate_managed_remote(expected_id.is_none().then_some(url))?;
+    if let Some(expected_id) = expected_id {
+        ensure!(
+            config.id == expected_id,
+            "Downloaded downloader config changed ID: expected {expected_id}, got {}",
+            config.id
+        );
     }
 
-    pub(super) async fn fetch(self) -> Result<Self> {
-        let client = reqwest::Client::builder()
-            .user_agent(crate::USER_AGENT)
-            .connect_timeout(std::time::Duration::from_secs(10))
-            .timeout(std::time::Duration::from_secs(60))
-            .build()?;
-        http_cache::update_file_cached(
-            &client,
-            &self.url,
-            &self.temp.path().join("downloader_config.json"),
-            self.temp.path(),
-            None,
-        )
-        .await?;
-        let cfg =
-            DownloaderConfig::load_from_path(self.temp.path().join("downloader_config.json"))?;
-        cfg.validate_managed_remote(
-            self.expected_id.is_none().then(|| SensitiveUrl::new(&self.url)),
-        )?;
-        if let Some(id) = &self.expected_id {
-            ensure!(
-                cfg.id == *id,
-                "Downloaded downloader config changed ID: expected {id}, got {}",
-                cfg.id
-            );
-        }
-        Ok(self)
-    }
+    Ok(FetchedConfig { config, content, is_install: expected_id.is_none() })
+}
 
-    /// Commits only after the controller has checked the source revision.
+impl FetchedConfig {
+    /// Writes the configuration to the managed configs directory.
+    ///
+    /// Called by the controller only after it has checked the source revision.
     pub(super) fn commit(self, app_dir: &Path) -> Result<DownloaderConfig> {
-        let cfg = write_managed_config(
-            app_dir,
-            &self.temp.path().join("downloader_config.json"),
-            self.expected_id.is_none().then(|| SensitiveUrl::new(&self.url)),
-            self.expected_id.as_deref(),
-            self.expected_id.is_none(),
-        )?;
-        let cache = runtime_cache_dir(app_dir, &cfg.id).join("source");
-        // A cache failure must not turn a successful source mutation into a failed install.
-        if let Err(error) = (|| -> Result<()> {
-            fs::create_dir_all(&cache)?;
-            for name in ["downloader_config.json", "meta.json"] {
-                let path = self.temp.path().join(name);
-                if path.exists() {
-                    fs::copy(path, cache.join(name))?;
-                }
-            }
-            Ok(())
-        })() {
-            warn!(%error, "Failed to save source download cache");
+        let dst_dir = managed_configs_dir(app_dir);
+        fs::create_dir_all(&dst_dir)
+            .with_context(|| format!("Failed to create {}", dst_dir.display()))?;
+
+        let dst = managed_config_path(app_dir, &self.config.id);
+        if self.is_install {
+            ensure!(!dst.exists(), "Downloader config ID already installed: {}", self.config.id);
         }
-        Ok(cfg)
-    }
-}
 
-pub(super) struct CacheLease(pub Arc<tokio::sync::Notify>);
+        let tmp = dst_dir.join(format!("{}.json.tmp", self.config.id));
+        fs::write(&tmp, &self.content)
+            .with_context(|| format!("Failed to write {}", tmp.display()))?;
+        fs::rename(&tmp, &dst).with_context(|| format!("Failed to replace {}", dst.display()))?;
 
-impl Drop for CacheLease {
-    fn drop(&mut self) {
-        self.0.notify_waiters();
+        Ok(self.config)
     }
 }
 
@@ -228,13 +238,7 @@ pub(crate) fn managed_config_path(app_dir: &Path, config_id: &str) -> PathBuf {
 }
 
 pub(crate) fn runtime_cache_dir(app_dir: &Path, config_id: &str) -> PathBuf {
-    app_dir.join("downloader_cache").join(config_id)
-}
-
-fn config_download_cache_path(app_dir: &Path, cache_key: &str) -> (PathBuf, PathBuf) {
-    let cache_dir = runtime_cache_dir(app_dir, cache_key);
-    let cached_cfg_path = cache_dir.join("downloader_config.json");
-    (cache_dir, cached_cfg_path)
+    app_dir.join(RUNTIME_CACHES_DIR).join(config_id)
 }
 
 fn current_settings(settings_handler: &Arc<SettingsHandler>) -> Settings {
@@ -263,11 +267,6 @@ fn resolve_active_config_id(configs: &[DownloaderConfig], desired_id: String) ->
 
 pub(crate) fn warnings_to_message(warnings: &[String]) -> Option<String> {
     if warnings.is_empty() { None } else { Some(warnings.join("\n")) }
-}
-
-fn is_http_url(value: &str) -> bool {
-    let v = value.to_ascii_lowercase();
-    v.starts_with("http://") || v.starts_with("https://")
 }
 
 fn read_configs(app_dir: &Path) -> Result<ReadConfigs> {
@@ -339,124 +338,6 @@ fn read_configs(app_dir: &Path) -> Result<ReadConfigs> {
     Ok(ReadConfigs { configs, installed_configs })
 }
 
-async fn cache_config_from_url(
-    app_dir: &Path,
-    cache_key: &str,
-    url: SensitiveUrl<'_>,
-) -> Result<PathBuf> {
-    ensure!(is_http_url(url.as_str()), "Config update URL must start with http:// or https://");
-    debug!(
-        update_url = %url,
-        cache_key = %cache_key,
-        "Downloading downloader config from URL"
-    );
-
-    let (cache_dir, cached_cfg_path) = config_download_cache_path(app_dir, cache_key);
-
-    let client = reqwest::Client::builder()
-        .user_agent(crate::USER_AGENT)
-        .build()
-        .context("Failed to build HTTP client for downloader config update")?;
-
-    let _ =
-        http_cache::update_file_cached(&client, url.as_str(), &cached_cfg_path, &cache_dir, None)
-            .await
-            .with_context(|| format!("Failed to download downloader config from {url}"))?;
-
-    Ok(cached_cfg_path)
-}
-
-async fn fetch_managed_config(
-    app_dir: &Path,
-    cache_key: &str,
-    url: SensitiveUrl<'_>,
-    source_url: Option<SensitiveUrl<'_>>,
-    expected_id: Option<&str>,
-    refuse_existing: bool,
-) -> Result<DownloaderConfig> {
-    let remote_cfg_path = cache_config_from_url(app_dir, cache_key, url).await?;
-    write_managed_config(app_dir, &remote_cfg_path, source_url, expected_id, refuse_existing)
-}
-
-fn write_managed_config(
-    app_dir: &Path,
-    src: &Path,
-    source_url: Option<SensitiveUrl<'_>>,
-    expected_id: Option<&str>,
-    refuse_existing: bool,
-) -> Result<DownloaderConfig> {
-    let cfg = DownloaderConfig::load_from_path(src)?;
-    cfg.validate_managed_remote(source_url)?;
-    if let Some(expected_id) = expected_id {
-        ensure!(
-            cfg.id == expected_id,
-            "Downloaded downloader config changed ID: expected {expected_id}, got {}",
-            cfg.id
-        );
-    }
-
-    let dst_dir = managed_configs_dir(app_dir);
-    fs::create_dir_all(&dst_dir)
-        .with_context(|| format!("Failed to create {}", dst_dir.display()))?;
-
-    let dst = managed_config_path(app_dir, &cfg.id);
-    if refuse_existing {
-        ensure!(!dst.exists(), "Downloader config ID already installed: {}", cfg.id);
-    }
-
-    let tmp = dst_dir.join(format!("{}.json.tmp", cfg.id));
-    let content =
-        fs::read_to_string(src).with_context(|| format!("Failed to read {}", src.display()))?;
-    fs::write(&tmp, content).with_context(|| format!("Failed to write {}", tmp.display()))?;
-    fs::rename(&tmp, &dst).with_context(|| format!("Failed to replace {}", dst.display()))?;
-
-    Ok(cfg)
-}
-
-#[cfg(test)]
-async fn refresh_configs(app_dir: &Path, configs: &[DownloaderConfig]) -> RefreshReport {
-    let mut report = RefreshReport::default();
-
-    for cfg in configs {
-        let Some(update_url) = cfg.config_update_url.as_deref().map(str::trim) else {
-            report.failed.push(format!("{}: missing config_update_url", cfg.id));
-            continue;
-        };
-
-        let refresh_result = async {
-            let update_url = SensitiveUrl::new(update_url);
-            let _ = fetch_managed_config(app_dir, &cfg.id, update_url, None, Some(&cfg.id), false)
-                .await?;
-            Ok::<(), anyhow::Error>(())
-        }
-        .await;
-
-        match refresh_result {
-            Ok(()) => report.refreshed += 1,
-            Err(e) => {
-                warn!(
-                    error = e.as_ref() as &dyn Error,
-                    config_id = %cfg.id,
-                    "Failed to refresh downloader config"
-                );
-                report.failed.push(format!("{}: {:#}", cfg.id, e));
-            }
-        }
-    }
-
-    report
-}
-
-fn delete_config_cache_dir(app_dir: &Path, config_id: &str) -> Result<()> {
-    let cache_dir = runtime_cache_dir(app_dir, config_id);
-    if cache_dir.exists() {
-        fs::remove_dir_all(&cache_dir)
-            .with_context(|| format!("Failed to delete {}", cache_dir.display()))?;
-    }
-
-    Ok(())
-}
-
 async fn migrate_legacy_config_if_needed(
     app_dir: &Path,
     settings_handler: &Arc<SettingsHandler>,
@@ -479,21 +360,15 @@ async fn migrate_legacy_config_if_needed(
 
         let select_as_active = current_active_config_id(settings_handler).is_empty();
 
-        if managed_config_path(app_dir, &legacy_cfg.id).exists() {
-            if select_as_active {
-                save_active_config_id(settings_handler, Some(&legacy_cfg.id))?;
-            }
-            return Ok::<(), anyhow::Error>(());
-        }
-
-        let update_url = SensitiveUrl::new(update_url);
-        let _ =
-            fetch_managed_config(app_dir, "_bootstrap", update_url, Some(update_url), None, true)
-                .await?;
+        let id = if managed_config_path(app_dir, &legacy_cfg.id).exists() {
+            legacy_cfg.id
+        } else {
+            fetch_config(SensitiveUrl::new(update_url), None).await?.commit(app_dir)?.id
+        };
         if select_as_active {
-            save_active_config_id(settings_handler, Some(&legacy_cfg.id))?;
+            save_active_config_id(settings_handler, Some(&id))?;
         }
-        Ok(())
+        Ok::<(), anyhow::Error>(())
     }
     .await;
 
@@ -549,49 +424,42 @@ mod tests {
         )
     }
 
-    #[test]
-    fn write_managed_config_requires_matching_update_url() {
-        let dir = tempdir().unwrap();
-        let src = dir.path().join("src.json");
-        std::fs::write(&src, managed_config_json("test", "https://example.com/downloader.json"))
-            .unwrap();
+    fn fetched_install(content: String) -> FetchedConfig {
+        FetchedConfig {
+            config: DownloaderConfig::parse(&content).unwrap(),
+            content,
+            is_install: true,
+        }
+    }
 
-        let err = write_managed_config(
-            dir.path(),
-            &src,
-            Some(SensitiveUrl::new("https://other.example/config.json")),
-            None,
-            true,
-        )
-        .unwrap_err();
+    #[tokio::test]
+    async fn fetch_config_install_requires_matching_update_url() {
+        let server = MockServer::start().await;
+        Mock::given(method("GET"))
+            .and(path("/downloader.json"))
+            .respond_with(
+                ResponseTemplate::new(200).set_body_string(managed_config_json(
+                    "test",
+                    "https://other.example/config.json",
+                )),
+            )
+            .mount(&server)
+            .await;
+
+        let url = format!("{}/downloader.json", server.uri());
+        let err = fetch_config(SensitiveUrl::new(&url), None).await.err().unwrap();
         assert!(format!("{:#}", err).contains("Config update URL mismatch"));
     }
 
     #[test]
-    fn write_managed_config_rejects_duplicate_id() {
+    fn install_rejects_duplicate_id() {
         let dir = tempdir().unwrap();
-        let src = dir.path().join("src.json");
-        std::fs::write(&src, managed_config_json("test", "https://example.com/downloader.json"))
-            .unwrap();
+        let content = managed_config_json("test", "https://example.com/downloader.json");
 
-        let first = write_managed_config(
-            dir.path(),
-            &src,
-            Some(SensitiveUrl::new("https://example.com/downloader.json")),
-            None,
-            true,
-        )
-        .unwrap();
+        let first = fetched_install(content.clone()).commit(dir.path()).unwrap();
         assert_eq!(first.id, "test");
 
-        let err = write_managed_config(
-            dir.path(),
-            &src,
-            Some(SensitiveUrl::new("https://example.com/downloader.json")),
-            None,
-            true,
-        )
-        .unwrap_err();
+        let err = fetched_install(content).commit(dir.path()).unwrap_err();
         assert!(format!("{:#}", err).contains("Downloader config ID already installed"));
     }
 
@@ -640,9 +508,8 @@ mod tests {
             assert!(entry.error.as_deref().unwrap().contains(error));
             assert!(sources.select_active(id).is_err());
 
-            let src = app_dir.join("replacement.json");
-            fs::write(&src, managed_config_json(id, "https://example.com/config.json")).unwrap();
-            assert!(write_managed_config(&app_dir, &src, None, None, true).is_err());
+            let replacement = managed_config_json(id, "https://example.com/config.json");
+            assert!(fetched_install(replacement.clone()).commit(&app_dir).is_err());
 
             sources.remove(&entry.id).unwrap();
             assert!(!invalid.exists());
@@ -651,7 +518,7 @@ mod tests {
             assert_eq!(remaining.installed_configs.len(), 1);
             assert!(remaining.installed_configs[0].error.is_none());
 
-            write_managed_config(&app_dir, &src, None, None, true).unwrap();
+            fetched_install(replacement).commit(&app_dir).unwrap();
             let reinstalled = sources.load().unwrap();
             assert_eq!(reinstalled.configs.len(), 2);
             assert!(reinstalled.installed_configs.iter().all(|cfg| cfg.error.is_none()));
@@ -683,7 +550,7 @@ mod tests {
     }
 
     #[tokio::test(flavor = "multi_thread")]
-    async fn refresh_all_configs_allows_update_url_change() {
+    async fn refresh_allows_update_url_change() {
         let dir = tempdir().unwrap();
         let app_dir = dir.path();
         let managed_dir = managed_configs_dir(app_dir);
@@ -703,11 +570,12 @@ mod tests {
             .mount(&server)
             .await;
 
-        let cfg = DownloaderConfig::load_from_path(&installed_path).expect("load installed config");
-        let report = refresh_configs(app_dir, &[cfg]).await;
+        fetch_config(SensitiveUrl::new(&original_url), Some("test"))
+            .await
+            .unwrap()
+            .commit(app_dir)
+            .unwrap();
 
-        assert_eq!(report.refreshed, 1);
-        assert!(report.failed.is_empty());
         let installed = std::fs::read_to_string(&installed_path).unwrap();
         assert!(installed.contains("https://other.example/downloader.json"));
     }
@@ -845,17 +713,29 @@ mod tests {
         assert_eq!(current_active_config_id(&settings), "");
     }
 
-    #[test]
-    fn delete_config_cache_dir_removes_runtime_directory() {
+    #[tokio::test]
+    async fn remove_orphaned_caches_keeps_installed_sources() {
         let dir = tempdir().unwrap();
         let app_dir = dir.path().to_path_buf();
-        let cache_dir = runtime_cache_dir(&app_dir, "test");
+        let settings = SettingsHandler::new(app_dir.clone(), true).unwrap();
+        let sources = SourceStore::new(app_dir.clone(), settings);
+        fs::create_dir_all(managed_configs_dir(&app_dir)).unwrap();
+        fs::write(
+            managed_config_path(&app_dir, "valid"),
+            managed_config_json("valid", "https://example.com/valid.json"),
+        )
+        .unwrap();
+        fs::write(managed_config_path(&app_dir, "broken"), "invalid json").unwrap();
+        for id in ["valid", "broken", "removed", "_bootstrap"] {
+            fs::create_dir_all(runtime_cache_dir(&app_dir, id)).unwrap();
+            fs::write(runtime_cache_dir(&app_dir, id).join("rclone.conf"), "cached").unwrap();
+        }
 
-        std::fs::create_dir_all(&cache_dir).unwrap();
-        std::fs::write(cache_dir.join("downloader_config.json"), "cached").unwrap();
+        sources.remove_orphaned_caches().unwrap();
 
-        delete_config_cache_dir(&app_dir, "test").unwrap();
-
-        assert!(!cache_dir.exists());
+        assert!(runtime_cache_dir(&app_dir, "valid").join("rclone.conf").exists());
+        assert!(runtime_cache_dir(&app_dir, "broken").join("rclone.conf").exists());
+        assert!(!runtime_cache_dir(&app_dir, "removed").exists());
+        assert!(!runtime_cache_dir(&app_dir, "_bootstrap").exists());
     }
 }

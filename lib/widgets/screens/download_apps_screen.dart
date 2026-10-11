@@ -1187,17 +1187,24 @@ class _DownloadAppsScreenState extends State<DownloadAppsScreen> {
   Widget _buildErrorBanner(String error) {
     final scheme = Theme.of(context).colorScheme;
     return Card(
-      color: scheme.errorContainer,
+      color: Color.alphaBlend(
+        scheme.errorContainer.withValues(alpha: 0.2),
+        scheme.surfaceContainerLow,
+      ),
+      shape: RoundedRectangleBorder(
+        borderRadius: BorderRadius.circular(12),
+        side: BorderSide(color: scheme.error.withValues(alpha: 0.35)),
+      ),
       child: Padding(
         padding: const EdgeInsets.all(12.0),
         child: Row(
           children: [
-            Icon(Icons.error_outline, color: scheme.onErrorContainer),
+            Icon(Icons.error_outline, color: scheme.error),
             const SizedBox(width: 8),
             Expanded(
               child: Text(
                 error,
-                style: TextStyle(color: scheme.onErrorContainer),
+                style: TextStyle(color: scheme.onSurface),
               ),
             ),
             const SizedBox(width: 12),

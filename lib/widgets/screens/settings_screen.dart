@@ -966,22 +966,22 @@ class _SettingsScreenState extends State<SettingsScreen> {
       child: Container(
         padding: const EdgeInsets.fromLTRB(16, 14, 8, 8),
         decoration: BoxDecoration(
-          color: colors.errorContainer,
+          color: colors.errorContainer.withValues(alpha: 0.2),
           borderRadius: BorderRadius.circular(12),
+          border: Border.all(color: colors.error.withValues(alpha: 0.35)),
         ),
         child: Column(
           crossAxisAlignment: CrossAxisAlignment.stretch,
           children: [
             Row(
               children: [
-                Icon(Icons.error_outline,
-                    size: 20, color: colors.onErrorContainer),
+                Icon(Icons.error_outline, size: 20, color: colors.error),
                 const SizedBox(width: 10),
                 Flexible(
                   child: buildCopyableText(
                     context,
                     error,
-                    style: TextStyle(color: colors.onErrorContainer),
+                    style: TextStyle(color: colors.onSurface),
                   ),
                 ),
               ],

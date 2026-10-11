@@ -14,7 +14,6 @@ import '../common/page_scaffold.dart';
 class _HomeMetrics {
   static const double gap = 16;
   static const double maxContentWidth = 1200;
-  static const double heroRadius = 28;
   static const double cardRadius = 20;
   static const double cardPadding = 20;
   static const double heroPadding = 24;
@@ -218,7 +217,7 @@ class _DeviceHeroCard extends StatelessWidget {
       margin: EdgeInsets.zero,
       color: scheme.secondaryContainer,
       shape: RoundedRectangleBorder(
-        borderRadius: BorderRadius.circular(_HomeMetrics.heroRadius),
+        borderRadius: BorderRadius.circular(_HomeMetrics.cardRadius),
       ),
       child: Padding(
         padding: const EdgeInsets.all(_HomeMetrics.heroPadding),

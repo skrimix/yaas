@@ -92,7 +92,6 @@ jobs:
       - name: Setup Rust toolchain
         uses: actions-rust-lang/setup-rust-toolchain@v2
         with:
-          components: rustfmt, clippy
           build-warnings: ""
 
       - name: Setup sccache
@@ -177,6 +176,7 @@ jobs:
         run: cargo test --locked
 
       - name: Test update backend
+        if: matrix.target != 'linux' # Linux runs the full test suite
         run: cargo test --locked -p hub update
 
       - name: Build the app

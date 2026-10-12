@@ -24,6 +24,7 @@ concurrency:
 jobs:
   prepare:
     name: Prepare Flutter project files
+    if: github.event_name != 'pull_request'
     runs-on: macos-26
     permissions:
       contents: write
@@ -90,9 +91,10 @@ jobs:
 
   build:
     needs: prepare
+    if: ${{ !cancelled() && (needs.prepare.result == 'success' || needs.prepare.result == 'skipped') }}
     uses: ./.github/workflows/packages.yaml
     with:
-      sha: ${{ needs.prepare.outputs.sha }}
+      sha: ${{ needs.prepare.outputs.sha || github.sha }}
       channel: ${{ github.ref == 'refs/heads/master' && github.event_name != 'pull_request' && 'nightly' || 'development' }}
 
   publish:

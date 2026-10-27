@@ -114,6 +114,7 @@ async fn run_7z_command(
 }
 
 /// Create a ZIP archive from the contents of `src_dir` into `dest_dir` with the given file name.
+/// Entries are stored relative to `src_dir`, without a top-level folder.
 /// If `archive_name` has no extension, `.zip` is appended.
 #[instrument(skip(src_dir, dest_dir, cancel), level = "debug")]
 pub(crate) async fn create_zip_from_dir(
@@ -142,13 +143,13 @@ pub(crate) async fn create_zip_from_dir(
         })?;
     }
 
-    // Archive the whole source directory; 7-Zip will store it as a top-level folder.
+    // 7-Zip expands the wildcard itself and stores matched entries relative to `src_dir`.
     let args = [
         OsString::from("a"),
         OsString::from("-tzip"),
         OsString::from("-y"),
         archive_path.as_os_str().to_os_string(),
-        src_dir.as_os_str().to_os_string(),
+        src_dir.join("*").into_os_string(),
     ];
 
     run_7z(args, cancel.as_ref()).await?;
@@ -676,8 +677,7 @@ Offset = 17198364
             .await
             .expect("decompression should succeed");
 
-        let top = src_path.file_name().expect("tempdir path should have a final component");
-        let extracted = dest_dir.path().join(top).join("sub").join("file.txt");
+        let extracted = dest_dir.path().join("sub").join("file.txt");
         let content = std::fs::read_to_string(extracted).unwrap();
         assert_eq!(content, "hello 7-zip");
     }

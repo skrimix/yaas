@@ -31,6 +31,7 @@ class SettingsState extends ChangeNotifier {
     autoReinstallOnConflict: true,
     autoBackupOnUninstall: true,
     experimentalNativeCast: false,
+    donatedApps: const [],
   );
 
   bool _isLoading = false;
@@ -302,6 +303,12 @@ class SettingsState extends ChangeNotifier {
     }
     return false;
   }
+
+  /// Newest donated version code per package name.
+  Map<String, int> get donatedVersionCodes => {
+        for (final app in _settings.donatedApps)
+          app.packageName: app.versionCode.toInt(),
+      };
 
   // Favorites
   Set<String> get favoritePackages => _settings.favoritePackages.toSet();

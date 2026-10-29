@@ -845,6 +845,7 @@
     "donateFilterReasonRenamed": "Renamed package",
     "donateFilterReasonSystemUnwanted": "System/unwanted app",
     "donateFilterReasonAlreadyExists": "Already exists",
+    "donateFilterReasonAlreadyDonated": "Already donated",
     "donateStatusNewApp": "New app",
     "donateStatusNewerVersion": "Newer version",
     "donateDonateButton": "Donate",

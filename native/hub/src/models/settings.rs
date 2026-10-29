@@ -94,6 +94,13 @@ impl Default for UpdateChannel {
     }
 }
 
+/// Newest version of a package uploaded through app donation
+#[derive(Debug, Clone, Serialize, Deserialize, PartialEq, Eq, SignalPiece)]
+pub(crate) struct DonatedApp {
+    pub package_name: String,
+    pub version_code: u64,
+}
+
 #[derive(Debug, Clone, Serialize, Deserialize, PartialEq, Eq, SignalPiece)]
 #[serde(default)]
 pub(crate) struct Settings {
@@ -134,6 +141,8 @@ pub(crate) struct Settings {
     pub auto_backup_on_uninstall: bool,
     /// Enable the experimental native casting feature
     pub experimental_native_cast: bool,
+    /// Apps already uploaded through app donation
+    pub donated_apps: Vec<DonatedApp>,
 }
 
 impl Default for Settings {
@@ -174,6 +183,7 @@ impl Default for Settings {
             auto_reinstall_on_conflict: true,
             auto_backup_on_uninstall: true,
             experimental_native_cast: false,
+            donated_apps: Vec::new(),
         }
     }
 }
@@ -249,6 +259,16 @@ impl Settings {
 
     pub(crate) fn backups_location(&self) -> PathBuf {
         PathBuf::from(&self.backups_location)
+    }
+
+    /// Remember a donated app version, keeping the newest version per package.
+    pub(crate) fn record_donation(&mut self, package_name: &str, version_code: u64) {
+        match self.donated_apps.iter_mut().find(|app| app.package_name == package_name) {
+            Some(app) => app.version_code = app.version_code.max(version_code),
+            None => self
+                .donated_apps
+                .push(DonatedApp { package_name: package_name.to_owned(), version_code }),
+        }
     }
 }
 
@@ -483,6 +503,26 @@ mod tests {
         let settings: Settings =
             serde_json::from_str(r#"{"auto_backup_on_uninstall":false}"#).unwrap();
         assert!(!settings.auto_backup_on_uninstall);
+        let json = serde_json::to_string(&settings).unwrap();
+        assert_eq!(serde_json::from_str::<Settings>(&json).unwrap(), settings);
+    }
+
+    #[test]
+    fn donations_keep_newest_version_per_package() {
+        let mut settings: Settings = serde_json::from_str("{}").unwrap();
+        assert!(settings.donated_apps.is_empty());
+
+        settings.record_donation("com.example.a", 5);
+        settings.record_donation("com.example.b", 1);
+        settings.record_donation("com.example.a", 3);
+        settings.record_donation("com.example.b", 2);
+
+        let donated: Vec<_> = settings
+            .donated_apps
+            .iter()
+            .map(|app| (app.package_name.as_str(), app.version_code))
+            .collect();
+        assert_eq!(donated, [("com.example.a", 5), ("com.example.b", 2)]);
         let json = serde_json::to_string(&settings).unwrap();
         assert_eq!(serde_json::from_str::<Settings>(&json).unwrap(), settings);
     }

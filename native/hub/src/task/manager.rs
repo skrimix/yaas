@@ -32,6 +32,7 @@ use crate::{
             task::{Task, TaskCancelRequest, TaskKind, TaskProgress, TaskRequest, TaskStatus},
         },
     },
+    settings::SettingsHandler,
     task::{BackupStepConfig, ProgressUpdate},
 };
 
@@ -46,6 +47,7 @@ pub(crate) struct TaskManager {
     pub(super) downloader_manager: Arc<DownloaderManager>,
     pub(super) downloads_catalog: Arc<DownloadsCatalog>,
     pub(super) settings: RwLock<Settings>,
+    pub(super) settings_handler: Arc<SettingsHandler>,
 }
 
 struct TaskRegistry {
@@ -166,8 +168,9 @@ impl TaskManager {
         adb_service: Arc<AdbService>,
         downloader_manager: Arc<DownloaderManager>,
         downloads_catalog: Arc<DownloadsCatalog>,
-        mut settings_stream: WatchStream<Settings>,
+        settings_handler: Arc<SettingsHandler>,
     ) -> Arc<Self> {
+        let mut settings_stream = WatchStream::new(settings_handler.subscribe());
         let initial_settings = futures::executor::block_on(settings_stream.next())
             .expect("Settings stream closed on task manager init");
 
@@ -182,6 +185,7 @@ impl TaskManager {
             downloader_manager,
             downloads_catalog,
             settings: RwLock::new(initial_settings),
+            settings_handler,
         });
 
         tokio::spawn({

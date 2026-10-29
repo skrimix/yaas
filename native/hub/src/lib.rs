@@ -276,7 +276,7 @@ async fn init_in_dir(
         adb_service.clone(),
         downloader_manager.clone(),
         downloads_catalog.clone(),
-        WatchStream::new(settings_handler.subscribe()),
+        settings_handler.clone(),
     );
     debug!("Starting downloader manager");
     DownloaderController::new(

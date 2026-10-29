@@ -1774,6 +1774,9 @@ class AppLocalizationsRu extends AppLocalizations {
   String get donateFilterReasonAlreadyExists => 'Уже существует';
 
   @override
+  String get donateFilterReasonAlreadyDonated => 'Уже загружено';
+
+  @override
   String get donateStatusNewApp => 'Новое приложение';
 
   @override

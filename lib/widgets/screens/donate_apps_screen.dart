@@ -27,6 +27,7 @@ enum FilterReason {
   renamed,
   systemUnwanted,
   alreadyExists,
+  alreadyDonated,
 }
 
 enum DonationStatus {
@@ -60,6 +61,7 @@ class _DonateAppsScreenState extends State<DonateAppsScreen> {
     List<InstalledPackage>? packages,
     Set<String> blacklist,
     CloudAppsState cloudAppsState,
+    Map<String, int> donatedVersionCodes,
   ) {
     if (packages == null) return [];
 
@@ -99,6 +101,13 @@ class _DonateAppsScreenState extends State<DonateAppsScreen> {
         status = DonationStatus.newApp;
       }
 
+      final donatedVersion = donatedVersionCodes[app.packageName];
+      if (donatedVersion != null &&
+          donatedVersion >= app.versionCode.toInt() &&
+          !reasons.contains(FilterReason.alreadyExists)) {
+        reasons.add(FilterReason.alreadyDonated);
+      }
+
       return _FilteredApp(app: app, filterReasons: reasons, status: status);
     }).toList();
 
@@ -123,6 +132,7 @@ class _DonateAppsScreenState extends State<DonateAppsScreen> {
       FilterReason.renamed => l10n.donateFilterReasonRenamed,
       FilterReason.systemUnwanted => l10n.donateFilterReasonSystemUnwanted,
       FilterReason.alreadyExists => l10n.donateFilterReasonAlreadyExists,
+      FilterReason.alreadyDonated => l10n.donateFilterReasonAlreadyDonated,
     };
   }
 
@@ -309,6 +319,7 @@ class _DonateAppsScreenState extends State<DonateAppsScreen> {
           deviceState.device?.installedPackages,
           cloudAppsState.donationBlacklist,
           cloudAppsState,
+          settingsState.donatedVersionCodes,
         );
 
         final showFiltered = appState.donateShowFiltered;

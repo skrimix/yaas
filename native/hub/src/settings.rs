@@ -107,8 +107,8 @@ impl SettingsHandler {
                     if request.is_some() {
                         debug!("Received ResetSettingsToDefaultsRequest");
                         let handler = self.clone();
-                        let installation_id = handler.watch_tx.borrow().installation_id.clone();
-                        let result = handler.load_default_settings(Some(installation_id), portable_mode);
+                        let previous = handler.watch_tx.borrow().clone();
+                        let result = handler.load_default_settings(Some(&previous), portable_mode);
 
                         match result {
                             Ok(settings) => {
@@ -208,6 +208,10 @@ impl SettingsHandler {
         })
     }
 
+    pub(crate) fn record_donation(&self, package_name: &str, version_code: u64) -> Result<()> {
+        self.update_settings(|settings| settings.record_donation(package_name, version_code))
+    }
+
     fn update_settings(&self, update: impl FnOnce(&mut Settings)) -> Result<()> {
         let _guard = self.write_guard.lock().unwrap();
         let mut settings = self.watch_tx.borrow().clone();
@@ -239,19 +243,20 @@ impl SettingsHandler {
         Ok(())
     }
 
-    /// Load default settings, optionally retaining provided installation id
-    #[instrument(level = "debug", skip(self))]
+    /// Load default settings, retaining the installation id and donation history of
+    /// `previous` if provided
+    #[instrument(level = "debug", skip(self, previous))]
     fn load_default_settings(
         &self,
-        installation_id: Option<String>,
+        previous: Option<&Settings>,
         portable_mode: bool,
     ) -> Result<Settings> {
         info!("Loading default settings");
         let mut settings = Settings::new(portable_mode);
 
-        // Retain installation id if provided
-        if let Some(installation_id) = installation_id {
-            settings.installation_id = installation_id
+        if let Some(previous) = previous {
+            settings.installation_id = previous.installation_id.clone();
+            settings.donated_apps = previous.donated_apps.clone();
         }
 
         let app_dir =

@@ -3267,6 +3267,12 @@ abstract class AppLocalizations {
   /// **'Already exists'**
   String get donateFilterReasonAlreadyExists;
 
+  /// No description provided for @donateFilterReasonAlreadyDonated.
+  ///
+  /// In en, this message translates to:
+  /// **'Already donated'**
+  String get donateFilterReasonAlreadyDonated;
+
   /// No description provided for @donateStatusNewApp.
   ///
   /// In en, this message translates to:

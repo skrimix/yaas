@@ -262,6 +262,11 @@ impl TaskManager {
 
         upload_result.expect("upload_result should be Some after loop exit");
 
+        if let Err(e) = self.settings_handler.record_donation(package.as_str(), version_code.into())
+        {
+            warn!(error = e.as_ref() as &dyn Error, "Failed to record donated app");
+        }
+
         // drop(cleanup_guard);
 
         Ok(())

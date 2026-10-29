@@ -1751,6 +1751,9 @@ class AppLocalizationsEn extends AppLocalizations {
   String get donateFilterReasonAlreadyExists => 'Already exists';
 
   @override
+  String get donateFilterReasonAlreadyDonated => 'Already donated';
+
+  @override
   String get donateStatusNewApp => 'New app';
 
   @override

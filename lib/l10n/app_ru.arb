@@ -839,6 +839,7 @@
     "donateFilterReasonRenamed": "Переименованный пакет",
     "donateFilterReasonSystemUnwanted": "Системное/нежелательное",
     "donateFilterReasonAlreadyExists": "Уже существует",
+    "donateFilterReasonAlreadyDonated": "Уже загружено",
     "donateStatusNewApp": "Новое приложение",
     "donateStatusNewerVersion": "Новая версия",
     "donateDonateButton": "Загрузить",

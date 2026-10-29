@@ -86,14 +86,21 @@ impl TaskRegistry {
         Ok(protected)
     }
 
-    fn insert(&mut self, id: u64, task: Task, token: CancellationToken) -> bool {
+    fn insert(&mut self, id: u64, task: Task, token: CancellationToken) -> InsertResult {
         if !self.accepting_tasks {
             debug!(task_id = id, "Ignoring task because shutdown has started");
-            return false;
+            return InsertResult::ShuttingDown;
+        }
+
+        if let Some((&existing_id, _)) =
+            self.tasks.iter().find(|(_, (existing, _))| task.is_covered_by(existing))
+        {
+            debug!(task_id = id, existing_id, "Ignoring task because the same task is active");
+            return InsertResult::Duplicate;
         }
 
         self.tasks.insert(id, (task, token));
-        true
+        InsertResult::Inserted
     }
 
     fn start_shutdown(&mut self) -> usize {
@@ -103,6 +110,13 @@ impl TaskRegistry {
         }
         self.tasks.len()
     }
+}
+
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+enum InsertResult {
+    Inserted,
+    ShuttingDown,
+    Duplicate,
 }
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
@@ -238,8 +252,20 @@ impl TaskManager {
 
         let mut registry = self.tasks.lock().await;
         let active_tasks_count = registry.tasks.len();
-        if !registry.insert(id, task.clone(), token.clone()) {
-            return None;
+        match registry.insert(id, task.clone(), token.clone()) {
+            InsertResult::Inserted => {}
+            InsertResult::ShuttingDown => return None,
+            InsertResult::Duplicate => {
+                drop(registry);
+                let task_name = task.task_name().unwrap_or_default();
+                Toast::send(
+                    task_name,
+                    format!("{}: already in progress", task.kind_label()),
+                    false,
+                    None,
+                );
+                return None;
+            }
         }
         drop(registry);
 
@@ -602,7 +628,7 @@ mod tests {
     use tokio::sync::{Mutex, Notify};
     use tokio_util::sync::CancellationToken;
 
-    use super::{TaskRegistry, wait_for_tasks};
+    use super::{InsertResult, TaskRegistry, wait_for_tasks};
     use crate::models::signals::task::Task;
 
     fn task(name: &str) -> Task {
@@ -648,8 +674,8 @@ mod tests {
         let first = CancellationToken::new();
         let second = CancellationToken::new();
         let mut registry = TaskRegistry::default();
-        assert!(registry.insert(1, task("First"), first.clone()));
-        assert!(registry.insert(2, task("Second"), second.clone()));
+        assert_eq!(registry.insert(1, task("First"), first.clone()), InsertResult::Inserted);
+        assert_eq!(registry.insert(2, task("Second"), second.clone()), InsertResult::Inserted);
 
         assert_eq!(registry.start_shutdown(), 2);
         assert!(first.is_cancelled());
@@ -661,8 +687,63 @@ mod tests {
         let mut registry = TaskRegistry::default();
         registry.start_shutdown();
 
-        assert!(!registry.insert(1, task("Late"), CancellationToken::new()));
+        assert_eq!(
+            registry.insert(1, task("Late"), CancellationToken::new()),
+            InsertResult::ShuttingDown
+        );
         assert!(registry.tasks.is_empty());
+    }
+
+    #[test]
+    fn rejects_tasks_covered_by_active_ones() {
+        let mut registry = TaskRegistry::default();
+        let uninstall = |display_name: &str| Task::Uninstall {
+            package_name: "com.example.app".into(),
+            display_name: Some(display_name.into()),
+        };
+        assert_eq!(
+            registry.insert(1, task("App"), CancellationToken::new()),
+            InsertResult::Inserted
+        );
+        assert_eq!(
+            registry.insert(2, uninstall("A"), CancellationToken::new()),
+            InsertResult::Inserted
+        );
+
+        assert_eq!(
+            registry.insert(3, task("App"), CancellationToken::new()),
+            InsertResult::Duplicate
+        );
+        assert_eq!(
+            registry.insert(4, uninstall("B"), CancellationToken::new()),
+            InsertResult::Duplicate
+        );
+        assert_eq!(registry.tasks.len(), 2);
+
+        assert_eq!(
+            registry.insert(5, task("Other"), CancellationToken::new()),
+            InsertResult::Inserted
+        );
+        assert_eq!(
+            registry.insert(
+                6,
+                Task::DownloadInstall("App".into(), "com.example.app".into()),
+                CancellationToken::new()
+            ),
+            InsertResult::Inserted
+        );
+
+        registry.tasks.remove(&1);
+        assert_eq!(
+            registry.insert(7, task("App"), CancellationToken::new()),
+            InsertResult::Duplicate
+        );
+
+        registry.tasks.remove(&6);
+        assert_eq!(
+            registry.insert(8, task("App"), CancellationToken::new()),
+            InsertResult::Inserted
+        );
     }
 
     #[tokio::test]
@@ -670,7 +751,10 @@ mod tests {
         let token = CancellationToken::new();
         let tasks = Arc::new(Mutex::new(TaskRegistry::default()));
         let tasks_changed = Arc::new(Notify::new());
-        assert!(tasks.lock().await.insert(1, task("Running"), token.clone()));
+        assert_eq!(
+            tasks.lock().await.insert(1, task("Running"), token.clone()),
+            InsertResult::Inserted
+        );
         tasks.lock().await.start_shutdown();
 
         let worker_tasks = tasks.clone();
@@ -690,7 +774,10 @@ mod tests {
     async fn shutdown_reports_tasks_left_after_timeout() {
         let tasks = Mutex::new(TaskRegistry::default());
         let tasks_changed = Notify::new();
-        assert!(tasks.lock().await.insert(1, task("Stuck"), CancellationToken::new()));
+        assert_eq!(
+            tasks.lock().await.insert(1, task("Stuck"), CancellationToken::new()),
+            InsertResult::Inserted
+        );
 
         let result = wait_for_tasks(&tasks, &tasks_changed, Duration::from_millis(10)).await;
         assert!(result.timed_out);

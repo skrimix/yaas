@@ -93,6 +93,47 @@ impl Task {
         })
     }
 
+    /// Whether an `active` task already does all the work of this task. UI-only fields are
+    /// ignored.
+    pub(crate) fn is_covered_by(&self, active: &Task) -> bool {
+        match (self, active) {
+            (Task::Download(a, _), Task::Download(b, _) | Task::DownloadInstall(b, _))
+            | (Task::DownloadInstall(a, _), Task::DownloadInstall(b, _))
+            | (Task::InstallApk(a), Task::InstallApk(b))
+            | (Task::InstallLocalApp(a), Task::InstallLocalApp(b))
+            | (Task::RestoreBackup(a), Task::RestoreBackup(b))
+            | (Task::Uninstall { package_name: a, .. }, Task::Uninstall { package_name: b, .. })
+            | (Task::DonateApp { package_name: a, .. }, Task::DonateApp { package_name: b, .. }) => {
+                a == b
+            }
+            (
+                Task::BackupApp {
+                    package_name: a_package,
+                    backup_apk: a_apk,
+                    backup_data: a_data,
+                    backup_obb: a_obb,
+                    backup_name_append: a_append,
+                    ..
+                },
+                Task::BackupApp {
+                    package_name: b_package,
+                    backup_apk: b_apk,
+                    backup_data: b_data,
+                    backup_obb: b_obb,
+                    backup_name_append: b_append,
+                    ..
+                },
+            ) => {
+                a_package == b_package
+                    && a_apk == b_apk
+                    && a_data == b_data
+                    && a_obb == b_obb
+                    && a_append == b_append
+            }
+            _ => false,
+        }
+    }
+
     pub(crate) fn total_steps(&self) -> u8 {
         match self {
             Task::Download { .. } => 1,

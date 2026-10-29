@@ -121,20 +121,24 @@ impl RcloneStorage {
         cancellation_token: CancellationToken,
     ) -> Result<PathBuf> {
         ensure!(dest.parent().is_some(), "Destination must have a parent directory");
-        let source = self.format_remote_path(&source);
+        let remote_path = self.format_remote_path(&source);
         let total_bytes =
-            self.client.size(&source).await.context("Failed to get remote dir size")?.bytes;
+            self.client.size(&remote_path).await.context("Failed to get remote dir size")?.bytes;
         self.client
             .transfer_with_stats(
-                source,
+                remote_path,
                 dest.display().to_string(),
                 RcloneTransferOperation::Sync,
                 total_bytes,
                 Some(stats_tx),
                 Some(cancellation_token),
             )
-            .await
-            .map(|_| dest)
+            .await?;
+        ensure!(
+            dest.is_dir(),
+            "No files were downloaded for \"{source}\", it may be missing or empty on the server"
+        );
+        Ok(dest)
     }
 
     #[instrument(level = "debug", skip(self, cancellation_token), ret)]

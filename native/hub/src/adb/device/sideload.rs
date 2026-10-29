@@ -458,7 +458,8 @@ impl AdbDevice {
             let _ = progress_sender.send(SideloadProgress { status: status.to_string(), progress });
         }
 
-        ensure!(app_dir.is_dir(), "App path must be a directory");
+        ensure!(app_dir.exists(), "App directory not found: {}", app_dir.display());
+        ensure!(app_dir.is_dir(), "App path is not a directory: {}", app_dir.display());
 
         send_progress(&progress_sender, "Enumerating files", None);
         let mut entries = Vec::new();

@@ -190,14 +190,11 @@ pub(crate) async fn decompress_archive(
     run_7z(args, cancel.as_ref()).await
 }
 
-/// Decompresses all `.7z` archives found directly under `dir` into `dir`.
-#[instrument(level = "debug", skip(dir, cancel))]
-pub(crate) async fn decompress_all_7z_in_dir(
-    dir: &Path,
-    cancel: Option<CancellationToken>,
-) -> Result<()> {
+/// Lists `.7z` archives found directly under `dir`, sorted by path.
+pub(crate) async fn list_7z_in_dir(dir: &Path) -> Result<Vec<PathBuf>> {
+    let mut archives = Vec::new();
     if !dir.is_dir() {
-        return Ok(());
+        return Ok(archives);
     }
     let mut rd = fs::read_dir(dir).await?;
     while let Some(entry) = rd.next_entry().await? {
@@ -208,19 +205,11 @@ pub(crate) async fn decompress_all_7z_in_dir(
                 .and_then(|e| e.to_str())
                 .is_some_and(|e| e.eq_ignore_ascii_case("7z"))
         {
-            if cancel.as_ref().is_some_and(|t| t.is_cancelled()) {
-                debug!("Cancellation requested before starting 7z extraction");
-                return Err(anyhow::Error::from(io::Error::new(
-                    io::ErrorKind::Interrupted,
-                    "extraction cancelled",
-                )));
-            }
-            let path = entry.path();
-            debug!(path = %path.display(), "Decompressing 7z archive");
-            decompress_archive(&path, dir, None, None, cancel.clone()).await?;
+            archives.push(entry.path());
         }
     }
-    Ok(())
+    archives.sort();
+    Ok(archives)
 }
 
 /// Run 7-Zip and capture stdout.
@@ -745,9 +734,13 @@ Offset = 17198364
         std::fs::remove_dir_all(&payload_dir).unwrap();
         assert!(!payload_dir.exists());
 
-        decompress_all_7z_in_dir(root_path, None)
-            .await
-            .expect("decompress_all_7z_in_dir should succeed");
+        let archives = list_7z_in_dir(root_path).await.expect("listing 7z archives should succeed");
+        assert_eq!(archives, vec![archive_path]);
+        for archive in &archives {
+            decompress_archive(archive, root_path, None, None, None)
+                .await
+                .expect("7z archive extraction should succeed");
+        }
 
         assert!(payload_dir.is_dir());
         let extracted_inner = payload_dir.join("inner.txt");

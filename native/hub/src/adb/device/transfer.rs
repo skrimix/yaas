@@ -1,7 +1,10 @@
 use std::path::{Path, PathBuf};
 
 use anyhow::{Context, Result, bail, ensure};
-use forensic_adb::{DeviceError, DirectoryTransferProgress, UnixFileStatus, UnixPath, UnixPathBuf};
+use forensic_adb::{
+    DeviceError, DirectoryTransferProgress, FileTransferProgress, UnixFileStatus, UnixPath,
+    UnixPathBuf,
+};
 use tokio::{
     fs::{self, File},
     io::BufReader,
@@ -158,6 +161,31 @@ impl AdbDevice {
     /// * `dest_file` - Destination path on the device
     #[instrument(level = "debug", skip(self), err)]
     pub(super) async fn push(&self, source_file: &Path, dest_file: &UnixPath) -> Result<()> {
+        self.push_file_internal(source_file, dest_file, None).await
+    }
+
+    /// Pushes a file to the device (with progress)
+    ///
+    /// # Arguments
+    /// * `source_file` - Local path of the file to push
+    /// * `dest_file` - Destination path on the device
+    /// * `progress_sender` - Sender for progress updates
+    #[instrument(level = "debug", skip(self, progress_sender), err)]
+    pub(super) async fn push_with_progress(
+        &self,
+        source_file: &Path,
+        dest_file: &UnixPath,
+        progress_sender: UnboundedSender<FileTransferProgress>,
+    ) -> Result<()> {
+        self.push_file_internal(source_file, dest_file, Some(progress_sender)).await
+    }
+
+    async fn push_file_internal(
+        &self,
+        source_file: &Path,
+        dest_file: &UnixPath,
+        progress_sender: Option<UnboundedSender<FileTransferProgress>>,
+    ) -> Result<()> {
         ensure!(
             source_file.is_file(),
             "Path does not exist or is not a file: {}",
@@ -173,8 +201,18 @@ impl AdbDevice {
             )
             .await?;
         debug!(source = %source_file.display(), dest = %dest_path.display(), "Pushing file");
-        let mut file = BufReader::new(File::open(source_file).await?);
-        self.inner.push(&mut file, &dest_path, 0o777).await.context("Failed to push file")
+        let file = File::open(source_file).await?;
+        let total_bytes = file.metadata().await?.len();
+        let mut file = BufReader::new(file);
+        match progress_sender {
+            Some(progress_sender) => {
+                self.inner
+                    .push_with_progress(&mut file, &dest_path, 0o777, total_bytes, progress_sender)
+                    .await
+            }
+            None => self.inner.push(&mut file, &dest_path, 0o777).await,
+        }
+        .context("Failed to push file")
     }
 
     /// Pushes a directory to the device
@@ -192,20 +230,6 @@ impl AdbDevice {
     ) -> Result<()> {
         self.push_dir_with_mode(source, dest, overwrite, DirectoryPushDestination::AdbCompatible)
             .await
-    }
-
-    /// Pushes a directory to an exact path on the device.
-    ///
-    /// If `dest` already exists as a directory, the directory contents are pushed into that
-    /// directory instead of appending the local source directory name again.
-    #[instrument(level = "debug", skip(self), err)]
-    pub(super) async fn push_dir_to_path(
-        &self,
-        source: &Path,
-        dest: &UnixPath,
-        overwrite: bool,
-    ) -> Result<()> {
-        self.push_dir_with_mode(source, dest, overwrite, DirectoryPushDestination::ExactPath).await
     }
 
     async fn push_dir_with_mode(
@@ -229,6 +253,31 @@ impl AdbDevice {
         }
         debug!(source = %source.display(), dest = %dest_path.display(), "Pushing directory");
         self.inner.push_dir(source, &dest_path, 0o777).await.context("Failed to push directory")
+    }
+
+    /// Pushes a directory to the device (with progress)
+    ///
+    /// # Arguments
+    /// * `source` - Local path of the directory to push
+    /// * `dest` - Destination path on the device
+    /// * `overwrite` - Whether to remove existing destination before pushing
+    /// * `progress_sender` - Sender for progress updates
+    #[instrument(level = "debug", skip(self, progress_sender), err)]
+    pub(super) async fn push_dir_with_progress(
+        &self,
+        source: &Path,
+        dest: &UnixPath,
+        overwrite: bool,
+        progress_sender: UnboundedSender<DirectoryTransferProgress>,
+    ) -> Result<()> {
+        self.push_dir_with_progress_mode(
+            source,
+            dest,
+            overwrite,
+            progress_sender,
+            DirectoryPushDestination::AdbCompatible,
+        )
+        .await
     }
 
     /// Pushes a directory to an exact path on the device (with progress).

@@ -58,7 +58,10 @@ fi
 echo "==> Repacking AppImage with bundled 7-Zip..."
 app="$OUTPUT_APPIMAGE"
 chmod +x "$app"
+rm -rf squashfs-root
 "$app" --appimage-extract
+# type2-runtime extracts directories with mode 0700; make them readable/traversable for packaging.
+chmod -R a+rX squashfs-root
 
 "$SCRIPT_DIR/bundle_7zip.sh" squashfs-root/usr/bin
 "$SCRIPT_DIR/bundle_adb.sh" squashfs-root/usr/bin

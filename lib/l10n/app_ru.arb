@@ -88,8 +88,8 @@
   "downloaderSourcesEmpty": "Источники загрузчика ещё не добавлены.",
   "downloaderSourcesAddTitle": "Добавить источник",
   "downloaderSourcesRefreshTooltip": "Обновить все источники",
-  "downloaderSourceRemoveTitle": "Убрать источник загрузчика",
-  "downloaderSourceRemoveConfirm": "Убрать \"{name}\"?",
+  "downloaderSourceRemoveTitle": "Удалить источник загрузчика",
+  "downloaderSourceRemoveConfirm": "Удалить \"{name}\"?",
   "@downloaderSourceRemoveConfirm": {
     "placeholders": {
       "name": {
@@ -97,7 +97,7 @@
       }
     }
   },
-  "downloaderSourceRemoveTooltip": "Убрать \"{name}\"",
+  "downloaderSourceRemoveTooltip": "Удалить \"{name}\"",
   "@downloaderSourceRemoveTooltip": {
     "placeholders": {
       "name": {

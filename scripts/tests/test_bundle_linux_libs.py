@@ -78,13 +78,18 @@ class BundleLinuxLibsTests(unittest.TestCase):
             [str(mpv), "-Wl,-rpath,/workspace/build/ephemeral"],
         )
 
-        # Main executable
+        # Main executable (pass indirect libs under --as-needed so GNU ld resolves
+        # the bundled stub libmpv.so.2 rather than any host /usr/lib copy, without
+        # recording direct DT_NEEDED entries on yaas)
         self.build_c(
             self.appdir / "yaas",
             "int plug_fn(void); int main(void) { return plug_fn() == 7 ? 0 : 1; }\n",
             [
                 str(plugin),
-                f"-Wl,-rpath-link,{self.appdir / 'usr/lib'}:{self.sys_libs}",
+                "-Wl,--push-state,--as-needed",
+                str(mpv),
+                str(leaf),
+                "-Wl,--pop-state",
                 "-Wl,-rpath,$ORIGIN/lib",
             ],
         )
@@ -99,6 +104,10 @@ class BundleLinuxLibsTests(unittest.TestCase):
     def test_bundles_transitive_libs_prunes_host_abi_and_sets_relocatable_rpaths(self):
         self.populate_minimal_appdir()
         app_snapshot_before = (self.appdir / "lib/libapp.so").read_bytes()
+        yaas_needed, _ = bundler.read_dynamic(self.appdir / "yaas")
+        self.assertIn("libvideo_plugin.so", yaas_needed)
+        self.assertNotIn("libmpv.so.2", yaas_needed)
+        self.assertNotIn("libcustomleaf.so.1", yaas_needed)
 
         bundler.bundle_linux_libs(self.appdir)
 
@@ -117,8 +126,6 @@ class BundleLinuxLibsTests(unittest.TestCase):
         # Remove build-time syslibs directory and verify the relocated AppDir still executes!
         shutil.rmtree(self.sys_libs)
         env = {"PATH": "/usr/bin:/bin", "LD_LIBRARY_PATH": "/custom/preserved/path"}
-        probe = self.appdir / "usr/bin/env_probe"
-        probe.parent.mkdir(parents=True, exist_ok=True)
         result = subprocess.run([str(self.appdir / "AppRun")], env=env, check=False)
         self.assertEqual(result.returncode, 0)
 

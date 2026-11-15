@@ -42,10 +42,13 @@ jobs:
           ref: ${{ github.sha }}
           submodules: true
 
+      - name: Load CI configuration
+        run: ./scripts/ci.sh github-env
+
       - name: Setup Flutter SDK
         uses: subosito/flutter-action@v2
         with:
-          flutter-version: "3.47.0"
+          flutter-version: ${{ env.FLUTTER_VERSION }}
           cache: true
 
       - name: Generate and migrate Flutter files without compiling

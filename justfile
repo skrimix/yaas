@@ -30,6 +30,14 @@ build-profile:
 build-appimage:
     ./scripts/build_appimage.sh
 
+# Build Linux AppImage in an Ubuntu 24.04 Podman container matching CI
+build-appimage-ci *args:
+    ./scripts/build_appimage_ci.sh {{args}}
+
+# Launch AppImage with GUI in a clean Podman container (fedora, nix, ubuntu, or all)
+test-appimage distro="fedora" *args:
+    ./scripts/test_appimage.sh "{{distro}}" {{args}}
+
 # Run all tests
 test:
     cargo test

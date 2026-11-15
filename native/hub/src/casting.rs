@@ -91,7 +91,7 @@ fn unzip_to_dir(zip_path: &Path, output_dir: &Path) -> Result<()> {
     let mut zip = zip::ZipArchive::new(file).context("Invalid ZIP archive")?;
     for i in 0..zip.len() {
         let mut entry = zip.by_index(i)?;
-        let outpath = output_dir.join(entry.mangled_name());
+        let outpath = output_dir.join(entry.mangled_name()?);
         if entry.is_dir() {
             std::fs::create_dir_all(&outpath)
                 .with_context(|| format!("Failed creating directory {}", outpath.display()))?;

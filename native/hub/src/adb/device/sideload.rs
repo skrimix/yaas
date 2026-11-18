@@ -1,4 +1,5 @@
 use std::{
+    collections::HashSet,
     error::Error,
     path::Path,
     time::{Duration, Instant},
@@ -30,6 +31,49 @@ const PROGRESS_THROTTLE: Duration = Duration::from_millis(300);
 pub(crate) struct SideloadProgress {
     pub status: String,
     pub progress: Option<f32>,
+}
+
+/// Controls how existing app installations and package conflicts are handled.
+#[derive(Clone, Copy, Debug, PartialEq, Eq)]
+pub(crate) struct ReinstallPolicy {
+    pub auto_reinstall_on_conflict: bool,
+    pub clear_data: bool,
+}
+
+impl ReinstallPolicy {
+    fn should_reinstall_on_conflict(self, msg: &str, did_reinstall: bool) -> bool {
+        !did_reinstall
+            && (self.auto_reinstall_on_conflict || self.clear_data)
+            && (msg.contains("INSTALL_FAILED_VERSION_DOWNGRADE")
+                || msg.contains("INSTALL_FAILED_UPDATE_INCOMPATIBLE"))
+    }
+}
+
+async fn reinstall_on_conflict<P, B, U, I, R, RFut>(
+    clear_data: bool,
+    backup: B,
+    uninstall: U,
+    reinstall: I,
+    restore: R,
+) -> Result<()>
+where
+    B: Future<Output = Result<Option<P>>>,
+    U: Future<Output = Result<()>>,
+    I: Future<Output = Result<()>>,
+    R: FnOnce(P) -> RFut,
+    RFut: Future<Output = Result<()>>,
+{
+    let backup_path = if clear_data {
+        None
+    } else {
+        backup.await.context("Failed to backup app for reinstall")?
+    };
+    uninstall.await.context("Failed to uninstall package for reinstall")?;
+    reinstall.await.context("Failed to reinstall APK")?;
+    if let Some(backup_path) = backup_path {
+        restore(backup_path).await.context("Failed to restore backup after reinstall")?;
+    }
+    Ok(())
 }
 
 fn progress_fraction(transferred: u64, total: u64, zero_total: f32) -> f32 {
@@ -244,7 +288,7 @@ impl AdbDevice {
         backups_location: &Path,
         progress_sender: &UnboundedSender<SideloadProgress>,
         token: CancellationToken,
-        auto_reinstall_on_conflict: bool,
+        reinstall_policy: ReinstallPolicy,
     ) -> Result<()> {
         let script_content = tokio::fs::read_to_string(script_path)
             .await
@@ -275,12 +319,41 @@ impl AdbDevice {
             progress.next_step();
         }
 
+        if reinstall_policy.clear_data {
+            let mut cleared = HashSet::new();
+            for step in &steps {
+                if let ScriptCommand::Install { apk } = &step.command {
+                    ensure!(!token.is_cancelled(), "Sideload cancelled");
+                    let apk_path = script_dir.join(apk);
+                    let apk_info = get_apk_info(&apk_path).with_context(|| {
+                        format!(
+                            "Line {}: failed to read APK info for '{}'",
+                            step.line_num,
+                            apk_path.display()
+                        )
+                    })?;
+                    let package = PackageName::parse(&apk_info.package_name)
+                        .context("Invalid package name in APK info")?;
+                    if cleared.insert(package.clone()) {
+                        let _ = progress_sender.send(SideloadProgress {
+                            status: "Clearing app data".to_string(),
+                            progress: None,
+                        });
+                        self.uninstall_package_if_installed(&package)
+                            .await
+                            .context("Failed to uninstall existing package before install")?;
+                    }
+                }
+            }
+        }
+
+        let step_policy = ReinstallPolicy { clear_data: false, ..reinstall_policy };
         for step in &steps {
             self.execute_script_step(
                 step,
                 script_dir,
                 backups_location,
-                auto_reinstall_on_conflict,
+                step_policy,
                 &mut progress,
             )
             .await?;
@@ -296,7 +369,7 @@ impl AdbDevice {
         step: &ScriptStep,
         script_dir: &Path,
         backups_location: &Path,
-        auto_reinstall_on_conflict: bool,
+        reinstall_policy: ReinstallPolicy,
         progress: &mut ScriptProgress<'_>,
     ) -> Result<()> {
         let line_num = step.line_num;
@@ -312,7 +385,7 @@ impl AdbDevice {
                         backups_location,
                         tx,
                         false,
-                        auto_reinstall_on_conflict,
+                        reinstall_policy,
                     )),
                     rx,
                     |p| match p.progress {
@@ -448,7 +521,7 @@ impl AdbDevice {
         backups_location: &Path,
         progress_sender: UnboundedSender<SideloadProgress>,
         token: CancellationToken,
-        auto_reinstall_on_conflict: bool,
+        reinstall_policy: ReinstallPolicy,
     ) -> Result<()> {
         fn send_progress(
             progress_sender: &UnboundedSender<SideloadProgress>,
@@ -478,7 +551,7 @@ impl AdbDevice {
                     backups_location,
                     &progress_sender,
                     token.clone(),
-                    auto_reinstall_on_conflict,
+                    reinstall_policy,
                 )
                 .await
                 .context("Failed to execute install script");
@@ -498,6 +571,15 @@ impl AdbDevice {
         let apk_info = get_apk_info(apk_path).context("Failed to read APK info")?;
         let package_name = &apk_info.package_name;
 
+        if reinstall_policy.clear_data {
+            ensure!(!token.is_cancelled(), "Sideload cancelled");
+            send_progress(&progress_sender, "Clearing app data", None);
+            let package =
+                PackageName::parse(package_name).context("Invalid package name in APK info")?;
+            self.uninstall_package_if_installed(&package)
+                .await
+                .context("Failed to uninstall existing package before install")?;
+        }
         let obb_dir = entries.iter().find_map(|e| {
             if e.path().is_dir() {
                 e.file_name()
@@ -534,7 +616,7 @@ impl AdbDevice {
             backups_location,
             tx,
             false,
-            auto_reinstall_on_conflict,
+            ReinstallPolicy { clear_data: false, ..reinstall_policy },
         )
         .await?;
 
@@ -590,7 +672,7 @@ impl AdbDevice {
         backups_location: &Path,
         progress_sender: UnboundedSender<SideloadProgress>,
         did_reinstall: bool,
-        auto_reinstall_on_conflict: bool,
+        reinstall_policy: ReinstallPolicy,
     ) -> Result<()> {
         info!(path = %apk_path.display(), "Installing APK with progress");
         // Bridge inner f32 progress into SideloadProgress
@@ -621,22 +703,19 @@ impl AdbDevice {
                     "Package manager returned error, checking if reinstall is needed"
                 );
 
-                if (msg.contains("INSTALL_FAILED_VERSION_DOWNGRADE")
-                    || msg.contains("INSTALL_FAILED_UPDATE_INCOMPATIBLE"))
-                    && !did_reinstall
-                    && auto_reinstall_on_conflict
-                {
+                if reinstall_policy.should_reinstall_on_conflict(&msg, did_reinstall) {
                     info!("Incompatible update, reinstalling. Reason: {}", msg);
                     let _ = progress_sender.send(SideloadProgress {
                         status: "Incompatible update, reinstalling".to_string(),
                         progress: None,
                     });
                     let apk_info =
-                        get_apk_info(apk_path).context("Failed to get APK info for backup")?;
+                        get_apk_info(apk_path).context("Failed to get APK info for reinstall")?;
                     let package_name = PackageName::parse(&apk_info.package_name)
                         .context("Invalid package name in APK info")?;
-                    let backup_path = self
-                        .backup_app(
+                    Box::pin(reinstall_on_conflict(
+                        reinstall_policy.clear_data,
+                        self.backup_app(
                             &package_name,
                             None,
                             backups_location,
@@ -649,27 +728,24 @@ impl AdbDevice {
                                 require_private_data: true,
                             },
                             CancellationToken::new(),
-                        )
-                        .await
-                        .context("Failed to backup app for reinstall")?;
-                    self.uninstall_package(&package_name)
-                        .await
-                        .context("Failed to uninstall package for reinstall")?;
-                    Box::pin(self.install_apk_with_progress(
-                        apk_path,
-                        backups_location,
-                        progress_sender,
-                        true,
-                        auto_reinstall_on_conflict,
+                        ),
+                        async {
+                            if reinstall_policy.clear_data {
+                                self.uninstall_package_if_installed(&package_name).await
+                            } else {
+                                self.uninstall_package(&package_name).await
+                            }
+                        },
+                        Box::pin(self.install_apk_with_progress(
+                            apk_path,
+                            backups_location,
+                            progress_sender,
+                            true,
+                            reinstall_policy,
+                        )),
+                        |backup_path| async move { self.restore_backup(&backup_path).await },
                     ))
                     .await
-                    .context("Failed to reinstall APK")?;
-                    if let Some(backup_path) = backup_path {
-                        self.restore_backup(&backup_path)
-                            .await
-                            .context("Failed to restore backup after reinstall")?;
-                    }
-                    Ok(())
                 } else {
                     Err(DeviceError::PackageManagerError(msg).into())
                 }
@@ -813,5 +889,109 @@ adb pull /sdcard/save.dat save.dat
                 ("Step 4/4: Pushing files".to_string(), Some(1.0)),
             ]
         );
+    }
+
+    #[test]
+    fn reinstall_policy_matches_conflict_errors_and_flags() {
+        let auto = ReinstallPolicy { auto_reinstall_on_conflict: true, clear_data: false };
+        let clear = ReinstallPolicy { auto_reinstall_on_conflict: false, clear_data: true };
+        let disabled = ReinstallPolicy { auto_reinstall_on_conflict: false, clear_data: false };
+
+        assert!(
+            auto.should_reinstall_on_conflict("Failure [INSTALL_FAILED_VERSION_DOWNGRADE]", false)
+        );
+        assert!(
+            auto.should_reinstall_on_conflict(
+                "Failure [INSTALL_FAILED_UPDATE_INCOMPATIBLE]",
+                false
+            )
+        );
+        assert!(
+            clear.should_reinstall_on_conflict("Failure [INSTALL_FAILED_VERSION_DOWNGRADE]", false)
+        );
+        assert!(
+            !auto.should_reinstall_on_conflict("Failure [INSTALL_FAILED_VERSION_DOWNGRADE]", true)
+        );
+        assert!(
+            !disabled
+                .should_reinstall_on_conflict("Failure [INSTALL_FAILED_VERSION_DOWNGRADE]", false)
+        );
+        assert!(
+            !clear.should_reinstall_on_conflict(
+                "Failure [INSTALL_FAILED_INSUFFICIENT_STORAGE]",
+                false
+            )
+        );
+    }
+
+    #[tokio::test]
+    async fn reinstall_on_conflict_clears_data_without_backup_or_restore() {
+        let events = std::cell::RefCell::new(Vec::new());
+        reinstall_on_conflict(
+            true,
+            async {
+                panic!("Backup must not run when clearing data");
+                #[allow(unreachable_code)]
+                Ok(Some("backup"))
+            },
+            async {
+                events.borrow_mut().push("uninstall");
+                Ok(())
+            },
+            async {
+                events.borrow_mut().push("reinstall");
+                Ok(())
+            },
+            |_| async { panic!("Restore must not run when clearing data") },
+        )
+        .await
+        .unwrap();
+
+        assert_eq!(*events.borrow(), vec!["uninstall", "reinstall"]);
+    }
+
+    #[tokio::test]
+    async fn reinstall_on_conflict_preserves_data_via_backup_and_restore() {
+        let events = std::cell::RefCell::new(Vec::new());
+        reinstall_on_conflict(
+            false,
+            async {
+                events.borrow_mut().push("backup");
+                Ok(Some("backup_dir"))
+            },
+            async {
+                events.borrow_mut().push("uninstall");
+                Ok(())
+            },
+            async {
+                events.borrow_mut().push("reinstall");
+                Ok(())
+            },
+            |path| {
+                assert_eq!(path, "backup_dir");
+                events.borrow_mut().push("restore");
+                async { Ok(()) }
+            },
+        )
+        .await
+        .unwrap();
+
+        assert_eq!(*events.borrow(), vec!["backup", "uninstall", "reinstall", "restore"]);
+    }
+
+    #[tokio::test]
+    async fn reinstall_on_conflict_aborts_before_uninstall_when_backup_fails() {
+        let result = reinstall_on_conflict(
+            false,
+            async { Err::<Option<&str>, _>(anyhow::anyhow!("run-as failed")) },
+            async { panic!("Must not uninstall when backup fails") },
+            async { panic!("Must not reinstall when backup fails") },
+            |_| async { panic!("Must not restore when backup fails") },
+        )
+        .await;
+
+        let err = format!("{:#}", result.unwrap_err());
+        assert!(err.contains("Failed to backup app for reinstall"));
+        assert!(err.contains("run-as failed"));
     }
 }

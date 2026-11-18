@@ -470,6 +470,23 @@
             }
         }
     },
+    "downgradeWithBackupConfirmMessage": "Attempt to downgrade to version {versionCode}? This may cause issues.\n\nWe'll try to back up and restore app data.",
+    "@downgradeWithBackupConfirmMessage": {
+        "placeholders": {
+            "versionCode": {
+                "type": "String"
+            }
+        }
+    },
+    "downgradeClearDataConfirmMessage": "Downgrade to version {versionCode}?\n\nApp data will be permanently deleted.",
+    "@downgradeClearDataConfirmMessage": {
+        "placeholders": {
+            "versionCode": {
+                "type": "String"
+            }
+        }
+    },
+    "downgradeClearData": "Clear app data",
     "holdShiftToDowngrade": "Hold Shift to downgrade to {to}",
     "@holdShiftToDowngrade": {
         "placeholders": {
@@ -823,6 +840,8 @@
     },
         "downgradeAppsTitle": "Downgrade Apps",
     "downgradeMultipleConfirmMessage": "The following apps will be downgraded. This may cause issues.",
+    "downgradeMultipleWithBackupConfirmMessage": "The following apps will be downgraded. This may cause issues.\n\nWe'll try to back up and restore their data.",
+    "downgradeMultipleClearDataConfirmMessage": "The following apps will be downgraded.\n\nTheir data will be permanently deleted.",
     "downgradeItemFormat": "{name} ({installedCode} → {cloudCode})",
     "@downgradeItemFormat": {
         "placeholders": {

@@ -14,6 +14,7 @@ import '../common/no_device_connected_indicator.dart';
 import '../common/page_scaffold.dart';
 import '../dialogs/animated_uninstall_dialog.dart';
 import '../dialogs/backup_options_dialog.dart';
+import '../dialogs/downgrade_confirm_dialog.dart';
 import '../../utils/sideload_utils.dart';
 
 const _animationDuration = Duration(milliseconds: 200);
@@ -509,21 +510,24 @@ class _ManageAppsScreenState extends State<ManageAppsScreen> {
                                 : null,
                             onPressed: canInstall
                                 ? () async {
+                                    DowngradeConfirmResult? downgrade;
                                     if (isOlder) {
-                                      final confirmed =
+                                      downgrade =
                                           await showDowngradeConfirmDialog(
                                         context,
                                         app,
                                         cloudApp,
                                       );
-                                      if (!confirmed) return;
+                                      if (downgrade == null) return;
                                     }
                                     if (!context.mounted) return;
                                     Navigator.of(context).pop();
                                     _installCloudApp(
-                                        cloudApp.fullName,
-                                        cloudApp.truePackageName,
-                                        cloudApp.size.toInt());
+                                      cloudApp.fullName,
+                                      cloudApp.truePackageName,
+                                      cloudApp.size.toInt(),
+                                      clearData: downgrade?.clearData ?? false,
+                                    );
                                   }
                                 : null,
                             child: Text(isNewer
@@ -551,11 +555,19 @@ class _ManageAppsScreenState extends State<ManageAppsScreen> {
   }
 
   Future<void> _installCloudApp(
-      String appFullName, String truePackageName, int size) async {
+    String appFullName,
+    String truePackageName,
+    int size, {
+    bool clearData = false,
+  }) async {
     final proceed = await SideloadUtils.confirmIfLowSpace(context, size);
     if (!proceed) return;
     TaskRequest(
-      task: TaskDownloadInstall(field0: appFullName, field1: truePackageName),
+      task: TaskDownloadInstall(
+        fullName: appFullName,
+        truePackageName: truePackageName,
+        clearData: clearData,
+      ),
     ).sendSignalToRust();
   }
 
@@ -629,18 +641,21 @@ class _ManageAppsScreenState extends State<ManageAppsScreen> {
                   tooltip: tooltip,
                   onPressed: enable
                       ? () async {
+                          DowngradeConfirmResult? downgrade;
                           if (isOlder) {
-                            final confirmed = await showDowngradeConfirmDialog(
+                            downgrade = await showDowngradeConfirmDialog(
                               context,
                               app,
                               newestCloudApp,
                             );
-                            if (!confirmed) return;
+                            if (downgrade == null) return;
                           }
                           _installCloudApp(
-                              newestCloudApp.fullName,
-                              newestCloudApp.truePackageName,
-                              newestCloudApp.size.toInt());
+                            newestCloudApp.fullName,
+                            newestCloudApp.truePackageName,
+                            newestCloudApp.size.toInt(),
+                            clearData: downgrade?.clearData ?? false,
+                          );
                         }
                       : null,
                 );

@@ -7,7 +7,10 @@ use tracing::{Instrument, Span, debug, info, instrument, warn};
 
 use super::{AdbStepConfig, InstallStepConfig, ProgressUpdate, TaskManager};
 use crate::{
-    adb::{PackageName, device::SideloadProgress},
+    adb::{
+        PackageName,
+        device::{ReinstallPolicy, SideloadProgress},
+    },
     task::acquire_permit_or_cancel,
 };
 
@@ -160,7 +163,10 @@ impl TaskManager {
 
         let settings = self.settings.read().await;
         let backups_location = settings.backups_location();
-        let auto_reinstall_on_conflict = settings.auto_reinstall_on_conflict;
+        let reinstall_policy = ReinstallPolicy {
+            auto_reinstall_on_conflict: settings.auto_reinstall_on_conflict,
+            clear_data: false,
+        };
         drop(settings);
 
         self.run_install_step(
@@ -177,7 +183,7 @@ impl TaskManager {
                                 Path::new(&apk_path),
                                 backups_location,
                                 tx,
-                                auto_reinstall_on_conflict,
+                                reinstall_policy,
                             )
                             .await
                     }
@@ -208,7 +214,10 @@ impl TaskManager {
 
         let settings = self.settings.read().await;
         let backups_location = settings.backups_location();
-        let auto_reinstall_on_conflict = settings.auto_reinstall_on_conflict;
+        let reinstall_policy = ReinstallPolicy {
+            auto_reinstall_on_conflict: settings.auto_reinstall_on_conflict,
+            clear_data: false,
+        };
         drop(settings);
 
         let app_path_cloned = app_path.clone();
@@ -228,7 +237,7 @@ impl TaskManager {
                                 backups_location,
                                 tx,
                                 token,
-                                auto_reinstall_on_conflict,
+                                reinstall_policy,
                             )
                             .await
                     }

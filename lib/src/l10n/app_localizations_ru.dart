@@ -1009,6 +1009,19 @@ class AppLocalizationsRu extends AppLocalizations {
   }
 
   @override
+  String downgradeWithBackupConfirmMessage(String versionCode) {
+    return 'Сделать попытку отката до версии $versionCode? Это может вызвать проблемы.\n\nМы попробуем сохранить и восстановить данные приложения.';
+  }
+
+  @override
+  String downgradeClearDataConfirmMessage(String versionCode) {
+    return 'Откатить до версии $versionCode?\n\nДанные приложения будут удалены.';
+  }
+
+  @override
+  String get downgradeClearData => 'Очистить данные';
+
+  @override
   String holdShiftToDowngrade(String to) {
     return 'Удерживайте Shift для отката до $to';
   }
@@ -1723,6 +1736,14 @@ class AppLocalizationsRu extends AppLocalizations {
   @override
   String get downgradeMultipleConfirmMessage =>
       'Будут откатены следующие приложения. Это может вызвать проблемы.';
+
+  @override
+  String get downgradeMultipleWithBackupConfirmMessage =>
+      'Будут откатены следующие приложения. Это может вызвать проблемы.\n\nМы попробуем сохранить и восстановить их данные.';
+
+  @override
+  String get downgradeMultipleClearDataConfirmMessage =>
+      'Будут откатены следующие приложения.\n\nИх данные будут удалены.';
 
   @override
   String downgradeItemFormat(

@@ -33,7 +33,7 @@ use super::{
     },
 };
 use crate::{
-    adb::device::{BackupOptions, SideloadProgress},
+    adb::device::{BackupOptions, ReinstallPolicy, SideloadProgress},
     models::{
         ConnectionKind, Settings,
         signals::{
@@ -1856,7 +1856,7 @@ impl AdbService {
         apk_path: &Path,
         backups_location: std::path::PathBuf,
         progress_sender: UnboundedSender<SideloadProgress>,
-        auto_reinstall_on_conflict: bool,
+        reinstall_policy: ReinstallPolicy,
     ) -> Result<()> {
         let result = device
             .install_apk_with_progress(
@@ -1864,7 +1864,7 @@ impl AdbService {
                 &backups_location,
                 progress_sender,
                 false,
-                auto_reinstall_on_conflict,
+                reinstall_policy,
             )
             .await;
         if let Err(e) = self.refresh_device_for(device, DeviceRefreshComponents::PACKAGES).await {
@@ -1919,16 +1919,10 @@ impl AdbService {
         backups_location: std::path::PathBuf,
         progress_sender: UnboundedSender<SideloadProgress>,
         token: CancellationToken,
-        auto_reinstall_on_conflict: bool,
+        reinstall_policy: ReinstallPolicy,
     ) -> Result<()> {
         let result = device
-            .sideload_app(
-                app_path,
-                &backups_location,
-                progress_sender,
-                token,
-                auto_reinstall_on_conflict,
-            )
+            .sideload_app(app_path, &backups_location, progress_sender, token, reinstall_policy)
             .await;
         if let Err(e) = self.refresh_device_for(device, DeviceRefreshComponents::PACKAGES).await {
             warn!(error = e.as_ref() as &dyn Error, "Failed to refresh device after sideload");

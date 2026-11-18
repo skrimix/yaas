@@ -988,6 +988,19 @@ class AppLocalizationsEn extends AppLocalizations {
   }
 
   @override
+  String downgradeWithBackupConfirmMessage(String versionCode) {
+    return 'Attempt to downgrade to version $versionCode? This may cause issues.\n\nWe\'ll try to back up and restore app data.';
+  }
+
+  @override
+  String downgradeClearDataConfirmMessage(String versionCode) {
+    return 'Downgrade to version $versionCode?\n\nApp data will be permanently deleted.';
+  }
+
+  @override
+  String get downgradeClearData => 'Clear app data';
+
+  @override
   String holdShiftToDowngrade(String to) {
     return 'Hold Shift to downgrade to $to';
   }
@@ -1700,6 +1713,14 @@ class AppLocalizationsEn extends AppLocalizations {
   @override
   String get downgradeMultipleConfirmMessage =>
       'The following apps will be downgraded. This may cause issues.';
+
+  @override
+  String get downgradeMultipleWithBackupConfirmMessage =>
+      'The following apps will be downgraded. This may cause issues.\n\nWe\'ll try to back up and restore their data.';
+
+  @override
+  String get downgradeMultipleClearDataConfirmMessage =>
+      'The following apps will be downgraded.\n\nTheir data will be permanently deleted.';
 
   @override
   String downgradeItemFormat(

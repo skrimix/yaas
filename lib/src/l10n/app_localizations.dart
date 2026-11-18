@@ -1856,6 +1856,24 @@ abstract class AppLocalizations {
   /// **'Attempt to downgrade to version {versionCode}? This may cause issues.'**
   String downgradeConfirmMessage(String versionCode);
 
+  /// No description provided for @downgradeWithBackupConfirmMessage.
+  ///
+  /// In en, this message translates to:
+  /// **'Attempt to downgrade to version {versionCode}? This may cause issues.\n\nWe\'ll try to back up and restore app data.'**
+  String downgradeWithBackupConfirmMessage(String versionCode);
+
+  /// No description provided for @downgradeClearDataConfirmMessage.
+  ///
+  /// In en, this message translates to:
+  /// **'Downgrade to version {versionCode}?\n\nApp data will be permanently deleted.'**
+  String downgradeClearDataConfirmMessage(String versionCode);
+
+  /// No description provided for @downgradeClearData.
+  ///
+  /// In en, this message translates to:
+  /// **'Clear app data'**
+  String get downgradeClearData;
+
   /// No description provided for @holdShiftToDowngrade.
   ///
   /// In en, this message translates to:
@@ -3175,6 +3193,18 @@ abstract class AppLocalizations {
   /// In en, this message translates to:
   /// **'The following apps will be downgraded. This may cause issues.'**
   String get downgradeMultipleConfirmMessage;
+
+  /// No description provided for @downgradeMultipleWithBackupConfirmMessage.
+  ///
+  /// In en, this message translates to:
+  /// **'The following apps will be downgraded. This may cause issues.\n\nWe\'ll try to back up and restore their data.'**
+  String get downgradeMultipleWithBackupConfirmMessage;
+
+  /// No description provided for @downgradeMultipleClearDataConfirmMessage.
+  ///
+  /// In en, this message translates to:
+  /// **'The following apps will be downgraded.\n\nTheir data will be permanently deleted.'**
+  String get downgradeMultipleClearDataConfirmMessage;
 
   /// No description provided for @downgradeItemFormat.
   ///

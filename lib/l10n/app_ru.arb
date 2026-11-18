@@ -464,6 +464,23 @@
             }
         }
     },
+    "downgradeWithBackupConfirmMessage": "Сделать попытку отката до версии {versionCode}? Это может вызвать проблемы.\n\nМы попробуем сохранить и восстановить данные приложения.",
+    "@downgradeWithBackupConfirmMessage": {
+        "placeholders": {
+            "versionCode": {
+                "type": "String"
+            }
+        }
+    },
+    "downgradeClearDataConfirmMessage": "Откатить до версии {versionCode}?\n\nДанные приложения будут удалены.",
+    "@downgradeClearDataConfirmMessage": {
+        "placeholders": {
+            "versionCode": {
+                "type": "String"
+            }
+        }
+    },
+    "downgradeClearData": "Очистить данные",
     "holdShiftToDowngrade": "Удерживайте Shift для отката до {to}",
     "@holdShiftToDowngrade": {
         "placeholders": {
@@ -817,6 +834,8 @@
     },
         "downgradeAppsTitle": "Откат приложений",
     "downgradeMultipleConfirmMessage": "Будут откатены следующие приложения. Это может вызвать проблемы.",
+    "downgradeMultipleWithBackupConfirmMessage": "Будут откатены следующие приложения. Это может вызвать проблемы.\n\nМы попробуем сохранить и восстановить их данные.",
+    "downgradeMultipleClearDataConfirmMessage": "Будут откатены следующие приложения.\n\nИх данные будут удалены.",
     "downgradeItemFormat": "{name} ({installedCode} → {cloudCode})",
     "@downgradeItemFormat": {
         "placeholders": {

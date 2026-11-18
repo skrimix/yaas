@@ -7,7 +7,7 @@ use tracing::{Instrument, Span, debug, info, instrument, warn};
 
 use super::{InstallStepConfig, ProgressUpdate, TaskManager};
 use crate::{
-    adb::PackageName,
+    adb::{PackageName, device::ReinstallPolicy},
     downloader::AppDownloadProgress,
     models::{DownloadCleanupTiming, signals::task::TaskStatus},
     task::acquire_permit_or_cancel,
@@ -207,6 +207,7 @@ impl TaskManager {
         task_id: u64,
         app_full_name: String,
         true_package: PackageName,
+        clear_data: bool,
         update_progress: &impl Fn(ProgressUpdate),
         token: CancellationToken,
     ) -> Result<()> {
@@ -238,7 +239,10 @@ impl TaskManager {
 
         let settings = self.settings.read().await;
         let backups_location = settings.backups_location();
-        let auto_reinstall_on_conflict = settings.auto_reinstall_on_conflict;
+        let reinstall_policy = ReinstallPolicy {
+            auto_reinstall_on_conflict: settings.auto_reinstall_on_conflict,
+            clear_data,
+        };
         drop(settings);
 
         let app_path_cloned = app_path.clone();
@@ -258,7 +262,7 @@ impl TaskManager {
                                 backups_location,
                                 tx,
                                 token,
-                                auto_reinstall_on_conflict,
+                                reinstall_policy,
                             )
                             .await
                     }

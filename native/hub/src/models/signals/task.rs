@@ -32,15 +32,16 @@ pub(crate) enum TaskStatus {
 pub(crate) enum Task {
     /// Download an app by full name (catalog entry identifier) and original (not renamed) package name
     Download(String, String),
-    /// Download and then install an app by full name and true package name
-    DownloadInstall(String, String),
+    /// Download and then install an app by full name and true package name. `clear_data` sets whether
+    /// we clear app's data on conflict or attempt a backup and restore
+    DownloadInstall { full_name: String, true_package_name: String, clear_data: bool },
     /// Install an APK from a single-file path
     InstallApk(String),
     /// Install a local app (a directory containing APK/manifest)
     InstallLocalApp(String),
-    /// Uninstall a package. Optional display name is used only for UI.
+    /// Uninstall a package. Optional display name is used only for UI
     Uninstall { package_name: String, display_name: Option<String> },
-    /// Create a backup for a package with selected parts.
+    /// Create a backup for a package with selected parts
     BackupApp {
         package_name: String,
         display_name: Option<String>,
@@ -51,7 +52,7 @@ pub(crate) enum Task {
     },
     /// Restore from a backup directory path (contains a `.backup` marker)
     RestoreBackup(String),
-    /// Donate (upload) installed app files from the device.
+    /// Donate (upload) installed app files from the device
     DonateApp { package_name: String, display_name: Option<String> },
 }
 
@@ -71,7 +72,7 @@ impl Task {
 
     pub(crate) fn task_name(&self) -> Result<String> {
         Ok(match self {
-            Task::Download(name, _) | Task::DownloadInstall(name, _) => name.clone(),
+            Task::Download(name, _) | Task::DownloadInstall { full_name: name, .. } => name.clone(),
             Task::InstallApk(apk_path) => {
                 Path::new(apk_path).file_name().unwrap_or_default().to_string_lossy().to_string()
             }
@@ -97,8 +98,10 @@ impl Task {
     /// ignored.
     pub(crate) fn is_covered_by(&self, active: &Task) -> bool {
         match (self, active) {
-            (Task::Download(a, _), Task::Download(b, _) | Task::DownloadInstall(b, _))
-            | (Task::DownloadInstall(a, _), Task::DownloadInstall(b, _))
+            (
+                Task::Download(a, _),
+                Task::Download(b, _) | Task::DownloadInstall { full_name: b, .. },
+            )
             | (Task::InstallApk(a), Task::InstallApk(b))
             | (Task::InstallLocalApp(a), Task::InstallLocalApp(b))
             | (Task::RestoreBackup(a), Task::RestoreBackup(b))
@@ -106,6 +109,10 @@ impl Task {
             | (Task::DonateApp { package_name: a, .. }, Task::DonateApp { package_name: b, .. }) => {
                 a == b
             }
+            (
+                Task::DownloadInstall { full_name: a, clear_data: a_clear, .. },
+                Task::DownloadInstall { full_name: b, clear_data: b_clear, .. },
+            ) => a == b && a_clear == b_clear,
             (
                 Task::BackupApp {
                     package_name: a_package,

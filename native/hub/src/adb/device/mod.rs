@@ -19,7 +19,7 @@ use forensic_adb::{Device, UnixPath};
 use futures::FutureExt;
 use lazy_regex::regex;
 use sha2_const_stable::Sha256;
-pub(crate) use sideload::SideloadProgress;
+pub(crate) use sideload::{ReinstallPolicy, SideloadProgress};
 use tokio::{fs, time::sleep};
 use tracing::{Span, debug, error, info, instrument, trace, warn};
 pub(crate) mod battery_dump;
@@ -767,13 +767,29 @@ impl AdbDevice {
     /// Uninstalls a package from the device
     #[instrument(level = "debug", skip(self))]
     pub(super) async fn uninstall_package(&self, package: &PackageName) -> Result<()> {
+        self.uninstall_package_inner(package, false).await
+    }
+
+    /// Uninstalls a package from the device if it is currently installed
+    #[instrument(level = "debug", skip(self))]
+    pub(super) async fn uninstall_package_if_installed(&self, package: &PackageName) -> Result<()> {
+        self.uninstall_package_inner(package, true).await
+    }
+
+    async fn uninstall_package_inner(
+        &self,
+        package: &PackageName,
+        ignore_not_installed: bool,
+    ) -> Result<()> {
         match self.inner.uninstall_package(package.as_str()).await {
             Ok(_) => Ok(()),
             Err(e) => {
                 let error_str = e.to_string();
                 debug!(error = %error_str, "Uninstall failed, checking error type");
 
-                if error_str.contains("DELETE_FAILED_INTERNAL_ERROR") {
+                if error_str.contains("Unknown package:") && ignore_not_installed {
+                    Ok(())
+                } else if error_str.contains("DELETE_FAILED_INTERNAL_ERROR") {
                     // Check if package exists
                     let escaped = package.as_str().replace('.', "\\.");
                     let output = self
@@ -782,7 +798,11 @@ impl AdbDevice {
                         .unwrap_or_default();
 
                     if output.trim().is_empty() {
-                        Err(anyhow!("Package not installed: {package}"))
+                        if ignore_not_installed {
+                            Ok(())
+                        } else {
+                            Err(anyhow!("Package not installed: {package}"))
+                        }
                     } else {
                         Err(e.into())
                     }

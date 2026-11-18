@@ -13,6 +13,7 @@ import '../../utils/utils.dart';
 import '../../utils/sideload_utils.dart';
 import '../cloud_apps/cloud_app_list.dart';
 import '../dialogs/downloader_setup_dialog.dart';
+import '../dialogs/downgrade_confirm_dialog.dart';
 import '../common/page_scaffold.dart';
 
 enum SortOption {
@@ -368,11 +369,19 @@ class _DownloadAppsScreenState extends State<DownloadAppsScreen> {
   }
 
   Future<void> _install(
-      String appFullName, String truePackageName, int size) async {
+    String appFullName,
+    String truePackageName,
+    int size, {
+    bool clearData = false,
+  }) async {
     final proceed = await SideloadUtils.confirmIfLowSpace(context, size);
     if (!proceed) return;
     TaskRequest(
-      task: TaskDownloadInstall(field0: appFullName, field1: truePackageName),
+      task: TaskDownloadInstall(
+        fullName: appFullName,
+        truePackageName: truePackageName,
+        clearData: clearData,
+      ),
     ).sendSignalToRust();
   }
 
@@ -380,62 +389,6 @@ class _DownloadAppsScreenState extends State<DownloadAppsScreen> {
     TaskRequest(
       task: TaskDownload(field0: appFullName, field1: truePackageName),
     ).sendSignalToRust();
-  }
-
-  Future<bool> _confirmDowngrades(
-    BuildContext context,
-    List<({InstalledPackage installed, CloudApp target})> items,
-  ) async {
-    if (items.isEmpty) return true;
-    final l10n = AppLocalizations.of(context);
-    final list = items
-        .map((e) => l10n.downgradeItemFormat(e.installed.label,
-            '${e.installed.versionCode}', '${e.target.versionCode}'))
-        .join('\n');
-    final res = await showDialog<bool>(
-      context: context,
-      builder: (context) => AlertDialog(
-        title: Text(l10n.downgradeAppsTitle),
-        content: SingleChildScrollView(
-          child: Column(
-            crossAxisAlignment: CrossAxisAlignment.start,
-            children: [
-              Text(l10n.downgradeMultipleConfirmMessage),
-              const SizedBox(height: 8),
-              Container(
-                width: double.infinity,
-                padding: const EdgeInsets.all(12),
-                decoration: BoxDecoration(
-                  color: Theme.of(context).colorScheme.surfaceContainer,
-                  borderRadius: BorderRadius.circular(8),
-                  border: Border.all(
-                    color: Theme.of(context).colorScheme.outlineVariant,
-                  ),
-                ),
-                child: Text(list, softWrap: true),
-              ),
-            ],
-          ),
-        ),
-        actions: [
-          TextButton(
-            onPressed: () => Navigator.of(context).pop(false),
-            child: Text(l10n.commonCancel),
-          ),
-          FilledButton(
-            style: ButtonStyle(
-              backgroundColor:
-                  WidgetStatePropertyAll(Theme.of(context).colorScheme.error),
-              foregroundColor:
-                  WidgetStatePropertyAll(Theme.of(context).colorScheme.onError),
-            ),
-            onPressed: () => Navigator.of(context).pop(true),
-            child: Text(l10n.commonConfirm),
-          ),
-        ],
-      ),
-    );
-    return res ?? false;
   }
 
   Widget _buildSortButton({required bool isSearchMode}) {
@@ -804,9 +757,16 @@ class _DownloadAppsScreenState extends State<DownloadAppsScreen> {
                           }
                         }
 
-                        final proceed =
-                            await _confirmDowngrades(context, downgrades);
-                        if (!proceed) return;
+                        var clearDowngradeData = false;
+                        if (downgrades.isNotEmpty) {
+                          final downgrade =
+                              await showMultipleDowngradeConfirmDialog(
+                            context,
+                            downgrades,
+                          );
+                          if (downgrade == null) return;
+                          clearDowngradeData = downgrade.clearData;
+                        }
 
                         final totalSize = selectedApps.fold<int>(
                           0,
@@ -817,11 +777,17 @@ class _DownloadAppsScreenState extends State<DownloadAppsScreen> {
                             context, totalSize);
                         if (!spaceOk) return;
 
+                        final downgradeFullNames = {
+                          for (final item in downgrades) item.target.fullName,
+                        };
                         for (final app in selectedApps) {
                           TaskRequest(
                             task: TaskDownloadInstall(
-                                field0: app.app.fullName,
-                                field1: app.app.truePackageName),
+                              fullName: app.app.fullName,
+                              truePackageName: app.app.truePackageName,
+                              clearData: clearDowngradeData &&
+                                  downgradeFullNames.contains(app.app.fullName),
+                            ),
                           ).sendSignalToRust();
                         }
                         _clearSelection();

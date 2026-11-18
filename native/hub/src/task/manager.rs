@@ -72,7 +72,7 @@ impl TaskRegistry {
                 continue;
             }
             match task {
-                Task::Download(name, _) | Task::DownloadInstall(name, _) => {
+                Task::Download(name, _) | Task::DownloadInstall { full_name: name, .. } => {
                     protected.release_names.insert(name.clone());
                 }
                 Task::InstallApk(path)
@@ -430,12 +430,13 @@ impl TaskManager {
                     )
                     .await
                 }
-                Task::DownloadInstall(app, package) => {
+                Task::DownloadInstall { full_name, true_package_name, clear_data } => {
                     info!(task_id = id, "Executing download and install task");
                     self.handle_download_install(
                         id,
-                        app.clone(),
-                        PackageName::parse(package.clone())?,
+                        full_name.clone(),
+                        PackageName::parse(true_package_name.clone())?,
+                        *clear_data,
                         &update_progress,
                         token.clone(),
                     )
@@ -649,7 +650,11 @@ mod tests {
         registry.insert(2, task("Downloading"), CancellationToken::new());
         registry.insert(
             3,
-            Task::DownloadInstall("Installing".into(), "com.example.app".into()),
+            Task::DownloadInstall {
+                full_name: "Installing".into(),
+                true_package_name: "com.example.app".into(),
+                clear_data: false,
+            },
             CancellationToken::new(),
         );
         registry.insert(
@@ -731,7 +736,11 @@ mod tests {
         assert_eq!(
             registry.insert(
                 6,
-                Task::DownloadInstall("App".into(), "com.example.app".into()),
+                Task::DownloadInstall {
+                    full_name: "App".into(),
+                    true_package_name: "com.example.app".into(),
+                    clear_data: false,
+                },
                 CancellationToken::new()
             ),
             InsertResult::Inserted
@@ -742,6 +751,31 @@ mod tests {
             registry.insert(7, task("App"), CancellationToken::new()),
             InsertResult::Duplicate
         );
+        assert_eq!(
+            registry.insert(
+                9,
+                Task::DownloadInstall {
+                    full_name: "App".into(),
+                    true_package_name: "com.example.app".into(),
+                    clear_data: false,
+                },
+                CancellationToken::new()
+            ),
+            InsertResult::Duplicate
+        );
+        assert_eq!(
+            registry.insert(
+                10,
+                Task::DownloadInstall {
+                    full_name: "App".into(),
+                    true_package_name: "com.example.app".into(),
+                    clear_data: true,
+                },
+                CancellationToken::new()
+            ),
+            InsertResult::Inserted
+        );
+        registry.tasks.remove(&10);
 
         registry.tasks.remove(&6);
         assert_eq!(

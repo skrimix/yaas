@@ -7,6 +7,7 @@ import '../../src/l10n/app_localizations.dart';
 import '../../utils/utils.dart';
 import '../common/context_menu_region.dart';
 import '../common/status_chip.dart';
+import '../dialogs/downgrade_confirm_dialog.dart';
 import 'cloud_app_details_dialog.dart';
 
 class CachedAppData {
@@ -37,7 +38,7 @@ class CloudAppList extends StatelessWidget {
   final ValueChanged<String>? onSelectionChanged;
   final ScrollController scrollController;
   final Function(String, String) onDownload;
-  final Function(String, String, int) onInstall;
+  final void Function(String, String, int, {bool clearData}) onInstall;
   final bool isSearching;
 
   const CloudAppList({
@@ -111,7 +112,7 @@ class CloudAppListItem extends StatelessWidget {
   final ValueChanged<bool> onSelectionChanged;
   final bool showCheckbox;
   final Function(String, String) onDownload;
-  final Function(String, String, int) onInstall;
+  final void Function(String, String, int, {bool clearData}) onInstall;
 
   @override
   Widget build(BuildContext context) {
@@ -265,17 +266,22 @@ class CloudAppListItem extends StatelessWidget {
   Future<void> _handleInstall(BuildContext context) async {
     final deviceState = context.read<DeviceState>();
     final installed = deviceState.findInstalled(cachedApp.app.packageName);
+    DowngradeConfirmResult? downgrade;
     if (installed != null &&
         installed.versionCode.toInt() > cachedApp.app.versionCode) {
-      final confirmed = await showDowngradeConfirmDialog(
+      downgrade = await showDowngradeConfirmDialog(
         context,
         installed,
         cachedApp.app,
       );
-      if (!confirmed) return;
+      if (downgrade == null) return;
     }
-    onInstall(cachedApp.app.fullName, cachedApp.app.truePackageName,
-        cachedApp.app.size.toInt());
+    onInstall(
+      cachedApp.app.fullName,
+      cachedApp.app.truePackageName,
+      cachedApp.app.size.toInt(),
+      clearData: downgrade?.clearData ?? false,
+    );
   }
 }
 

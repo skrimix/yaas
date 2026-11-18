@@ -20,6 +20,7 @@ derive_more = { version = "2.1.1", features = ["debug"] }
 dirs = "7.0.0"
 forensic-adb = { git = "https://github.com/skrimix/forensic-adb" }
 futures = "0.3.34"
+async-trait = "0.1.92"
 humansize = "2.1.3"
 lazy-regex = "3.6.1"
 log = { version = "0.4.34", features = [
@@ -30,6 +31,7 @@ mimalloc = "0.1.52"
 rinf = { version = "=8.10.1", features = ["show-backtrace"] }
 serde = { version = "1.0.229", features = ["derive"] }
 serde_json = { version = "1.0.151", features = ["preserve_order"] }
+test-log = { version = "0.2.21", features = ["trace"] }
 tokio = { version = "1.53.1", features = [
     "macros",
     "fs",

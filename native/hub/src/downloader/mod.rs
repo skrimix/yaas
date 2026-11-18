@@ -65,15 +65,8 @@ fn sanitize_url_for_log(url: &str) -> String {
 }
 
 fn sanitize_raw_url_for_log(url: &str) -> String {
-    let marker = url
-        .find('?')
-        .map(|index| (index, "?redacted"))
-        .into_iter()
-        .chain(url.find('#').map(|index| (index, "#redacted")))
-        .min_by_key(|(index, _)| *index);
-
-    match marker {
-        Some((index, replacement)) => format!("{}{}", &url[..index], replacement),
+    match url.find(['?', '#']) {
+        Some(index) => format!("{}redacted", &url[..=index]),
         None => url.to_string(),
     }
 }
@@ -103,5 +96,7 @@ mod tests {
     #[test]
     fn sensitive_url_display_handles_unparseable_urls() {
         assert_eq!(SensitiveUrl::new("not a url?Od2xfKex").to_string(), "not a url?redacted");
+        assert_eq!(SensitiveUrl::new("not a url#token?Od2xfKex").to_string(), "not a url#redacted");
+        assert_eq!(SensitiveUrl::new("not a url").to_string(), "not a url");
     }
 }

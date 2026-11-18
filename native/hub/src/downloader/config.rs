@@ -3,7 +3,6 @@ use std::{collections::HashMap, fmt, fs, path::Path};
 use anyhow::{Context, Result, ensure};
 use const_format::concatcp;
 use serde::Deserialize;
-use tracing::error;
 
 use crate::downloader::{SensitiveUrl, is_http_url};
 
@@ -82,11 +81,8 @@ impl DownloaderConfig {
     }
 
     pub(crate) fn parse(content: &str) -> Result<Self> {
-        let mut cfg: DownloaderConfig = serde_json::from_str(content)
-            .context("Failed to parse downloader.json")
-            .inspect_err(|e| {
-                error!("Failed to parse downloader.json: {:#}", e);
-            })?;
+        let mut cfg: DownloaderConfig =
+            serde_json::from_str(content).context("Failed to parse downloader.json")?;
         cfg.config_update_url = cfg.config_update_url.trim().to_string();
         if let Backend::NewRepo(repo) = &mut cfg.backend {
             repo.base_url = repo.base_url.trim().trim_end_matches('/').to_string();
@@ -99,10 +95,7 @@ impl DownloaderConfig {
         let trimmed_id = self.id.trim();
         ensure!(!trimmed_id.is_empty(), "downloader.id must not be empty");
         ensure!(trimmed_id == self.id, "downloader.id must not have surrounding whitespace");
-        ensure!(
-            !self.id.contains('/') && !self.id.contains('\\') && self.id != "." && self.id != "..",
-            "downloader.id must be a safe file name"
-        );
+        ensure!(is_safe_id(&self.id), "downloader.id must be a safe file name");
         ensure_http_url("config_update_url", &self.config_update_url)?;
 
         match &self.backend {
@@ -168,6 +161,10 @@ impl FfaConfig {
     pub(crate) fn donation_blacklist_path(&self) -> Option<&str> {
         non_empty(&self.donation_blacklist_path)
     }
+}
+
+pub(super) fn is_safe_id(id: &str) -> bool {
+    !id.is_empty() && !id.contains('/') && !id.contains('\\') && id != "." && id != ".."
 }
 
 fn ensure_http_url(field: &str, value: &str) -> Result<()> {

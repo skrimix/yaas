@@ -13,7 +13,7 @@ use crate::{
         manager::DownloaderManager,
         repo,
         sources::{
-            RefreshReport, SourceSnapshot, SourceStore, fetch_config, runtime_cache_dir,
+            FetchMode, RefreshReport, SourceSnapshot, SourceStore, fetch_config,
             warnings_to_message,
         },
     },
@@ -111,7 +111,7 @@ impl DownloaderController {
         if let Err(error) = self.sync(false, warnings).await {
             send_error_toast("Failed to initialize downloader", &error);
         }
-        let inactive = self.sources.inactive_configs(&loaded);
+        let inactive = loaded.inactive_configs();
         if !inactive.is_empty() {
             tokio::spawn(async move {
                 self.refresh_configs(inactive).await;
@@ -152,7 +152,7 @@ impl DownloaderController {
             initialization.cancel.cancel();
             let _ = initialization.task.await;
         }
-        self.manager.clear().await;
+        self.manager.set(None).await;
         state.active = active.clone();
         let Some(cfg) = active else {
             DownloaderAvailabilityChanged { needs_setup: true, ..Default::default() }
@@ -166,7 +166,7 @@ impl DownloaderController {
         let task_cancel = cancel.clone();
         let task = tokio::spawn(async move {
             let cancel = task_cancel;
-            let cache_dir = runtime_cache_dir(controller.sources.app_dir(), &cfg.id);
+            let cache_dir = controller.sources.runtime_cache_dir(&cfg.id);
             let settings = controller.settings_handler.subscribe().borrow().clone();
             let result = async {
                 tokio::fs::create_dir_all(&cache_dir).await?;
@@ -188,7 +188,7 @@ impl DownloaderController {
                 // The session applies settings changed while preparing runtime files.
                 let session =
                     DownloaderSession::new(repo, cache_dir, controller.settings_handler.clone());
-                controller.manager.replace(session).await;
+                controller.manager.set(Some(session)).await;
                 Ok::<_, anyhow::Error>(())
             }
             .await;
@@ -203,9 +203,9 @@ impl DownloaderController {
 
     async fn install_from_url(self: &Arc<Self>, url: SensitiveUrl<'_>) {
         let result = async {
-            let fetched = fetch_config(url, None).await?;
+            let fetched = fetch_config(url, FetchMode::Install).await?;
             let mut state = self.state.lock().await;
-            let cfg = fetched.commit(self.sources.app_dir())?;
+            let cfg = self.sources.commit(fetched)?;
             self.sources.select_active(&cfg.id)?;
             self.reconcile(&mut state, false, &[]).await?;
             Ok::<_, anyhow::Error>(cfg.id)
@@ -295,15 +295,18 @@ impl DownloaderController {
             }
         };
         for cfg in pending {
-            let result =
-                fetch_config(SensitiveUrl::new(&cfg.config_update_url), Some(&cfg.id)).await;
+            let result = fetch_config(
+                SensitiveUrl::new(&cfg.config_update_url),
+                FetchMode::Refresh(&cfg.id),
+            )
+            .await;
             let mut state = self.state.lock().await;
             // A source mutation or another refresh committed during the fetch makes this result stale.
             let current = self.sources.load();
             if !current.as_ref().is_ok_and(|sources| sources.configs.contains(&cfg)) {
                 continue;
             }
-            match result.and_then(|fetched| fetched.commit(self.sources.app_dir())) {
+            match result.and_then(|fetched| self.sources.commit(fetched)) {
                 Ok(updated) => {
                     report.refreshed += 1;
                     // Runtime files can change without their URLs changing.
@@ -458,16 +461,14 @@ mod tests {
     };
 
     use super::*;
-    use crate::downloader::sources::{managed_config_path, managed_configs_dir};
 
     fn config_json(id: &str, update_url: &str, name: &str) -> String {
         serde_json::json!({"id": id, "layout": "new-repo", "base_url": "http://127.0.0.1:1", "config_update_url": update_url, "display_name": name}).to_string()
     }
 
     fn install_fixture(controller: &DownloaderController, id: &str, url: &str) -> DownloaderConfig {
-        let app_dir = controller.sources.app_dir();
-        std::fs::create_dir_all(managed_configs_dir(app_dir)).unwrap();
-        let path = managed_config_path(app_dir, id);
+        std::fs::create_dir_all(controller.sources.managed_configs_dir()).unwrap();
+        let path = controller.sources.managed_config_path(id);
         std::fs::write(&path, config_json(id, url, id)).unwrap();
         DownloaderConfig::load_from_path(path).unwrap()
     }
@@ -540,7 +541,7 @@ mod tests {
             controller.remove_source("a".into()).await;
             if reinstall {
                 let _state = controller.state.lock().await;
-                let path = managed_config_path(controller.sources.app_dir(), "a");
+                let path = controller.sources.managed_config_path("a");
                 std::fs::write(path, config_json("a", &url, "reinstalled")).unwrap();
             }
             release.send(config_json("a", &url, "stale")).unwrap();
@@ -565,14 +566,14 @@ mod tests {
         let session = controller.manager.require().await.unwrap();
         controller.select_source("a").await;
         controller.remove_source("b".into()).await;
-        let path = managed_config_path(controller.sources.app_dir(), "a");
+        let path = controller.sources.managed_config_path("a");
         std::fs::write(&path, config_json("a", "http://127.0.0.1:1/new", "renamed")).unwrap();
         controller.sync(false, vec![]).await.unwrap();
         assert!(Arc::ptr_eq(&session, &controller.manager.require().await.unwrap()));
         controller.sync(true, vec![]).await.unwrap();
         settled(&controller).await;
         assert!(!Arc::ptr_eq(&session, &controller.manager.require().await.unwrap()));
-        controller.manager.clear().await;
+        controller.manager.set(None).await;
     }
 
     #[cfg(unix)]
@@ -592,9 +593,8 @@ mod tests {
             "config_update_url": format!("{}/config", server.uri()),
         })
         .to_string();
-        let app_dir = controller.sources.app_dir();
-        std::fs::create_dir_all(managed_configs_dir(app_dir)).unwrap();
-        std::fs::write(managed_config_path(app_dir, "a"), &config).unwrap();
+        std::fs::create_dir_all(controller.sources.managed_configs_dir()).unwrap();
+        std::fs::write(controller.sources.managed_config_path("a"), &config).unwrap();
         Mock::given(method("GET"))
             .and(path("/config"))
             .respond_with(ResponseTemplate::new(200).set_body_string(&config))
@@ -629,12 +629,13 @@ mod tests {
         controller.manual_refresh().await;
         settled(&controller).await;
         assert_eq!(
-            std::fs::read_to_string(runtime_cache_dir(app_dir, "a").join("rclone.conf")).unwrap(),
+            std::fs::read_to_string(controller.sources.runtime_cache_dir("a").join("rclone.conf"))
+                .unwrap(),
             "two:\n"
         );
         assert_eq!(controller.settings_handler.subscribe().borrow().rclone_remote_name, "two");
         assert!(!Arc::ptr_eq(&old_session, &controller.manager.require().await.unwrap()));
-        controller.manager.clear().await;
+        controller.manager.set(None).await;
         server.verify().await;
     }
 
@@ -666,17 +667,16 @@ mod tests {
             &controller.state.lock().await.active.as_ref().unwrap().backend,
             Backend::NewRepo(repo) if repo.base_url == "http://127.0.0.1:2"
         ));
-        controller.manager.clear().await;
+        controller.manager.set(None).await;
     }
 
     #[tokio::test]
     async fn selection_cancels_obsolete_initialization() {
         let (_dir, controller) = fixture().await;
         let (url, entered, release, server) = delayed_config().await;
-        let app_dir = controller.sources.app_dir();
-        std::fs::create_dir_all(managed_configs_dir(app_dir)).unwrap();
+        std::fs::create_dir_all(controller.sources.managed_configs_dir()).unwrap();
         std::fs::write(
-            managed_config_path(app_dir, "a"),
+            controller.sources.managed_config_path("a"),
             serde_json::json!({
                 "id": "a", "layout": "ffa", "rclone_path": format!("{url}/binary"),
                 "rclone_config_path": url, "config_update_url": url,
@@ -695,7 +695,7 @@ mod tests {
         settled(&controller).await;
         assert_eq!(controller.state.lock().await.active.as_ref().unwrap().id, "b");
         assert!(controller.manager.get().await.is_some());
-        controller.manager.clear().await;
+        controller.manager.set(None).await;
     }
 
     #[tokio::test]
@@ -733,7 +733,7 @@ mod tests {
         tokio::time::timeout(std::time::Duration::from_secs(5), selection).await.unwrap().unwrap();
         settled(&controller).await;
         assert!(!Arc::ptr_eq(&old_session, &controller.manager.require().await.unwrap()));
-        controller.manager.clear().await;
+        controller.manager.set(None).await;
     }
 
     #[tokio::test]
@@ -791,6 +791,6 @@ mod tests {
             Some("new")
         );
         settled(&controller).await;
-        controller.manager.clear().await;
+        controller.manager.set(None).await;
     }
 }
